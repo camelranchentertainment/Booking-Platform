@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import nodemailer from 'nodemailer';
-import { supabase, logEmail, updateVenueContactStatus } from '@/lib/supabase';
+import { supabase, logEmail, updateVenueContactStatus } from '../../../lib/supabase';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
