@@ -256,7 +256,7 @@ export class VenueSearchWorker {
     console.log(`✅ Found ${venues.length} venues`);
 
     // Save all venues
-    const savedVenues = [];
+    const savedVenues: any[] = [];
     for (const venue of venues) {
       const duplicate = await checkDuplicateVenue(venue.name, venue.city);
       
