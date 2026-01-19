@@ -30,12 +30,15 @@ export default function VenueSearch({ onVenuesAdded }: VenueSearchProps) {
     setIsSearching(true);
     setSearchResults(null);
 
-    const results = {
-      total_discovered: 0,
-      new_venues: 0,
-      duplicates: 0,
-      venues: []
-    };
+   const results: {
+  venues: any[];
+  total_discovered: number;
+  new_venues: number;
+} = {
+  venues: [],
+  total_discovered: 0,
+  new_venues: 0
+};
 
     for (const region of regions) {
       try {
