@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getVenues, updateVenueContactStatus } from '../lib/supabase';
+import { supabase, getVenues, updateVenueContactStatus } from '../lib/supabase';
 
 interface Venue {
   id: string;
