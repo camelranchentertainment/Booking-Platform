@@ -1,13 +1,13 @@
 'use client';
- 
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
- 
+
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
- 
+
   useEffect(() => {
     const auth = localStorage.getItem('authenticated');
     if (auth === 'true') {
@@ -17,7 +17,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     }
     setIsLoading(false);
   }, [router]);
- 
+
   if (isLoading) {
     return (
       <div style={{
@@ -31,11 +31,10 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
       </div>
     );
   }
- 
+
   if (!isAuthenticated) {
     return null;
   }
- 
+
   return <>{children}</>;
 }
- 
