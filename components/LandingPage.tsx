@@ -10,22 +10,21 @@ export default function LandingPage() {
   const [error, setError] = useState('');
   const router = useRouter();
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const validUsers: { [key: string]: string } = {
-      'jake@camelranchbooking.com': 'Tornado2023!',
-      'scott@camelranchbooking.com': 'Tornado2023!'
-    };
-
-    if (validUsers[email.toLowerCase()] === password) {
-  localStorage.setItem('loggedInUser', JSON.stringify({ email: email.toLowerCase() }));
-  router.push('/dashboard');
-  }
-    } else {
-      setError('Invalid credentials');
-    }
+ const handleLogin = (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  const validUsers: { [key: string]: string } = {
+    'jake@camelranchbooking.com': 'Tornado2023!',
+    'scott@camelranchbooking.com': 'Tornado2023!'
   };
+
+  if (validUsers[email.toLowerCase()] === password) {
+    localStorage.setItem('loggedInUser', JSON.stringify({ email: email.toLowerCase() }));
+    router.push('/dashboard');
+  } else {
+    setError('Invalid credentials');
+  }
+};
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #F5F5F0 0%, #E8E6E1 100%)' }}>
