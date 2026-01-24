@@ -140,7 +140,7 @@ export class VenueSearchWorker {
     for (const venue of venues) {
       try {
         // Check for duplicates
-        const duplicate = await checkDuplicateVenue(venue.name, venue.city);
+       const duplicate = await checkDuplicateVenue(venue.name, venue.city, venue.state);
         
         if (!duplicate) {
           await addVenue({
