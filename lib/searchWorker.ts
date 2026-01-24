@@ -232,10 +232,10 @@ export class VenueSearchWorker {
       }
 
       // Queue the search
-      await queueSearch(
-        region.id,
-        `${region.city}, ${region.state} live music venues`
-      );
+     await queueSearch({
+  region_id: region.id,
+  search_query: `${region.city}, ${region.state} live music venues`
+});
       
       console.log(`✅ Queued: ${region.city}, ${region.state}`);
     }
