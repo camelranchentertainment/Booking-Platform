@@ -73,12 +73,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await transporter.sendMail(mailOptions);
 
-    // Log the email
+    // Log the email (sent_at is added automatically by logEmail function)
     await logEmail({
       venue_id: venueId,
       campaign_id: campaignId,
-      email_template_id: templateId,
-      sent_at: new Date().toISOString()
+      email_template_id: templateId
     });
 
     // Update venue status
@@ -89,6 +88,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       message: 'Email sent successfully',
       venue: venue.name
     });
+
   } catch (error: any) {
     console.error('Email sending error:', error);
     return res.status(500).json({ error: error.message || 'Failed to send email' });
