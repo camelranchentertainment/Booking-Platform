@@ -112,8 +112,11 @@ export default function CampaignManager() {
       const discoveryService = new VenueDiscoveryService();
       
       for (const city of campaign.cities) {
-        const searchQuery = `live music venues in ${city}`;
-        const results = await discoveryService.discoverVenues(searchQuery, { limit: 20 });
+        const results = await discoveryService.searchVenues({
+          city: city,
+          state: 'AR', // TODO: You may want to make state dynamic
+          radiusMiles: campaign.radius
+        });
         
         // Save to database and collect
         for (const venue of results) {
@@ -136,7 +139,8 @@ export default function CampaignManager() {
                 state: venue.state || 'Unknown',
                 address: venue.address,
                 phone: venue.phone,
-                venue_type: venue.venue_type,
+                website: venue.website,
+                venue_type: venue.venueType,
                 contact_status: 'not_contacted'
               }])
               .select()
@@ -760,4 +764,3 @@ export default function CampaignManager() {
     </div>
   );
 }
-
