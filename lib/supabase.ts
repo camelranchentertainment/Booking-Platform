@@ -6,6 +6,16 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Venue Management Functions
+export async function getVenues() {
+  const { data, error } = await supabase
+    .from('venues')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (error) throw error;
+  return data || [];
+}
+
 export async function addVenue(venueData: any) {
   const { data, error } = await supabase
     .from('venues')
