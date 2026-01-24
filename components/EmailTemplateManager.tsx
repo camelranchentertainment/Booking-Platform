@@ -1,29 +1,30 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { getEmailTemplates, createEmailTemplate, updateEmailTemplate, deleteEmailTemplate } from '../lib/supabase';
 
 interface EmailTemplate {
   id: string;
   name: string;
   subject: string;
   body: string;
-  from_email: 'scott@camelranchbooking.com' | 'jake@camelranchbooking.com';
-  is_default: boolean;
+  sender_email: string;
+  template_type: string;
   created_at: string;
 }
 
-export default function EmailTemplateManager() {
+export default function EmailTemplates() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [isNewTemplate, setIsNewTemplate] = useState(false);
-  const [editedTemplate, setEditedTemplate] = useState<Partial<EmailTemplate>>({
+  const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
+
+  const [formData, setFormData] = useState({
     name: '',
     subject: '',
     body: '',
-    from_email: 'scott@camelranchbooking.com',
-    is_default: false
+    sender_email: 'scott@camelranchbooking.com',
+    template_type: 'initial_contact'
   });
 
   useEffect(() => {
@@ -32,603 +33,384 @@ export default function EmailTemplateManager() {
 
   const loadTemplates = async () => {
     try {
-      const { data, error } = await supabase
-        .from('email_templates')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      setLoading(true);
+      const data = await getEmailTemplates();
       setTemplates(data || []);
     } catch (error) {
       console.error('Error loading templates:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const createTemplate = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
-      const { error } = await supabase
-        .from('email_templates')
-        .insert([editedTemplate]);
-
-      if (error) throw error;
-
-      alert('✅ Template created successfully!');
-      setIsNewTemplate(false);
-      setEditedTemplate({
-        name: '',
-        subject: '',
-        body: '',
-        from_email: 'scott@camelranchbooking.com',
-        is_default: false
-      });
+      if (editingTemplate) {
+        await updateEmailTemplate(editingTemplate.id, formData);
+        alert('Template updated successfully!');
+      } else {
+        await createEmailTemplate(formData);
+        alert('Template created successfully!');
+      }
+      
+      resetForm();
       loadTemplates();
     } catch (error) {
-      console.error('Error creating template:', error);
-      alert('Error creating template');
+      console.error('Error saving template:', error);
+      alert('Error saving template');
     }
   };
 
-  const updateTemplate = async () => {
-    if (!selectedTemplate) return;
+  const handleEdit = (template: EmailTemplate) => {
+    setEditingTemplate(template);
+    setFormData({
+      name: template.name,
+      subject: template.subject,
+      body: template.body,
+      sender_email: template.sender_email,
+      template_type: template.template_type
+    });
+    setShowCreateForm(true);
+  };
 
-    try {
-      const { error } = await supabase
-        .from('email_templates')
-        .update({
-          name: editedTemplate.name,
-          subject: editedTemplate.subject,
-          body: editedTemplate.body,
-          from_email: editedTemplate.from_email,
-          is_default: editedTemplate.is_default
-        })
-        .eq('id', selectedTemplate.id);
-
-      if (error) throw error;
-
-      alert('✅ Template updated successfully!');
-      setIsEditMode(false);
-      setSelectedTemplate(null);
-      loadTemplates();
-    } catch (error) {
-      console.error('Error updating template:', error);
-      alert('Error updating template');
+  const handleDelete = async (id: string, name: string) => {
+    if (confirm(`Delete template "${name}"?`)) {
+      try {
+        await deleteEmailTemplate(id);
+        loadTemplates();
+        alert('Template deleted successfully!');
+      } catch (error) {
+        console.error('Error deleting template:', error);
+        alert('Error deleting template');
+      }
     }
   };
 
-  const deleteTemplate = async (templateId: string) => {
-    if (!confirm('Are you sure you want to delete this template?')) return;
-
-    try {
-      const { error } = await supabase
-        .from('email_templates')
-        .delete()
-        .eq('id', templateId);
-
-      if (error) throw error;
-
-      alert('✅ Template deleted successfully!');
-      loadTemplates();
-    } catch (error) {
-      console.error('Error deleting template:', error);
-      alert('Error deleting template');
-    }
-  };
-
-  const startNewTemplate = () => {
-    setIsNewTemplate(true);
-    setIsEditMode(false);
-    setSelectedTemplate(null);
-    setEditedTemplate({
+  const resetForm = () => {
+    setFormData({
       name: '',
       subject: '',
       body: '',
-      from_email: 'scott@camelranchbooking.com',
-      is_default: false
+      sender_email: 'scott@camelranchbooking.com',
+      template_type: 'initial_contact'
     });
+    setShowCreateForm(false);
+    setEditingTemplate(null);
   };
 
-  const startEditTemplate = (template: EmailTemplate) => {
-    setSelectedTemplate(template);
-    setEditedTemplate(template);
-    setIsEditMode(true);
-    setIsNewTemplate(false);
-  };
-
-  const cancelEdit = () => {
-    setIsEditMode(false);
-    setIsNewTemplate(false);
-    setSelectedTemplate(null);
-    setEditedTemplate({
-      name: '',
-      subject: '',
-      body: '',
-      from_email: 'scott@camelranchbooking.com',
-      is_default: false
-    });
-  };
-
-  // Default template suggestions
-  const insertDefaultTemplate = (type: 'initial' | 'followup') => {
-    if (type === 'initial') {
-      setEditedTemplate({
-        ...editedTemplate,
-        name: 'Initial Booking Request',
-        subject: 'Booking Inquiry - Better Than Nothin\' Band',
-        body: `Hi there,
-
-My name is [Your Name] and I'm the booking manager for Better Than Nothin', an Ozark Country/Red Dirt/Honky Tonk band based out of Northwest Arkansas.
-
-We're currently booking dates for [Month/Year] and would love to perform at [Venue Name]. We play high-energy country music that keeps the dance floor packed and the crowd engaged.
-
-Our band features:
-- Original songs and crowd-favorite covers
-- Professional sound and lighting
-- Experienced performers who know how to read a room
-
-Would you have availability for a show on [Date Range]? We're flexible on dates and would love to discuss what works best for your venue.
-
-You can check us out at: www.betterthannothin.com
-
-Looking forward to hearing from you!
-
-Best regards,
-[Your Name]
-Better Than Nothin'
-[Phone Number]`
-      });
-    } else {
-      setEditedTemplate({
-        ...editedTemplate,
-        name: 'Follow-up Email',
-        subject: 'Following Up - Better Than Nothin\' Booking',
-        body: `Hi there,
-
-I wanted to follow up on my previous email about booking Better Than Nothin' at [Venue Name].
-
-We're still very interested in performing at your venue and have some upcoming dates available. Our band has been getting great feedback from venues in the area, and we think your crowd would really enjoy our high-energy country music.
-
-Would you have a few minutes to discuss potential dates? I'm happy to work with your schedule.
-
-Thanks for your time!
-
-Best regards,
-[Your Name]
-Better Than Nothin'
-[Phone Number]`
-      });
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'initial_contact':
+        return '#5D4E37';
+      case 'follow_up':
+        return '#B7410E';
+      case 'confirmation':
+        return '#87AE73';
+      default:
+        return '#708090';
     }
   };
 
   return (
     <div style={{ padding: '2rem' }}>
-      <style jsx>{`
-        .template-container {
-          background: linear-gradient(135deg, #2C1810 0%, #3D2817 50%, #2C1810 100%);
-          min-height: 100vh;
-          padding: 2rem;
-        }
-        
-        .header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 2rem;
-        }
-        
-        .header h2 {
-          color: #C8A882;
-          font-size: 1.8rem;
-          margin: 0;
-        }
-        
-        .header p {
-          color: #9B8A7A;
-          margin: 0.5rem 0 0 0;
-        }
-        
-        .btn-new {
-          background: #6B8E23;
-          color: white;
-          border: none;
-          padding: 12px 24px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-weight: 700;
-          transition: all 0.3s ease;
-        }
-        
-        .btn-new:hover {
-          background: #5a7a1f;
-          transform: translateY(-2px);
-        }
-        
-        .templates-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-          gap: 20px;
-          margin-bottom: 40px;
-        }
-        
-        .template-card {
-          background: linear-gradient(135deg, rgba(61, 40, 23, 0.9), rgba(74, 50, 32, 0.9));
-          border: 2px solid #5C4A3A;
-          border-radius: 12px;
-          padding: 25px;
-          transition: all 0.3s ease;
-          cursor: pointer;
-        }
-        
-        .template-card:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 8px 25px rgba(0,0,0,0.4);
-          border-color: #C8A882;
-        }
-        
-        .template-card.default {
-          border-color: #6B8E23;
-          border-width: 3px;
-        }
-        
-        .template-name {
-          color: #C8A882;
-          font-size: 1.3rem;
-          font-weight: 700;
-          margin-bottom: 10px;
-        }
-        
-        .template-from {
-          color: #9B8A7A;
-          font-size: 0.9rem;
-          margin-bottom: 15px;
-        }
-        
-        .template-subject {
-          color: #E8DCC4;
-          font-size: 1rem;
-          font-weight: 600;
-          margin-bottom: 10px;
-        }
-        
-        .template-preview {
-          color: #9B8A7A;
-          font-size: 0.85rem;
-          line-height: 1.5;
-          max-height: 80px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          margin-bottom: 15px;
-        }
-        
-        .template-actions {
-          display: flex;
-          gap: 10px;
-        }
-        
-        .btn-edit {
-          flex: 1;
-          background: #8B7355;
-          color: white;
-          border: none;
-          padding: 10px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-weight: 600;
-        }
-        
-        .btn-delete {
-          background: #C84630;
-          color: white;
-          border: none;
-          padding: 10px 15px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-weight: 600;
-        }
-        
-        .form-container {
-          background: linear-gradient(135deg, rgba(61, 40, 23, 0.9), rgba(74, 50, 32, 0.9));
-          border: 3px solid #8B6F47;
-          border-radius: 12px;
-          padding: 30px;
-          max-width: 900px;
-          margin: 0 auto;
-        }
-        
-        .form-title {
-          color: #C8A882;
-          font-size: 1.8rem;
-          margin-bottom: 25px;
-        }
-        
-        .form-group {
-          margin-bottom: 20px;
-        }
-        
-        .form-label {
-          display: block;
-          color: #C8A882;
-          font-weight: 600;
-          margin-bottom: 8px;
-        }
-        
-        .form-input, .form-select, .form-textarea {
-          width: 100%;
-          padding: 12px 20px;
-          background: rgba(44, 24, 16, 0.5);
-          border: 2px solid #5C4A3A;
-          border-radius: 8px;
-          color: #E8DCC4;
-          font-size: 1rem;
-          font-family: inherit;
-        }
-        
-        .form-textarea {
-          min-height: 300px;
-          resize: vertical;
-          font-family: 'Courier New', monospace;
-          line-height: 1.6;
-        }
-        
-        .form-input:focus, .form-select:focus, .form-textarea:focus {
-          outline: none;
-          border-color: #C8A882;
-        }
-        
-        .checkbox-label {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          color: #E8DCC4;
-          cursor: pointer;
-        }
-        
-        .checkbox-label input {
-          width: 20px;
-          height: 20px;
-          cursor: pointer;
-        }
-        
-        .btn-group {
-          display: flex;
-          gap: 10px;
-          margin-top: 30px;
-        }
-        
-        .btn-cancel {
-          flex: 1;
-          background: #A8A8A8;
-          color: #36454F;
-          border: none;
-          padding: 12px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-weight: 600;
-        }
-        
-        .btn-save {
-          flex: 2;
-          background: #6B8E23;
-          color: white;
-          border: none;
-          padding: 12px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-weight: 700;
-          font-size: 1.1rem;
-        }
-        
-        .template-helpers {
-          background: rgba(139, 111, 71, 0.2);
-          border: 2px solid #8B6F47;
-          border-radius: 8px;
-          padding: 15px;
-          margin-bottom: 20px;
-        }
-        
-        .helper-title {
-          color: #C8A882;
-          font-weight: 600;
-          margin-bottom: 10px;
-        }
-        
-        .helper-buttons {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-        
-        .btn-helper {
-          background: rgba(200, 168, 130, 0.2);
-          color: #C8A882;
-          border: 2px solid #C8A882;
-          padding: 8px 15px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-weight: 600;
-          font-size: 0.9rem;
-        }
-        
-        .empty-state {
-          background: rgba(61, 40, 23, 0.5);
-          padding: 4rem;
-          text-align: center;
-          color: #9B8A7A;
-          border-radius: 12px;
-          border: 2px dashed #5C4A3A;
-        }
-      `}</style>
+      {/* Header */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        marginBottom: '2rem'
+      }}>
+        <div>
+          <h2 style={{ color: '#5D4E37', margin: 0 }}>Email Templates</h2>
+          <p style={{ color: '#708090', margin: '0.5rem 0 0 0' }}>
+            Create and manage reusable email templates for venue outreach
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            if (showCreateForm) {
+              resetForm();
+            } else {
+              setShowCreateForm(true);
+            }
+          }}
+          style={{
+            padding: '0.75rem 1.5rem',
+            background: showCreateForm ? '#708090' : '#5D4E37',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: '600',
+            fontSize: '1rem'
+          }}
+        >
+          {showCreateForm ? 'Cancel' : '+ New Template'}
+        </button>
+      </div>
 
-      <div className="template-container">
-        {!isNewTemplate && !isEditMode ? (
-          <>
-            <div className="header">
+      {/* Create/Edit Form */}
+      {showCreateForm && (
+        <div style={{
+          background: '#F5F5F0',
+          padding: '2rem',
+          borderRadius: '8px',
+          marginBottom: '2rem',
+          border: '2px solid #5D4E37'
+        }}>
+          <h3 style={{ color: '#5D4E37', marginTop: 0 }}>
+            {editingTemplate ? 'Edit Template' : 'Create New Template'}
+          </h3>
+          <form onSubmit={handleSubmit}>
+            <div style={{ display: 'grid', gap: '1rem' }}>
               <div>
-                <h2>📧 Email Template Management</h2>
-                <p>Create and manage booking email templates</p>
+                <label style={{ display: 'block', color: '#5D4E37', marginBottom: '0.5rem', fontWeight: '600' }}>
+                  Template Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  placeholder="e.g., Initial Contact - Arkansas Venues"
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    borderRadius: '4px',
+                    border: '1px solid #D3D3D3'
+                  }}
+                />
               </div>
-              <button className="btn-new" onClick={startNewTemplate}>
-                + New Template
-              </button>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', color: '#5D4E37', marginBottom: '0.5rem', fontWeight: '600' }}>
+                    Sender Email *
+                  </label>
+                  <select
+                    value={formData.sender_email}
+                    onChange={(e) => setFormData({...formData, sender_email: e.target.value})}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      borderRadius: '4px',
+                      border: '1px solid #D3D3D3'
+                    }}
+                  >
+                    <option value="scott@camelranchbooking.com">scott@camelranchbooking.com</option>
+                    <option value="jake@camelranchbooking.com">jake@camelranchbooking.com</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', color: '#5D4E37', marginBottom: '0.5rem', fontWeight: '600' }}>
+                    Template Type *
+                  </label>
+                  <select
+                    value={formData.template_type}
+                    onChange={(e) => setFormData({...formData, template_type: e.target.value})}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      borderRadius: '4px',
+                      border: '1px solid #D3D3D3'
+                    }}
+                  >
+                    <option value="initial_contact">Initial Contact</option>
+                    <option value="follow_up">Follow Up</option>
+                    <option value="confirmation">Confirmation</option>
+                    <option value="thank_you">Thank You</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', color: '#5D4E37', marginBottom: '0.5rem', fontWeight: '600' }}>
+                  Email Subject *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.subject}
+                  onChange={(e) => setFormData({...formData, subject: e.target.value})}
+                  placeholder="e.g., Booking Inquiry - Better Than Nothin' Band"
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    borderRadius: '4px',
+                    border: '1px solid #D3D3D3'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', color: '#5D4E37', marginBottom: '0.5rem', fontWeight: '600' }}>
+                  Email Body *
+                </label>
+                <textarea
+                  required
+                  value={formData.body}
+                  onChange={(e) => setFormData({...formData, body: e.target.value})}
+                  rows={12}
+                  placeholder="Hi [Venue Name],
+
+I hope this message finds you well! My name is Scott with Better Than Nothin', a country/honky-tonk band based out of Northwest Arkansas...
+
+Use [Venue Name], [City], [State] as placeholders"
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    borderRadius: '4px',
+                    border: '1px solid #D3D3D3',
+                    fontFamily: 'monospace',
+                    fontSize: '0.95rem'
+                  }}
+                />
+                <p style={{ color: '#708090', fontSize: '0.85rem', margin: '0.5rem 0 0 0' }}>
+                  💡 Tip: Use [Venue Name], [City], [State], [Date] as placeholders that will be replaced automatically
+                </p>
+              </div>
             </div>
 
-            {templates.length === 0 ? (
-              <div className="empty-state">
-                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📧</div>
-                <p style={{ fontSize: '1.1rem', fontWeight: '600', color: '#C8A882', marginBottom: '1rem' }}>
-                  No email templates yet
-                </p>
-                <p>Create your first template to streamline venue outreach!</p>
-              </div>
-            ) : (
-              <div className="templates-grid">
-                {templates.map((template) => (
-                  <div
-                    key={template.id}
-                    className={`template-card ${template.is_default ? 'default' : ''}`}
-                  >
-                    {template.is_default && (
-                      <div style={{
-                        background: '#6B8E23',
-                        color: 'white',
-                        padding: '4px 12px',
-                        borderRadius: '4px',
-                        display: 'inline-block',
-                        fontSize: '0.75rem',
-                        fontWeight: '700',
-                        marginBottom: '10px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '1px'
-                      }}>
-                        ⭐ Default
-                      </div>
-                    )}
-                    <div className="template-name">{template.name}</div>
-                    <div className="template-from">From: {template.from_email}</div>
-                    <div className="template-subject">Subject: {template.subject}</div>
-                    <div className="template-preview">{template.body}</div>
-                    <div className="template-actions">
-                      <button
-                        className="btn-edit"
-                        onClick={() => startEditTemplate(template)}
-                      >
-                        ✏️ Edit
-                      </button>
-                      <button
-                        className="btn-delete"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteTemplate(template.id);
-                        }}
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="form-container">
-            <h3 className="form-title">
-              {isNewTemplate ? '📝 Create New Template' : '✏️ Edit Template'}
-            </h3>
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+              <button
+                type="submit"
+                style={{
+                  padding: '0.75rem 2rem',
+                  background: '#5D4E37',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '1rem'
+                }}
+              >
+                {editingTemplate ? 'Update Template' : 'Create Template'}
+              </button>
+              {editingTemplate && (
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  style={{
+                    padding: '0.75rem 2rem',
+                    background: '#708090',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    fontSize: '1rem'
+                  }}
+                >
+                  Cancel Edit
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+      )}
 
-            {isNewTemplate && (
-              <div className="template-helpers">
-                <div className="helper-title">Quick Start Templates:</div>
-                <div className="helper-buttons">
+      {/* Templates List */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '3rem', color: '#708090' }}>
+          Loading templates...
+        </div>
+      ) : templates.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '3rem', color: '#708090' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>✉️</div>
+          <p>No email templates yet. Create your first template to streamline venue outreach!</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: '1.5rem' }}>
+          {templates.map((template) => (
+            <div
+              key={template.id}
+              style={{
+                background: 'white',
+                padding: '1.5rem',
+                borderRadius: '8px',
+                border: '2px solid #D3D3D3',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1rem' }}>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ color: '#5D4E37', margin: '0 0 0.5rem 0' }}>{template.name}</h3>
+                  <div style={{ display: 'flex', gap: '1.5rem', color: '#708090', fontSize: '0.9rem' }}>
+                    <span>📧 {template.sender_email}</span>
+                    <span style={{
+                      padding: '0.25rem 0.75rem',
+                      background: getTypeColor(template.template_type),
+                      color: 'white',
+                      borderRadius: '12px',
+                      fontSize: '0.8rem',
+                      fontWeight: '600',
+                      textTransform: 'uppercase'
+                    }}>
+                      {template.template_type.replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button
-                    className="btn-helper"
-                    onClick={() => insertDefaultTemplate('initial')}
+                    onClick={() => handleEdit(template)}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      background: '#5D4E37',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem'
+                    }}
                   >
-                    📩 Initial Booking Request
+                    Edit
                   </button>
                   <button
-                    className="btn-helper"
-                    onClick={() => insertDefaultTemplate('followup')}
+                    onClick={() => handleDelete(template.id, template.name)}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      background: '#C33',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem'
+                    }}
                   >
-                    🔄 Follow-up Email
+                    Delete
                   </button>
                 </div>
               </div>
-            )}
 
-            <div className="form-group">
-              <label className="form-label">Template Name *</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="e.g., Initial Booking Request"
-                value={editedTemplate.name}
-                onChange={(e) => setEditedTemplate({ ...editedTemplate, name: e.target.value })}
-              />
+              <div style={{
+                background: '#F5F5F0',
+                padding: '1rem',
+                borderRadius: '4px',
+                marginTop: '1rem'
+              }}>
+                <p style={{ color: '#5D4E37', fontWeight: '600', margin: '0 0 0.5rem 0' }}>
+                  Subject: {template.subject}
+                </p>
+                <div style={{
+                  color: '#708090',
+                  fontSize: '0.9rem',
+                  whiteSpace: 'pre-wrap',
+                  fontFamily: 'monospace',
+                  maxHeight: '200px',
+                  overflow: 'auto',
+                  lineHeight: '1.6'
+                }}>
+                  {template.body}
+                </div>
+              </div>
             </div>
-
-            <div className="form-group">
-              <label className="form-label">From Email *</label>
-              <select
-                className="form-select"
-                value={editedTemplate.from_email}
-                onChange={(e) => setEditedTemplate({
-                  ...editedTemplate,
-                  from_email: e.target.value as 'scott@camelranchbooking.com' | 'jake@camelranchbooking.com'
-                })}
-              >
-                <option value="scott@camelranchbooking.com">scott@camelranchbooking.com</option>
-                <option value="jake@camelranchbooking.com">jake@camelranchbooking.com</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Email Subject *</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="e.g., Booking Inquiry - Better Than Nothin' Band"
-                value={editedTemplate.subject}
-                onChange={(e) => setEditedTemplate({ ...editedTemplate, subject: e.target.value })}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Email Body *</label>
-              <textarea
-                className="form-textarea"
-                placeholder="Write your email template here..."
-                value={editedTemplate.body}
-                onChange={(e) => setEditedTemplate({ ...editedTemplate, body: e.target.value })}
-              />
-              <p style={{ color: '#9B8A7A', fontSize: '0.85rem', marginTop: '8px' }}>
-                Tip: Use placeholders like [Venue Name], [Your Name], [Date Range] that you can fill in when sending
-              </p>
-            </div>
-
-            <div className="form-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={editedTemplate.is_default || false}
-                  onChange={(e) => setEditedTemplate({ ...editedTemplate, is_default: e.target.checked })}
-                />
-                <span>Set as default template</span>
-              </label>
-            </div>
-
-            <div className="btn-group">
-              <button className="btn-cancel" onClick={cancelEdit}>
-                Cancel
-              </button>
-              <button
-                className="btn-save"
-                onClick={isNewTemplate ? createTemplate : updateTemplate}
-              >
-                {isNewTemplate ? '✅ Create Template' : '✅ Save Changes'}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
