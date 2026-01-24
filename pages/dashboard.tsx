@@ -136,11 +136,12 @@ function DashboardContent() {
             textAlign: 'center'
           }}>
             <h2 style={{ color: '#5D4E37', marginBottom: '1rem' }}>
-              {activeTab === 'venues' && '🔍 Venue Search'}
-              {activeTab === 'campaigns' && '🎯 Campaign Manager'}
-              {activeTab === 'booking-runs' && '🎸 Booking Runs'}
-              {activeTab === 'emails' && '📧 Email Manager'}
-              {activeTab === 'social' && '📱 Social Media'}
+             import Dashboard from '../components/Dashboard';
+import BookingRuns from '../components/BookingRuns';
+import VenueSearch from '../components/VenueSearch';
+import CampaignManager from '../components/CampaignManager';
+import EmailTemplates from '../components/EmailTemplates';
+import SocialMedia from '../components/SocialMedia';
             </h2>
             <p style={{ color: '#708090' }}>Building this component now...</p>
           </div>
