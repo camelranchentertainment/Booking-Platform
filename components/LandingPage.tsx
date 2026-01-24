@@ -19,8 +19,9 @@ export default function LandingPage() {
     };
 
     if (validUsers[email.toLowerCase()] === password) {
-      localStorage.setItem('isAuthenticated', 'true');
-      router.push('/dashboard');
+  localStorage.setItem('loggedInUser', JSON.stringify({ email: email.toLowerCase() }));
+  router.push('/dashboard');
+  }
     } else {
       setError('Invalid credentials');
     }
