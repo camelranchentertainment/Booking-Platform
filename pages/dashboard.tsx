@@ -4,8 +4,8 @@ import Dashboard from '../components/Dashboard';
 import BookingRunManager from '../components/BookingRunManager';
 import VenueSearch from '../components/VenueSearch';
 import CampaignManager from '../components/CampaignManager';
-import EmailTemplates from '../components/EmailTemplates';
-import SocialMedia from '../components/SocialMedia';
+import EmailTemplateManager from '../components/EmailTemplateManager';
+import SocialMediaCampaign from '../components/SocialMediaCampaign';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -136,8 +136,8 @@ export default function DashboardPage() {
         {activeTab === 'booking-runs' && <BookingRunManager />}
         {activeTab === 'venue-search' && <VenueSearch />}
         {activeTab === 'campaigns' && <CampaignManager />}
-        {activeTab === 'emails' && <EmailTemplates />}
-        {activeTab === 'social' && <SocialMedia />}
+        {activeTab === 'emails' && <EmailTemplateManager />}
+        {activeTab === 'social' && <SocialMediaCampaign />}
       </div>
     </div>
   );
