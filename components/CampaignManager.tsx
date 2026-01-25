@@ -996,7 +996,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
               <button
                 onClick={() => {
                   setShowCreateModal(false);
-                  setNewCampaign({ name: '', date_range_start: '', date_range_end: '', cities: '', radius: 10 });
+                  setNewCampaign({ name: '', date_range_start: '', date_range_end: '', locations: [{ city: '', state: 'TX' }], radius: 10 });
                 }}
                 style={{
                   flex: 1,
