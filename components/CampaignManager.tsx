@@ -89,6 +89,15 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
     try {
       const citiesArray = newCampaign.cities.split(',').map(c => c.trim()).filter(c => c);
       
+      console.log('Creating campaign with data:', {
+        name: newCampaign.name,
+        date_range_start: newCampaign.date_range_start || null,
+        date_range_end: newCampaign.date_range_end || null,
+        cities: citiesArray,
+        radius: newCampaign.radius,
+        status: 'active'
+      });
+
       const { data, error } = await supabase
         .from('campaigns')
         .insert([{
@@ -102,7 +111,12 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Campaign creation error:', error);
+        throw error;
+      }
+
+      console.log('Campaign created successfully:', data);
 
       alert('✅ Campaign created! Starting venue discovery...');
       setShowCreateModal(false);
@@ -115,7 +129,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
       loadCampaigns();
     } catch (error) {
       console.error('Error creating campaign:', error);
-      alert('Error creating campaign');
+      alert(`Error creating campaign: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -326,6 +340,33 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
     }
   };
 
+  const deleteCampaign = async (campaignId: string, campaignName: string) => {
+    if (!confirm(`Delete campaign "${campaignName}"? This will remove all venues from this campaign.`)) return;
+
+    try {
+      // First delete all campaign_venues entries
+      await supabase
+        .from('campaign_venues')
+        .delete()
+        .eq('campaign_id', campaignId);
+
+      // Then delete the campaign
+      const { error } = await supabase
+        .from('campaigns')
+        .delete()
+        .eq('id', campaignId);
+
+      if (error) throw error;
+
+      alert('✅ Campaign deleted');
+      loadCampaigns(); // Refresh list
+      setSelectedCampaign(null); // Clear selection if viewing deleted campaign
+    } catch (error) {
+      console.error('Error deleting campaign:', error);
+      alert('Error deleting campaign');
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const styles: { [key: string]: React.CSSProperties } = {
       'contact?': { background: '#A8A8A8', color: 'white' },
@@ -494,11 +535,35 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
               <div
                 key={campaign.id}
                 className="campaign-card"
-                onClick={() => openCampaignDetail(campaign)}
+                style={{ position: 'relative' }}
               >
-                <h3 style={{ color: '#C8A882', fontSize: '1.4rem', marginBottom: '1rem' }}>
-                  {campaign.name}
-                </h3>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteCampaign(campaign.id, campaign.name);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: '1rem',
+                    right: '1rem',
+                    background: '#C84630',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '0.5rem 0.75rem',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    fontWeight: '600',
+                    zIndex: 10
+                  }}
+                  title="Delete campaign"
+                >
+                  🗑️ Delete
+                </button>
+                <div onClick={() => openCampaignDetail(campaign)}>
+                  <h3 style={{ color: '#C8A882', fontSize: '1.4rem', marginBottom: '1rem' }}>
+                    {campaign.name}
+                  </h3>
                 
                 {campaign.date_range_start && (
                   <div style={{ color: '#E8DCC4', fontSize: '0.9rem', marginBottom: '1rem' }}>
@@ -506,35 +571,36 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
                   </div>
                 )}
 
-                <div style={{ color: '#9B8A7A', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                  📍 {campaign.cities?.join(', ')} ({campaign.radius}mi radius)
-                </div>
+                  <div style={{ color: '#9B8A7A', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                    📍 {campaign.cities?.join(', ')} ({campaign.radius}mi radius)
+                  </div>
 
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: '1rem',
-                  marginTop: '1rem',
-                  paddingTop: '1rem',
-                  borderTop: '1px solid #5C4A3A'
-                }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ color: '#C8A882', fontSize: '1.5rem', fontWeight: '700' }}>
-                      {campaign.total_venues || 0}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '1rem',
+                    marginTop: '1rem',
+                    paddingTop: '1rem',
+                    borderTop: '1px solid #5C4A3A'
+                  }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: '#C8A882', fontSize: '1.5rem', fontWeight: '700' }}>
+                        {campaign.total_venues || 0}
+                      </div>
+                      <div style={{ color: '#E8DCC4', fontSize: '0.75rem' }}>Venues</div>
                     </div>
-                    <div style={{ color: '#E8DCC4', fontSize: '0.75rem' }}>Venues</div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ color: '#B7410E', fontSize: '1.5rem', fontWeight: '700' }}>
-                      {campaign.contacted || 0}
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: '#B7410E', fontSize: '1.5rem', fontWeight: '700' }}>
+                        {campaign.contacted || 0}
+                      </div>
+                      <div style={{ color: '#E8DCC4', fontSize: '0.75rem' }}>Contacted</div>
                     </div>
-                    <div style={{ color: '#E8DCC4', fontSize: '0.75rem' }}>Contacted</div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ color: '#87AE73', fontSize: '1.5rem', fontWeight: '700' }}>
-                      {campaign.confirmed || 0}
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: '#87AE73', fontSize: '1.5rem', fontWeight: '700' }}>
+                        {campaign.confirmed || 0}
+                      </div>
+                      <div style={{ color: '#E8DCC4', fontSize: '0.75rem' }}>Booked</div>
                     </div>
-                    <div style={{ color: '#E8DCC4', fontSize: '0.75rem' }}>Booked</div>
                   </div>
                 </div>
               </div>
