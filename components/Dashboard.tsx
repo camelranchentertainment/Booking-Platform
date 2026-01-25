@@ -218,7 +218,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               margin: 0,
               marginBottom: '0.5rem'
             }}>
-              🎸 Tour Command Center
+              Tour Command Center
             </h1>
             <p style={{ color: '#708090', margin: 0, fontSize: '1.1rem' }}>
               What needs your attention today
@@ -302,7 +302,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 color: '#5D4E37',
                 marginBottom: '1.5rem'
               }}>
-                🎯 Active Campaigns
+                Active Campaigns
               </h2>
 
               {campaigns.length === 0 ? (
