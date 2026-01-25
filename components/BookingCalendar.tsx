@@ -285,7 +285,7 @@ function MonthCard({
   const today = new Date();
   const isCurrentMonth = today.getMonth() === monthIndex && today.getFullYear() === year;
 
-  const days = [];
+  const days: JSX.Element[] = [];
   
   // Empty cells for days before month starts
   for (let i = 0; i < startingDayOfWeek; i++) {
