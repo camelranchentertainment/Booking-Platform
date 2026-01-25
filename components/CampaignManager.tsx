@@ -30,7 +30,11 @@ interface Venue {
   contact_status?: string;
 }
 
-export default function CampaignManager() {
+interface CampaignManagerProps {
+  initialData?: any;
+}
+
+export default function CampaignManager({ initialData }: CampaignManagerProps) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -51,6 +55,16 @@ export default function CampaignManager() {
   useEffect(() => {
     loadCampaigns();
   }, []);
+
+  useEffect(() => {
+    // Handle navigation from Dashboard
+    if (initialData?.campaignId) {
+      const campaign = campaigns.find(c => c.id === initialData.campaignId);
+      if (campaign) {
+        openCampaignDetail(campaign);
+      }
+    }
+  }, [initialData, campaigns]);
 
   const loadCampaigns = async () => {
     try {
@@ -248,6 +262,28 @@ export default function CampaignManager() {
       }
     } catch (error) {
       console.error('Error updating email:', error);
+    }
+  };
+
+  const removeVenueFromCampaign = async (campaignVenueId: string) => {
+    if (!confirm('Remove this venue from the campaign?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('campaign_venues')
+        .delete()
+        .eq('id', campaignVenueId);
+
+      if (error) throw error;
+
+      if (selectedCampaign) {
+        openCampaignDetail(selectedCampaign); // Refresh
+      }
+
+      alert('✅ Venue removed from campaign');
+    } catch (error) {
+      console.error('Error removing venue:', error);
+      alert('Error removing venue from campaign');
     }
   };
 
@@ -549,6 +585,22 @@ export default function CampaignManager() {
                           <option value="declined">Declined</option>
                           <option value="booked">Booked</option>
                         </select>
+                        <button
+                          onClick={() => removeVenueFromCampaign(cv.id)}
+                          style={{
+                            padding: '0.5rem 0.75rem',
+                            background: '#C84630',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            fontWeight: '600'
+                          }}
+                          title="Remove from campaign"
+                        >
+                          ✕
+                        </button>
                       </div>
                     </div>
                   </div>
