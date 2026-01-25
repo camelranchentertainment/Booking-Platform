@@ -43,14 +43,32 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [selectedVenueIds, setSelectedVenueIds] = useState<string[]>([]);
 
-  // New campaign form
   const [newCampaign, setNewCampaign] = useState({
     name: '',
     date_range_start: '',
     date_range_end: '',
-    cities: '',
+    locations: [{ city: '', state: 'TX' }], // Array of {city, state} objects
     radius: 10
   });
+
+  const addLocationRow = () => {
+    setNewCampaign({
+      ...newCampaign,
+      locations: [...newCampaign.locations, { city: '', state: 'TX' }]
+    });
+  };
+
+  const removeLocationRow = (index: number) => {
+    if (newCampaign.locations.length === 1) return; // Keep at least one row
+    const newLocations = newCampaign.locations.filter((_, i) => i !== index);
+    setNewCampaign({ ...newCampaign, locations: newLocations });
+  };
+
+  const updateLocation = (index: number, field: 'city' | 'state', value: string) => {
+    const newLocations = [...newCampaign.locations];
+    newLocations[index][field] = value;
+    setNewCampaign({ ...newCampaign, locations: newLocations });
+  };
 
   useEffect(() => {
     loadCampaigns();
@@ -81,19 +99,27 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
   };
 
   const createCampaign = async () => {
-    if (!newCampaign.name || !newCampaign.cities) {
-      alert('Please enter campaign name and cities');
+    if (!newCampaign.name) {
+      alert('Please enter campaign name');
+      return;
+    }
+
+    // Validate at least one city is filled
+    const validLocations = newCampaign.locations.filter(loc => loc.city.trim());
+    if (validLocations.length === 0) {
+      alert('Please enter at least one city');
       return;
     }
 
     try {
-      const citiesArray = newCampaign.cities.split(',').map(c => c.trim()).filter(c => c);
+      // Store cities with states as "City, ST" format
+      const citiesWithStates = validLocations.map(loc => `${loc.city.trim()}, ${loc.state.trim().toUpperCase()}`);
       
       console.log('Creating campaign with data:', {
         name: newCampaign.name,
         date_range_start: newCampaign.date_range_start || null,
         date_range_end: newCampaign.date_range_end || null,
-        cities: citiesArray,
+        cities: citiesWithStates,
         radius: newCampaign.radius,
         status: 'active'
       });
@@ -104,7 +130,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
           name: newCampaign.name,
           date_range_start: newCampaign.date_range_start || null,
           date_range_end: newCampaign.date_range_end || null,
-          cities: citiesArray,
+          cities: citiesWithStates,
           radius: newCampaign.radius,
           status: 'active'
         }])
@@ -120,7 +146,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
 
       alert('✅ Campaign created! Starting venue discovery...');
       setShowCreateModal(false);
-      setNewCampaign({ name: '', date_range_start: '', date_range_end: '', cities: '', radius: 10 });
+      setNewCampaign({ name: '', date_range_start: '', date_range_end: '', locations: [{ city: '', state: 'TX' }], radius: 10 });
       
       // Auto-discover venues for the new campaign
       setSelectedCampaign(data);
@@ -153,13 +179,18 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
         return;
       }
       
-      for (const city of cities) {
-        console.log(`Discovering venues in ${city}...`);
+      for (const cityState of cities) {
+        // Parse "City, ST" format
+        const parts = cityState.split(',').map(p => p.trim());
+        const city = parts[0];
+        const state = parts[1] || 'AR'; // Default to AR if no state
+        
+        console.log(`Discovering venues in ${city}, ${state}...`);
         
         try {
           const results = await discoveryService.searchVenues({
             city: city,
-            state: 'AR', // TODO: You may want to make state dynamic
+            state: state,
             radiusMiles: campaign.radius
           });
           
@@ -852,16 +883,97 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Cities *</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="e.g., Dallas, Austin, Fort Worth"
-                value={newCampaign.cities}
-                onChange={(e) => setNewCampaign({ ...newCampaign, cities: e.target.value })}
-              />
+              <label className="form-label">Cities & States *</label>
+              {newCampaign.locations.map((location, index) => (
+                <div key={index} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="City name"
+                    value={location.city}
+                    onChange={(e) => updateLocation(index, 'city', e.target.value)}
+                    style={{ flex: 2 }}
+                  />
+                  <select
+                    className="form-input"
+                    value={location.state}
+                    onChange={(e) => updateLocation(index, 'state', e.target.value)}
+                    style={{ flex: 1 }}
+                  >
+                    <option value="AL">AL</option>
+                    <option value="AR">AR</option>
+                    <option value="AZ">AZ</option>
+                    <option value="CA">CA</option>
+                    <option value="CO">CO</option>
+                    <option value="FL">FL</option>
+                    <option value="GA">GA</option>
+                    <option value="IA">IA</option>
+                    <option value="IL">IL</option>
+                    <option value="IN">IN</option>
+                    <option value="KS">KS</option>
+                    <option value="KY">KY</option>
+                    <option value="LA">LA</option>
+                    <option value="MN">MN</option>
+                    <option value="MO">MO</option>
+                    <option value="MS">MS</option>
+                    <option value="NC">NC</option>
+                    <option value="NE">NE</option>
+                    <option value="NM">NM</option>
+                    <option value="NV">NV</option>
+                    <option value="NY">NY</option>
+                    <option value="OH">OH</option>
+                    <option value="OK">OK</option>
+                    <option value="OR">OR</option>
+                    <option value="PA">PA</option>
+                    <option value="SC">SC</option>
+                    <option value="TN">TN</option>
+                    <option value="TX">TX</option>
+                    <option value="UT">UT</option>
+                    <option value="VA">VA</option>
+                    <option value="WA">WA</option>
+                    <option value="WI">WI</option>
+                  </select>
+                  {index === newCampaign.locations.length - 1 ? (
+                    <button
+                      type="button"
+                      onClick={addLocationRow}
+                      style={{
+                        padding: '0.75rem',
+                        background: '#87AE73',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: '700',
+                        fontSize: '1.2rem'
+                      }}
+                      title="Add another city"
+                    >
+                      +
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => removeLocationRow(index)}
+                      style={{
+                        padding: '0.75rem',
+                        background: '#C84630',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: '700',
+                        fontSize: '1.2rem'
+                      }}
+                      title="Remove this city"
+                    >
+                      −
+                    </button>
+                  )}
+                </div>
+              ))}
               <div style={{ color: '#9B8A7A', fontSize: '0.85rem', marginTop: '0.25rem' }}>
-                Comma-separated list of cities
+                Add as many cities as needed for your tour
               </div>
             </div>
 
