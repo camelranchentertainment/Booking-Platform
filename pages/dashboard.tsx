@@ -6,6 +6,7 @@ import CampaignManager from '../components/CampaignManager';
 import EmailTemplateManager from '../components/EmailTemplateManager';
 import SocialMediaCampaign from '../components/SocialMediaCampaign';
 import VenueContactManager from '../components/VenueContactManager';
+import BookingCalendar from '../components/BookingCalendar';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -48,6 +49,7 @@ export default function DashboardPage() {
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'calendar', label: 'Calendar', icon: '📅' },
     { id: 'campaigns', label: 'Campaign Manager', icon: '🎯' },
     { id: 'contact-info', label: 'Contact Info', icon: '📧' },
     { id: 'emails', label: 'Email Templates', icon: '✉️' },
@@ -133,9 +135,10 @@ export default function DashboardPage() {
       <div style={{
         maxWidth: '1400px',
         margin: '0 auto',
-        padding: activeTab === 'dashboard' ? '0' : '2rem'
+        padding: activeTab === 'dashboard' || activeTab === 'calendar' ? '0' : '2rem'
       }}>
         {activeTab === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
+        {activeTab === 'calendar' && <BookingCalendar />}
         {activeTab === 'campaigns' && <CampaignManager initialData={navigationData} />}
         {activeTab === 'contact-info' && <VenueContactManager />}
         {activeTab === 'venue-database' && <VenueSearch />}
