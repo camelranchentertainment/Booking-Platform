@@ -125,53 +125,85 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
       const allVenues: Venue[] = [];
       const discoveryService = new VenueDiscoveryService();
       
-      for (const city of campaign.cities) {
-        const results = await discoveryService.searchVenues({
-          city: city,
-          state: 'AR', // TODO: You may want to make state dynamic
-          radiusMiles: campaign.radius
-        });
+      // Ensure cities is an array
+      let cities = campaign.cities;
+      if (typeof cities === 'string') {
+        cities = [cities];
+      } else if (!Array.isArray(cities)) {
+        cities = [];
+      }
+      
+      if (cities.length === 0) {
+        alert('No cities specified for this campaign');
+        setIsDiscovering(false);
+        return;
+      }
+      
+      for (const city of cities) {
+        console.log(`Discovering venues in ${city}...`);
         
-        // Save to database and collect
-        for (const venue of results) {
-          const { data: existing } = await supabase
-            .from('venues')
-            .select('*')
-            .ilike('name', venue.name)
-            .ilike('city', venue.city)
-            .limit(1)
-            .single();
+        try {
+          const results = await discoveryService.searchVenues({
+            city: city,
+            state: 'AR', // TODO: You may want to make state dynamic
+            radiusMiles: campaign.radius
+          });
+          
+          console.log(`Found ${results.length} venues in ${city}`);
+          
+          // Save to database and collect
+          for (const venue of results) {
+            try {
+              const { data: existing } = await supabase
+                .from('venues')
+                .select('*')
+                .ilike('name', venue.name)
+                .ilike('city', venue.city)
+                .limit(1)
+                .single();
 
-          if (existing) {
-            allVenues.push(existing);
-          } else {
-            const { data: newVenue, error } = await supabase
-              .from('venues')
-              .insert([{
-                name: venue.name,
-                city: venue.city,
-                state: venue.state || 'Unknown',
-                address: venue.address,
-                phone: venue.phone,
-                website: venue.website,
-                venue_type: venue.venueType,
-                contact_status: 'not_contacted'
-              }])
-              .select()
-              .single();
+              if (existing) {
+                allVenues.push(existing);
+              } else {
+                const { data: newVenue, error } = await supabase
+                  .from('venues')
+                  .insert([{
+                    name: venue.name,
+                    city: venue.city,
+                    state: venue.state || 'Unknown',
+                    address: venue.address,
+                    phone: venue.phone,
+                    website: venue.website,
+                    venue_type: venue.venueType,
+                    contact_status: 'not_contacted'
+                  }])
+                  .select()
+                  .single();
 
-            if (!error && newVenue) {
-              allVenues.push(newVenue);
+                if (!error && newVenue) {
+                  allVenues.push(newVenue);
+                }
+              }
+            } catch (venueError) {
+              console.error(`Error saving venue ${venue.name}:`, venueError);
             }
           }
+        } catch (cityError) {
+          console.error(`Error discovering venues in ${city}:`, cityError);
+          alert(`Warning: Could not discover venues in ${city}. Check console for details.`);
         }
       }
 
       setDiscoveredVenues(allVenues);
-      alert(`✅ Discovered ${allVenues.length} venues across ${campaign.cities.length} cities!`);
+      
+      if (allVenues.length > 0) {
+        alert(`✅ Discovered ${allVenues.length} venues across ${cities.length} cities!`);
+      } else {
+        alert(`⚠️ No venues found. This could be due to:\n- Missing Google API key\n- API rate limits\n- No venues matching criteria\n\nCheck browser console for details.`);
+      }
     } catch (error) {
       console.error('Error discovering venues:', error);
-      alert('Error discovering venues');
+      alert(`Error discovering venues: ${error instanceof Error ? error.message : 'Unknown error'}\n\nCheck browser console for details.`);
     } finally {
       setIsDiscovering(false);
     }
@@ -180,6 +212,13 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
   const openCampaignDetail = async (campaign: Campaign) => {
     setSelectedCampaign(campaign);
     setSelectedVenueIds([]);
+    
+    // Ensure cities is an array
+    if (typeof campaign.cities === 'string') {
+      campaign.cities = [campaign.cities];
+    } else if (!Array.isArray(campaign.cities)) {
+      campaign.cities = [];
+    }
     
     // Load venues already in this campaign
     const { data: campaignVenuesData } = await supabase
