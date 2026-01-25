@@ -440,7 +440,8 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                       <div
                         key={idx}
                         onClick={() => {
-                          if (action.type === 'social_approval') onNavigate?.('social');
+                          if (action.type === 'email_needed') onNavigate?.('contact-info');
+                          else if (action.type === 'social_approval') onNavigate?.('social');
                           else onNavigate?.('campaigns');
                         }}
                         style={{
