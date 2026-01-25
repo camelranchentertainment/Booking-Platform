@@ -390,7 +390,7 @@ export default function EmailTemplates() {
                         <span style={{ fontSize: '1.5rem' }}>{typeInfo.icon}</span>
                         <div>
                           <div style={{ fontSize: '0.75rem', opacity: 0.9, fontWeight: '500' }}>{typeInfo.label}</div>
-                          <div style={{ fontSize: '0.85rem', opacity: 0.8' }}>
+                          <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
                             {template.sender_email?.split('@')[0] || 'Unknown'}
                           </div>
                         </div>
