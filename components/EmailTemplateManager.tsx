@@ -65,11 +65,11 @@ export default function EmailTemplates() {
   const handleEdit = (template: EmailTemplate) => {
     setEditingTemplate(template);
     setFormData({
-      name: template.name,
-      subject: template.subject,
-      body: template.body,
-      sender_email: template.sender_email,
-      template_type: template.template_type
+      name: template.name || '',
+      subject: template.subject || '',
+      body: template.body || '',
+      sender_email: template.sender_email || 'scott@camelranchbooking.com',
+      template_type: template.template_type || 'initial_contact'
     });
     setShowCreateForm(true);
   };
@@ -337,19 +337,19 @@ Use [Venue Name], [City], [State] as placeholders"
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1rem' }}>
                 <div style={{ flex: 1 }}>
-                  <h3 style={{ color: '#5D4E37', margin: '0 0 0.5rem 0' }}>{template.name}</h3>
+                  <h3 style={{ color: '#5D4E37', margin: '0 0 0.5rem 0' }}>{template.name || 'Untitled Template'}</h3>
                   <div style={{ display: 'flex', gap: '1.5rem', color: '#708090', fontSize: '0.9rem' }}>
-                    <span>📧 {template.sender_email}</span>
+                    <span>📧 {template.sender_email || 'No sender'}</span>
                     <span style={{
                       padding: '0.25rem 0.75rem',
-                      background: getTypeColor(template.template_type),
+                      background: getTypeColor(template.template_type || 'general'),
                       color: 'white',
                       borderRadius: '12px',
                       fontSize: '0.8rem',
                       fontWeight: '600',
                       textTransform: 'uppercase'
                     }}>
-                      {template.template_type.replace('_', ' ')}
+                      {template.template_type ? template.template_type.replace('_', ' ') : 'General'}
                     </span>
                   </div>
                 </div>
@@ -370,7 +370,7 @@ Use [Venue Name], [City], [State] as placeholders"
                     Edit
                   </button>
                   <button
-                    onClick={() => handleDelete(template.id, template.name)}
+                    onClick={() => handleDelete(template.id, template.name || 'this template')}
                     style={{
                       padding: '0.5rem 1rem',
                       background: '#C33',
@@ -393,7 +393,7 @@ Use [Venue Name], [City], [State] as placeholders"
                 marginTop: '1rem'
               }}>
                 <p style={{ color: '#5D4E37', fontWeight: '600', margin: '0 0 0.5rem 0' }}>
-                  Subject: {template.subject}
+                  Subject: {template.subject || 'No subject'}
                 </p>
                 <div style={{
                   color: '#708090',
@@ -404,7 +404,7 @@ Use [Venue Name], [City], [State] as placeholders"
                   overflow: 'auto',
                   lineHeight: '1.6'
                 }}>
-                  {template.body}
+                  {template.body || 'No body content'}
                 </div>
               </div>
             </div>
