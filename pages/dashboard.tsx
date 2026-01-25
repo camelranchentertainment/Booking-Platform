@@ -5,6 +5,7 @@ import VenueSearch from '../components/VenueSearch';
 import CampaignManager from '../components/CampaignManager';
 import EmailTemplateManager from '../components/EmailTemplateManager';
 import SocialMediaCampaign from '../components/SocialMediaCampaign';
+import VenueContactManager from '../components/VenueContactManager';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -48,6 +49,7 @@ export default function DashboardPage() {
   const tabs = [
     { id: 'dashboard', label: '📊 Dashboard', icon: '📊' },
     { id: 'campaigns', label: '🎯 Campaign Manager', icon: '🎯' },
+    { id: 'contact-info', label: '📧 Contact Info', icon: '📧' },
     { id: 'emails', label: '✉️ Email Templates', icon: '✉️' },
     { id: 'social', label: '📱 Social Media', icon: '📱' },
     { id: 'venue-database', label: '🗂️ Venue Database', icon: '🗂️' }
@@ -138,6 +140,7 @@ export default function DashboardPage() {
       }}>
         {activeTab === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
         {activeTab === 'campaigns' && <CampaignManager initialData={navigationData} />}
+        {activeTab === 'contact-info' && <VenueContactManager />}
         {activeTab === 'venue-database' && <VenueSearch />}
         {activeTab === 'emails' && <EmailTemplateManager />}
         {activeTab === 'social' && <SocialMediaCampaign />}
