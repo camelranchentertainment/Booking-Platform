@@ -47,12 +47,12 @@ export default function DashboardPage() {
   };
 
   const tabs = [
-    { id: 'dashboard', label: '📊 Dashboard', icon: '📊' },
-    { id: 'campaigns', label: '🎯 Campaign Manager', icon: '🎯' },
-    { id: 'contact-info', label: '📧 Contact Info', icon: '📧' },
-    { id: 'emails', label: '✉️ Email Templates', icon: '✉️' },
-    { id: 'social', label: '📱 Social Media', icon: '📱' },
-    { id: 'venue-database', label: '🗂️ Venue Database', icon: '🗂️' }
+    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'campaigns', label: 'Campaign Manager', icon: '🎯' },
+    { id: 'contact-info', label: 'Contact Info', icon: '📧' },
+    { id: 'emails', label: 'Email Templates', icon: '✉️' },
+    { id: 'social', label: 'Social Media', icon: '📱' },
+    { id: 'venue-database', label: 'Venue Database', icon: '🗂️' }
   ];
 
   return (
@@ -72,10 +72,7 @@ export default function DashboardPage() {
           margin: '0 auto'
         }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: '1.8rem' }}>🎸 Camel Ranch Booking</h1>
-            <p style={{ margin: '0.25rem 0 0 0', opacity: 0.9, fontSize: '0.9rem' }}>
-              Better Than Nothin' Tour Management
-            </p>
+            <h1 style={{ margin: 0, fontSize: '2.5rem' }}>Camel Ranch Booking</h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <span style={{ fontSize: '0.9rem' }}>👤 {user.email}</span>
