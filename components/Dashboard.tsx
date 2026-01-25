@@ -96,7 +96,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       });
 
       // Build pending actions list
-      const actions = [];
+      const actions: Array<{
+        type: string;
+        message: string;
+        action: string;
+        icon: string;
+      }> = [];
       if (venuesNeedingEmail > 0) {
         actions.push({
           type: 'email_needed',
