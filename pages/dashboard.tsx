@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Dashboard from '../components/Dashboard';
-import BookingRunManager from '../components/BookingRunManager';
 import VenueSearch from '../components/VenueSearch';
 import CampaignManager from '../components/CampaignManager';
 import EmailTemplateManager from '../components/EmailTemplateManager';
@@ -11,6 +10,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [user, setUser] = useState<any>(null);
+  const [navigationData, setNavigationData] = useState<any>(null);
 
   useEffect(() => {
     const loggedInUser = localStorage.getItem('loggedInUser');
@@ -40,13 +40,17 @@ export default function DashboardPage() {
     router.push('/');
   };
 
+  const handleNavigate = (tab: string, data?: any) => {
+    setActiveTab(tab);
+    setNavigationData(data);
+  };
+
   const tabs = [
     { id: 'dashboard', label: '📊 Dashboard', icon: '📊' },
-    { id: 'booking-runs', label: '📅 Booking Runs', icon: '📅' },
-    { id: 'venue-search', label: '🔍 Venue Search', icon: '🔍' },
-    { id: 'campaigns', label: '📧 Campaign Manager', icon: '📧' },
+    { id: 'campaigns', label: '🎯 Campaign Manager', icon: '🎯' },
     { id: 'emails', label: '✉️ Email Templates', icon: '✉️' },
-    { id: 'social', label: '📱 Social Media', icon: '📱' }
+    { id: 'social', label: '📱 Social Media', icon: '📱' },
+    { id: 'venue-database', label: '🗂️ Venue Database', icon: '🗂️' }
   ];
 
   return (
@@ -107,7 +111,7 @@ export default function DashboardPage() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleNavigate(tab.id)}
               style={{
                 padding: '1rem 1.5rem',
                 background: activeTab === tab.id ? '#5D4E37' : 'transparent',
@@ -130,16 +134,14 @@ export default function DashboardPage() {
       <div style={{
         maxWidth: '1400px',
         margin: '0 auto',
-        padding: '2rem'
+        padding: activeTab === 'dashboard' ? '0' : '2rem'
       }}>
-        {activeTab === 'dashboard' && <Dashboard />}
-        {activeTab === 'booking-runs' && <BookingRunManager />}
-        {activeTab === 'venue-search' && <VenueSearch />}
-        {activeTab === 'campaigns' && <CampaignManager />}
+        {activeTab === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
+        {activeTab === 'campaigns' && <CampaignManager initialData={navigationData} />}
+        {activeTab === 'venue-database' && <VenueSearch />}
         {activeTab === 'emails' && <EmailTemplateManager />}
         {activeTab === 'social' && <SocialMediaCampaign />}
       </div>
     </div>
   );
 }
-
