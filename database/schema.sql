@@ -152,3 +152,4 @@ Scott
 Better Than Nothin''
 [Your Contact Info]',
  ARRAY['booking_contact', 'venue_name', 'city', 'season']);
+

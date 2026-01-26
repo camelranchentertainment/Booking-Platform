@@ -140,7 +140,7 @@ export class VenueSearchWorker {
     for (const venue of venues) {
       try {
         // Check for duplicates
-        const duplicate = await checkDuplicateVenue(venue.name, venue.city);
+        const duplicate = await checkDuplicateVenue(venue.name, venue.city, venue.state);
         
         if (!duplicate) {
           await addVenue({
@@ -232,10 +232,10 @@ export class VenueSearchWorker {
       }
 
       // Queue the search
-      await queueSearch(
-        region.id,
-        `${region.city}, ${region.state} live music venues`
-      );
+      await queueSearch({
+        region_id: region.id,
+        search_query: `${region.city}, ${region.state} live music venues`
+      });
       
       console.log(`✅ Queued: ${region.city}, ${region.state}`);
     }
@@ -258,7 +258,7 @@ export class VenueSearchWorker {
     // Save all venues
     const savedVenues: any[] = [];
     for (const venue of venues) {
-      const duplicate = await checkDuplicateVenue(venue.name, venue.city);
+      const duplicate = await checkDuplicateVenue(venue.name, venue.city, venue.state);
       
       if (!duplicate) {
         const saved = await addVenue({
@@ -305,3 +305,4 @@ if (require.main === module) {
     process.exit(0);
   });
 }
+
