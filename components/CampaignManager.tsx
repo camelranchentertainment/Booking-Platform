@@ -111,29 +111,45 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
       return;
     }
 
-    try {
-      // Store cities with states as "City, ST" format
-      const citiesWithStates = validLocations.map(loc => `${loc.city.trim()}, ${loc.state.trim().toUpperCase()}`);
-      
-      console.log('Creating campaign with data:', {
-        name: newCampaign.name,
-        date_range_start: newCampaign.date_range_start || null,
-        date_range_end: newCampaign.date_range_end || null,
-        cities: citiesWithStates,
-        radius: newCampaign.radius,
-        status: 'active'
-      });
+   try {
+  // Get current user - ADD THIS BLOCK
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  // Fallback to localStorage if no session
+  let userId = session?.user?.id;
+  if (!userId) {
+    const loggedInUser = localStorage.getItem('loggedInUser');
+    if (loggedInUser) {
+      userId = JSON.parse(loggedInUser).id;
+    }
+  }
+  
+  if (!userId) {
+    alert('You must be logged in to create a campaign');
+    return;
+  }
+  // END NEW BLOCK
 
-      const { data, error } = await supabase
-        .from('campaigns')
-        .insert([{
-          name: newCampaign.name,
-          date_range_start: newCampaign.date_range_start || null,
-          date_range_end: newCampaign.date_range_end || null,
-          cities: citiesWithStates,
-          radius: newCampaign.radius,
-          status: 'active'
-        }])
+  // Store cities with states as "City, ST" format
+  const citiesWithStates = validLocations.map(loc => `${loc.city.trim()}, ${loc.state.trim().toUpperCase()}`);
+  
+  console.log('Creating campaign with data:', {
+    name: newCampaign.name,
+    // ... rest
+    user_id: userId  // ADD THIS LINE
+  });
+
+  const { data, error } = await supabase
+    .from('campaigns')
+    .insert([{
+      name: newCampaign.name,
+      date_range_start: newCampaign.date_range_start || null,
+      date_range_end: newCampaign.date_range_end || null,
+      cities: citiesWithStates,
+      radius: newCampaign.radius,
+      status: 'active',
+      user_id: userId  // ADD THIS LINE
+    }])
         .select()
         .single();
 
