@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { supabase } from '../lib/supabase';
 import Dashboard from '../components/Dashboard';
 import VenueSearch from '../components/VenueSearch';
 import CampaignManager from '../components/CampaignManager';
@@ -13,16 +14,47 @@ export default function DashboardPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [user, setUser] = useState<any>(null);
+  const [bandProfile, setBandProfile] = useState<any>(null);
   const [navigationData, setNavigationData] = useState<any>(null);
 
   useEffect(() => {
-    const loggedInUser = localStorage.getItem('loggedInUser');
-    if (!loggedInUser) {
-      router.push('/');
+    checkAuth();
+  }, [router]);
+
+  const checkAuth = async () => {
+    // Check Supabase auth
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      // Fallback to localStorage for existing users
+      const loggedInUser = localStorage.getItem('loggedInUser');
+      if (!loggedInUser) {
+        router.push('/login');
+        return;
+      }
+      setUser(JSON.parse(loggedInUser));
       return;
     }
-    setUser(JSON.parse(loggedInUser));
-  }, [router]);
+
+    setUser(session.user);
+    loadBandProfile(session.user.id);
+  };
+
+  const loadBandProfile = async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from('band_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (data) {
+        setBandProfile(data);
+      }
+    } catch (error) {
+      console.error('Error loading band profile:', error);
+    }
+  };
 
   if (!user) {
     return (
@@ -38,9 +70,10 @@ export default function DashboardPage() {
     );
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     localStorage.removeItem('loggedInUser');
-    router.push('/');
+    router.push('/login');
   };
 
   const handleNavigate = (tab: string, data?: any) => {
@@ -65,36 +98,76 @@ export default function DashboardPage() {
       <div style={{
         background: '#5D4E37',
         color: 'white',
-        padding: '1.5rem 2rem',
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
       }}>
         <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
           maxWidth: '1400px',
-          margin: '0 auto'
+          margin: '0 auto',
+          padding: '1rem 2rem'
         }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '2.5rem' }}>Camel Ranch Booking</h1>
+          {/* Top Row: Camel Ranch Booking + User Menu */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: bandProfile ? '1rem' : 0
+          }}>
+            <div style={{ fontSize: '1.2rem', fontWeight: '600', opacity: 0.9 }}>
+              Camel Ranch Booking
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>
+                {user.email}
+              </span>
+              <button
+                onClick={handleLogout}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: '#708090',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem'
+                }}
+              >
+                Logout
+              </button>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <span style={{ fontSize: '0.9rem' }}>👤 {user.email}</span>
-            <button
-              onClick={handleLogout}
-              style={{
-                padding: '0.5rem 1rem',
-                background: '#708090',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.9rem'
-              }}
-            >
-              Logout
-            </button>
-          </div>
+
+          {/* Band Name Row (only if band profile exists) */}
+          {bandProfile && (
+            <div style={{ 
+              textAlign: 'center',
+              padding: '1rem 0'
+            }}>
+              <h1 style={{ 
+                margin: 0, 
+                fontSize: '2.5rem',
+                fontWeight: '700',
+                color: 'white'
+              }}>
+                {bandProfile.band_name}
+              </h1>
+              {bandProfile.website && (
+                <a
+                  href={bandProfile.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: '#C8A882',
+                    fontSize: '1.05rem',
+                    textDecoration: 'none',
+                    marginTop: '0.5rem',
+                    display: 'inline-block'
+                  }}
+                >
+                  {bandProfile.website.replace(/^https?:\/\//, '')}
+                </a>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -109,7 +182,8 @@ export default function DashboardPage() {
           margin: '0 auto',
           display: 'flex',
           gap: '0.5rem',
-          padding: '0 2rem'
+          padding: '0 2rem',
+          overflowX: 'auto'
         }}>
           {tabs.map((tab) => (
             <button
@@ -124,7 +198,8 @@ export default function DashboardPage() {
                 cursor: 'pointer',
                 fontSize: '1rem',
                 fontWeight: activeTab === tab.id ? '600' : '400',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
               }}
             >
               {tab.label}
