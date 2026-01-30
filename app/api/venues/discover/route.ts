@@ -112,8 +112,11 @@ export async function POST(request: NextRequest) {
           );
 
           const searchData: GooglePlacesSearchResult = await searchResponse.json();
+          
+          console.log(`Search query "${query}" returned ${searchData.results?.length || 0} results`);
 
           if (!searchData.results || searchData.results.length === 0) {
+            console.log(`No results for query: ${query}`);
             continue;
           }
 
@@ -185,6 +188,7 @@ export async function POST(request: NextRequest) {
                 continue;
               }
 
+              console.log(`✓ Successfully added venue: ${details.name} in ${venueCity}, ${venueState}`);
               totalVenuesFound++;
 
               // Rate limiting - delay between API calls
