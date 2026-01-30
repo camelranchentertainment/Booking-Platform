@@ -35,6 +35,7 @@ interface GooglePlaceResult {
 }
 
 interface GoogleGeocodeResult {
+  status: string;
   results: Array<{
     geometry: {
       location: {
@@ -43,6 +44,7 @@ interface GoogleGeocodeResult {
       };
     };
   }>;
+  error_message?: string;
 }
 
 interface GooglePlacesSearchResult {
@@ -84,16 +86,25 @@ export default async function handler(
       const { city, state } = location;
 
       // Step 1: Geocode the city to get coordinates
-      const geocodeResponse = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
-          `${city}, ${state}`
-        )}&key=${googleApiKey}`
-      );
+      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+        `${city}, ${state}`
+      )}&key=${googleApiKey}`;
+      
+      console.log(`Geocoding: ${city}, ${state}`);
+      const geocodeResponse = await fetch(geocodeUrl);
 
       const geocodeData: GoogleGeocodeResult = await geocodeResponse.json();
+      
+      console.log(`Geocode response for ${city}:`, JSON.stringify(geocodeData));
+
+      // Check for API errors
+      if (geocodeData.status !== 'OK') {
+        console.error(`Geocoding failed for ${city}, ${state}. Status: ${geocodeData.status}, Error: ${geocodeData.error_message || 'Unknown'}`);
+        continue;
+      }
 
       if (!geocodeData.results || geocodeData.results.length === 0) {
-        console.error(`Could not geocode ${city}, ${state}`);
+        console.error(`Could not geocode ${city}, ${state}. No results returned.`);
         continue;
       }
 
