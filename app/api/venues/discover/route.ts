@@ -160,9 +160,9 @@ export async function POST(request: NextRequest) {
                 continue;
               }
 
-              // Get user_id - for App Router, we'll set it to null for now
-              // In production, you'd get this from auth session
-              const userId: string | null = null;
+              // Get user_id - using Scott's user ID for now
+              // TODO: In production, get this from auth session
+              const userId: string | null = '41c554dc-a9cc-4605-8f65-dd474752ce55';
 
               // Insert new venue
               const { error: insertError } = await supabase.from('venues').insert([
