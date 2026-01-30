@@ -156,8 +156,8 @@ export default function VenueSearch() {
   const handleAddVenue = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Get user ID
-      let userId = null;
+      // Get user ID - FIX: Change type to string | null
+      let userId: string | null = null;
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         userId = session.user.id;
