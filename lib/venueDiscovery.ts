@@ -264,6 +264,28 @@ export class VenueDiscoveryService {
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
+
+  /**
+   * Score a venue based on available information (0-100)
+   */
+  scoreVenue(venue: DiscoveredVenue): number {
+    let score = 0;
+    
+    // Base score for having basic info
+    score += 20;
+    
+    // Contact information
+    if (venue.email) score += 30;
+    if (venue.phone) score += 20;
+    if (venue.website) score += 10;
+    
+    // Rating quality
+    if (venue.rating) {
+      score += Math.round(venue.rating * 4); // 5-star = 20 points
+    }
+    
+    return Math.min(score, 100);
+  }
 }
 
 export const venueDiscovery = new VenueDiscoveryService();
