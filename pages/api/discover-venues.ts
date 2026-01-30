@@ -73,7 +73,7 @@ export default async function handler(
       return res.status(400).json({ error: 'No locations provided' });
     }
 
-    const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
+    const googleApiKey = 'AIzaSyAaWb5krK4mP9x7UERojP3tTVdLRlNxuKs';
     if (!googleApiKey) {
       return res.status(500).json({ error: 'Google Places API key not configured' });
     }
