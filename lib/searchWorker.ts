@@ -157,7 +157,7 @@ export class VenueSearchWorker {
             rating: venue.rating,
             google_maps_url: venue.googleMapsUrl,
             contact_status: venue.email ? 'ready' : 'needs_contact_info',
-            discovery_score: venue.rating || 0
+            discovery_score: venueDiscovery.scoreVenue(venue)
           });
           savedCount++;
         } else {
@@ -275,7 +275,7 @@ export class VenueSearchWorker {
           rating: venue.rating,
           google_maps_url: venue.googleMapsUrl,
           contact_status: venue.email ? 'ready' : 'needs_contact_info',
-          discovery_score: venue.rating || 0
+          discovery_score: venueDiscovery.scoreVenue(venue)
         });
         savedVenues.push(saved);
       }
