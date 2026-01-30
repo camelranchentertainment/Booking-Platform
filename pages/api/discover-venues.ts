@@ -34,6 +34,28 @@ interface GooglePlaceResult {
   };
 }
 
+interface GoogleGeocodeResult {
+  results: Array<{
+    geometry: {
+      location: {
+        lat: number;
+        lng: number;
+      };
+    };
+  }>;
+}
+
+interface GooglePlacesSearchResult {
+  results: Array<{
+    place_id: string;
+    name: string;
+  }>;
+}
+
+interface GooglePlaceDetailsResponse {
+  result: GooglePlaceResult;
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -68,7 +90,7 @@ export default async function handler(
         )}&key=${googleApiKey}`
       );
 
-      const geocodeData = await geocodeResponse.json();
+      const geocodeData: GoogleGeocodeResult = await geocodeResponse.json();
 
       if (!geocodeData.results || geocodeData.results.length === 0) {
         console.error(`Could not geocode ${city}, ${state}`);
@@ -97,7 +119,7 @@ export default async function handler(
             )}&location=${coordinates.lat},${coordinates.lng}&radius=${radiusMeters}&type=bar|night_club&key=${googleApiKey}`
           );
 
-          const searchData = await searchResponse.json();
+          const searchData: GooglePlacesSearchResult = await searchResponse.json();
 
           if (!searchData.results || searchData.results.length === 0) {
             continue;
@@ -111,7 +133,7 @@ export default async function handler(
                 `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=place_id,name,formatted_address,formatted_phone_number,website,rating,types,url&key=${googleApiKey}`
               );
 
-              const detailsData = await detailsResponse.json();
+              const detailsData: GooglePlaceDetailsResponse = await detailsResponse.json();
               const details: GooglePlaceResult = detailsData.result;
 
               if (!details) continue;
@@ -146,12 +168,12 @@ export default async function handler(
 
               // Get user_id from session or use a default
               // Note: In production, you should get this from auth
-              let userId = null;
+              let userId: string | null = null;
               const authHeader = req.headers.authorization;
               if (authHeader) {
                 const token = authHeader.replace('Bearer ', '');
                 const { data: { user } } = await supabase.auth.getUser(token);
-                userId = user?.id;
+                userId = user?.id || null; // Convert undefined to null
               }
 
               // Insert new venue
