@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client
+// ✅ CRITICAL FIX: Use SERVICE ROLE KEY for server-side operations
+// This bypasses RLS policies which is necessary for API-driven venue discovery
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!  // Changed from NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 interface Location {
@@ -48,10 +49,15 @@ interface GooglePlaceDetailsResponse {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { locations, radius }: { locations: Location[]; radius: number } = body;
+    const { locations, radius, userId }: { locations: Location[]; radius: number; userId?: string } = body;
 
     if (!locations || locations.length === 0) {
       return NextResponse.json({ error: 'No locations provided' }, { status: 400 });
+    }
+
+    // ✅ CRITICAL FIX: Require userId to be passed from frontend
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
     const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
@@ -63,6 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     let totalVenuesFound = 0;
+    let totalVenuesSkipped = 0;
     const radiusMeters = radius * 1609.34; // Convert miles to meters
 
     // Process each location
@@ -74,25 +81,26 @@ export async function POST(request: NextRequest) {
         `${city}, ${state}`
       )}&key=${googleApiKey}`;
       
-      console.log(`Geocoding: ${city}, ${state}`);
+      console.log(`\n=== Geocoding: ${city}, ${state} ===`);
       const geocodeResponse = await fetch(geocodeUrl);
 
       const geocodeData: GoogleGeocodeResult = await geocodeResponse.json();
       
-      console.log(`Geocode response for ${city}:`, JSON.stringify(geocodeData));
+      console.log(`Geocode status: ${geocodeData.status}`);
 
       // Check for API errors
       if (geocodeData.status !== 'OK') {
-        console.error(`Geocoding failed for ${city}, ${state}. Status: ${geocodeData.status}, Error: ${geocodeData.error_message || 'Unknown'}`);
+        console.error(`❌ Geocoding failed for ${city}, ${state}. Status: ${geocodeData.status}, Error: ${geocodeData.error_message || 'Unknown'}`);
         continue;
       }
 
       if (!geocodeData.results || geocodeData.results.length === 0) {
-        console.error(`Could not geocode ${city}, ${state}. No results returned.`);
+        console.error(`❌ Could not geocode ${city}, ${state}. No results returned.`);
         continue;
       }
 
       const coordinates = geocodeData.results[0].geometry.location;
+      console.log(`✓ Coordinates found: ${coordinates.lat}, ${coordinates.lng}`);
 
       // Step 2: Search for live music venues
       const searchQueries = [
@@ -104,6 +112,8 @@ export async function POST(request: NextRequest) {
 
       for (const query of searchQueries) {
         try {
+          console.log(`\n--- Searching for "${query}" near ${city} ---`);
+          
           // Text Search
           const searchResponse = await fetch(
             `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
@@ -113,7 +123,7 @@ export async function POST(request: NextRequest) {
 
           const searchData: GooglePlacesSearchResult = await searchResponse.json();
           
-          console.log(`Search query "${query}" returned ${searchData.results?.length || 0} results`);
+          console.log(`Search returned ${searchData.results?.length || 0} results for "${query}"`);
 
           if (!searchData.results || searchData.results.length === 0) {
             console.log(`No results for query: ${query}`);
@@ -125,6 +135,8 @@ export async function POST(request: NextRequest) {
           
           for (const place of placesToProcess) {
             try {
+              console.log(`\nProcessing: ${place.name}`);
+              
               // Get detailed place information
               const detailsResponse = await fetch(
                 `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=place_id,name,formatted_address,formatted_phone_number,website,rating,types,url&key=${googleApiKey}`
@@ -133,7 +145,10 @@ export async function POST(request: NextRequest) {
               const detailsData: GooglePlaceDetailsResponse = await detailsResponse.json();
               const details = detailsData.result;
 
-              if (!details) continue;
+              if (!details) {
+                console.log(`⚠️ No details found for ${place.name}`);
+                continue;
+              }
 
               // Parse address to extract city and state
               const addressParts = details.formatted_address.split(',').map(p => p.trim());
@@ -149,70 +164,85 @@ export async function POST(request: NextRequest) {
               // Determine venue type
               const venueType = determineVenueType(details.name, details.types.join(' '));
 
-              // Check if venue already exists
-              const { data: existingVenue } = await supabase
+              // ✅ CRITICAL FIX: Proper duplicate detection without .single()
+              const { data: existingVenues, error: checkError } = await supabase
                 .from('venues')
                 .select('id')
                 .ilike('name', details.name)
                 .ilike('city', venueCity)
-                .limit(1)
-                .single();
+                .limit(1);
 
-              if (existingVenue) {
-                console.log(`Venue already exists: ${details.name}`);
+              if (checkError) {
+                console.error(`❌ Error checking for existing venue:`, checkError);
                 continue;
               }
 
-              // Get user_id - using Scott's user ID for now
-              // TODO: In production, get this from auth session
-              const userId: string | null = '41c554dc-a9cc-4605-8f65-dd474752ce55';
+              if (existingVenues && existingVenues.length > 0) {
+                console.log(`⊘ Venue already exists: ${details.name}`);
+                totalVenuesSkipped++;
+                continue;
+              }
 
-              // Insert new venue
-              const { error: insertError } = await supabase.from('venues').insert([
-                {
-                  name: details.name,
-                  address: details.formatted_address,
-                  city: venueCity,
-                  state: venueState,
-                  phone: details.formatted_phone_number,
-                  website: details.website,
-                  venue_type: venueType,
-                  contact_status: 'not_contacted',
-                  notes: `Found via Google Places. Rating: ${details.rating || 'N/A'}. Google Maps: ${details.url || 'N/A'}`,
-                  user_id: userId
-                }
-              ]);
+              // Insert new venue with userId from request
+              const { data: insertedVenue, error: insertError } = await supabase
+                .from('venues')
+                .insert([
+                  {
+                    name: details.name,
+                    address: details.formatted_address,
+                    city: venueCity,
+                    state: venueState,
+                    phone: details.formatted_phone_number,
+                    website: details.website,
+                    venue_type: venueType,
+                    contact_status: 'not_contacted',
+                    notes: `Found via Google Places. Rating: ${details.rating || 'N/A'}. Google Maps: ${details.url || 'N/A'}`,
+                    user_id: userId  // Use userId from request
+                  }
+                ])
+                .select();
 
               if (insertError) {
-                console.error('Error inserting venue:', insertError);
+                console.error('❌ Error inserting venue:', insertError);
+                console.error('Attempted to insert:', {
+                  name: details.name,
+                  city: venueCity,
+                  state: venueState,
+                  user_id: userId
+                });
                 continue;
               }
 
-              console.log(`✓ Successfully added venue: ${details.name} in ${venueCity}, ${venueState}`);
+              console.log(`✅ Successfully added venue: ${details.name} in ${venueCity}, ${venueState}`);
               totalVenuesFound++;
 
               // Rate limiting - delay between API calls
               await delay(300);
             } catch (error) {
-              console.error(`Error processing place ${place.name}:`, error);
+              console.error(`❌ Error processing place ${place.name}:`, error);
             }
           }
 
           // Delay between search queries
           await delay(500);
         } catch (error) {
-          console.error(`Error searching for "${query}":`, error);
+          console.error(`❌ Error searching for "${query}":`, error);
         }
       }
     }
 
+    console.log(`\n=== SEARCH COMPLETE ===`);
+    console.log(`✅ New venues found: ${totalVenuesFound}`);
+    console.log(`⊘ Venues skipped (duplicates): ${totalVenuesSkipped}`);
+
     return NextResponse.json({
       success: true,
       venuesFound: totalVenuesFound,
-      message: `Discovered ${totalVenuesFound} new venues`
+      venuesSkipped: totalVenuesSkipped,
+      message: `Discovered ${totalVenuesFound} new venues (${totalVenuesSkipped} duplicates skipped)`
     });
   } catch (error) {
-    console.error('Venue discovery error:', error);
+    console.error('❌ Venue discovery error:', error);
     return NextResponse.json({
       error: 'Venue discovery failed',
       details: error instanceof Error ? error.message : 'Unknown error'
