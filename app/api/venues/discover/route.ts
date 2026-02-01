@@ -55,10 +55,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No locations provided' }, { status: 400 });
     }
 
-    // ✅ CRITICAL FIX: Require userId to be passed from frontend
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
-    }
+    // Get userId from request, or fall back to hardcoded value for now
+if (!userId) {
+  userId = '41c554dc-a9cc-4605-8f65-dd474752ce55';
+  console.log('⚠️ Using fallback userId');
+}
 
     const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
     console.log('API Key check:', googleApiKey ? `Key exists (${googleApiKey.substring(0, 10)}...)` : 'KEY IS UNDEFINED OR EMPTY');
