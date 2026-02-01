@@ -49,7 +49,7 @@ interface GooglePlaceDetailsResponse {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { locations, radius, userId }: { locations: Location[]; radius: number; userId?: string } = body;
+   let { locations, radius, userId }: { locations: Location[]; radius: number; userId?: string } = body;
 
     if (!locations || locations.length === 0) {
       return NextResponse.json({ error: 'No locations provided' }, { status: 400 });
