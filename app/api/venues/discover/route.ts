@@ -49,17 +49,16 @@ interface GooglePlaceDetailsResponse {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-   let { locations, radius, userId }: { locations: Location[]; radius: number; userId?: string } = body;
+    const { locations, radius, userId }: { locations: Location[]; radius: number; userId?: string } = body;
 
     if (!locations || locations.length === 0) {
       return NextResponse.json({ error: 'No locations provided' }, { status: 400 });
     }
 
-    // Get userId from request, or fall back to hardcoded value for now
-if (!userId) {
-  userId = '41c554dc-a9cc-4605-8f65-dd474752ce55';
-  console.log('⚠️ Using fallback userId');
-}
+    // ✅ CRITICAL FIX: Require userId to be passed from frontend
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+    }
 
     const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
     console.log('API Key check:', googleApiKey ? `Key exists (${googleApiKey.substring(0, 10)}...)` : 'KEY IS UNDEFINED OR EMPTY');
@@ -88,16 +87,17 @@ if (!userId) {
       const geocodeData: GoogleGeocodeResult = await geocodeResponse.json();
       
       console.log(`Geocode status: ${geocodeData.status}`);
+      console.log(`Full geocode response:`, JSON.stringify(geocodeData, null, 2));
 
       // Check for API errors
       if (geocodeData.status !== 'OK') {
         console.error(`❌ Geocoding failed for ${city}, ${state}. Status: ${geocodeData.status}, Error: ${geocodeData.error_message || 'Unknown'}`);
-        continue;
+        throw new Error(`Could not geocode ${city}, ${state}`);
       }
 
       if (!geocodeData.results || geocodeData.results.length === 0) {
         console.error(`❌ Could not geocode ${city}, ${state}. No results returned.`);
-        continue;
+        throw new Error(`Could not geocode ${city}, ${state}`);
       }
 
       const coordinates = geocodeData.results[0].geometry.location;
