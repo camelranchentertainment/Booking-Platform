@@ -40,7 +40,9 @@ interface GooglePlaceDetailsResponse {
 }
 
 export async function POST(request: NextRequest) {
+  console.log('=== VENUE DISCOVERY API CALLED ===');
   try {
+    console.log('Entering try block');
     // Create Supabase client with SERVICE ROLE KEY inside request handler
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -247,4 +249,3 @@ function determineVenueType(name: string, description: string): string {
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
-
