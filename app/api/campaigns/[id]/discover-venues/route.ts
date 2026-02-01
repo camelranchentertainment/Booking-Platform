@@ -10,11 +10,15 @@ interface Campaign {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   console.log('=== CAMPAIGN VENUE DISCOVERY API CALLED ===');
   
   try {
+    // Await params in Next.js 16+
+    const { id: campaignId } = await params;
+    console.log('Campaign ID:', campaignId);
+    
     // Create Supabase client with SERVICE ROLE KEY
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -26,9 +30,6 @@ export async function POST(
     
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     console.log('Supabase client created');
-    
-    const campaignId = params.id;
-    console.log('Campaign ID:', campaignId);
 
     // Get campaign details
     const { data: campaign, error: campaignError } = await supabase
