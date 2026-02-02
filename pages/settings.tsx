@@ -98,22 +98,31 @@ export default function Settings() {
       setWebsite(bandData.website || '');
       setBio(bandData.bio || '');
 
-      // Get band members with their profile info
+      // Get band members - simpler query without joins
       const { data: membersData, error: membersError } = await supabase
         .from('band_members')
-        .select(`
-          id,
-          user_id,
-          role,
-          invited_at,
-          accepted_at,
-          profiles!inner(display_name)
-        `)
+        .select('id, user_id, role, invited_at, accepted_at')
         .eq('band_id', bandData.id);
 
       if (membersError) throw membersError;
 
-      setMembers(membersData || []);
+      // Get profiles separately for each member
+      const membersWithProfiles = await Promise.all(
+        (membersData || []).map(async (member) => {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('display_name')
+            .eq('id', member.user_id)
+            .maybeSingle();
+
+          return {
+            ...member,
+            profiles: profile ? [profile] : []
+          };
+        })
+      );
+
+      setMembers(membersWithProfiles);
     } catch (error) {
       console.error('Error loading band:', error);
     }
