@@ -2,11 +2,34 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 
+interface Profile {
+  display_name: string;
+}
+
+interface BandMember {
+  id: string;
+  user_id: string;
+  role: string;
+  invited_at: string;
+  accepted_at: string | null;
+  profiles: Profile;
+}
+
+interface Band {
+  id: string;
+  band_name: string;
+  owner_user_id: string;
+  contact_email: string;
+  contact_phone: string;
+  website: string;
+  bio: string;
+}
+
 export default function Settings() {
   const router = useRouter();
-  const [user, setUser] = useState(null);
-  const [band, setBand] = useState(null);
-  const [members, setMembers] = useState([]);
+  const [user, setUser] = useState<any>(null);
+  const [band, setBand] = useState<Band | null>(null);
+  const [members, setMembers] = useState<BandMember[]>([]);
   
   // Band info form
   const [bandName, setBandName] = useState('');
@@ -24,7 +47,6 @@ export default function Settings() {
   
   // Calendar integration
   const [calendarType, setCalendarType] = useState('');
-  const [icalUrl, setIcalUrl] = useState('');
 
   useEffect(() => {
     checkAuth();
@@ -49,7 +71,7 @@ export default function Settings() {
     }
   };
 
-  const loadBandData = async (userId) => {
+  const loadBandData = async (userId: string) => {
     try {
       // First, get user's band_id from band_members
       const { data: memberData, error: memberError } = await supabase
@@ -76,7 +98,7 @@ export default function Settings() {
       setWebsite(bandData.website || '');
       setBio(bandData.bio || '');
 
-      // Get band members with their profile info (including email from profiles)
+      // Get band members with their profile info
       const { data: membersData, error: membersError } = await supabase
         .from('band_members')
         .select(`
@@ -85,7 +107,7 @@ export default function Settings() {
           role,
           invited_at,
           accepted_at,
-          profiles!inner(display_name, id)
+          profiles!inner(display_name)
         `)
         .eq('band_id', bandData.id);
 
@@ -97,7 +119,7 @@ export default function Settings() {
     }
   };
 
-  const loadProfile = async (userId) => {
+  const loadProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -112,7 +134,7 @@ export default function Settings() {
     }
   };
 
-  const updateBandInfo = async (e) => {
+  const updateBandInfo = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const { error } = await supabase
@@ -125,7 +147,7 @@ export default function Settings() {
           bio: bio,
           updated_at: new Date().toISOString()
         })
-        .eq('id', band.id);
+        .eq('id', band!.id);
 
       if (error) throw error;
       alert('Band info updated successfully!');
@@ -135,7 +157,7 @@ export default function Settings() {
     }
   };
 
-  const updateProfile = async (e) => {
+  const updateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const { error } = await supabase
@@ -151,58 +173,21 @@ export default function Settings() {
     }
   };
 
-  const inviteMember = async (e) => {
+  const inviteMember = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Check if user exists
-      const { data: existingUser, error: userError } = await supabase
-        .from('auth.users')
-        .select('id')
-        .eq('email', inviteEmail)
-        .single();
-
-      if (userError) {
-        alert('User not found. They need to create an account first.');
-        return;
-      }
-
-      // Check if already a member
-      const { data: existingMember } = await supabase
-        .from('band_members')
-        .select('id')
-        .eq('band_id', band.id)
-        .eq('user_id', existingUser.id)
-        .single();
-
-      if (existingMember) {
-        alert('This user is already a member of your band.');
-        return;
-      }
-
-      // Add member
-      const { error } = await supabase
-        .from('band_members')
-        .insert({
-          band_id: band.id,
-          user_id: existingUser.id,
-          role: 'member',
-          invited_by: user.id,
-          accepted_at: new Date().toISOString()
-        });
-
-      if (error) throw error;
-
-      alert('Team member added successfully!');
+      // Simple approach: User must already exist and we'll search profiles
+      // In production, you'd want a proper invitation system
+      alert('Team member invitation feature coming soon! For now, have the user create an account first, then contact support to be added to your band.');
       setInviteEmail('');
       setShowInviteForm(false);
-      await loadBandData(user.id);
     } catch (error) {
       console.error('Error inviting member:', error);
       alert('Failed to add team member');
     }
   };
 
-  const removeMember = async (memberId, memberUserId) => {
+  const removeMember = async (memberId: string) => {
     if (!confirm('Are you sure you want to remove this team member?')) return;
 
     try {
@@ -218,17 +203,6 @@ export default function Settings() {
     } catch (error) {
       console.error('Error removing member:', error);
       alert('Failed to remove team member');
-    }
-  };
-
-  const saveCalendarSettings = async (e) => {
-    e.preventDefault();
-    try {
-      // TODO: Implement calendar settings save
-      alert('Calendar integration coming soon!');
-    } catch (error) {
-      console.error('Error saving calendar settings:', error);
-      alert('Failed to save calendar settings');
     }
   };
 
@@ -488,7 +462,8 @@ export default function Settings() {
                     background: 'rgba(245, 245, 240, 0.1)',
                     color: '#E8DCC4',
                     fontSize: '1rem',
-                    resize: 'vertical'
+                    resize: 'vertical',
+                    fontFamily: 'inherit'
                   }}
                 />
               </div>
@@ -611,8 +586,8 @@ export default function Settings() {
                   Cancel
                 </button>
               </div>
-              <p style={{ color: '#9B8A7A', fontSize: '0.85rem', marginTop: '0.5rem' }}>
-                Note: User must already have a Camel Ranch Booking account
+              <p style={{ color: '#9B8A7A', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
+                Note: Team member invitation system coming soon
               </p>
             </form>
           )}
@@ -632,7 +607,7 @@ export default function Settings() {
               >
                 <div>
                   <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>
-                    {member.profiles?.display_name || `Band Member`}
+                    {member.profiles?.display_name || 'Band Member'}
                   </div>
                   <div style={{ fontSize: '0.9rem', color: '#9B8A7A' }}>
                     {member.user_id === user.id ? user.email : 'Team Member'}
@@ -652,7 +627,7 @@ export default function Settings() {
                 </div>
                 {isOwner && member.role !== 'owner' && (
                   <button
-                    onClick={() => removeMember(member.id, member.user_id)}
+                    onClick={() => removeMember(member.id)}
                     style={{
                       padding: '0.5rem 1rem',
                       background: '#C85050',
@@ -693,7 +668,7 @@ export default function Settings() {
               🚧 Coming Soon: Connect your Google Calendar, Outlook, or iCal to sync bookings automatically!
             </p>
           </div>
-          <form onSubmit={saveCalendarSettings}>
+          <form onSubmit={(e) => { e.preventDefault(); alert('Calendar integration coming soon!'); }}>
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
