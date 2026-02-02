@@ -68,6 +68,7 @@ export default function Settings() {
       
       await loadBandData(userData.id);
       await loadProfile(userData.id);
+      await loadCalendarSettings(userData.id);
     } catch (error) {
       console.error('Auth error:', error);
       router.push('/');
@@ -143,6 +144,27 @@ export default function Settings() {
       setDisplayName(data.display_name || '');
     } catch (error) {
       console.error('Error loading profile:', error);
+    }
+  };
+
+  const loadCalendarSettings = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_calendar_settings')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (data) {
+        setCalendarType(data.calendar_type || '');
+        setCalendarApiKey(data.calendar_api_key || '');
+        setCalendarRefreshToken(data.calendar_refresh_token || '');
+        setIcalUrl(data.ical_url || '');
+      }
+    } catch (error) {
+      console.error('Error loading calendar settings:', error);
     }
   };
 
@@ -737,7 +759,54 @@ For now, please provide their User ID instead of email.`);
               Your calendar credentials are stored securely and used only to sync your booking dates.
             </p>
           </div>
-          <form onSubmit={(e) => { e.preventDefault(); alert('Calendar settings saved! (Feature in development)'); }}>
+          <form onSubmit={async (e) => { 
+            e.preventDefault();
+            
+            if (!user) return;
+            
+            try {
+              // Prepare the data to save
+              const calendarData = {
+                user_id: user.id,
+                calendar_type: calendarType,
+                calendar_api_key: calendarType === 'google' || calendarType === 'outlook' ? calendarApiKey : null,
+                calendar_refresh_token: calendarType === 'google' ? calendarRefreshToken : null,
+                ical_url: calendarType === 'ical' ? icalUrl : null,
+                is_active: true,
+                updated_at: new Date().toISOString()
+              };
+
+              // Try to update first (if settings exist)
+              const { data: existingSettings } = await supabase
+                .from('user_calendar_settings')
+                .select('id')
+                .eq('user_id', user.id)
+                .maybeSingle();
+
+              let error;
+              if (existingSettings) {
+                // Update existing settings
+                const result = await supabase
+                  .from('user_calendar_settings')
+                  .update(calendarData)
+                  .eq('user_id', user.id);
+                error = result.error;
+              } else {
+                // Insert new settings
+                const result = await supabase
+                  .from('user_calendar_settings')
+                  .insert([calendarData]);
+                error = result.error;
+              }
+
+              if (error) throw error;
+
+              alert('✓ Calendar settings saved successfully!');
+            } catch (error) {
+              console.error('Error saving calendar settings:', error);
+              alert('Failed to save calendar settings. Please try again.');
+            }
+          }}>
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
