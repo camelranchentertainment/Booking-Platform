@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { VenueDiscoveryService } from '../lib/venueDiscovery';
 
 interface Campaign {
   id: string;
@@ -28,6 +27,7 @@ interface Venue {
   email?: string;
   venue_type?: string;
   contact_status?: string;
+  in_campaign?: boolean;
 }
 
 interface CampaignManagerProps {
@@ -111,45 +111,44 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
       return;
     }
 
-   try {
-  // Get current user - ADD THIS BLOCK
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  // Fallback to localStorage if no session
-  let userId = session?.user?.id;
-  if (!userId) {
-    const loggedInUser = localStorage.getItem('loggedInUser');
-    if (loggedInUser) {
-      userId = JSON.parse(loggedInUser).id;
-    }
-  }
-  
-  if (!userId) {
-    alert('You must be logged in to create a campaign');
-    return;
-  }
-  // END NEW BLOCK
+    try {
+      // Get current user
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Fallback to localStorage if no session
+      let userId = session?.user?.id;
+      if (!userId) {
+        const loggedInUser = localStorage.getItem('loggedInUser');
+        if (loggedInUser) {
+          userId = JSON.parse(loggedInUser).id;
+        }
+      }
+      
+      if (!userId) {
+        alert('You must be logged in to create a campaign');
+        return;
+      }
 
-  // Store cities with states as "City, ST" format
-  const citiesWithStates = validLocations.map(loc => `${loc.city.trim()}, ${loc.state.trim().toUpperCase()}`);
-  
-  console.log('Creating campaign with data:', {
-    name: newCampaign.name,
-    // ... rest
-    user_id: userId  // ADD THIS LINE
-  });
+      // Store cities with states as "City, ST" format
+      const citiesWithStates = validLocations.map(loc => `${loc.city.trim()}, ${loc.state.trim().toUpperCase()}`);
+      
+      console.log('Creating campaign with data:', {
+        name: newCampaign.name,
+        cities: citiesWithStates,
+        user_id: userId
+      });
 
-  const { data, error } = await supabase
-    .from('campaigns')
-    .insert([{
-      name: newCampaign.name,
-      date_range_start: newCampaign.date_range_start || null,
-      date_range_end: newCampaign.date_range_end || null,
-      cities: citiesWithStates,
-      radius: newCampaign.radius,
-      status: 'active',
-      user_id: userId  // ADD THIS LINE
-    }])
+      const { data, error } = await supabase
+        .from('campaigns')
+        .insert([{
+          name: newCampaign.name,
+          date_range_start: newCampaign.date_range_start || null,
+          date_range_end: newCampaign.date_range_end || null,
+          cities: citiesWithStates,
+          radius: newCampaign.radius,
+          status: 'active',
+          user_id: userId
+        }])
         .select()
         .single();
 
@@ -178,93 +177,32 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
   const discoverVenuesForCampaign = async (campaign: Campaign) => {
     setIsDiscovering(true);
     try {
-      const allVenues: Venue[] = [];
-      const discoveryService = new VenueDiscoveryService();
+      console.log(`Calling venue discovery API for campaign ${campaign.id}...`);
       
-      // Ensure cities is an array
-      let cities = campaign.cities;
-      if (typeof cities === 'string') {
-        cities = [cities];
-      } else if (!Array.isArray(cities)) {
-        cities = [];
-      }
-      
-      if (cities.length === 0) {
-        alert('No cities specified for this campaign');
-        setIsDiscovering(false);
-        return;
-      }
-      
-      for (const cityState of cities) {
-        // Parse "City, ST" format
-        const parts = cityState.split(',').map(p => p.trim());
-        const city = parts[0];
-        const state = parts[1] || 'AR'; // Default to AR if no state
-        
-        console.log(`Discovering venues in ${city}, ${state}...`);
-        
-        try {
-          const results = await discoveryService.searchVenues({
-            city: city,
-            state: state,
-            radiusMiles: campaign.radius
-          });
-          
-          console.log(`Found ${results.length} venues in ${city}`);
-          
-          // Save to database and collect
-          for (const venue of results) {
-            try {
-              const { data: existing } = await supabase
-                .from('venues')
-                .select('*')
-                .ilike('name', venue.name)
-                .ilike('city', venue.city)
-                .limit(1)
-                .single();
+      const response = await fetch(`/api/campaigns/${campaign.id}/discover-venues`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
 
-              if (existing) {
-                allVenues.push(existing);
-              } else {
-                const { data: newVenue, error } = await supabase
-                  .from('venues')
-                  .insert([{
-                    name: venue.name,
-                    city: venue.city,
-                    state: venue.state || 'Unknown',
-                    address: venue.address,
-                    phone: venue.phone,
-                    website: venue.website,
-                    venue_type: venue.venueType,
-                    contact_status: 'not_contacted'
-                  }])
-                  .select()
-                  .single();
-
-                if (!error && newVenue) {
-                  allVenues.push(newVenue);
-                }
-              }
-            } catch (venueError) {
-              console.error(`Error saving venue ${venue.name}:`, venueError);
-            }
-          }
-        } catch (cityError) {
-          console.error(`Error discovering venues in ${city}:`, cityError);
-          alert(`Warning: Could not discover venues in ${city}. Check console for details.`);
-        }
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to discover venues');
       }
 
-      setDiscoveredVenues(allVenues);
+      const result = await response.json();
       
-      if (allVenues.length > 0) {
-        alert(`✅ Discovered ${allVenues.length} venues across ${cities.length} cities!`);
+      console.log('Discovery result:', result);
+      
+      setDiscoveredVenues(result.venues || []);
+      
+      if (result.newVenuesDiscovered > 0) {
+        alert(`✅ Discovered ${result.newVenuesDiscovered} new venues! Total: ${result.totalVenues} venues available.`);
       } else {
-        alert(`⚠️ No venues found. This could be due to:\n- Missing Google API key\n- API rate limits\n- No venues matching criteria\n\nCheck browser console for details.`);
+        alert(`Found ${result.totalVenues} existing venues for this campaign!`);
       }
     } catch (error) {
       console.error('Error discovering venues:', error);
-      alert(`Error discovering venues: ${error instanceof Error ? error.message : 'Unknown error'}\n\nCheck browser console for details.`);
+      alert(`Error discovering venues: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsDiscovering(false);
     }
@@ -292,12 +230,18 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
 
     setCampaignVenues(campaignVenuesData || []);
 
-    // If campaign has cities, show discovered venues
+    // Load all venues for campaign cities
     if (campaign.cities && campaign.cities.length > 0) {
+      // Parse cities from "City, ST" format
+      const cityNames = campaign.cities.map(cityState => {
+        const parts = cityState.split(',');
+        return parts[0].trim();
+      });
+
       const { data: allVenues } = await supabase
         .from('venues')
         .select('*')
-        .in('city', campaign.cities);
+        .in('city', cityNames);
       
       setDiscoveredVenues(allVenues || []);
     }
@@ -948,6 +892,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
                     <option value="VA">VA</option>
                     <option value="WA">WA</option>
                     <option value="WI">WI</option>
+                    <option value="WY">WY</option>
                   </select>
                   {index === newCampaign.locations.length - 1 ? (
                     <button
