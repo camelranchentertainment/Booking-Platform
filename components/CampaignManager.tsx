@@ -623,27 +623,120 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
 
             <h2 style={{ color: '#C8A882', marginBottom: '2rem' }}>{selectedCampaign.name}</h2>
 
-            {/* Campaign Venues - Status Tracking */}
+            {/* Campaign Venues - Detailed Tiles */}
             {campaignVenues.length > 0 && (
               <div style={{ marginBottom: '3rem' }}>
-                <h3 style={{ color: '#C8A882', marginBottom: '1rem' }}>📋 Campaign Venues</h3>
-                {campaignVenues.map((cv) => (
-                  <div key={cv.id} className="venue-tile">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: '600', fontSize: '1.1rem', color: '#C8A882', marginBottom: '0.5rem' }}>
-                          {cv.venue.name}
-                        </div>
-                        <div style={{ color: '#9B8A7A', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                          📍 {cv.venue.city}, {cv.venue.state}
-                          {cv.venue.phone && ` • ${cv.venue.phone}`}
-                        </div>
+                <h3 style={{ color: '#C8A882', marginBottom: '1.5rem', fontSize: '1.5rem' }}>
+                  📋 Campaign Venues ({campaignVenues.length})
+                </h3>
+                
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))',
+                  gap: '1.5rem'
+                }}>
+                  {campaignVenues.map((cv) => (
+                    <div 
+                      key={cv.id} 
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(61, 40, 23, 0.8), rgba(74, 50, 32, 0.8))',
+                        border: '2px solid #5C4A3A',
+                        borderRadius: '12px',
+                        padding: '1.5rem',
+                        position: 'relative',
+                        transition: 'all 0.3s ease'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.borderColor = '#C8A882'}
+                      onMouseLeave={(e) => e.currentTarget.style.borderColor = '#5C4A3A'}
+                    >
+                      {/* Remove Button */}
+                      <button
+                        onClick={() => removeVenueFromCampaign(cv.id)}
+                        style={{
+                          position: 'absolute',
+                          top: '0.75rem',
+                          right: '0.75rem',
+                          background: '#C84630',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '0.35rem 0.6rem',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem',
+                          fontWeight: '600'
+                        }}
+                        title="Remove from campaign"
+                      >
+                        ✕
+                      </button>
+
+                      {/* Venue Name */}
+                      <h4 style={{ 
+                        color: '#C8A882', 
+                        fontSize: '1.2rem', 
+                        fontWeight: '700',
+                        marginBottom: '1rem',
+                        marginRight: '2rem'
+                      }}>
+                        {cv.venue.name}
+                      </h4>
+
+                      {/* Venue Details Grid */}
+                      <div style={{ marginBottom: '1rem', color: '#E8DCC4', fontSize: '0.9rem' }}>
+                        {/* Address */}
+                        {cv.venue.address && (
+                          <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                            <span style={{ color: '#9B8A7A' }}>📍</span>
+                            <span>{cv.venue.address}</span>
+                          </div>
+                        )}
                         
+                        {/* City, State */}
+                        {!cv.venue.address && (
+                          <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                            <span style={{ color: '#9B8A7A' }}>📍</span>
+                            <span>{cv.venue.city}, {cv.venue.state}</span>
+                          </div>
+                        )}
+
+                        {/* Phone */}
+                        {cv.venue.phone && (
+                          <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                            <span style={{ color: '#9B8A7A' }}>📞</span>
+                            <a 
+                              href={`tel:${cv.venue.phone}`}
+                              style={{ color: '#E8DCC4', textDecoration: 'none' }}
+                            >
+                              {cv.venue.phone}
+                            </a>
+                          </div>
+                        )}
+
+                        {/* Website */}
+                        {cv.venue.website && (
+                          <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                            <span style={{ color: '#9B8A7A' }}>🌐</span>
+                            <a 
+                              href={cv.venue.website}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ 
+                                color: '#87AE73', 
+                                textDecoration: 'none',
+                                wordBreak: 'break-all'
+                              }}
+                            >
+                              {cv.venue.website.replace(/^https?:\/\/(www\.)?/, '')}
+                            </a>
+                          </div>
+                        )}
+
                         {/* Email Input */}
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+                        <div style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          <span style={{ color: '#9B8A7A' }}>📧</span>
                           <input
                             type="email"
-                            placeholder="Enter email address..."
+                            placeholder="Add email address..."
                             defaultValue={cv.venue.email || ''}
                             onBlur={(e) => {
                               if (e.target.value && e.target.value !== cv.venue.email) {
@@ -656,24 +749,34 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
                               border: '1px solid #5C4A3A',
                               borderRadius: '4px',
                               background: 'rgba(245, 245, 240, 0.1)',
-                              color: '#E8DCC4'
+                              color: '#E8DCC4',
+                              fontSize: '0.9rem'
                             }}
                           />
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginLeft: '1rem' }}>
+                      {/* Status Controls */}
+                      <div style={{ 
+                        display: 'flex', 
+                        gap: '0.75rem', 
+                        alignItems: 'center',
+                        paddingTop: '1rem',
+                        borderTop: '1px solid #5C4A3A'
+                      }}>
                         {getStatusBadge(cv.status || 'contact?')}
                         <select
                           value={cv.status || 'contact?'}
                           onChange={(e) => updateVenueStatus(cv.id, e.target.value)}
                           style={{
+                            flex: 1,
                             padding: '0.5rem',
                             border: '1px solid #5C4A3A',
                             borderRadius: '4px',
                             background: 'rgba(245, 245, 240, 0.1)',
                             color: '#E8DCC4',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            fontSize: '0.9rem'
                           }}
                         >
                           <option value="contact?">Contact?</option>
@@ -681,26 +784,10 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
                           <option value="declined">Declined</option>
                           <option value="booked">Booked</option>
                         </select>
-                        <button
-                          onClick={() => removeVenueFromCampaign(cv.id)}
-                          style={{
-                            padding: '0.5rem 0.75rem',
-                            background: '#C84630',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '0.85rem',
-                            fontWeight: '600'
-                          }}
-                          title="Remove from campaign"
-                        >
-                          ✕
-                        </button>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
 
