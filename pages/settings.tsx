@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
-import Navigation from '../components/Navigation';
 
 export default function Settings() {
   const router = useRouter();
@@ -235,7 +234,42 @@ export default function Settings() {
       background: 'linear-gradient(135deg, #2C1810 0%, #3D2817 50%, #2C1810 100%)',
       minHeight: '100vh'
     }}>
-      <Navigation />
+      {/* Header */}
+      <div style={{
+        background: '#5D4E37',
+        padding: '1rem 2rem',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        marginBottom: '2rem'
+      }}>
+        <div style={{
+          maxWidth: '1000px',
+          margin: '0 auto',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <a
+            href="/dashboard"
+            style={{
+              color: '#C8A882',
+              textDecoration: 'none',
+              fontSize: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            ← Back to Dashboard
+          </a>
+          <div style={{
+            fontSize: '1.2rem',
+            fontWeight: '600',
+            color: 'white'
+          }}>
+            Camel Ranch Booking
+          </div>
+        </div>
+      </div>
       
       <div style={{
         maxWidth: '1000px',
