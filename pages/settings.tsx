@@ -76,17 +76,21 @@ export default function Settings() {
       setWebsite(bandData.website || '');
       setBio(bandData.bio || '');
 
-      // Get band members
+      // Get band members with their profile info (including email from profiles)
       const { data: membersData, error: membersError } = await supabase
         .from('band_members')
         .select(`
-          *,
-          user:auth.users(email),
-          profile:profiles(display_name)
+          id,
+          user_id,
+          role,
+          invited_at,
+          accepted_at,
+          profiles!inner(display_name, id)
         `)
         .eq('band_id', bandData.id);
 
       if (membersError) throw membersError;
+
       setMembers(membersData || []);
     } catch (error) {
       console.error('Error loading band:', error);
@@ -628,10 +632,10 @@ export default function Settings() {
               >
                 <div>
                   <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>
-                    {member.profile?.display_name || member.user?.email?.split('@')[0]}
+                    {member.profiles?.display_name || `Band Member`}
                   </div>
                   <div style={{ fontSize: '0.9rem', color: '#9B8A7A' }}>
-                    {member.user?.email}
+                    {member.user_id === user.id ? user.email : 'Team Member'}
                   </div>
                   <div style={{
                     display: 'inline-block',
