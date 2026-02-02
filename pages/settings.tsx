@@ -51,15 +51,20 @@ export default function Settings() {
 
   const loadBandData = async (userId) => {
     try {
-      // Get user's band
+      // First, get user's band_id from band_members
+      const { data: memberData, error: memberError } = await supabase
+        .from('band_members')
+        .select('band_id')
+        .eq('user_id', userId)
+        .single();
+
+      if (memberError) throw memberError;
+
+      // Then get the band details
       const { data: bandData, error: bandError } = await supabase
         .from('bands')
         .select('*')
-        .in('id', 
-          supabase.from('band_members')
-            .select('band_id')
-            .eq('user_id', userId)
-        )
+        .eq('id', memberData.band_id)
         .single();
 
       if (bandError) throw bandError;
