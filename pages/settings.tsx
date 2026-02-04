@@ -77,14 +77,20 @@ export default function Settings() {
 
   const loadBandData = async (userId: string) => {
     try {
-      // First, get user's band_id from band_members
+      // First, get user's band_id from band_members (get first band if multiple)
       const { data: memberData, error: memberError } = await supabase
         .from('band_members')
         .select('band_id')
         .eq('user_id', userId)
-        .single();
+        .limit(1)
+        .maybeSingle();
 
       if (memberError) throw memberError;
+      
+      if (!memberData) {
+        console.log('User is not a member of any band');
+        return;
+      }
 
       // Then get the band details
       const { data: bandData, error: bandError } = await supabase
@@ -160,7 +166,7 @@ export default function Settings() {
       if (data) {
         setCalendarType(data.calendar_type || '');
         setCalendarApiKey(data.calendar_api_key || '');
-        setCalendarRefreshToken(data.calendar_refresh_token || '');
+        setCalendarRefreshToken(data.google_refresh_token || ''); // Use actual column name
         setIcalUrl(data.ical_url || '');
       }
     } catch (error) {
@@ -765,16 +771,23 @@ For now, please provide their User ID instead of email.`);
             if (!user) return;
             
             try {
-              // Prepare the data to save
-              const calendarData = {
+              // Prepare the data to save using ACTUAL column names from database
+              const calendarData: any = {
                 user_id: user.id,
                 calendar_type: calendarType,
-                calendar_api_key: calendarType === 'google' || calendarType === 'outlook' ? calendarApiKey : null,
-                calendar_refresh_token: calendarType === 'google' ? calendarRefreshToken : null,
-                ical_url: calendarType === 'ical' ? icalUrl : null,
                 is_active: true,
                 updated_at: new Date().toISOString()
               };
+
+              // Map to actual database columns based on calendar type
+              if (calendarType === 'google') {
+                calendarData.calendar_api_key = calendarApiKey || null;
+                calendarData.google_refresh_token = calendarRefreshToken || null;
+              } else if (calendarType === 'outlook') {
+                calendarData.calendar_api_key = calendarApiKey || null;
+              } else if (calendarType === 'ical') {
+                calendarData.ical_url = icalUrl || null;
+              }
 
               // Try to update first (if settings exist)
               const { data: existingSettings } = await supabase
