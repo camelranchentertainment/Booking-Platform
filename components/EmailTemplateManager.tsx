@@ -1,40 +1,114 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getEmailTemplates, createEmailTemplate, updateEmailTemplate, deleteEmailTemplate } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 interface EmailTemplate {
   id: string;
   name: string;
   subject: string;
   body: string;
-  sender_email: string;
-  template_type: string;
+  variables: string[];
   created_at: string;
+  user_id: string;
 }
 
-export default function EmailTemplates() {
+interface BandInfo {
+  band_name: string;
+  contact_email: string;
+  contact_phone: string;
+  website: string;
+}
+
+export default function EmailTemplateManager() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
-
-  const [formData, setFormData] = useState({
-    name: '',
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [band, setBand] = useState<BandInfo | null>(null);
+  
+  // Send Email Modal
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
+  const [sendForm, setSendForm] = useState({
+    to: '',
+    cc: '',
+    bcc: '',
     subject: '',
-    body: '',
-    sender_email: 'scott@camelranchbooking.com',
-    template_type: 'initial_contact'
+    body: ''
   });
+  const [variableValues, setVariableValues] = useState<Record<string, string>>({});
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    loadTemplates();
+    checkAuth();
   }, []);
 
+  useEffect(() => {
+    if (user) {
+      loadUserData();
+      loadTemplates();
+    }
+  }, [user]);
+
+  const checkAuth = async () => {
+    try {
+      const loggedInUser = localStorage.getItem('loggedInUser');
+      if (loggedInUser) {
+        setUser(JSON.parse(loggedInUser));
+      }
+    } catch (error) {
+      console.error('Auth error:', error);
+    }
+  };
+
+  const loadUserData = async () => {
+    if (!user) return;
+    
+    try {
+      // Load profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      
+      setProfile(profileData);
+
+      // Load band info
+      const { data: memberData } = await supabase
+        .from('band_members')
+        .select('band_id')
+        .eq('user_id', user.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (memberData) {
+        const { data: bandData } = await supabase
+          .from('bands')
+          .select('band_name, contact_email, contact_phone, website')
+          .eq('id', memberData.band_id)
+          .maybeSingle();
+        
+        setBand(bandData);
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
+
   const loadTemplates = async () => {
+    if (!user) return;
+    
     try {
       setLoading(true);
-      const data = await getEmailTemplates();
+      const { data, error } = await supabase
+        .from('email_templates')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
       setTemplates(data || []);
     } catch (error) {
       console.error('Error loading templates:', error);
@@ -43,269 +117,456 @@ export default function EmailTemplates() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (editingTemplate) {
-        await updateEmailTemplate(editingTemplate.id, formData);
-        alert('✅ Template updated!');
-      } else {
-        await createEmailTemplate(formData);
-        alert('✅ Template created!');
-      }
-      
-      resetForm();
-      loadTemplates();
-    } catch (error) {
-      console.error('Error saving template:', error);
-      alert('Error saving template');
-    }
-  };
-
-  const handleEdit = (template: EmailTemplate) => {
-    setEditingTemplate(template);
-    setFormData({
-      name: template.name || '',
-      subject: template.subject || '',
-      body: template.body || '',
-      sender_email: template.sender_email || 'scott@camelranchbooking.com',
-      template_type: template.template_type || 'initial_contact'
-    });
-    setShowCreateForm(true);
-  };
-
-  const handleDelete = async (id: string, name: string) => {
-    if (confirm(`Delete "${name}"?`)) {
-      try {
-        await deleteEmailTemplate(id);
-        loadTemplates();
-        alert('✅ Template deleted!');
-      } catch (error) {
-        console.error('Error deleting template:', error);
-        alert('Error deleting template');
-      }
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      subject: '',
-      body: '',
-      sender_email: 'scott@camelranchbooking.com',
-      template_type: 'initial_contact'
-    });
-    setShowCreateForm(false);
-    setEditingTemplate(null);
-  };
-
-  const getTypeInfo = (type: string) => {
-    switch (type) {
-      case 'initial_contact':
-        return { color: '#5D4E37', icon: '👋', label: 'Initial Contact' };
-      case 'follow_up':
-        return { color: '#B7410E', icon: '🔔', label: 'Follow Up' };
-      case 'confirmation':
-        return { color: '#87AE73', icon: '✅', label: 'Confirmation' };
-      case 'thank_you':
-        return { color: '#6B8E5C', icon: '🙏', label: 'Thank You' };
+  const getAutoFillValue = (variable: string): string => {
+    // Auto-fill from band/profile data
+    switch (variable) {
+      case 'Your Name':
+        return profile?.display_name || '';
+      case 'Band Name':
+        return band?.band_name || '';
+      case 'Phone Number':
+        return band?.contact_phone || '';
+      case 'Email':
+        return band?.contact_email || user?.email || '';
+      case 'Website':
+        return band?.website || '';
       default:
-        return { color: '#708090', icon: '📧', label: 'General' };
+        return '';
     }
   };
+
+  const handleSendClick = (template: EmailTemplate) => {
+    setSelectedTemplate(template);
+    setSendForm({
+      to: '',
+      cc: '',
+      bcc: '',
+      subject: template.subject,
+      body: template.body
+    });
+    
+    // Initialize variable values with AUTO-FILL
+    const initialValues: Record<string, string> = {};
+    (template.variables || []).forEach(v => {
+      initialValues[v] = getAutoFillValue(v);
+    });
+    setVariableValues(initialValues);
+    
+    setShowSendModal(true);
+  };
+
+  const replaceVariables = (text: string, values: Record<string, string>) => {
+    let result = text;
+    Object.keys(values).forEach(key => {
+      const regex = new RegExp(`\\[${key}\\]`, 'g');
+      result = result.replace(regex, values[key] || `[${key}]`);
+    });
+    return result;
+  };
+
+  const updateEmailPreview = () => {
+    if (!selectedTemplate) return;
+    
+    const updatedSubject = replaceVariables(selectedTemplate.subject, variableValues);
+    const updatedBody = replaceVariables(selectedTemplate.body, variableValues);
+    
+    setSendForm(prev => ({
+      ...prev,
+      subject: updatedSubject,
+      body: updatedBody
+    }));
+  };
+
+  useEffect(() => {
+    if (selectedTemplate) {
+      updateEmailPreview();
+    }
+  }, [variableValues]);
+
+  const handleSendEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!user) {
+      alert('Please log in to send emails');
+      return;
+    }
+
+    if (!sendForm.to) {
+      alert('Please enter a recipient email address');
+      return;
+    }
+
+    setSending(true);
+
+    try {
+      const response = await fetch('/api/emails/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          to: sendForm.to,
+          cc: sendForm.cc || undefined,
+          bcc: sendForm.bcc || undefined,
+          subject: sendForm.subject,
+          body: sendForm.body
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send email');
+      }
+
+      alert('✅ Email sent successfully!');
+      setShowSendModal(false);
+      setSelectedTemplate(null);
+      
+    } catch (error: any) {
+      console.error('Send email error:', error);
+      alert(`Failed to send email: ${error.message}`);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '4rem', color: '#708090' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⏳</div>
+        <p>Loading templates...</p>
+      </div>
+    );
+  }
 
   return (
     <>
       <style jsx>{`
         * { box-sizing: border-box; }
-        
         .page-container {
           background: linear-gradient(135deg, #F5F5F0 0%, #E8E6E1 100%);
           min-height: 100vh;
           padding: 1rem;
         }
-        
-        .content-wrapper {
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-        
-        .header-section {
-          margin-bottom: 2rem;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 1rem;
-        }
-        
-        .header-title {
-          font-size: 1.8rem;
-          font-weight: 700;
-          color: #5D4E37;
-          margin: 0 0 0.5rem 0;
-        }
-        
-        .header-subtitle {
-          font-size: 1rem;
-          color: #708090;
-          margin: 0;
-        }
-        
         .template-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
           gap: 1.5rem;
         }
-        
-        .form-two-col {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 1rem;
-        }
-        
-        .card-footer-btns {
-          display: flex;
-          gap: 0.75rem;
-        }
-        
         @media (max-width: 767px) {
-          .page-container {
-            padding: 0.75rem;
-          }
-          
-          .header-title {
-            font-size: 1.5rem;
-          }
-          
-          .header-subtitle {
-            font-size: 0.9rem;
-          }
-          
           .template-grid {
             grid-template-columns: 1fr;
-          }
-          
-          .form-two-col {
-            grid-template-columns: 1fr;
-          }
-          
-          .card-footer-btns {
-            flex-direction: column;
-          }
-          
-          .card-footer-btns button {
-            width: 100% !important;
           }
         }
       `}</style>
 
       <div className="page-container">
-        <div className="content-wrapper">
+        <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
           {/* Header */}
-          <div className="header-section">
-            <div style={{ flex: '1 1 200px' }}>
-              <h1 className="header-title">✉️ Email Templates</h1>
-              <p className="header-subtitle">Save time with reusable templates</p>
-            </div>
-            
-            <button
-              onClick={() => showCreateForm ? resetForm() : setShowCreateForm(true)}
-              style={{
-                padding: '1rem 1.5rem',
-                background: showCreateForm ? '#708090' : 'linear-gradient(135deg, #5D4E37 0%, #8B7355 100%)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '12px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '1rem',
-                boxShadow: '0 4px 12px rgba(93, 78, 55, 0.3)',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {showCreateForm ? '✕ Cancel' : '+ New Template'}
-            </button>
+          <div style={{ marginBottom: '2rem' }}>
+            <h1 style={{ fontSize: '2rem', fontWeight: '700', color: '#5D4E37', margin: '0 0 0.5rem 0' }}>
+              ✉️ Email Templates
+            </h1>
+            <p style={{ color: '#708090', margin: 0 }}>
+              Professional templates ready to send • Band info auto-fills
+            </p>
           </div>
 
-          {/* Create/Edit Form */}
-          {showCreateForm && (
-            <div style={{
-              background: 'white',
-              padding: '2rem',
-              borderRadius: '16px',
-              marginBottom: '2rem',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.08)'
-            }}>
-              <h2 style={{ fontSize: '1.4rem', fontWeight: '700', color: '#5D4E37', margin: '0 0 1.5rem 0' }}>
-                {editingTemplate ? '✏️ Edit Template' : '✨ Create New Template'}
-              </h2>
-              
-              <form onSubmit={handleSubmit}>
-                <div style={{ display: 'grid', gap: '1.5rem' }}>
-                  <div>
-                    <label style={{ display: 'block', color: '#5D4E37', marginBottom: '0.5rem', fontWeight: '600' }}>
-                      Template Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      placeholder="e.g., Texas Venues - Initial Outreach"
+          {/* Templates Grid */}
+          {templates.length === 0 ? (
+            <div style={{ background: 'white', padding: '4rem', borderRadius: '16px', textAlign: 'center' }}>
+              <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>📝</div>
+              <h3 style={{ fontSize: '1.5rem', color: '#5D4E37', margin: '0 0 0.5rem 0' }}>No templates yet</h3>
+              <p style={{ color: '#708090' }}>Templates will appear here</p>
+            </div>
+          ) : (
+            <div className="template-grid">
+              {templates.map((template) => (
+                <div
+                  key={template.id}
+                  style={{
+                    background: 'white',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                    display: 'flex',
+                    flexDirection: 'column'
+                  }}
+                >
+                  {/* Header */}
+                  <div style={{ background: '#5D4E37', color: 'white', padding: '1.25rem' }}>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: '700', margin: 0 }}>
+                      {template.name}
+                    </h3>
+                  </div>
+
+                  {/* Content */}
+                  <div style={{ padding: '1.5rem', flex: 1 }}>
+                    <div style={{ 
+                      background: '#F5F5F0', 
+                      padding: '1rem', 
+                      borderRadius: '8px', 
+                      marginBottom: '1rem' 
+                    }}>
+                      <div style={{ fontSize: '0.75rem', color: '#708090', fontWeight: '600', marginBottom: '0.5rem' }}>
+                        SUBJECT
+                      </div>
+                      <div style={{ color: '#5D4E37', fontWeight: '600' }}>
+                        {template.subject}
+                      </div>
+                    </div>
+
+                    <div style={{ 
+                      fontSize: '0.9rem', 
+                      color: '#708090', 
+                      lineHeight: '1.6', 
+                      maxHeight: '120px', 
+                      overflow: 'hidden' 
+                    }}>
+                      {template.body.substring(0, 200)}...
+                    </div>
+
+                    {template.variables && template.variables.length > 0 && (
+                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E8E6E1' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#87AE73', marginBottom: '0.5rem', fontWeight: '600' }}>
+                          ✓ Auto-fills: Your Name, Band Name, Phone, Email, Website
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#708090', marginTop: '0.25rem' }}>
+                          Manual: {template.variables.filter(v => !['Your Name', 'Band Name', 'Phone Number', 'Email', 'Website'].includes(v)).length} fields
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #E8E6E1' }}>
+                    <button
+                      onClick={() => handleSendClick(template)}
                       style={{
                         width: '100%',
                         padding: '0.875rem',
+                        background: 'linear-gradient(135deg, #87AE73 0%, #6B8E5C 100%)',
+                        color: 'white',
+                        border: 'none',
                         borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: '700',
+                        fontSize: '1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem'
+                      }}
+                    >
+                      <span>📧</span>
+                      <span>Send Email</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Send Email Modal */}
+        {showSendModal && selectedTemplate && (
+          <div
+            onClick={() => setShowSendModal(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.7)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              padding: '1rem',
+              overflow: 'auto'
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'white',
+                borderRadius: '16px',
+                width: '100%',
+                maxWidth: '800px',
+                maxHeight: '90vh',
+                overflow: 'auto',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+              }}
+            >
+              {/* Modal Header */}
+              <div style={{
+                padding: '1.5rem 2rem',
+                borderBottom: '2px solid #E8E6E1',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                position: 'sticky',
+                top: 0,
+                background: 'white',
+                zIndex: 1
+              }}>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#5D4E37', margin: 0 }}>
+                  📧 Send: {selectedTemplate.name}
+                </h2>
+                <button
+                  onClick={() => setShowSendModal(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '1.5rem',
+                    cursor: 'pointer',
+                    color: '#708090'
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <form onSubmit={handleSendEmail} style={{ padding: '2rem' }}>
+                {/* Variables Section */}
+                {selectedTemplate.variables && selectedTemplate.variables.length > 0 && (
+                  <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#F5F5F0', borderRadius: '8px' }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#5D4E37', marginBottom: '0.5rem' }}>
+                      Fill in Template Variables
+                    </h3>
+                    <p style={{ fontSize: '0.9rem', color: '#87AE73', margin: '0 0 1rem 0' }}>
+                      ✓ Band info auto-filled from your profile
+                    </p>
+                    <div style={{ display: 'grid', gap: '1rem' }}>
+                      {selectedTemplate.variables.map((variable) => {
+                        const isAutoFilled = ['Your Name', 'Band Name', 'Phone Number', 'Email', 'Website'].includes(variable);
+                        return (
+                          <div key={variable}>
+                            <label style={{ 
+                              display: 'block', 
+                              color: '#5D4E37', 
+                              marginBottom: '0.5rem', 
+                              fontWeight: '600',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.5rem'
+                            }}>
+                              {variable}
+                              {isAutoFilled && (
+                                <span style={{ 
+                                  fontSize: '0.75rem', 
+                                  color: '#87AE73', 
+                                  background: 'rgba(135, 174, 115, 0.2)',
+                                  padding: '0.125rem 0.5rem',
+                                  borderRadius: '4px'
+                                }}>
+                                  auto-filled
+                                </span>
+                              )}
+                            </label>
+                            <input
+                              type="text"
+                              value={variableValues[variable] || ''}
+                              onChange={(e) => setVariableValues({
+                                ...variableValues,
+                                [variable]: e.target.value
+                              })}
+                              placeholder={`Enter ${variable}`}
+                              style={{
+                                width: '100%',
+                                padding: '0.75rem',
+                                borderRadius: '6px',
+                                border: isAutoFilled ? '2px solid #87AE73' : '2px solid #E8E6E1',
+                                background: isAutoFilled ? 'rgba(135, 174, 115, 0.05)' : 'white',
+                                fontSize: '1rem'
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Email Fields */}
+                <div style={{ display: 'grid', gap: '1rem', marginBottom: '1.5rem' }}>
+                  <div>
+                    <label style={{ display: 'block', color: '#5D4E37', marginBottom: '0.5rem', fontWeight: '600' }}>
+                      To <span style={{color: '#C33'}}>*</span>
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={sendForm.to}
+                      onChange={(e) => setSendForm({...sendForm, to: e.target.value})}
+                      placeholder="venue@example.com"
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        borderRadius: '6px',
                         border: '2px solid #E8E6E1',
                         fontSize: '1rem'
                       }}
                     />
                   </div>
 
-                  <div className="form-two-col">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div>
                       <label style={{ display: 'block', color: '#5D4E37', marginBottom: '0.5rem', fontWeight: '600' }}>
-                        From
+                        CC
                       </label>
-                      <select
-                        value={formData.sender_email}
-                        onChange={(e) => setFormData({...formData, sender_email: e.target.value})}
-                        style={{ width: '100%', padding: '0.875rem', borderRadius: '8px', border: '2px solid #E8E6E1', fontSize: '1rem' }}
-                      >
-                        <option value="scott@camelranchbooking.com">📧 Scott</option>
-                        <option value="jake@camelranchbooking.com">📧 Jake</option>
-                      </select>
+                      <input
+                        type="email"
+                        value={sendForm.cc}
+                        onChange={(e) => setSendForm({...sendForm, cc: e.target.value})}
+                        placeholder="Optional"
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          borderRadius: '6px',
+                          border: '2px solid #E8E6E1',
+                          fontSize: '1rem'
+                        }}
+                      />
                     </div>
-
                     <div>
                       <label style={{ display: 'block', color: '#5D4E37', marginBottom: '0.5rem', fontWeight: '600' }}>
-                        Type
+                        BCC
                       </label>
-                      <select
-                        value={formData.template_type}
-                        onChange={(e) => setFormData({...formData, template_type: e.target.value})}
-                        style={{ width: '100%', padding: '0.875rem', borderRadius: '8px', border: '2px solid #E8E6E1', fontSize: '1rem' }}
-                      >
-                        <option value="initial_contact">👋 Initial Contact</option>
-                        <option value="follow_up">🔔 Follow Up</option>
-                        <option value="confirmation">✅ Confirmation</option>
-                        <option value="thank_you">🙏 Thank You</option>
-                      </select>
+                      <input
+                        type="email"
+                        value={sendForm.bcc}
+                        onChange={(e) => setSendForm({...sendForm, bcc: e.target.value})}
+                        placeholder="Optional"
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          borderRadius: '6px',
+                          border: '2px solid #E8E6E1',
+                          fontSize: '1rem'
+                        }}
+                      />
                     </div>
                   </div>
 
                   <div>
                     <label style={{ display: 'block', color: '#5D4E37', marginBottom: '0.5rem', fontWeight: '600' }}>
-                      Subject Line
+                      Subject
                     </label>
                     <input
                       type="text"
                       required
-                      value={formData.subject}
-                      onChange={(e) => setFormData({...formData, subject: e.target.value})}
-                      placeholder="Booking Inquiry - Better Than Nothin' Band"
-                      style={{ width: '100%', padding: '0.875rem', borderRadius: '8px', border: '2px solid #E8E6E1', fontSize: '1rem' }}
+                      value={sendForm.subject}
+                      onChange={(e) => setSendForm({...sendForm, subject: e.target.value})}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        borderRadius: '6px',
+                        border: '2px solid #E8E6E1',
+                        fontSize: '1rem'
+                      }}
                     />
                   </div>
 
@@ -315,144 +576,63 @@ export default function EmailTemplates() {
                     </label>
                     <textarea
                       required
-                      value={formData.body}
-                      onChange={(e) => setFormData({...formData, body: e.target.value})}
-                      rows={10}
-                      placeholder="Hi [Venue Name],&#10;&#10;Hope you're doing well! I'm reaching out from Better Than Nothin'..."
+                      value={sendForm.body}
+                      onChange={(e) => setSendForm({...sendForm, body: e.target.value})}
+                      rows={14}
                       style={{
                         width: '100%',
                         padding: '1rem',
-                        borderRadius: '8px',
+                        borderRadius: '6px',
                         border: '2px solid #E8E6E1',
                         fontSize: '1rem',
                         lineHeight: '1.6',
-                        resize: 'vertical'
+                        resize: 'vertical',
+                        fontFamily: 'inherit'
                       }}
                     />
-                    <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#F5F5F0', borderRadius: '6px', fontSize: '0.9rem', color: '#708090' }}>
-                      💡 <strong>Pro Tip:</strong> Use [Venue Name], [City], [State] as placeholders!
-                    </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem', flexWrap: 'wrap' }}>
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowSendModal(false)}
+                    disabled={sending}
+                    style={{
+                      padding: '0.875rem 2rem',
+                      background: '#E8E6E1',
+                      color: '#708090',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: sending ? 'not-allowed' : 'pointer',
+                      fontWeight: '600',
+                      fontSize: '1rem'
+                    }}
+                  >
+                    Cancel
+                  </button>
                   <button
                     type="submit"
+                    disabled={sending}
                     style={{
-                      flex: '1 1 200px',
-                      padding: '1rem',
-                      background: 'linear-gradient(135deg, #87AE73 0%, #6B8E5C 100%)',
+                      padding: '0.875rem 2rem',
+                      background: sending ? '#708090' : 'linear-gradient(135deg, #87AE73 0%, #6B8E5C 100%)',
                       color: 'white',
                       border: 'none',
                       borderRadius: '8px',
-                      cursor: 'pointer',
+                      cursor: sending ? 'not-allowed' : 'pointer',
                       fontWeight: '700',
-                      fontSize: '1rem',
-                      boxShadow: '0 4px 12px rgba(135, 174, 115, 0.3)'
+                      fontSize: '1rem'
                     }}
                   >
-                    {editingTemplate ? '💾 Update' : '✨ Create'}
+                    {sending ? '📤 Sending...' : '📧 Send Email'}
                   </button>
                 </div>
               </form>
             </div>
-          )}
-
-          {/* Templates List */}
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '4rem', color: '#708090' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⏳</div>
-              <p>Loading templates...</p>
-            </div>
-          ) : templates.length === 0 ? (
-            <div style={{ background: 'white', padding: '4rem', borderRadius: '16px', textAlign: 'center', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }}>
-              <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>📝</div>
-              <h3 style={{ fontSize: '1.5rem', color: '#5D4E37', margin: '0 0 0.5rem 0' }}>No templates yet</h3>
-              <p style={{ color: '#708090', fontSize: '1.05rem', margin: 0 }}>Create your first template!</p>
-            </div>
-          ) : (
-            <div className="template-grid">
-              {templates.map((template) => {
-                const typeInfo = getTypeInfo(template.template_type || 'general');
-                return (
-                  <div
-                    key={template.id}
-                    style={{
-                      background: 'white',
-                      borderRadius: '12px',
-                      overflow: 'hidden',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                      transition: 'transform 0.3s ease'
-                    }}
-                  >
-                    <div style={{ background: typeInfo.color, color: 'white', padding: '1.25rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <span style={{ fontSize: '1.5rem' }}>{typeInfo.icon}</span>
-                        <div>
-                          <div style={{ fontSize: '0.75rem', opacity: 0.9, fontWeight: '500' }}>{typeInfo.label}</div>
-                          <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
-                            {template.sender_email?.split('@')[0] || 'Unknown'}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ padding: '1.5rem' }}>
-                      <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#5D4E37', margin: '0 0 1rem 0' }}>
-                        {template.name || 'Untitled'}
-                      </h3>
-
-                      <div style={{ background: '#F5F5F0', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                        <div style={{ fontSize: '0.8rem', color: '#708090', fontWeight: '600', marginBottom: '0.5rem' }}>
-                          SUBJECT
-                        </div>
-                        <div style={{ color: '#5D4E37', fontWeight: '600', fontSize: '0.95rem' }}>
-                          {template.subject || 'No subject'}
-                        </div>
-                      </div>
-
-                      <div style={{ fontSize: '0.9rem', color: '#708090', lineHeight: '1.6', maxHeight: '100px', overflow: 'hidden' }}>
-                        {template.body || 'No content'}
-                      </div>
-                    </div>
-
-                    <div className="card-footer-btns" style={{ padding: '1rem 1.5rem', borderTop: '1px solid #E8E6E1' }}>
-                      <button
-                        onClick={() => handleEdit(template)}
-                        style={{
-                          flex: 1,
-                          padding: '0.75rem',
-                          background: typeInfo.color,
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontWeight: '600'
-                        }}
-                      >
-                        ✏️ Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(template.id, template.name || 'this template')}
-                        style={{
-                          padding: '0.75rem 1rem',
-                          background: '#FEE',
-                          color: '#C33',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontWeight: '600'
-                        }}
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </>
   );
