@@ -42,6 +42,8 @@ export default function EmailTemplateManager() {
   const [showSendModal, setShowSendModal] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
+  const [venueSearchQuery, setVenueSearchQuery] = useState('');
+  const [showVenueDropdown, setShowVenueDropdown] = useState(false);
   const [sendForm, setSendForm] = useState({
     to: '',
     cc: '',
@@ -222,6 +224,8 @@ export default function EmailTemplateManager() {
 
     setSelectedTemplate(template);
     setSelectedVenue(null); // Reset venue selection
+    setVenueSearchQuery(''); // Reset search query
+    setShowVenueDropdown(false);
     setSendForm({
       to: '',
       cc: '',
@@ -261,6 +265,16 @@ export default function EmailTemplateManager() {
       }));
     }
   };
+
+  // Filter venues based on search query
+  const filteredVenues = venues.filter(venue => {
+    const searchLower = venueSearchQuery.toLowerCase();
+    return (
+      venue.name.toLowerCase().includes(searchLower) ||
+      venue.city.toLowerCase().includes(searchLower) ||
+      venue.state.toLowerCase().includes(searchLower)
+    );
+  });
 
   const replaceVariables = (text: string, values: Record<string, string>) => {
     let result = text;
@@ -498,31 +512,93 @@ export default function EmailTemplateManager() {
 
               {/* Modal Body */}
               <form onSubmit={handleSendEmail} style={{ padding: '2rem' }}>
-                {/* Venue Selection Dropdown */}
+                {/* Venue Selection - Searchable Input */}
                 <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#F5F5F0', borderRadius: '12px' }}>
                   <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#5D4E37', marginBottom: '1rem' }}>
                     Select Venue
                   </h3>
-                  <select
-                    value={selectedVenue?.id || ''}
-                    onChange={(e) => handleVenueSelect(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '0.875rem',
-                      borderRadius: '8px',
-                      border: '2px solid #5D4E37',
-                      fontSize: '1rem',
-                      background: 'white',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <option value="">Select a venue from your database...</option>
-                    {venues.map(venue => (
-                      <option key={venue.id} value={venue.id}>
-                        {venue.name} - {venue.city}, {venue.state}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      value={venueSearchQuery}
+                      onChange={(e) => setVenueSearchQuery(e.target.value)}
+                      onFocus={() => setShowVenueDropdown(true)}
+                      placeholder="Type to search venues..."
+                      style={{
+                        width: '100%',
+                        padding: '0.875rem',
+                        borderRadius: '8px',
+                        border: selectedVenue ? '2px solid #87AE73' : '2px solid #5D4E37',
+                        fontSize: '1rem',
+                        background: 'white'
+                      }}
+                    />
+                    
+                    {/* Dropdown Results */}
+                    {showVenueDropdown && venueSearchQuery && filteredVenues.length > 0 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        background: 'white',
+                        border: '2px solid #5D4E37',
+                        borderTop: 'none',
+                        borderRadius: '0 0 8px 8px',
+                        maxHeight: '300px',
+                        overflowY: 'auto',
+                        zIndex: 10,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                      }}>
+                        {filteredVenues.slice(0, 10).map(venue => (
+                          <div
+                            key={venue.id}
+                            onClick={() => {
+                              handleVenueSelect(venue.id);
+                              setVenueSearchQuery(`${venue.name} - ${venue.city}, ${venue.state}`);
+                              setShowVenueDropdown(false);
+                            }}
+                            style={{
+                              padding: '0.875rem',
+                              cursor: 'pointer',
+                              borderBottom: '1px solid #E8E6E1',
+                              transition: 'background 0.15s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = '#F5F5F0'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                          >
+                            <div style={{ fontWeight: '600', color: '#5D4E37', marginBottom: '0.25rem' }}>
+                              {venue.name}
+                            </div>
+                            <div style={{ fontSize: '0.85rem', color: '#708090' }}>
+                              📍 {venue.city}, {venue.state}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* No results message */}
+                    {showVenueDropdown && venueSearchQuery && filteredVenues.length === 0 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        background: 'white',
+                        border: '2px solid #5D4E37',
+                        borderTop: 'none',
+                        borderRadius: '0 0 8px 8px',
+                        padding: '1rem',
+                        color: '#708090',
+                        fontSize: '0.9rem',
+                        zIndex: 10
+                      }}>
+                        No venues found matching "{venueSearchQuery}"
+                      </div>
+                    )}
+                  </div>
+                  
                   {selectedVenue && (
                     <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(135, 174, 115, 0.1)', borderRadius: '8px' }}>
                       <div style={{ fontSize: '0.9rem', color: '#87AE73', fontWeight: '600', marginBottom: '0.5rem' }}>
