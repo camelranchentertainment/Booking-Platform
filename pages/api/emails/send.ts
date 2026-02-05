@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { supabase } from '../../../lib/supabase';
 import nodemailer from 'nodemailer';
-import { supabase, logEmail, updateVenueContactStatus } from '../../../lib/supabase';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -8,89 +8,65 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { venueId, campaignId, templateId, customizations } = req.body;
+    const { userId, to, subject, body, cc, bcc } = req.body;
 
-    // Fetch venue details
-    const { data: venue, error: venueError } = await supabase
-      .from('venues')
-      .select('*')
-      .eq('id', venueId)
-      .single();
-
-    if (venueError || !venue) {
-      return res.status(404).json({ error: 'Venue not found' });
+    if (!userId || !to || !subject || !body) {
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Fetch email template
-    const { data: template, error: templateError } = await supabase
-      .from('email_templates')
+    // Get user's SMTP settings
+    const { data: smtpSettings, error: smtpError } = await supabase
+      .from('smtp_settings')
       .select('*')
-      .eq('id', templateId)
-      .single();
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .maybeSingle();
 
-    if (templateError || !template) {
-      return res.status(404).json({ error: 'Email template not found' });
+    if (smtpError || !smtpSettings) {
+      return res.status(400).json({ 
+        error: 'Email not configured. Please set up your email in Settings.' 
+      });
     }
 
-    // Replace template variables
-    let subject = template.subject;
-    let body = template.body;
-
-    const replacements: { [key: string]: string } = {
-      venue_name: venue.name,
-      city: venue.city,
-      state: venue.state,
-      booking_contact: venue.booking_contact || 'Booking Manager',
-      season: customizations?.season || 'the upcoming season',
-      ...customizations
-    };
-
-    // Replace all variables in subject and body
-    Object.keys(replacements).forEach(key => {
-      const regex = new RegExp(`{{${key}}}`, 'g');
-      subject = subject.replace(regex, replacements[key]);
-      body = body.replace(regex, replacements[key]);
-    });
-
-    // Create email transporter
-    // Note: You'll need to configure these environment variables
+    // Create nodemailer transporter
     const transporter = nodemailer.createTransport({
-      service: process.env.EMAIL_SERVICE || 'gmail', // 'gmail' or 'outlook'
+      host: smtpSettings.smtp_host,
+      port: smtpSettings.smtp_port,
+      secure: smtpSettings.smtp_port === 465, // true for 465, false for other ports
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD, // For Gmail, use App Password
+        user: smtpSettings.smtp_email,
+        pass: smtpSettings.smtp_password,
       },
     });
 
     // Send email
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: venue.email,
+    const info = await transporter.sendMail({
+      from: `"${smtpSettings.smtp_from_name || smtpSettings.smtp_email}" <${smtpSettings.smtp_email}>`,
+      to: to,
+      cc: cc,
+      bcc: bcc,
       subject: subject,
       text: body,
-      html: body.replace(/\n/g, '<br>'), // Basic HTML conversion
-    };
-
-    await transporter.sendMail(mailOptions);
-
-    // Log the email (sent_at is added automatically by logEmail function)
-    await logEmail({
-      venue_id: venueId,
-      campaign_id: campaignId,
-      email_template_id: templateId
+      html: body.replace(/\n/g, '<br>'),
     });
 
-    // Update venue status
-    await updateVenueContactStatus(venueId, 'awaiting_response');
+    // Update last_used_at
+    await supabase
+      .from('smtp_settings')
+      .update({ last_used_at: new Date().toISOString() })
+      .eq('user_id', userId);
 
     return res.status(200).json({ 
       success: true, 
-      message: 'Email sent successfully',
-      venue: venue.name
+      messageId: info.messageId,
+      message: 'Email sent successfully' 
     });
 
   } catch (error: any) {
     console.error('Email sending error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to send email' });
+    return res.status(500).json({ 
+      error: 'Failed to send email',
+      details: error.message 
+    });
   }
 }
