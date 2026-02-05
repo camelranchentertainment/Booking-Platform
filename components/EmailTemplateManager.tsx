@@ -429,7 +429,7 @@ export default function EmailTemplateManager() {
                   fontSize: '0.9rem',
                   fontWeight: '600'
                 }}>
-                  Click to Send
+                  Click to Edit
                 </div>
               </div>
             ))}
