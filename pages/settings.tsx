@@ -51,6 +51,13 @@ export default function Settings() {
   const [calendarRefreshToken, setCalendarRefreshToken] = useState('');
   const [icalUrl, setIcalUrl] = useState('');
 
+  // SMTP Email Configuration
+  const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
+  const [smtpPort, setSmtpPort] = useState('587');
+  const [smtpEmail, setSmtpEmail] = useState('');
+  const [smtpPassword, setSmtpPassword] = useState('');
+  const [smtpFromName, setSmtpFromName] = useState('');
+
   useEffect(() => {
     checkAuth();
   }, []);
@@ -69,6 +76,7 @@ export default function Settings() {
       await loadBandData(userData.id);
       await loadProfile(userData.id);
       await loadCalendarSettings(userData.id);
+      await loadSmtpSettings(userData.id);
     } catch (error) {
       console.error('Auth error:', error);
       router.push('/');
@@ -166,11 +174,33 @@ export default function Settings() {
       if (data) {
         setCalendarType(data.calendar_type || '');
         setCalendarApiKey(data.calendar_api_key || '');
-        setCalendarRefreshToken(data.google_refresh_token || ''); // Use actual column name
+        setCalendarRefreshToken(data.google_refresh_token || '');
         setIcalUrl(data.ical_url || '');
       }
     } catch (error) {
       console.error('Error loading calendar settings:', error);
+    }
+  };
+
+  const loadSmtpSettings = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('smtp_settings')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (data) {
+        setSmtpHost(data.smtp_host || 'smtp.gmail.com');
+        setSmtpPort(data.smtp_port?.toString() || '587');
+        setSmtpEmail(data.smtp_email || '');
+        setSmtpPassword(data.smtp_password || '');
+        setSmtpFromName(data.smtp_from_name || '');
+      }
+    } catch (error) {
+      console.error('Error loading SMTP settings:', error);
     }
   };
 
@@ -219,19 +249,6 @@ export default function Settings() {
     if (!band) return;
     
     try {
-      // Step 1: Find the user by email using a direct query
-      // We need to create an API endpoint or use a different approach
-      // For now, we'll use a simpler method: add by user_id manually
-      
-      // Get all users and find by email (this is a workaround - ideally use API)
-      const { data: allMembers } = await supabase
-        .from('band_members')
-        .select('user_id');
-      
-      // Check if email matches any existing user
-      // This is a limitation - we can't search auth.users from client
-      // So we'll use a manual UUID input instead
-      
       alert(`To add a team member:
 1. Have them create an account at your site
 2. They need to share their User ID with you
@@ -741,6 +758,241 @@ For now, please provide their User ID instead of email.`);
           </div>
         </div>
 
+        {/* Email SMTP Configuration Section */}
+        <div style={{
+          background: 'rgba(61, 40, 23, 0.6)',
+          border: '2px solid #5C4A3A',
+          borderRadius: '12px',
+          padding: '2rem',
+          marginBottom: '2rem'
+        }}>
+          <h2 style={{ color: '#C8A882', fontSize: '1.8rem', marginBottom: '1.5rem' }}>
+            📧 Email Configuration
+          </h2>
+          <div style={{
+            background: 'rgba(135, 174, 115, 0.2)',
+            border: '1px solid #87AE73',
+            borderRadius: '8px',
+            padding: '1.5rem',
+            marginBottom: '1.5rem'
+          }}>
+            <p style={{ color: '#87AE73', margin: 0, marginBottom: '0.5rem' }}>
+              Configure your email to send booking inquiries from YOUR email address
+            </p>
+            <p style={{ color: '#9B8A7A', margin: 0, fontSize: '0.9rem' }}>
+              For Gmail: Use your email and an <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer" style={{color: '#87AE73'}}>App Password</a> (not your regular password)
+            </p>
+          </div>
+
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            
+            if (!user) return;
+            
+            try {
+              const smtpData = {
+                user_id: user.id,
+                smtp_host: smtpHost,
+                smtp_port: parseInt(smtpPort),
+                smtp_email: smtpEmail,
+                smtp_password: smtpPassword,
+                smtp_from_name: smtpFromName || band?.band_name || '',
+                is_active: true,
+                updated_at: new Date().toISOString()
+              };
+
+              const { data: existing } = await supabase
+                .from('smtp_settings')
+                .select('id')
+                .eq('user_id', user.id)
+                .maybeSingle();
+
+              let error;
+              if (existing) {
+                const result = await supabase
+                  .from('smtp_settings')
+                  .update(smtpData)
+                  .eq('user_id', user.id);
+                error = result.error;
+              } else {
+                const result = await supabase
+                  .from('smtp_settings')
+                  .insert([smtpData]);
+                error = result.error;
+              }
+
+              if (error) throw error;
+              alert('✓ Email settings saved successfully!');
+            } catch (error) {
+              console.error('Error saving email settings:', error);
+              alert('Failed to save email settings');
+            }
+          }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                color: '#C8A882',
+                marginBottom: '0.5rem',
+                fontWeight: '600'
+              }}>
+                Your Email Address
+              </label>
+              <input
+                type="email"
+                value={smtpEmail}
+                onChange={(e) => setSmtpEmail(e.target.value)}
+                placeholder="yourband@gmail.com"
+                required
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '2px solid #5C4A3A',
+                  borderRadius: '6px',
+                  background: 'rgba(245, 245, 240, 0.1)',
+                  color: '#E8DCC4',
+                  fontSize: '1rem'
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                color: '#C8A882',
+                marginBottom: '0.5rem',
+                fontWeight: '600'
+              }}>
+                Email App Password
+              </label>
+              <input
+                type="password"
+                value={smtpPassword}
+                onChange={(e) => setSmtpPassword(e.target.value)}
+                placeholder="••••••••••••••••"
+                required
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '2px solid #5C4A3A',
+                  borderRadius: '6px',
+                  background: 'rgba(245, 245, 240, 0.1)',
+                  color: '#E8DCC4',
+                  fontSize: '1rem'
+                }}
+              />
+              <p style={{ color: '#9B8A7A', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
+                For Gmail: Create an <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer" style={{color: '#87AE73'}}>App Password</a> in your Google Account settings
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                color: '#C8A882',
+                marginBottom: '0.5rem',
+                fontWeight: '600'
+              }}>
+                Display Name (appears in "From" field)
+              </label>
+              <input
+                type="text"
+                value={smtpFromName}
+                onChange={(e) => setSmtpFromName(e.target.value)}
+                placeholder={band?.band_name || "Your Band Name"}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '2px solid #5C4A3A',
+                  borderRadius: '6px',
+                  background: 'rgba(245, 245, 240, 0.1)',
+                  color: '#E8DCC4',
+                  fontSize: '1rem'
+                }}
+              />
+            </div>
+
+            <details style={{ marginBottom: '1.5rem' }}>
+              <summary style={{ 
+                color: '#C8A882', 
+                cursor: 'pointer',
+                fontWeight: '600',
+                marginBottom: '1rem'
+              }}>
+                ⚙️ Advanced Settings
+              </summary>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+                <div>
+                  <label style={{
+                    display: 'block',
+                    color: '#C8A882',
+                    marginBottom: '0.5rem',
+                    fontWeight: '600',
+                    fontSize: '0.9rem'
+                  }}>
+                    SMTP Host
+                  </label>
+                  <input
+                    type="text"
+                    value={smtpHost}
+                    onChange={(e) => setSmtpHost(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      border: '2px solid #5C4A3A',
+                      borderRadius: '6px',
+                      background: 'rgba(245, 245, 240, 0.1)',
+                      color: '#E8DCC4',
+                      fontSize: '0.95rem'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{
+                    display: 'block',
+                    color: '#C8A882',
+                    marginBottom: '0.5rem',
+                    fontWeight: '600',
+                    fontSize: '0.9rem'
+                  }}>
+                    Port
+                  </label>
+                  <input
+                    type="number"
+                    value={smtpPort}
+                    onChange={(e) => setSmtpPort(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      border: '2px solid #5C4A3A',
+                      borderRadius: '6px',
+                      background: 'rgba(245, 245, 240, 0.1)',
+                      color: '#E8DCC4',
+                      fontSize: '0.95rem'
+                    }}
+                  />
+                </div>
+              </div>
+            </details>
+
+            <button
+              type="submit"
+              style={{
+                padding: '0.75rem 2rem',
+                background: '#87AE73',
+                border: 'none',
+                borderRadius: '6px',
+                color: 'white',
+                fontSize: '1rem',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              Save Email Settings
+            </button>
+          </form>
+        </div>
+
         {/* Calendar Integration Section */}
         <div style={{
           background: 'rgba(61, 40, 23, 0.6)',
@@ -771,7 +1023,6 @@ For now, please provide their User ID instead of email.`);
             if (!user) return;
             
             try {
-              // Prepare the data to save using ACTUAL column names from database
               const calendarData: any = {
                 user_id: user.id,
                 calendar_type: calendarType,
@@ -779,7 +1030,6 @@ For now, please provide their User ID instead of email.`);
                 updated_at: new Date().toISOString()
               };
 
-              // Map to actual database columns based on calendar type
               if (calendarType === 'google') {
                 calendarData.calendar_api_key = calendarApiKey || null;
                 calendarData.google_refresh_token = calendarRefreshToken || null;
@@ -789,7 +1039,6 @@ For now, please provide their User ID instead of email.`);
                 calendarData.ical_url = icalUrl || null;
               }
 
-              // Try to update first (if settings exist)
               const { data: existingSettings } = await supabase
                 .from('user_calendar_settings')
                 .select('id')
@@ -798,14 +1047,12 @@ For now, please provide their User ID instead of email.`);
 
               let error;
               if (existingSettings) {
-                // Update existing settings
                 const result = await supabase
                   .from('user_calendar_settings')
                   .update(calendarData)
                   .eq('user_id', user.id);
                 error = result.error;
               } else {
-                // Insert new settings
                 const result = await supabase
                   .from('user_calendar_settings')
                   .insert([calendarData]);
