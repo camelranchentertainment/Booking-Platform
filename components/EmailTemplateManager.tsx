@@ -13,6 +13,16 @@ interface EmailTemplate {
   user_id: string;
 }
 
+interface Venue {
+  id: string;
+  name: string;
+  email: string;
+  city: string;
+  state: string;
+  address: string;
+  phone: string;
+}
+
 interface BandInfo {
   band_name: string;
   contact_email: string;
@@ -22,6 +32,7 @@ interface BandInfo {
 
 export default function EmailTemplateManager() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
+  const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -30,6 +41,7 @@ export default function EmailTemplateManager() {
   // Send Email Modal
   const [showSendModal, setShowSendModal] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
+  const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [sendForm, setSendForm] = useState({
     to: '',
     cc: '',
@@ -40,6 +52,34 @@ export default function EmailTemplateManager() {
   const [variableValues, setVariableValues] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
 
+  // Fixed template list
+  const TEMPLATE_TILES = [
+    { 
+      id: 'initial', 
+      name: 'Initial Venue Inquiry', 
+      icon: '👋',
+      color: '#5D4E37'
+    },
+    { 
+      id: 'followup', 
+      name: 'Follow Up on Booking Inquiry', 
+      icon: '🔔',
+      color: '#B7410E'
+    },
+    { 
+      id: 'confirmation', 
+      name: 'Booking Confirmation', 
+      icon: '✅',
+      color: '#87AE73'
+    },
+    { 
+      id: 'thankyou', 
+      name: 'Post-Show Thank You', 
+      icon: '🙏',
+      color: '#6B8E5C'
+    }
+  ];
+
   useEffect(() => {
     checkAuth();
   }, []);
@@ -48,6 +88,7 @@ export default function EmailTemplateManager() {
     if (user) {
       loadUserData();
       loadTemplates();
+      loadVenues();
     }
   }, [user]);
 
@@ -117,6 +158,33 @@ export default function EmailTemplateManager() {
     }
   };
 
+  const loadVenues = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('venues')
+        .select('id, name, email, city, state, address, phone')
+        .order('name');
+
+      if (error) throw error;
+      setVenues(data || []);
+    } catch (error) {
+      console.error('Error loading venues:', error);
+    }
+  };
+
+  const getTemplateByType = (tileId: string): EmailTemplate | null => {
+    // Map tile IDs to template names
+    const nameMap: Record<string, string> = {
+      'initial': 'Initial Venue Inquiry',
+      'followup': 'Follow Up on Booking Inquiry',
+      'confirmation': 'Booking Confirmation',
+      'thankyou': 'Post-Show Thank You'
+    };
+    
+    const templateName = nameMap[tileId];
+    return templates.find(t => t.name === templateName) || null;
+  };
+
   const getAutoFillValue = (variable: string): string => {
     // Auto-fill from band/profile data
     switch (variable) {
@@ -130,13 +198,30 @@ export default function EmailTemplateManager() {
         return band?.contact_email || user?.email || '';
       case 'Website':
         return band?.website || '';
+      // Venue-specific (will be filled when venue selected)
+      case 'Venue Name':
+        return selectedVenue?.name || '';
+      case 'Venue Address':
+        return selectedVenue?.address || '';
+      case 'City':
+        return selectedVenue?.city || '';
+      case 'State':
+        return selectedVenue?.state || '';
       default:
         return '';
     }
   };
 
-  const handleSendClick = (template: EmailTemplate) => {
+  const handleTileClick = (tileId: string) => {
+    const template = getTemplateByType(tileId);
+    
+    if (!template) {
+      alert('Template not found in database. Please ensure templates are created.');
+      return;
+    }
+
     setSelectedTemplate(template);
+    setSelectedVenue(null); // Reset venue selection
     setSendForm({
       to: '',
       cc: '',
@@ -153,6 +238,28 @@ export default function EmailTemplateManager() {
     setVariableValues(initialValues);
     
     setShowSendModal(true);
+  };
+
+  const handleVenueSelect = (venueId: string) => {
+    const venue = venues.find(v => v.id === venueId);
+    setSelectedVenue(venue || null);
+    
+    if (venue) {
+      // Update recipient email
+      setSendForm(prev => ({
+        ...prev,
+        to: venue.email || ''
+      }));
+      
+      // Update venue-related variables
+      setVariableValues(prev => ({
+        ...prev,
+        'Venue Name': venue.name || '',
+        'Venue Address': venue.address || '',
+        'City': venue.city || '',
+        'State': venue.state || ''
+      }));
+    }
   };
 
   const replaceVariables = (text: string, values: Record<string, string>) => {
@@ -192,7 +299,7 @@ export default function EmailTemplateManager() {
     }
 
     if (!sendForm.to) {
-      alert('Please enter a recipient email address');
+      alert('Please select a venue or enter a recipient email address');
       return;
     }
 
@@ -221,6 +328,7 @@ export default function EmailTemplateManager() {
       alert('✅ Email sent successfully!');
       setShowSendModal(false);
       setSelectedTemplate(null);
+      setSelectedVenue(null);
       
     } catch (error: any) {
       console.error('Send email error:', error);
@@ -250,8 +358,21 @@ export default function EmailTemplateManager() {
         }
         .template-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
           gap: 1.5rem;
+        }
+        .tile {
+          background: white;
+          border-radius: 16px;
+          padding: 2.5rem 2rem;
+          text-align: center;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .tile:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.15);
         }
         @media (max-width: 767px) {
           .template-grid {
@@ -261,111 +382,58 @@ export default function EmailTemplateManager() {
       `}</style>
 
       <div className="page-container">
-        <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           {/* Header */}
           <div style={{ marginBottom: '2rem' }}>
             <h1 style={{ fontSize: '2rem', fontWeight: '700', color: '#5D4E37', margin: '0 0 0.5rem 0' }}>
               ✉️ Email Templates
             </h1>
             <p style={{ color: '#708090', margin: 0 }}>
-              Professional templates ready to send • Band info auto-fills
+              Select a template to send a professional booking inquiry
             </p>
           </div>
 
-          {/* Templates Grid */}
-          {templates.length === 0 ? (
-            <div style={{ background: 'white', padding: '4rem', borderRadius: '16px', textAlign: 'center' }}>
-              <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>📝</div>
-              <h3 style={{ fontSize: '1.5rem', color: '#5D4E37', margin: '0 0 0.5rem 0' }}>No templates yet</h3>
-              <p style={{ color: '#708090' }}>Templates will appear here</p>
-            </div>
-          ) : (
-            <div className="template-grid">
-              {templates.map((template) => (
-                <div
-                  key={template.id}
-                  style={{
-                    background: 'white',
-                    borderRadius: '12px',
-                    overflow: 'hidden',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                    display: 'flex',
-                    flexDirection: 'column'
-                  }}
-                >
-                  {/* Header */}
-                  <div style={{ background: '#5D4E37', color: 'white', padding: '1.25rem' }}>
-                    <h3 style={{ fontSize: '1.2rem', fontWeight: '700', margin: 0 }}>
-                      {template.name}
-                    </h3>
-                  </div>
-
-                  {/* Content */}
-                  <div style={{ padding: '1.5rem', flex: 1 }}>
-                    <div style={{ 
-                      background: '#F5F5F0', 
-                      padding: '1rem', 
-                      borderRadius: '8px', 
-                      marginBottom: '1rem' 
-                    }}>
-                      <div style={{ fontSize: '0.75rem', color: '#708090', fontWeight: '600', marginBottom: '0.5rem' }}>
-                        SUBJECT
-                      </div>
-                      <div style={{ color: '#5D4E37', fontWeight: '600' }}>
-                        {template.subject}
-                      </div>
-                    </div>
-
-                    <div style={{ 
-                      fontSize: '0.9rem', 
-                      color: '#708090', 
-                      lineHeight: '1.6', 
-                      maxHeight: '120px', 
-                      overflow: 'hidden' 
-                    }}>
-                      {template.body.substring(0, 200)}...
-                    </div>
-
-                    {template.variables && template.variables.length > 0 && (
-                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #E8E6E1' }}>
-                        <div style={{ fontSize: '0.75rem', color: '#87AE73', marginBottom: '0.5rem', fontWeight: '600' }}>
-                          ✓ Auto-fills: Your Name, Band Name, Phone, Email, Website
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: '#708090', marginTop: '0.25rem' }}>
-                          Manual: {template.variables.filter(v => !['Your Name', 'Band Name', 'Phone Number', 'Email', 'Website'].includes(v)).length} fields
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Footer */}
-                  <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #E8E6E1' }}>
-                    <button
-                      onClick={() => handleSendClick(template)}
-                      style={{
-                        width: '100%',
-                        padding: '0.875rem',
-                        background: 'linear-gradient(135deg, #87AE73 0%, #6B8E5C 100%)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        fontWeight: '700',
-                        fontSize: '1rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.5rem'
-                      }}
-                    >
-                      <span>📧</span>
-                      <span>Send Email</span>
-                    </button>
-                  </div>
+          {/* Template Tiles */}
+          <div className="template-grid">
+            {TEMPLATE_TILES.map((tile) => (
+              <div
+                key={tile.id}
+                className="tile"
+                onClick={() => handleTileClick(tile.id)}
+                style={{
+                  borderTop: `6px solid ${tile.color}`
+                }}
+              >
+                <div style={{ 
+                  fontSize: '3.5rem', 
+                  marginBottom: '1rem',
+                  lineHeight: 1
+                }}>
+                  {tile.icon}
                 </div>
-              ))}
-            </div>
-          )}
+                <h3 style={{ 
+                  fontSize: '1.3rem', 
+                  fontWeight: '700', 
+                  color: '#5D4E37',
+                  margin: '0 0 0.75rem 0',
+                  lineHeight: '1.3'
+                }}>
+                  {tile.name}
+                </h3>
+                <div style={{
+                  display: 'inline-block',
+                  padding: '0.5rem 1.5rem',
+                  background: tile.color,
+                  color: 'white',
+                  borderRadius: '24px',
+                  fontSize: '0.9rem',
+                  fontWeight: '600'
+                }}>
+                  Click to Send
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Send Email Modal */}
@@ -393,7 +461,7 @@ export default function EmailTemplateManager() {
                 background: 'white',
                 borderRadius: '16px',
                 width: '100%',
-                maxWidth: '800px',
+                maxWidth: '900px',
                 maxHeight: '90vh',
                 overflow: 'auto',
                 boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
@@ -412,7 +480,7 @@ export default function EmailTemplateManager() {
                 zIndex: 1
               }}>
                 <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#5D4E37', margin: 0 }}>
-                  📧 Send: {selectedTemplate.name}
+                  📧 {selectedTemplate.name}
                 </h2>
                 <button
                   onClick={() => setShowSendModal(false)}
@@ -430,18 +498,62 @@ export default function EmailTemplateManager() {
 
               {/* Modal Body */}
               <form onSubmit={handleSendEmail} style={{ padding: '2rem' }}>
+                {/* Venue Selection Dropdown */}
+                <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#F5F5F0', borderRadius: '12px' }}>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#5D4E37', marginBottom: '1rem' }}>
+                    Select Venue
+                  </h3>
+                  <select
+                    value={selectedVenue?.id || ''}
+                    onChange={(e) => handleVenueSelect(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.875rem',
+                      borderRadius: '8px',
+                      border: '2px solid #5D4E37',
+                      fontSize: '1rem',
+                      background: 'white',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="">Select a venue from your database...</option>
+                    {venues.map(venue => (
+                      <option key={venue.id} value={venue.id}>
+                        {venue.name} - {venue.city}, {venue.state}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedVenue && (
+                    <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(135, 174, 115, 0.1)', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '0.9rem', color: '#87AE73', fontWeight: '600', marginBottom: '0.5rem' }}>
+                        ✓ Venue selected - Email will be sent to:
+                      </div>
+                      <div style={{ fontSize: '0.95rem', color: '#5D4E37', fontWeight: '600' }}>
+                        {selectedVenue.email || 'No email on file'}
+                      </div>
+                      {selectedVenue.phone && (
+                        <div style={{ fontSize: '0.85rem', color: '#708090', marginTop: '0.25rem' }}>
+                          📞 {selectedVenue.phone}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* Variables Section */}
                 {selectedTemplate.variables && selectedTemplate.variables.length > 0 && (
-                  <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#F5F5F0', borderRadius: '8px' }}>
+                  <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#F5F5F0', borderRadius: '12px' }}>
                     <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#5D4E37', marginBottom: '0.5rem' }}>
-                      Fill in Template Variables
+                      Email Details
                     </h3>
-                    <p style={{ fontSize: '0.9rem', color: '#87AE73', margin: '0 0 1rem 0' }}>
-                      ✓ Band info auto-filled from your profile
+                    <p style={{ fontSize: '0.9rem', color: '#87AE73', margin: '0 0 1.5rem 0' }}>
+                      ✓ Band info auto-filled • Venue info from database
                     </p>
                     <div style={{ display: 'grid', gap: '1rem' }}>
                       {selectedTemplate.variables.map((variable) => {
-                        const isAutoFilled = ['Your Name', 'Band Name', 'Phone Number', 'Email', 'Website'].includes(variable);
+                        const isAutoFilled = ['Your Name', 'Band Name', 'Phone Number', 'Email', 'Website', 'Venue Name', 'Venue Address', 'City', 'State'].includes(variable);
+                        const isVenueField = ['Venue Name', 'Venue Address', 'City', 'State'].includes(variable);
+                        
                         return (
                           <div key={variable}>
                             <label style={{ 
@@ -456,12 +568,12 @@ export default function EmailTemplateManager() {
                               {isAutoFilled && (
                                 <span style={{ 
                                   fontSize: '0.75rem', 
-                                  color: '#87AE73', 
-                                  background: 'rgba(135, 174, 115, 0.2)',
+                                  color: isVenueField ? '#5D9CEC' : '#87AE73',
+                                  background: isVenueField ? 'rgba(93, 156, 236, 0.2)' : 'rgba(135, 174, 115, 0.2)',
                                   padding: '0.125rem 0.5rem',
                                   borderRadius: '4px'
                                 }}>
-                                  auto-filled
+                                  {isVenueField ? 'from venue' : 'auto-filled'}
                                 </span>
                               )}
                             </label>
@@ -501,12 +613,15 @@ export default function EmailTemplateManager() {
                       value={sendForm.to}
                       onChange={(e) => setSendForm({...sendForm, to: e.target.value})}
                       placeholder="venue@example.com"
+                      disabled={!!selectedVenue}
                       style={{
                         width: '100%',
                         padding: '0.75rem',
                         borderRadius: '6px',
                         border: '2px solid #E8E6E1',
-                        fontSize: '1rem'
+                        fontSize: '1rem',
+                        background: selectedVenue ? '#F5F5F0' : 'white',
+                        cursor: selectedVenue ? 'not-allowed' : 'text'
                       }}
                     />
                   </div>
