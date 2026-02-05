@@ -445,11 +445,10 @@ export default function EmailTemplateManager() {
                         return (
                           <div key={variable}>
                             <label style={{ 
-                              display: 'block', 
+                              display: 'flex', 
                               color: '#5D4E37', 
                               marginBottom: '0.5rem', 
                               fontWeight: '600',
-                              display: 'flex',
                               alignItems: 'center',
                               gap: '0.5rem'
                             }}>
