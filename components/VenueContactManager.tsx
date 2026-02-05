@@ -11,6 +11,7 @@ interface Venue {
   state: string;
   address: string;
   phone: string | null;
+  campaign_name?: string;
 }
 
 export default function VenueContactManager() {
@@ -23,19 +24,52 @@ export default function VenueContactManager() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    loadVenues();
+    loadCampaignVenuesWithoutEmail();
   }, []);
 
-  const loadVenues = async () => {
+  const loadCampaignVenuesWithoutEmail = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      // Get all campaign_venues from all campaigns
+      const { data: campaignVenues, error: cvError } = await supabase
+        .from('campaign_venues')
+        .select(`
+          venue_id,
+          campaigns(name)
+        `);
+
+      if (cvError) throw cvError;
+
+      // Get unique venue IDs from campaigns
+      const venueIds = [...new Set(campaignVenues?.map(cv => cv.venue_id) || [])];
+
+      if (venueIds.length === 0) {
+        setVenues([]);
+        setLoading(false);
+        return;
+      }
+
+      // Get venue details for those IDs, but ONLY where email is null or empty
+      const { data: venuesData, error: venuesError } = await supabase
         .from('venues')
         .select('*')
+        .in('id', venueIds)
+        .or('email.is.null,email.eq.')
         .order('name');
 
-      if (error) throw error;
-      setVenues(data || []);
+      if (venuesError) throw venuesError;
+
+      // Add campaign name to each venue
+      const venuesWithCampaign = (venuesData || []).map(venue => {
+        const campaignVenue = campaignVenues?.find(cv => cv.venue_id === venue.id);
+        return {
+          ...venue,
+          campaign_name: campaignVenue?.campaigns?.name || 'Unknown Campaign'
+        };
+      });
+
+      setVenues(venuesWithCampaign);
     } catch (error) {
       console.error('Error loading venues:', error);
     } finally {
@@ -55,13 +89,18 @@ export default function VenueContactManager() {
     
     if (!selectedVenue) return;
 
+    if (!editEmail) {
+      alert('Please enter an email address');
+      return;
+    }
+
     setSaving(true);
 
     try {
       const { error } = await supabase
         .from('venues')
         .update({
-          email: editEmail || null,
+          email: editEmail,
           phone: editPhone || null
         })
         .eq('id', selectedVenue.id);
@@ -71,7 +110,9 @@ export default function VenueContactManager() {
       alert('✅ Contact info saved!');
       setShowEditModal(false);
       setSelectedVenue(null);
-      await loadVenues();
+      
+      // Reload the list - venue with email will disappear
+      await loadCampaignVenuesWithoutEmail();
     } catch (error) {
       console.error('Error saving contact info:', error);
       alert('Failed to save contact info');
@@ -115,7 +156,7 @@ export default function VenueContactManager() {
         .venue-tile:hover {
           transform: translateY(-2px);
           box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-          border-color: #87AE73;
+          border-color: #B7410E;
         }
         @media (max-width: 1200px) {
           .venue-grid {
@@ -139,82 +180,107 @@ export default function VenueContactManager() {
           {/* Header */}
           <div style={{ marginBottom: '2rem' }}>
             <h1 style={{ fontSize: '2rem', fontWeight: '700', color: '#5D4E37', margin: '0 0 0.5rem 0' }}>
-              📧 Venue Contact Info
+              📧 Add Venue Contact Info
             </h1>
             <p style={{ color: '#708090', margin: 0 }}>
-              Click any venue to add or update contact information
+              Campaign venues missing email addresses • Click to add contact info
             </p>
           </div>
 
           {/* Venue Grid */}
           {venues.length === 0 ? (
-            <div style={{ background: 'white', padding: '4rem', borderRadius: '16px', textAlign: 'center' }}>
-              <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🏛️</div>
-              <h3 style={{ fontSize: '1.5rem', color: '#5D4E37', margin: '0 0 0.5rem 0' }}>No venues yet</h3>
-              <p style={{ color: '#708090' }}>Add venues from the Venue Database</p>
+            <div style={{ background: 'white', padding: '4rem', borderRadius: '16px', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+              <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>✅</div>
+              <h3 style={{ fontSize: '1.5rem', color: '#87AE73', margin: '0 0 0.5rem 0' }}>All set!</h3>
+              <p style={{ color: '#708090', margin: 0 }}>
+                All campaign venues have email addresses
+              </p>
             </div>
           ) : (
-            <div className="venue-grid">
-              {venues.map((venue) => (
-                <div
-                  key={venue.id}
-                  className="venue-tile"
-                  onClick={() => handleTileClick(venue)}
-                >
-                  {/* Venue Name */}
-                  <div style={{
-                    fontSize: '1rem',
-                    fontWeight: '700',
-                    color: '#5D4E37',
-                    marginBottom: '0.5rem',
-                    lineHeight: '1.2',
-                    minHeight: '2.4rem',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden'
-                  }}>
-                    {venue.name}
+            <>
+              <div style={{ 
+                background: 'rgba(183, 65, 14, 0.1)', 
+                border: '2px solid rgba(183, 65, 14, 0.3)',
+                borderRadius: '12px',
+                padding: '1rem 1.5rem',
+                marginBottom: '1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem'
+              }}>
+                <div style={{ fontSize: '1.5rem' }}>⚠️</div>
+                <div>
+                  <div style={{ color: '#5D4E37', fontWeight: '700', marginBottom: '0.25rem' }}>
+                    {venues.length} venue{venues.length !== 1 ? 's' : ''} need{venues.length === 1 ? 's' : ''} email addresses
                   </div>
-
-                  {/* Location */}
-                  <div style={{
-                    fontSize: '0.85rem',
-                    color: '#708090',
-                    marginBottom: '0.75rem'
-                  }}>
-                    📍 {venue.city}, {venue.state}
+                  <div style={{ color: '#708090', fontSize: '0.9rem' }}>
+                    These venues are in your campaigns but missing contact info
                   </div>
+                </div>
+              </div>
 
-                  {/* Status Badge */}
-                  {venue.email ? (
+              <div className="venue-grid">
+                {venues.map((venue) => (
+                  <div
+                    key={venue.id}
+                    className="venue-tile"
+                    onClick={() => handleTileClick(venue)}
+                  >
+                    {/* Venue Name */}
                     <div style={{
-                      display: 'inline-block',
-                      padding: '0.25rem 0.75rem',
-                      background: 'rgba(135, 174, 115, 0.2)',
-                      color: '#87AE73',
-                      borderRadius: '12px',
-                      fontSize: '0.75rem',
-                      fontWeight: '600'
+                      fontSize: '1rem',
+                      fontWeight: '700',
+                      color: '#5D4E37',
+                      marginBottom: '0.5rem',
+                      lineHeight: '1.2',
+                      minHeight: '2.4rem',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden'
                     }}>
-                      ✓ Has Email
+                      {venue.name}
                     </div>
-                  ) : (
+
+                    {/* Location */}
                     <div style={{
-                      display: 'inline-block',
-                      padding: '0.25rem 0.75rem',
+                      fontSize: '0.85rem',
+                      color: '#708090',
+                      marginBottom: '0.5rem'
+                    }}>
+                      📍 {venue.city}, {venue.state}
+                    </div>
+
+                    {/* Campaign Badge */}
+                    <div style={{
+                      fontSize: '0.75rem',
+                      color: '#5D9CEC',
+                      background: 'rgba(93, 156, 236, 0.1)',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '4px',
+                      marginBottom: '0.75rem',
+                      display: 'inline-block'
+                    }}>
+                      🎯 {venue.campaign_name}
+                    </div>
+
+                    {/* Add Email Badge */}
+                    <div style={{
+                      display: 'block',
+                      padding: '0.5rem',
                       background: 'rgba(183, 65, 14, 0.2)',
                       color: '#B7410E',
-                      borderRadius: '12px',
-                      fontSize: '0.75rem',
-                      fontWeight: '600'
+                      borderRadius: '6px',
+                      fontSize: '0.85rem',
+                      fontWeight: '700',
+                      textAlign: 'center'
                     }}>
-                      Add Email
+                      + Add Email
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
 
@@ -274,6 +340,12 @@ export default function VenueContactManager() {
               {/* Modal Body */}
               <form onSubmit={handleSaveEmail} style={{ padding: '1.5rem' }}>
                 <div style={{ marginBottom: '1rem', padding: '1rem', background: '#F5F5F0', borderRadius: '8px' }}>
+                  <div style={{ fontSize: '0.85rem', color: '#708090', marginBottom: '0.5rem' }}>
+                    Campaign
+                  </div>
+                  <div style={{ fontSize: '0.95rem', color: '#5D9CEC', fontWeight: '600', marginBottom: '0.75rem' }}>
+                    🎯 {selectedVenue.campaign_name}
+                  </div>
                   <div style={{ fontSize: '0.85rem', color: '#708090', marginBottom: '0.25rem' }}>
                     Location
                   </div>
@@ -289,13 +361,14 @@ export default function VenueContactManager() {
 
                 <div style={{ marginBottom: '1.5rem' }}>
                   <label style={{ display: 'block', color: '#5D4E37', marginBottom: '0.5rem', fontWeight: '600' }}>
-                    Email Address
+                    Email Address <span style={{ color: '#C33' }}>*</span>
                   </label>
                   <input
                     type="email"
                     value={editEmail}
                     onChange={(e) => setEditEmail(e.target.value)}
                     placeholder="venue@example.com"
+                    required
                     style={{
                       width: '100%',
                       padding: '0.75rem',
