@@ -862,7 +862,7 @@ For now, please provide their User ID instead of email.`);
                     Google Calendar API Key
                   </label>
                   <input
-                    type="text"
+                    type="password"
                     value={calendarApiKey}
                     onChange={(e) => setCalendarApiKey(e.target.value)}
                     placeholder="AIza..."
@@ -919,7 +919,7 @@ For now, please provide their User ID instead of email.`);
                   Microsoft Graph API Key
                 </label>
                 <input
-                  type="text"
+                  type="password"
                   value={calendarApiKey}
                   onChange={(e) => setCalendarApiKey(e.target.value)}
                   placeholder="Enter your Microsoft Graph API key..."
