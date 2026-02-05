@@ -82,11 +82,11 @@ export default function DashboardPage() {
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { id: 'calendar', label: 'Calendar', icon: '📅' },
     { id: 'campaigns', label: 'Campaign Manager', icon: '🎯' },
     { id: 'contact-info', label: 'Contact Info', icon: '📧' },
     { id: 'emails', label: 'Email Templates', icon: '✉️' },
     { id: 'social', label: 'Social Media', icon: '📱' },
+    { id: 'calendar', label: 'Calendar', icon: '📅' },
     { id: 'venue-database', label: 'Venue Database', icon: '🗂️' }
   ];
 
