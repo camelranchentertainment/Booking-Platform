@@ -14,10 +14,10 @@ interface Venue {
   campaign_name?: string;
 }
 
-// Fix: explicitly type the campaigns join result
+// Supabase returns joined tables as arrays
 interface CampaignVenueRow {
   venue_id: string;
-  campaigns: { name: string } | null;
+  campaigns: { name: string }[] | null;
 }
 
 export default function VenueContactManager() {
@@ -43,7 +43,7 @@ export default function VenueContactManager() {
 
       if (cvError) throw cvError;
 
-      const typedCampaignVenues = (campaignVenues || []) as CampaignVenueRow[];
+      const typedCampaignVenues = (campaignVenues || []) as unknown as CampaignVenueRow[];
       const venueIds = [...new Set(typedCampaignVenues.map(cv => cv.venue_id))];
 
       if (venueIds.length === 0) {
@@ -65,7 +65,7 @@ export default function VenueContactManager() {
         const campaignVenue = typedCampaignVenues.find(cv => cv.venue_id === venue.id);
         return {
           ...venue,
-          campaign_name: campaignVenue?.campaigns?.name || 'Unknown Campaign',
+          campaign_name: campaignVenue?.campaigns?.[0]?.name || 'Unknown Campaign',
         };
       });
 
@@ -164,7 +164,6 @@ export default function VenueContactManager() {
             </p>
           </div>
 
-          {/* Venue Grid */}
           {venues.length === 0 ? (
             <div style={{
               background: '#0d2540', padding: '4rem', borderRadius: '16px',
@@ -177,7 +176,6 @@ export default function VenueContactManager() {
             </div>
           ) : (
             <>
-              {/* Warning banner */}
               <div style={{
                 background: 'rgba(251,191,36,0.08)',
                 border: '1px solid rgba(251,191,36,0.3)',
@@ -254,7 +252,6 @@ export default function VenueContactManager() {
                 boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
               }}
             >
-              {/* Modal Header */}
               <div style={{
                 padding: '1.5rem',
                 borderBottom: '1px solid rgba(56,189,248,0.15)',
@@ -269,7 +266,6 @@ export default function VenueContactManager() {
                 }}>×</button>
               </div>
 
-              {/* Modal Body */}
               <form onSubmit={handleSaveEmail} style={{ padding: '1.5rem' }}>
                 <div style={{
                   marginBottom: '1rem', padding: '1rem',
@@ -293,7 +289,10 @@ export default function VenueContactManager() {
                 </div>
 
                 <div style={{ marginBottom: '1.25rem' }}>
-                  <label style={{ display: 'block', color: '#7db8d4', marginBottom: '0.5rem', fontWeight: '600', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  <label style={{
+                    display: 'block', color: '#7db8d4', marginBottom: '0.5rem',
+                    fontWeight: '600', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.08em',
+                  }}>
                     Email Address <span style={{ color: '#f87171' }}>*</span>
                   </label>
                   <input
@@ -310,7 +309,10 @@ export default function VenueContactManager() {
                 </div>
 
                 <div style={{ marginBottom: '1.5rem' }}>
-                  <label style={{ display: 'block', color: '#7db8d4', marginBottom: '0.5rem', fontWeight: '600', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  <label style={{
+                    display: 'block', color: '#7db8d4', marginBottom: '0.5rem',
+                    fontWeight: '600', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.08em',
+                  }}>
                     Phone Number (Optional)
                   </label>
                   <input
