@@ -1,3 +1,132 @@
-@tailwind base; 
-@tailwind components; 
-@tailwind utilities; 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import the theme */
+@import './western-theme.css';
+
+/* ── Global resets ─────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: linear-gradient(135deg, #05111f 0%, #0a1f35 100%);
+  background-attachment: fixed;
+  color: #f0f9ff;
+  font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+/* ── Typography ────────────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6 {
+  color: #f0f9ff;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.25rem; }
+
+p { line-height: 1.65; color: #7db8d4; }
+
+a {
+  color: #38bdf8;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+a:hover { color: #7dd3fc; }
+
+/* ── Form elements ─────────────────────────────────────────── */
+input, select, textarea, button {
+  font-family: inherit;
+  font-size: 14px;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #4a7a9b;
+}
+
+/* ── Utility classes ───────────────────────────────────────── */
+.text-accent   { color: #38bdf8; }
+.text-muted    { color: #7db8d4; }
+.text-faint    { color: #4a7a9b; }
+.text-success  { color: #4ade80; }
+.text-warning  { color: #fbbf24; }
+.text-error    { color: #f87171; }
+
+.bg-surface    { background: #0d2540; }
+.bg-surface-hi { background: #102d4a; }
+
+.border-accent { border-color: rgba(56,189,248,0.2); }
+
+.glow-accent   { box-shadow: 0 0 20px rgba(56,189,248,0.2); }
+
+/* ── Page wrapper ──────────────────────────────────────────── */
+.page-wrapper {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #05111f 0%, #0a1f35 100%);
+  background-attachment: fixed;
+  padding: 24px;
+}
+
+/* ── Modal overlay ─────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 17, 31, 0.85);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #0d2540;
+  border: 1px solid rgba(56,189,248,0.2);
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  padding: 32px;
+  max-width: 560px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* ── Loading spinner ───────────────────────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(56,189,248,0.2);
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* ── Fade in animation ─────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeIn 0.3s ease forwards; }
+
+/* ── Glow pulse ────────────────────────────────────────────── */
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(56,189,248,0.2); }
+  50%       { box-shadow: 0 0 28px rgba(56,189,248,0.45); }
+}
+.glow-pulse { animation: glowPulse 2.5s ease-in-out infinite; }
