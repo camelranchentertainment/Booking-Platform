@@ -1,195 +1,171 @@
-/* Western Theme Colors - Grey and Brown Professional */
+/* ============================================================
+   Camel Ranch Booking — Bold & Vibrant Theme
+   Replaces the previous brown/leather color scheme
+   ============================================================ */
 
 :root {
-  /* Primary Browns */
-  --leather-brown: #5D4E37;
-  --saddle-brown: #8B7355;
-  --tan-brown: #C19A6B;
-  --light-tan: #D2B48C;
-  
-  /* Greys */
-  --charcoal: #36454F;
-  --slate-grey: #708090;
-  --warm-grey: #A8A8A8;
-  --light-grey: #D3D3D3;
-  --soft-white: #F5F5F0;
-  
-  /* Accent Colors */
-  --accent-rust: #B7410E;
-  --accent-sage: #87AE73;
-  
-  /* Spacing */
-  --page-padding: 2rem;
-  --card-padding: 1.5rem;
-  --section-gap: 2rem;
+  /* ── Core palette ── */
+  --color-bg:           #05111f;
+  --color-bg-alt:       #0a1f35;
+  --color-surface:      #0d2540;
+  --color-surface-hi:   #102d4a;
+  --color-surface-mid:  #0f2238;
+
+  /* ── Accent ── */
+  --color-accent:       #38bdf8;
+  --color-accent-dark:  #0ea5e9;
+  --color-accent-deep:  #0369a1;
+  --color-accent-glow:  rgba(56, 189, 248, 0.22);
+  --color-accent-faint: rgba(56, 189, 248, 0.08);
+
+  /* ── Text ── */
+  --color-text:         #f0f9ff;
+  --color-text-muted:   #7db8d4;
+  --color-text-faint:   #4a7a9b;
+
+  /* ── Borders ── */
+  --color-border:       rgba(56, 189, 248, 0.2);
+  --color-border-faint: rgba(56, 189, 248, 0.1);
+  --color-divider:      #1a3a5c;
+
+  /* ── Buttons ── */
+  --btn-bg:             linear-gradient(135deg, #38bdf8, #0ea5e9);
+  --btn-text:           #05111f;
+  --btn-shadow:         0 4px 18px rgba(56, 189, 248, 0.35);
+  --btn-ghost-border:   rgba(56, 189, 248, 0.4);
+  --btn-ghost-text:     #38bdf8;
+
+  /* ── Status ── */
+  --color-success:      #4ade80;
+  --color-warning:      #fbbf24;
+  --color-error:        #f87171;
+  --color-info:         #38bdf8;
+
+  /* ── Shadows ── */
+  --shadow-card:        0 4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-glow:        0 0 20px rgba(56, 189, 248, 0.2);
+
+  /* ── Radius ── */
+  --radius-sm:          6px;
+  --radius-md:          10px;
+  --radius-lg:          14px;
+  --radius-xl:          20px;
+
+  /* ── Legacy brown aliases → new values (prevents breakage) ──
+     Any component still referencing the old brown vars will
+     automatically get the new colors instead of breaking.    */
+  --color-primary:      #38bdf8;        /* was leather brown */
+  --color-primary-dark: #0ea5e9;        /* was dark brown */
+  --color-secondary:    #7db8d4;        /* was slate grey */
+  --color-background:   #05111f;        /* was near-black brown */
+  --color-card-bg:      #0d2540;        /* was dark card brown */
+  --color-text-primary: #f0f9ff;        /* was soft white */
+  --color-text-secondary:#7db8d4;       /* was grey */
+  --color-border-color: rgba(56,189,248,0.2); /* was brown border */
+  --color-accent-gold:  #38bdf8;        /* was gold — now accent blue */
 }
 
+/* ── Base ──────────────────────────────────────────────────── */
 body {
-  background-color: var(--soft-white);
-  color: var(--charcoal);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  background: linear-gradient(135deg, #05111f 0%, #0a1f35 100%);
+  color: var(--color-text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Western-themed container */
-.western-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: var(--page-padding);
+/* ── Cards ─────────────────────────────────────────────────── */
+.card, [class*="card"] {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
 }
 
-/* Card styling */
-.western-card {
-  background: white;
-  border-radius: 8px;
-  padding: var(--card-padding);
-  box-shadow: 0 2px 8px rgba(93, 78, 55, 0.1);
-  border: 1px solid var(--light-grey);
-  margin-bottom: var(--section-gap);
-}
-
-.western-card:hover {
-  box-shadow: 0 4px 12px rgba(93, 78, 55, 0.15);
-  transition: box-shadow 0.3s ease;
-}
-
-/* Button styles */
-.btn-primary {
-  background-color: var(--leather-brown);
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border-radius: 6px;
+/* ── Buttons ───────────────────────────────────────────────── */
+.btn-primary, button[class*="primary"] {
+  background: var(--btn-bg);
+  color: var(--btn-text);
   border: none;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.btn-primary:hover {
-  background-color: var(--saddle-brown);
-}
-
-.btn-secondary {
-  background-color: var(--warm-grey);
-  color: var(--charcoal);
-  padding: 0.75rem 1.5rem;
-  border-radius: 6px;
-  border: 1px solid var(--light-grey);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-secondary:hover {
-  background-color: var(--light-grey);
-}
-
-.btn-accent {
-  background-color: var(--accent-rust);
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border-radius: 6px;
-  border: none;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.btn-accent:hover {
-  background-color: #9a3608;
-}
-
-/* Navigation tabs */
-.nav-tabs {
-  display: flex;
-  gap: 0.5rem;
-  border-bottom: 2px solid var(--light-grey);
-  margin-bottom: var(--section-gap);
-  padding-bottom: 0;
-}
-
-.nav-tab {
-  padding: 1rem 2rem;
-  background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
-  color: var(--slate-grey);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.nav-tab:hover {
-  color: var(--leather-brown);
-  border-bottom-color: var(--tan-brown);
-}
-
-.nav-tab.active {
-  color: var(--leather-brown);
-  border-bottom-color: var(--leather-brown);
-  background-color: var(--soft-white);
-}
-
-/* Header styling */
-h1, h2, h3 {
-  color: var(--charcoal);
+  border-radius: var(--radius-md);
   font-weight: 700;
+  box-shadow: var(--btn-shadow);
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
 }
+.btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
 
-h1 {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
-}
-
-h2 {
-  font-size: 1.75rem;
-  margin-bottom: 1rem;
-}
-
-h3 {
-  font-size: 1.25rem;
-  margin-bottom: 0.75rem;
-}
-
-/* Status badges */
-.badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.875rem;
+.btn-ghost, button[class*="ghost"] {
+  background: transparent;
+  color: var(--btn-ghost-text);
+  border: 1px solid var(--btn-ghost-border);
+  border-radius: var(--radius-md);
   font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-ghost:hover { background: var(--color-accent-faint); }
+
+/* ── Inputs ────────────────────────────────────────────────── */
+input, select, textarea {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-divider);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-glow);
 }
 
-.badge-pending {
-  background-color: var(--light-tan);
-  color: var(--leather-brown);
+/* ── Nav / Sidebar ─────────────────────────────────────────── */
+nav, aside, [class*="sidebar"], [class*="nav"] {
+  background: var(--color-surface);
+  border-color: var(--color-border);
 }
 
-.badge-confirmed {
-  background-color: var(--accent-sage);
-  color: white;
+/* ── Tables ────────────────────────────────────────────────── */
+table { border-collapse: collapse; width: 100%; }
+th {
+  background: var(--color-surface-hi);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border-faint);
+  color: var(--color-text);
+}
+tr:hover td { background: var(--color-accent-faint); }
+
+/* ── Status chips ──────────────────────────────────────────── */
+.status-confirmed  { background: rgba(74,222,128,0.12);  color: #4ade80; border: 1px solid rgba(74,222,128,0.3);  border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; }
+.status-awaiting   { background: rgba(251,191,36,0.12);  color: #fbbf24; border: 1px solid rgba(251,191,36,0.3);  border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; }
+.status-contacted  { background: rgba(56,189,248,0.12);  color: #38bdf8; border: 1px solid rgba(56,189,248,0.3);  border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; }
+.status-replied    { background: rgba(168,85,247,0.12);  color: #c084fc; border: 1px solid rgba(168,85,247,0.3);  border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; }
+.status-declined   { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.3); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; }
+.status-new        { background: rgba(255,255,255,0.06); color: #7db8d4; border: 1px solid rgba(255,255,255,0.1); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; }
+
+/* ── Glass morphism panels ─────────────────────────────────── */
+.glass {
+  background: rgba(13, 37, 64, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.15);
+  border-radius: var(--radius-lg);
 }
 
-.badge-completed {
-  background-color: var(--slate-grey);
-  color: white;
-}
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #05111f; }
+::-webkit-scrollbar-thumb { background: #1a3a5c; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #38bdf8; }
 
-/* Spacing utilities */
-.mb-2 { margin-bottom: 2rem; }
-.mt-2 { margin-top: 2rem; }
-.p-2 { padding: 2rem; }
-
-/* Grid layouts */
-.grid-2 {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: var(--section-gap);
-}
-
-.grid-3 {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: var(--section-gap);
-}
+/* ── Selection ─────────────────────────────────────────────── */
+::selection { background: rgba(56,189,248,0.3); color: #f0f9ff; }
