@@ -61,7 +61,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       // ── 1. Check if user already exists ──────────────────────────────────────
       const { data: existing } = await supabase.auth.admin.listUsers();
-      const alreadyExists = existing?.users?.find(u => u.email === admin.email);
+      const users = (existing?.users ?? []) as Array<{ id: string; email?: string }>;
+      const alreadyExists = users.find(u => u.email === admin.email);
 
       let userId: string;
 
