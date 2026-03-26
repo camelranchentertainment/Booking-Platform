@@ -93,8 +93,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .from('band_profiles')
         .upsert({
           id:                userId,
-          display_name:      admin.name,
           band_name:         admin.bandName,
+          username:          admin.bandName.toLowerCase().replace(/[^a-z0-9]/g, ''),
           subscription_tier: 'premium', // admins get premium for free
           is_admin:          true,
         }, { onConflict: 'id' });
