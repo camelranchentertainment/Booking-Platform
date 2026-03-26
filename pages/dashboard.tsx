@@ -52,13 +52,13 @@ export default function DashboardPage() {
   };
 
   const tabs = [
-    { id: 'dashboard',      label: 'Dashboard',       icon: '📊' },
-    { id: 'campaigns',      label: 'Runs & Tours',     icon: '🛣️' },
-    { id: 'venue-database', label: 'Venue Search',     icon: '🔍' },
-    { id: 'contact-info',   label: 'Contact Info',     icon: '📧' },
-    { id: 'emails',         label: 'Email Templates',  icon: '✉️' },
-    { id: 'social',         label: 'Social Media',     icon: '📣' },
-    { id: 'calendar',       label: 'Calendar',         icon: '📅' },
+    { id: 'dashboard',      label: 'Dashboard'       },
+    { id: 'campaigns',      label: 'Runs & Tours'     },
+    { id: 'venue-database', label: 'Venue Search'     },
+    { id: 'contact-info',   label: 'Contact Info'     },
+    { id: 'emails',         label: 'Email Templates'  },
+    { id: 'social',         label: 'Social Media'     },
+    { id: 'calendar',       label: 'Calendar'         },
   ];
 
   // ─── Loading state ───────────────────────────────────────────────────────────
@@ -105,23 +105,30 @@ export default function DashboardPage() {
 
         /* ── Tab bar ── */
         .crb-tab {
-          padding: 14px 18px;
-          background: transparent;
-          border: none;
-          border-bottom: 3px solid transparent;
-          color: #3d6285;
+          padding: 14px 22px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(74,133,200,0.1);
+          border-radius: 8px;
+          margin: 8px 4px;
+          color: rgba(255,255,255,0.55);
           font-family: 'Nunito', sans-serif;
-          font-size: 13px;
-          font-weight: 600;
+          font-size: 15px;
+          font-weight: 800;
           cursor: pointer;
           white-space: nowrap;
-          transition: color .2s, border-color .2s;
-          display: flex; align-items: center; gap: 6px;
+          letter-spacing: 0.01em;
+          transition: background .18s, color .18s, border-color .18s, box-shadow .18s;
         }
-        .crb-tab:hover { color: #7aa5c4; }
+        .crb-tab:hover {
+          background: rgba(74,133,200,0.1);
+          color: #ffffff;
+          border-color: rgba(74,133,200,0.3);
+        }
         .crb-tab.active {
-          color: #6baed6;
-          border-bottom-color: #3a7fc1;
+          background: rgba(58,127,193,0.18);
+          color: #ffffff;
+          border-color: rgba(74,133,200,0.5);
+          box-shadow: 0 0 16px rgba(58,127,193,0.2);
         }
 
         /* ── User menu dropdown ── */
@@ -172,20 +179,20 @@ export default function DashboardPage() {
           <div style={{
             maxWidth: 1400, margin: '0 auto',
             padding: '0 2rem',
-            height: 56,
+            height: 68,
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
             {/* Logo */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{
-                width: 32, height: 32, borderRadius: 8,
+                width: 38, height: 38, borderRadius: 10,
                 background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: "'Bebas Neue', cursive", fontSize: 18, color: '#e8f1f8',
+                fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: '#e8f1f8',
               }}>C</div>
               <span style={{
                 fontFamily: "'Bebas Neue', cursive",
-                fontSize: '1.1rem', letterSpacing: '0.06em', color: '#e8f1f8',
+                fontSize: '1.5rem', letterSpacing: '0.07em', color: '#e8f1f8',
               }}>Camel Ranch Booking</span>
             </div>
 
@@ -194,8 +201,9 @@ export default function DashboardPage() {
               <div style={{
                 position: 'absolute', left: '50%', transform: 'translateX(-50%)',
                 fontFamily: "'Bebas Neue', cursive",
-                fontSize: '1.4rem', letterSpacing: '0.08em',
-                color: '#4a85c8',
+                fontSize: '1.9rem', letterSpacing: '0.09em',
+                color: '#ffffff',
+                textShadow: '0 0 24px rgba(74,133,200,0.5)',
               }}>
                 {bandProfile.band_name}
               </div>
@@ -265,8 +273,8 @@ export default function DashboardPage() {
           {/* ── Nav Tab Bar ─────────────────────────────────────────────────── */}
           <div style={{
             maxWidth: 1400, margin: '0 auto',
-            padding: '0 2rem',
-            display: 'flex', overflowX: 'auto',
+            padding: '0 1.5rem',
+            display: 'flex', overflowX: 'auto', gap: 2,
             borderTop: '1px solid rgba(74,133,200,0.07)',
           }}>
             {tabs.map(tab => (
@@ -275,7 +283,6 @@ export default function DashboardPage() {
                 className={`crb-tab${activeTab === tab.id ? ' active' : ''}`}
                 onClick={() => handleNavigate(tab.id)}
               >
-                <span>{tab.icon}</span>
                 {tab.label}
               </button>
             ))}
