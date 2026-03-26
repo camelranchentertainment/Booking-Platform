@@ -410,4 +410,273 @@ export default function LandingPage() {
                   caption:'Hype every confirmed show.',
                   body:'Generate ready-to-post social content for each confirmed gig. Tied directly to your Runs, so every date gets promoted without writing a single caption from scratch.',
                 },
-                
+                {
+                  icon:'📅', color:'#4ade80', bg:'rgba(74,222,128,0.08)',
+                  title:'Band Calendar',
+                  caption:'See the whole picture.',
+                  body:'Your confirmed shows, follow-up reminders, and open dates — all on one calendar. Spot gaps, plan ahead, and never lose track of what\'s coming.',
+                },
+                {
+                  icon:'⚙️', color:'#fbbf24', bg:'rgba(251,191,36,0.08)',
+                  title:'Setup & Integrations',
+                  caption:'Connected in minutes.',
+                  body:'Step-by-step guides to link your email account, sync your calendar, and connect social media. Get everything talking to each other before your first search.',
+                },
+              ].map((f, i) => (
+                <div key={i} className="feature-card" style={{
+                  background:'rgba(13,37,64,0.5)',
+                  border:'1px solid rgba(56,189,248,0.1)',
+                  borderRadius:16, padding:'2rem',
+                  transition:'border-color .2s, transform .2s, box-shadow .2s',
+                }}>
+                  <div className="module-icon" style={{ background:f.bg, border:`1px solid ${f.color}25` }}>
+                    {f.icon}
+                  </div>
+                  <p style={{ color:f.color, fontWeight:700, fontSize:12, letterSpacing:'0.1em',
+                    textTransform:'uppercase', marginBottom:6 }}>{f.caption}</p>
+                  <h3 style={{ fontFamily:"'Syne', sans-serif", fontWeight:700, fontSize:'1.15rem',
+                    color:'#f0f9ff', marginBottom:10 }}>{f.title}</h3>
+                  <p style={{ color:'#7db8d4', fontSize:14, lineHeight:1.7, margin:0 }}>{f.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ──────────────────────────────────────────────── SOCIAL PROOF */}
+        <section style={{ padding:'80px 2rem', maxWidth:900, margin:'0 auto', textAlign:'center' }}>
+          <div style={{
+            background:'rgba(13,37,64,0.6)',
+            border:'1px solid rgba(56,189,248,0.12)',
+            borderRadius:20, padding:'3rem 2.5rem',
+          }}>
+            <div style={{ fontSize:40, marginBottom:20 }}>🎸</div>
+            <p style={{ fontFamily:"'Syne', sans-serif", fontWeight:700, fontSize:'clamp(1.3rem,3vw,1.8rem)',
+              color:'#f0f9ff', lineHeight:1.4, marginBottom:16 }}>
+              "We used to spend two hours a weekend making phone calls and sending emails just to book one date.
+              Now we run the whole outreach from one screen."
+            </p>
+            <p style={{ color:'#38bdf8', fontWeight:600, fontSize:14 }}>Jake Stringer — Better Than Nothin'</p>
+            <p style={{ color:'#4a7a9b', fontSize:13, marginTop:2 }}>Touring Arkansas & Missouri</p>
+          </div>
+        </section>
+
+        {/* ──────────────────────────────────────────────────── PRICING */}
+        <section id="pricing" style={{ padding:'100px 2rem 120px', maxWidth:1100, margin:'0 auto' }}>
+          <div style={{ textAlign:'center', marginBottom:'4rem' }}>
+            <p style={S.sectionLabel}>Simple Pricing</p>
+            <h2 style={{ ...S.h2, textAlign:'center' }}>Start Free. Scale When You're Ready.</h2>
+            <p style={{ ...S.sub, textAlign:'center' }}>
+              No contracts. No surprises. Cancel anytime from your account.
+              Paid plans unlock unlimited searches and advanced tools.
+            </p>
+          </div>
+
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:24, alignItems:'start' }}>
+            <PricingCard
+              name="Free" price="$0" period="forever"
+              desc="Try the whole platform with no commitment."
+              badge={null} highlight={false}
+              features={[
+                '5 venue searches per month',
+                'Runs & tour management',
+                'Email outreach tools',
+                'Band calendar',
+                'Social media generator',
+                'Full platform access',
+              ]}
+              cta="Sign Up Free"
+              onCta={() => openSignup('free')}
+            />
+            <PricingCard
+              name="Basic" price="$10" period="per month"
+              desc="For bands actively booking 2–3 nights a month."
+              badge={null} highlight={false}
+              features={[
+                'Unlimited venue searches',
+                'Unlimited Runs',
+                'Email templates & tracking',
+                'Social post generation',
+                'Calendar sync',
+                'Priority support',
+              ]}
+              cta="Get Basic"
+              onCta={() => openSignup('basic')}
+            />
+            <PricingCard
+              name="Premium" price="$18" period="per month"
+              desc="For serious touring acts running full regional campaigns."
+              badge="Most Popular" highlight={true}
+              features={[
+                'Everything in Basic',
+                'Bulk venue discovery by region',
+                'Full email template library',
+                'Advanced campaign analytics',
+                'Multi-platform social scheduling',
+                'Dedicated support',
+              ]}
+              cta="Get Premium"
+              onCta={() => openSignup('premium')}
+            />
+          </div>
+
+          <p style={{ textAlign:'center', color:'#4a7a9b', fontSize:13, marginTop:28 }}>
+            Payments securely handled by <strong style={{ color:'#7db8d4' }}>Stripe</strong>. You can cancel or change plans anytime.
+          </p>
+        </section>
+
+        {/* ─────────────────────────────────────────────────────── FOOTER */}
+        <footer style={{
+          borderTop:'1px solid rgba(56,189,248,0.1)',
+          padding:'3rem 2rem', textAlign:'center',
+        }}>
+          <div style={{ fontFamily:"'Syne', sans-serif", fontWeight:700, color:'#7db8d4', marginBottom:8, fontSize:'1rem' }}>
+            Camel Ranch Booking
+          </div>
+          <p style={{ color:'#4a7a9b', fontSize:13 }}>
+            © {new Date().getFullYear()} Camel Ranch Booking. All rights reserved.
+          </p>
+        </footer>
+
+      </div>{/* end page */}
+
+      {/* ──────────────────────────────────────────────────── LOGIN MODAL */}
+      {showLogin && (
+        <Modal onClose={() => { setShowLogin(false); setAuthError(''); }}>
+          <h2 style={{ fontFamily:"'Syne', sans-serif", fontWeight:800, fontSize:'1.65rem', marginBottom:6 }}>Welcome Back</h2>
+          <p style={{ color:'#7db8d4', fontSize:14, marginBottom:24 }}>Sign in to your Camel Ranch account</p>
+          {authError && <ErrBox msg={authError} />}
+          <form onSubmit={handleLogin} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <Field label="Email" type="email"     value={email}    onChange={setEmail}    ph="you@email.com" />
+            <Field label="Password" type="password" value={password} onChange={setPassword} ph="Your password" />
+            <ModalBtns cancel={() => { setShowLogin(false); setAuthError(''); }}
+              submit={loading ? 'Signing In…' : 'Sign In'} disabled={loading} />
+          </form>
+        </Modal>
+      )}
+
+      {/* ─────────────────────────────────────────────────── SIGNUP MODAL */}
+      {showSignup && (
+        <Modal onClose={() => { setShowSignup(false); setAuthError(''); }}>
+          <div style={{
+            display:'inline-block', padding:'4px 14px', borderRadius:999, marginBottom:12,
+            background:'rgba(56,189,248,0.1)', border:'1px solid rgba(56,189,248,0.2)',
+            color:'#38bdf8', fontSize:12, fontWeight:700,
+          }}>{tierLabel}</div>
+          <h2 style={{ fontFamily:"'Syne', sans-serif", fontWeight:800, fontSize:'1.65rem', marginBottom:6 }}>Create Your Account</h2>
+          <p style={{ color:'#7db8d4', fontSize:14, marginBottom:24 }}>
+            {signupTier === 'free'
+              ? 'Full platform access. 5 free searches per month.'
+              : 'Complete your account, then you\'ll be taken to Stripe to finish payment.'}
+          </p>
+          {authError && <ErrBox msg={authError} />}
+          <form onSubmit={handleSignup} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <Field label="Your Name"  type="text"     value={name}     onChange={setName}     ph="First & Last Name" />
+            <Field label="Band Name"  type="text"     value={bandName} onChange={setBandName} ph="e.g. Jake Stringer & Better Than Nothin'" />
+            <Field label="Email"      type="email"    value={email}    onChange={setEmail}    ph="you@email.com" />
+            <Field label="Password"   type="password" value={password} onChange={setPassword} ph="Minimum 8 characters" />
+            <ModalBtns cancel={() => { setShowSignup(false); setAuthError(''); }}
+              submit={loading ? 'Creating Account…' : signupTier === 'free' ? 'Create Free Account' : 'Continue to Payment →'}
+              disabled={loading} />
+          </form>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+// ─── Pricing Card ─────────────────────────────────────────────────────────────
+function PricingCard({ name, price, period, desc, badge, highlight, features, cta, onCta }: {
+  name:string; price:string; period:string; desc:string;
+  badge:string|null; highlight:boolean; features:string[];
+  cta:string; onCta:()=>void;
+}) {
+  return (
+    <div className={highlight ? 'pricing-highlight' : ''} style={{
+      background: highlight ? undefined : 'rgba(13,37,64,0.5)',
+      border: highlight ? undefined : '1px solid rgba(56,189,248,0.12)',
+      borderRadius:18, padding:'2rem', position:'relative',
+    }}>
+      {badge && (
+        <div style={{
+          position:'absolute', top:-13, left:'50%', transform:'translateX(-50%)',
+          background:'linear-gradient(135deg, #38bdf8, #0ea5e9)',
+          color:'#05111f', fontWeight:700, fontSize:11,
+          padding:'4px 16px', borderRadius:999, whiteSpace:'nowrap',
+        }}>{badge}</div>
+      )}
+      <div style={{ marginBottom:'1.5rem' }}>
+        <div style={{ fontFamily:"'Syne', sans-serif", fontWeight:700, fontSize:'1.05rem', color:'#f0f9ff', marginBottom:4 }}>{name}</div>
+        <div style={{ display:'flex', alignItems:'baseline', gap:6, margin:'10px 0 8px' }}>
+          <span style={{ fontFamily:"'Syne', sans-serif", fontSize:'2.8rem', fontWeight:800, color:'#f0f9ff', lineHeight:1 }}>{price}</span>
+          <span style={{ color:'#4a7a9b', fontSize:13 }}>/{period}</span>
+        </div>
+        <p style={{ color:'#7db8d4', fontSize:13, lineHeight:1.55, margin:0 }}>{desc}</p>
+      </div>
+      <div style={{ borderTop:'1px solid rgba(56,189,248,0.1)', paddingTop:'1.5rem', marginBottom:'1.75rem' }}>
+        {features.map((f,i) => (
+          <div key={i} style={{ display:'flex', gap:10, alignItems:'flex-start', marginBottom:10 }}>
+            <span style={{ color:'#38bdf8', flexShrink:0, marginTop:1 }}>✓</span>
+            <span style={{ color:'#7db8d4', fontSize:14 }}>{f}</span>
+          </div>
+        ))}
+      </div>
+      <button onClick={onCta} className={highlight ? 'btn-primary' : 'btn-ghost'}
+        style={{ width:'100%', padding:13, fontSize:15, borderRadius:10 }}>
+        {cta}
+      </button>
+    </div>
+  );
+}
+
+// ─── Modal shell ──────────────────────────────────────────────────────────────
+function Modal({ children, onClose }: { children:React.ReactNode; onClose:()=>void }) {
+  return (
+    <div onClick={e => { if (e.target===e.currentTarget) onClose(); }} style={{
+      position:'fixed', inset:0, zIndex:200,
+      background:'rgba(5,17,31,0.88)', backdropFilter:'blur(12px)',
+      display:'flex', alignItems:'center', justifyContent:'center', padding:'1rem',
+    }}>
+      <div style={{
+        background:'#0a1f35', border:'1px solid rgba(56,189,248,0.18)',
+        borderRadius:20, padding:'2.5rem', width:'100%', maxWidth:460,
+        boxShadow:'0 24px 80px rgba(0,0,0,0.6)',
+      }}>{children}</div>
+    </div>
+  );
+}
+
+// ─── Form field ───────────────────────────────────────────────────────────────
+function Field({ label, type, value, onChange, ph }: {
+  label:string; type:string; value:string; onChange:(v:string)=>void; ph:string;
+}) {
+  return (
+    <div>
+      <label style={{ display:'block', color:'#7db8d4', fontSize:13, fontWeight:600, marginBottom:6 }}>{label}</label>
+      <input type={type} value={value} placeholder={ph} required
+        onChange={e=>onChange(e.target.value)} className="form-input" />
+    </div>
+  );
+}
+
+// ─── Error box ────────────────────────────────────────────────────────────────
+function ErrBox({ msg }: { msg:string }) {
+  return (
+    <div style={{
+      background:'rgba(248,113,113,0.1)', border:'1px solid rgba(248,113,113,0.25)',
+      borderRadius:8, padding:'10px 14px', color:'#f87171', fontSize:14, marginBottom:14,
+    }}>{msg}</div>
+  );
+}
+
+// ─── Modal action buttons ─────────────────────────────────────────────────────
+function ModalBtns({ cancel, submit, disabled }: { cancel:()=>void; submit:string; disabled:boolean }) {
+  return (
+    <div style={{ display:'flex', gap:10, marginTop:4 }}>
+      <button type="button" onClick={cancel} className="btn-ghost"
+        style={{ flex:1, padding:11, fontSize:14 }}>Cancel</button>
+      <button type="submit" disabled={disabled} className="btn-primary"
+        style={{ flex:1, padding:11, fontSize:14, opacity:disabled?0.6:1 }}>{submit}</button>
+    </div>
+  );
+}
