@@ -1,364 +1,563 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
 interface Venue {
   id: string;
   name: string;
-  email: string | null;
   city: string;
   state: string;
-  address: string;
+  address: string | null;
   phone: string | null;
-  campaign_name?: string;
+  email: string | null;
+  booking_contact: string | null;
+  venue_type: string | null;
+  contact_status: string | null;
+  website: string | null;
+  notes: string | null;
 }
 
-// Supabase returns joined tables as arrays
-interface CampaignVenueRow {
-  venue_id: string;
-  campaigns: { name: string }[] | null;
+// Which field is being inline-edited
+interface EditingCell {
+  venueId: string;
+  field: 'email' | 'phone' | 'booking_contact' | 'notes';
 }
+
+const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  not_contacted:    { bg: 'rgba(74,133,200,0.1)',  text: '#6baed6',  border: 'rgba(74,133,200,0.25)'  },
+  awaiting_response:{ bg: 'rgba(245,158,11,0.1)',  text: '#f59e0b',  border: 'rgba(245,158,11,0.25)'  },
+  responded:        { bg: 'rgba(167,139,250,0.1)', text: '#a78bfa',  border: 'rgba(167,139,250,0.25)' },
+  booked:           { bg: 'rgba(34,197,94,0.1)',   text: '#22c55e',  border: 'rgba(34,197,94,0.25)'   },
+  declined:         { bg: 'rgba(248,113,113,0.1)', text: '#f87171',  border: 'rgba(248,113,113,0.25)' },
+  no_response:      { bg: 'rgba(100,116,139,0.1)', text: '#94a3b8',  border: 'rgba(100,116,139,0.25)' },
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  not_contacted:     'Not Contacted',
+  awaiting_response: 'Awaiting Response',
+  responded:         'Responded',
+  booked:            'Booked',
+  declined:          'Declined',
+  no_response:       'No Response',
+};
 
 export default function VenueContactManager() {
-  const [venues, setVenues] = useState<Venue[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
-  const [editEmail, setEditEmail] = useState('');
-  const [editPhone, setEditPhone] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [venues, setVenues]           = useState<Venue[]>([]);
+  const [filtered, setFiltered]       = useState<Venue[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [search, setSearch]           = useState('');
+  const [filterState, setFilterState] = useState('ALL');
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [editing, setEditing]         = useState<EditingCell | null>(null);
+  const [editValue, setEditValue]     = useState('');
+  const [saving, setSaving]           = useState(false);
+  const [states, setStates]           = useState<string[]>([]);
+  const inputRef                      = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+
+  useEffect(() => { loadVenues(); }, []);
 
   useEffect(() => {
-    loadCampaignVenuesWithoutEmail();
-  }, []);
+    let list = [...venues];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(v =>
+        v.name.toLowerCase().includes(q) ||
+        v.city.toLowerCase().includes(q) ||
+        v.state.toLowerCase().includes(q) ||
+        (v.email || '').toLowerCase().includes(q) ||
+        (v.booking_contact || '').toLowerCase().includes(q)
+      );
+    }
+    if (filterState !== 'ALL') list = list.filter(v => v.state === filterState);
+    if (filterStatus !== 'ALL') list = list.filter(v => (v.contact_status || 'not_contacted') === filterStatus);
+    setFiltered(list);
+  }, [venues, search, filterState, filterStatus]);
 
-  const loadCampaignVenuesWithoutEmail = async () => {
+  useEffect(() => {
+    if (editing && inputRef.current) inputRef.current.focus();
+  }, [editing]);
+
+  const loadVenues = async () => {
     try {
       setLoading(true);
-
-      const { data: campaignVenues, error: cvError } = await supabase
-        .from('campaign_venues')
-        .select(`venue_id, campaigns(name)`);
-
-      if (cvError) throw cvError;
-
-      const typedCampaignVenues = (campaignVenues || []) as unknown as CampaignVenueRow[];
-      const venueIds = [...new Set(typedCampaignVenues.map(cv => cv.venue_id))];
-
-      if (venueIds.length === 0) {
-        setVenues([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data: venuesData, error: venuesError } = await supabase
+      const { data, error } = await supabase
         .from('venues')
-        .select('*')
-        .in('id', venueIds)
-        .or('email.is.null,email.eq.')
-        .order('name');
+        .select('id,name,city,state,address,phone,email,booking_contact,venue_type,contact_status,website,notes')
+        .order('state').order('city').order('name');
 
-      if (venuesError) throw venuesError;
-
-      const venuesWithCampaign = (venuesData || []).map(venue => {
-        const campaignVenue = typedCampaignVenues.find(cv => cv.venue_id === venue.id);
-        return {
-          ...venue,
-          campaign_name: campaignVenue?.campaigns?.[0]?.name || 'Unknown Campaign',
-        };
-      });
-
-      setVenues(venuesWithCampaign);
-    } catch (error) {
-      console.error('Error loading venues:', error);
+      if (error) throw error;
+      const list = data || [];
+      setVenues(list);
+      const uniqueStates = [...new Set(list.map((v: Venue) => v.state))].sort() as string[];
+      setStates(uniqueStates);
+    } catch (err) {
+      console.error('Error loading venues:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleTileClick = (venue: Venue) => {
-    setSelectedVenue(venue);
-    setEditEmail(venue.email || '');
-    setEditPhone(venue.phone || '');
-    setShowEditModal(true);
+  // Start editing a cell
+  const startEdit = (venue: Venue, field: EditingCell['field']) => {
+    setEditing({ venueId: venue.id, field });
+    setEditValue((venue[field] as string) || '');
   };
 
-  const handleSaveEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedVenue) return;
-    if (!editEmail) { alert('Please enter an email address'); return; }
+  // Save inline edit on blur or Enter
+  const commitEdit = async () => {
+    if (!editing || saving) return;
+    const { venueId, field } = editing;
+    const current = venues.find(v => v.id === venueId);
+    if (!current) { setEditing(null); return; }
+    // No change
+    if ((current[field] || '') === editValue.trim()) { setEditing(null); return; }
 
     setSaving(true);
     try {
       const { error } = await supabase
         .from('venues')
-        .update({ email: editEmail, phone: editPhone || null })
-        .eq('id', selectedVenue.id);
-
+        .update({ [field]: editValue.trim() || null })
+        .eq('id', venueId);
       if (error) throw error;
-
-      setShowEditModal(false);
-      setSelectedVenue(null);
-      await loadCampaignVenuesWithoutEmail();
-    } catch (error) {
-      console.error('Error saving contact info:', error);
-      alert('Failed to save contact info');
+      setVenues(prev => prev.map(v => v.id === venueId ? { ...v, [field]: editValue.trim() || null } : v));
+    } catch (err) {
+      console.error('Save error:', err);
     } finally {
       setSaving(false);
+      setEditing(null);
     }
   };
 
+  const updateStatus = async (venueId: string, status: string) => {
+    try {
+      await supabase.from('venues').update({ contact_status: status }).eq('id', venueId);
+      setVenues(prev => prev.map(v => v.id === venueId ? { ...v, contact_status: status } : v));
+    } catch (err) { console.error('Status update error:', err); }
+  };
+
+  const missingEmail = filtered.filter(v => !v.email).length;
+
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: '4rem', color: '#7db8d4' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⏳</div>
-        <p>Loading venues...</p>
-      </div>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        minHeight: 400, background: '#030d18',
+        fontFamily: "'Nunito', sans-serif", color: '#3d6285', fontSize: 15,
+      }}>Loading venues…</div>
     );
   }
 
   return (
     <>
-      <style jsx>{`
-        * { box-sizing: border-box; }
-        .page-container {
-          background: linear-gradient(135deg, #05111f 0%, #0a1f35 100%);
+      <style>{`
+        *, *::before, *::after { box-sizing: border-box; }
+
+        .vl-wrap {
+          background: #030d18;
           min-height: 100vh;
           padding: 2rem;
+          font-family: 'Nunito', sans-serif;
         }
-        .venue-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 1rem;
+
+        /* ── Controls ── */
+        .vl-search {
+          background: rgba(9,24,40,0.9);
+          border: 1px solid rgba(74,133,200,0.2);
+          border-radius: 9px;
+          padding: 10px 14px;
+          color: #e8f1f8;
+          font-family: 'Nunito', sans-serif;
+          font-size: 14px;
+          outline: none;
+          transition: border-color .2s;
+          width: 280px;
         }
-        .venue-tile {
-          background: #0d2540;
-          border-radius: 10px;
-          padding: 1rem;
+        .vl-search::placeholder { color: #3d6285; }
+        .vl-search:focus { border-color: rgba(74,133,200,0.5); }
+
+        .vl-select {
+          background: rgba(9,24,40,0.9);
+          border: 1px solid rgba(74,133,200,0.2);
+          border-radius: 9px;
+          padding: 10px 14px;
+          color: #e8f1f8;
+          font-family: 'Nunito', sans-serif;
+          font-size: 13px;
+          outline: none;
           cursor: pointer;
-          transition: all 0.2s ease;
-          box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-          border: 1px solid rgba(56,189,248,0.15);
         }
-        .venue-tile:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 28px rgba(56,189,248,0.2);
-          border-color: #38bdf8;
+        .vl-select:focus { border-color: rgba(74,133,200,0.5); }
+
+        /* ── Table ── */
+        .vl-table {
+          width: 100%;
+          border-collapse: separate;
+          border-spacing: 0 6px;
         }
-        @media (max-width: 1200px) { .venue-grid { grid-template-columns: repeat(3, 1fr); } }
-        @media (max-width: 900px)  { .venue-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 600px)  { .venue-grid { grid-template-columns: 1fr; } }
+        .vl-th {
+          text-align: left;
+          padding: 0 14px 8px;
+          font-size: 11px; font-weight: 800;
+          text-transform: uppercase; letter-spacing: 0.1em;
+          color: #3d6285;
+          border-bottom: 1px solid rgba(74,133,200,0.1);
+          white-space: nowrap;
+        }
+        .vl-row {
+          background: rgba(9,24,40,0.7);
+          transition: background .15s;
+        }
+        .vl-row:hover { background: rgba(9,24,40,1); }
+        .vl-td {
+          padding: 12px 14px;
+          font-size: 13px;
+          color: #e8f1f8;
+          border-top: 1px solid rgba(74,133,200,0.07);
+          border-bottom: 1px solid rgba(74,133,200,0.07);
+          vertical-align: middle;
+        }
+        .vl-td:first-child {
+          border-left: 1px solid rgba(74,133,200,0.07);
+          border-radius: 10px 0 0 10px;
+        }
+        .vl-td:last-child {
+          border-right: 1px solid rgba(74,133,200,0.07);
+          border-radius: 0 10px 10px 0;
+        }
+
+        /* ── Editable cell ── */
+        .vl-editable {
+          cursor: text;
+          border-radius: 6px;
+          padding: 5px 8px;
+          min-height: 30px;
+          display: flex; align-items: center;
+          transition: background .15s;
+          position: relative;
+        }
+        .vl-editable:hover {
+          background: rgba(74,133,200,0.1);
+        }
+        .vl-editable.empty {
+          color: #3d6285;
+          font-style: italic;
+        }
+        .vl-editable.empty:hover::after {
+          content: '+ Add';
+          color: #4a85c8;
+          font-style: normal;
+          font-weight: 700;
+          font-size: 12px;
+          margin-left: 4px;
+        }
+        .vl-input {
+          width: 100%;
+          background: rgba(9,24,40,0.95);
+          border: 1px solid rgba(74,133,200,0.5);
+          border-radius: 6px;
+          padding: 6px 10px;
+          color: #e8f1f8;
+          font-family: 'Nunito', sans-serif;
+          font-size: 13px;
+          outline: none;
+          box-shadow: 0 0 0 3px rgba(74,133,200,0.12);
+        }
+
+        /* ── Status badge ── */
+        .vl-status {
+          display: inline-flex; align-items: center;
+          padding: 3px 10px; border-radius: 99px;
+          font-size: 11px; font-weight: 700;
+          white-space: nowrap; cursor: pointer;
+          border: 1px solid;
+          transition: opacity .15s;
+        }
+        .vl-status:hover { opacity: 0.8; }
+
+        /* ── Status dropdown ── */
+        .vl-status-menu {
+          position: absolute; top: calc(100% + 4px); left: 0;
+          background: #091828;
+          border: 1px solid rgba(74,133,200,0.2);
+          border-radius: 10px; padding: 6px;
+          z-index: 50; min-width: 180px;
+          box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+        }
+        .vl-status-opt {
+          display: block; width: 100%;
+          padding: 8px 12px; border: none; border-radius: 7px;
+          background: transparent; text-align: left;
+          font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 600;
+          cursor: pointer; transition: background .12s;
+        }
+        .vl-status-opt:hover { background: rgba(74,133,200,0.1); }
+
+        @media (max-width: 900px) {
+          .vl-wrap { padding: 1rem; }
+          .vl-search { width: 100%; }
+        }
       `}</style>
 
-      <div className="page-container">
-        <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      <div className="vl-wrap">
+        <div style={{ maxWidth: 1400, margin: '0 auto' }}>
 
-          {/* Header */}
-          <div style={{ marginBottom: '2rem' }}>
-            <h1 style={{ fontSize: '2rem', fontWeight: '700', color: '#f0f9ff', margin: '0 0 0.5rem 0' }}>
-              📧 Add Venue Contact Info
-            </h1>
-            <p style={{ color: '#7db8d4', margin: 0 }}>
-              Campaign venues missing email addresses • Click to add contact info
+          {/* ── Header ────────────────────────────────────────────────────────── */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <h1 style={{
+              fontFamily: "'Bebas Neue', cursive", fontWeight: 400,
+              fontSize: 'clamp(1.8rem,3vw,2.4rem)', letterSpacing: '0.06em',
+              color: '#ffffff', margin: 0, lineHeight: 1,
+            }}>Venue List</h1>
+            <p style={{ color: '#3d6285', margin: '5px 0 0', fontSize: 13, fontWeight: 600 }}>
+              {venues.length} venues total
+              {missingEmail > 0 && (
+                <span style={{
+                  marginLeft: 12, background: 'rgba(245,158,11,0.12)',
+                  border: '1px solid rgba(245,158,11,0.3)', borderRadius: 99,
+                  padding: '1px 10px', color: '#f59e0b', fontSize: 12,
+                }}>
+                  {missingEmail} missing email
+                </span>
+              )}
             </p>
           </div>
 
-          {venues.length === 0 ? (
+          {/* ── Controls ──────────────────────────────────────────────────────── */}
+          <div style={{
+            display: 'flex', gap: 10, flexWrap: 'wrap',
+            alignItems: 'center', marginBottom: '1.25rem',
+          }}>
+            <input
+              className="vl-search"
+              placeholder="Search venues, cities, contacts…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            <select className="vl-select" value={filterState} onChange={e => setFilterState(e.target.value)}>
+              <option value="ALL">All States</option>
+              {states.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select className="vl-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+              <option value="ALL">All Statuses</option>
+              {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            <span style={{ marginLeft: 'auto', color: '#3d6285', fontSize: 13, fontWeight: 600 }}>
+              {filtered.length} result{filtered.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          {/* ── Tip banner ────────────────────────────────────────────────────── */}
+          <div style={{
+            background: 'rgba(58,127,193,0.07)',
+            border: '1px solid rgba(58,127,193,0.15)',
+            borderRadius: 10, padding: '10px 16px',
+            marginBottom: '1.25rem',
+            display: 'flex', alignItems: 'center', gap: 10,
+            color: '#6baed6', fontSize: 13, fontWeight: 600,
+          }}>
+            <span style={{ fontSize: 16 }}>✏️</span>
+            Click any email, phone, booking contact, or notes field to edit it directly in the list.
+          </div>
+
+          {/* ── Table ─────────────────────────────────────────────────────────── */}
+          {filtered.length === 0 ? (
             <div style={{
-              background: '#0d2540', padding: '4rem', borderRadius: '16px',
-              textAlign: 'center', border: '1px solid rgba(74,222,128,0.2)',
-              boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+              textAlign: 'center', padding: '4rem 2rem',
+              border: '1px dashed rgba(74,133,200,0.18)', borderRadius: 14,
+              color: '#3d6285', fontSize: 14, fontWeight: 600,
             }}>
-              <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>✅</div>
-              <h3 style={{ fontSize: '1.5rem', color: '#4ade80', margin: '0 0 0.5rem 0' }}>All set!</h3>
-              <p style={{ color: '#7db8d4', margin: 0 }}>All campaign venues have email addresses</p>
+              No venues match your filters.
             </div>
           ) : (
-            <>
-              <div style={{
-                background: 'rgba(251,191,36,0.08)',
-                border: '1px solid rgba(251,191,36,0.3)',
-                borderRadius: '12px', padding: '1rem 1.5rem',
-                marginBottom: '1.5rem', display: 'flex',
-                alignItems: 'center', gap: '1rem',
-              }}>
-                <div style={{ fontSize: '1.5rem' }}>⚠️</div>
-                <div>
-                  <div style={{ color: '#fbbf24', fontWeight: '700', marginBottom: '0.25rem' }}>
-                    {venues.length} venue{venues.length !== 1 ? 's' : ''} need{venues.length === 1 ? 's' : ''} email addresses
-                  </div>
-                  <div style={{ color: '#7db8d4', fontSize: '0.9rem' }}>
-                    These venues are in your campaigns but missing contact info
-                  </div>
-                </div>
-              </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="vl-table">
+                <thead>
+                  <tr>
+                    {['Venue', 'City / State', 'Status', 'Email', 'Phone', 'Booking Contact', 'Notes'].map(h => (
+                      <th key={h} className="vl-th">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(venue => {
+                    const status = venue.contact_status || 'not_contacted';
+                    const sc     = STATUS_COLORS[status] || STATUS_COLORS.not_contacted;
+                    return (
+                      <VenueRow
+                        key={venue.id}
+                        venue={venue}
+                        status={status}
+                        sc={sc}
+                        editing={editing}
+                        editValue={editValue}
+                        saving={saving}
+                        inputRef={inputRef}
+                        onStartEdit={startEdit}
+                        onEditChange={setEditValue}
+                        onCommit={commitEdit}
+                        onStatusChange={updateStatus}
+                        onCancelEdit={() => setEditing(null)}
+                      />
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
 
-              <div className="venue-grid">
-                {venues.map((venue) => (
-                  <div key={venue.id} className="venue-tile" onClick={() => handleTileClick(venue)}>
-                    <div style={{
-                      fontSize: '1rem', fontWeight: '700', color: '#f0f9ff',
-                      marginBottom: '0.5rem', lineHeight: '1.2', minHeight: '2.4rem',
-                      display: '-webkit-box', WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                    }}>
-                      {venue.name}
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: '#7db8d4', marginBottom: '0.5rem' }}>
-                      📍 {venue.city}, {venue.state}
-                    </div>
-                    <div style={{
-                      fontSize: '0.75rem', color: '#38bdf8',
-                      background: 'rgba(56,189,248,0.1)', padding: '0.25rem 0.5rem',
-                      borderRadius: '4px', marginBottom: '0.75rem', display: 'inline-block',
-                    }}>
-                      🎯 {venue.campaign_name}
-                    </div>
-                    <div style={{
-                      display: 'block', padding: '0.5rem',
-                      background: 'rgba(56,189,248,0.15)', color: '#38bdf8',
-                      borderRadius: '6px', fontSize: '0.85rem',
-                      fontWeight: '700', textAlign: 'center',
-                      border: '1px solid rgba(56,189,248,0.3)',
-                    }}>
-                      + Add Email
-                    </div>
-                  </div>
-                ))}
+// ─── Venue Row ────────────────────────────────────────────────────────────────
+function VenueRow({
+  venue, status, sc, editing, editValue, saving,
+  inputRef, onStartEdit, onEditChange, onCommit, onStatusChange, onCancelEdit,
+}: {
+  venue: Venue;
+  status: string;
+  sc: { bg: string; text: string; border: string };
+  editing: EditingCell | null;
+  editValue: string;
+  saving: boolean;
+  inputRef: React.RefObject<any>;
+  onStartEdit: (v: Venue, f: EditingCell['field']) => void;
+  onEditChange: (val: string) => void;
+  onCommit: () => void;
+  onStatusChange: (id: string, status: string) => void;
+  onCancelEdit: () => void;
+}) {
+  const [statusOpen, setStatusOpen] = useState(false);
+
+  const isEditing = (field: EditingCell['field']) =>
+    editing?.venueId === venue.id && editing.field === field;
+
+  const EditableCell = ({
+    field, value, placeholder, multiline,
+  }: {
+    field: EditingCell['field'];
+    value: string | null;
+    placeholder: string;
+    multiline?: boolean;
+  }) => {
+    const active = isEditing(field);
+    if (active) {
+      return multiline ? (
+        <textarea
+          ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+          className="vl-input"
+          value={editValue}
+          rows={2}
+          style={{ resize: 'vertical', minWidth: 180 }}
+          onChange={e => onEditChange(e.target.value)}
+          onBlur={onCommit}
+          onKeyDown={e => { if (e.key === 'Escape') onCancelEdit(); }}
+        />
+      ) : (
+        <input
+          ref={inputRef as React.RefObject<HTMLInputElement>}
+          className="vl-input"
+          value={editValue}
+          style={{ minWidth: 160 }}
+          onChange={e => onEditChange(e.target.value)}
+          onBlur={onCommit}
+          onKeyDown={e => {
+            if (e.key === 'Enter') onCommit();
+            if (e.key === 'Escape') onCancelEdit();
+          }}
+        />
+      );
+    }
+    return (
+      <div
+        className={`vl-editable${!value ? ' empty' : ''}`}
+        onClick={() => onStartEdit(venue, field)}
+        title="Click to edit"
+      >
+        {value || placeholder}
+      </div>
+    );
+  };
+
+  return (
+    <tr className="vl-row">
+      {/* Name */}
+      <td className="vl-td" style={{ minWidth: 180, maxWidth: 240 }}>
+        <div style={{ fontWeight: 800, color: '#ffffff', fontSize: 13, lineHeight: 1.3 }}>
+          {venue.name}
+        </div>
+        {venue.venue_type && (
+          <div style={{ color: '#3d6285', fontSize: 11, marginTop: 2, textTransform: 'capitalize' }}>
+            {venue.venue_type}
+          </div>
+        )}
+        {venue.website && (
+          <a href={venue.website} target="_blank" rel="noopener noreferrer"
+            style={{ color: '#4a85c8', fontSize: 11, textDecoration: 'none' }}
+            onClick={e => e.stopPropagation()}>
+            Website ↗
+          </a>
+        )}
+      </td>
+
+      {/* City / State */}
+      <td className="vl-td" style={{ whiteSpace: 'nowrap' }}>
+        <div style={{ fontWeight: 700, color: '#e8f1f8', fontSize: 13 }}>{venue.city}</div>
+        <div style={{ color: '#3d6285', fontSize: 11 }}>{venue.state}</div>
+      </td>
+
+      {/* Status */}
+      <td className="vl-td">
+        <div style={{ position: 'relative' }}>
+          <span
+            className="vl-status"
+            style={{ background: sc.bg, color: sc.text, borderColor: sc.border }}
+            onClick={() => setStatusOpen(o => !o)}
+          >
+            {STATUS_LABELS[status]}
+            <span style={{ marginLeft: 5, fontSize: 9 }}>▼</span>
+          </span>
+          {statusOpen && (
+            <>
+              <div style={{ position: 'fixed', inset: 0, zIndex: 49 }}
+                onClick={() => setStatusOpen(false)} />
+              <div className="vl-status-menu">
+                {Object.entries(STATUS_LABELS).map(([k, label]) => {
+                  const c = STATUS_COLORS[k];
+                  return (
+                    <button key={k} className="vl-status-opt" style={{ color: c.text }}
+                      onClick={() => { onStatusChange(venue.id, k); setStatusOpen(false); }}>
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             </>
           )}
         </div>
+      </td>
 
-        {/* Edit Modal */}
-        {showEditModal && selectedVenue && (
-          <div
-            onClick={() => setShowEditModal(false)}
-            style={{
-              position: 'fixed', inset: 0,
-              background: 'rgba(5,17,31,0.85)',
-              backdropFilter: 'blur(6px)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              zIndex: 1000, padding: '1rem',
-            }}
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                background: '#0d2540',
-                border: '1px solid rgba(56,189,248,0.25)',
-                borderRadius: '16px', width: '100%', maxWidth: '500px',
-                boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
-              }}
-            >
-              <div style={{
-                padding: '1.5rem',
-                borderBottom: '1px solid rgba(56,189,248,0.15)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              }}>
-                <h2 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#f0f9ff', margin: 0 }}>
-                  {selectedVenue.name}
-                </h2>
-                <button onClick={() => setShowEditModal(false)} style={{
-                  background: 'none', border: 'none', fontSize: '1.5rem',
-                  cursor: 'pointer', color: '#7db8d4',
-                }}>×</button>
-              </div>
+      {/* Email */}
+      <td className="vl-td" style={{ minWidth: 200 }}>
+        <EditableCell field="email" value={venue.email} placeholder="Add email" />
+      </td>
 
-              <form onSubmit={handleSaveEmail} style={{ padding: '1.5rem' }}>
-                <div style={{
-                  marginBottom: '1rem', padding: '1rem',
-                  background: 'rgba(56,189,248,0.05)',
-                  border: '1px solid rgba(56,189,248,0.15)',
-                  borderRadius: '8px',
-                }}>
-                  <div style={{ fontSize: '0.85rem', color: '#7db8d4', marginBottom: '0.25rem' }}>Campaign</div>
-                  <div style={{ fontSize: '0.95rem', color: '#38bdf8', fontWeight: '600', marginBottom: '0.75rem' }}>
-                    🎯 {selectedVenue.campaign_name}
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: '#7db8d4', marginBottom: '0.25rem' }}>Location</div>
-                  <div style={{ fontSize: '0.95rem', color: '#f0f9ff', fontWeight: '600' }}>
-                    📍 {selectedVenue.city}, {selectedVenue.state}
-                  </div>
-                  {selectedVenue.address && (
-                    <div style={{ fontSize: '0.85rem', color: '#7db8d4', marginTop: '0.25rem' }}>
-                      {selectedVenue.address}
-                    </div>
-                  )}
-                </div>
+      {/* Phone */}
+      <td className="vl-td" style={{ minWidth: 140 }}>
+        <EditableCell field="phone" value={venue.phone} placeholder="Add phone" />
+      </td>
 
-                <div style={{ marginBottom: '1.25rem' }}>
-                  <label style={{
-                    display: 'block', color: '#7db8d4', marginBottom: '0.5rem',
-                    fontWeight: '600', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.08em',
-                  }}>
-                    Email Address <span style={{ color: '#f87171' }}>*</span>
-                  </label>
-                  <input
-                    type="email" value={editEmail} required
-                    onChange={(e) => setEditEmail(e.target.value)}
-                    placeholder="venue@example.com"
-                    style={{
-                      width: '100%', padding: '0.75rem', borderRadius: '8px',
-                      border: '1px solid #1a3a5c', background: 'rgba(255,255,255,0.03)',
-                      color: '#f0f9ff', fontSize: '1rem', outline: 'none',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
+      {/* Booking Contact */}
+      <td className="vl-td" style={{ minWidth: 160 }}>
+        <EditableCell field="booking_contact" value={venue.booking_contact} placeholder="Add contact" />
+      </td>
 
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <label style={{
-                    display: 'block', color: '#7db8d4', marginBottom: '0.5rem',
-                    fontWeight: '600', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.08em',
-                  }}>
-                    Phone Number (Optional)
-                  </label>
-                  <input
-                    type="tel" value={editPhone}
-                    onChange={(e) => setEditPhone(e.target.value)}
-                    placeholder="(555) 123-4567"
-                    style={{
-                      width: '100%', padding: '0.75rem', borderRadius: '8px',
-                      border: '1px solid #1a3a5c', background: 'rgba(255,255,255,0.03)',
-                      color: '#f0f9ff', fontSize: '1rem', outline: 'none',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                  <button
-                    type="button" onClick={() => setShowEditModal(false)} disabled={saving}
-                    style={{
-                      flex: 1, padding: '0.875rem',
-                      background: 'transparent', color: '#7db8d4',
-                      border: '1px solid rgba(56,189,248,0.3)', borderRadius: '8px',
-                      cursor: saving ? 'not-allowed' : 'pointer',
-                      fontWeight: '600', fontSize: '1rem',
-                    }}
-                  >Cancel</button>
-                  <button
-                    type="submit" disabled={saving}
-                    style={{
-                      flex: 1, padding: '0.875rem',
-                      background: saving ? '#1a3a5c' : 'linear-gradient(135deg, #38bdf8, #0ea5e9)',
-                      color: saving ? '#7db8d4' : '#05111f',
-                      border: 'none', borderRadius: '8px',
-                      cursor: saving ? 'not-allowed' : 'pointer',
-                      fontWeight: '700', fontSize: '1rem',
-                      boxShadow: saving ? 'none' : '0 4px 14px rgba(56,189,248,0.35)',
-                    }}
-                  >
-                    {saving ? 'Saving...' : '💾 Save Email'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-      </div>
-    </>
+      {/* Notes */}
+      <td className="vl-td" style={{ minWidth: 200 }}>
+        <EditableCell field="notes" value={venue.notes} placeholder="Add notes" multiline />
+      </td>
+    </tr>
   );
 }
