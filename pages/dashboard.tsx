@@ -55,10 +55,10 @@ export default function DashboardPage() {
     { id: 'dashboard',      label: 'Dashboard'       },
     { id: 'campaigns',      label: 'Runs & Tours'     },
     { id: 'venue-database', label: 'Venue Search'     },
-    { id: 'contact-info',   label: 'Contact Info'     },
     { id: 'emails',         label: 'Email Templates'  },
     { id: 'social',         label: 'Social Media'     },
     { id: 'calendar',       label: 'Calendar'         },
+    { id: 'contact-info',   label: 'Venue List'       },
   ];
 
   // ─── Loading state ───────────────────────────────────────────────────────────
