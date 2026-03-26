@@ -72,6 +72,7 @@ export default function LandingPage() {
         email:    data.email,
         bandName: data.bandName,
         tier:     data.subscriptionTier,
+        isAdmin:  data.isAdmin || false,
         token:    data.accessToken,
       }));
       router.push('/dashboard');
