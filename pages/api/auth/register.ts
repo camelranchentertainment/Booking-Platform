@@ -47,11 +47,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { error: profileError } = await supabase
       .from('band_profiles')
       .insert({
-        id:               userId,
-        display_name:     name?.trim() || '',
-        band_name:        bandName.trim(),
+        id:                userId,
+        band_name:         bandName.trim(),
+        username:          bandName.trim().toLowerCase().replace(/[^a-z0-9]/g, ''),
         subscription_tier: tier || 'free',
-        created_at:       new Date().toISOString(),
+        is_admin:          false,
       });
 
     // If profile insert fails, clean up the auth user so we don't leave orphans
