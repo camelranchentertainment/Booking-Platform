@@ -12,6 +12,10 @@ export default function Settings() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loaded, setLoaded] = useState(false);
 
+  // Profile (band_profiles table)
+  const [bandName, setBandName] = useState('');
+  const [profileSaveMsg, setProfileSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
   // SMTP Email Configuration
   const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
   const [smtpPort, setSmtpPort] = useState('587');
@@ -39,8 +43,9 @@ export default function Settings() {
       const userData = JSON.parse(loggedInUser);
       setUser(userData);
 
-      // Load settings in parallel - errors are silently ignored so page never hangs
+      // Load all settings in parallel — each handles its own errors so nothing can hang
       await Promise.all([
+        loadProfile(userData.id),
         loadSmtpSettings(userData.id),
         loadCalendarSettings(userData.id),
       ]);
@@ -61,6 +66,41 @@ export default function Settings() {
       console.error('Settings init error:', error);
     } finally {
       setLoaded(true);
+    }
+  };
+
+  const loadProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('band_profiles')
+        .select('band_name')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('Could not load profile:', error.message);
+        return;
+      }
+      if (data) setBandName(data.band_name || '');
+    } catch (error) {
+      console.warn('Profile load failed:', error);
+    }
+  };
+
+  const saveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setProfileSaveMsg(null);
+    try {
+      const { error } = await supabase
+        .from('band_profiles')
+        .update({ band_name: bandName })
+        .eq('id', user.id);
+      if (error) throw error;
+      setProfileSaveMsg({ ok: true, text: '✓ Profile saved!' });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      setProfileSaveMsg({ ok: false, text: `✗ ${msg}` });
     }
   };
 
@@ -223,7 +263,50 @@ export default function Settings() {
           Settings
         </h1>
 
-        {/* Email Configuration - shown first, most important */}
+        {/* Profile */}
+        <div style={cardStyle}>
+          <h2 style={{ color: '#e8f1f8', fontSize: '1.8rem', marginBottom: '1.5rem' }}>
+            Profile
+          </h2>
+
+          {profileSaveMsg && (
+            <div style={{
+              padding: '0.75rem 1rem',
+              marginBottom: '1.5rem',
+              borderRadius: '8px',
+              background: profileSaveMsg.ok ? 'rgba(34,197,94,0.1)' : 'rgba(248,113,113,0.1)',
+              border: `1px solid ${profileSaveMsg.ok ? 'rgba(34,197,94,0.3)' : 'rgba(248,113,113,0.3)'}`,
+              color: profileSaveMsg.ok ? '#22c55e' : '#f87171',
+              fontWeight: 600, fontSize: 14,
+            }}>
+              {profileSaveMsg.text}
+            </div>
+          )}
+
+          <form onSubmit={saveProfile}>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={labelStyle}>Band / Artist Name</label>
+              <input
+                type="text"
+                value={bandName}
+                onChange={(e) => setBandName(e.target.value)}
+                placeholder="Your Band Name"
+                required
+                style={inputStyle}
+              />
+            </div>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ ...labelStyle, color: '#7aa5c4', fontWeight: 400 }}>
+                Account Email: {user.email}
+              </label>
+            </div>
+            <button type="submit" style={btnStyle}>
+              Save Profile
+            </button>
+          </form>
+        </div>
+
+        {/* Email Configuration - shown prominently */}
         <div style={cardStyle}>
           <h2 style={{ color: '#e8f1f8', fontSize: '1.8rem', marginBottom: '0.5rem' }}>
             📧 Email Configuration
@@ -425,7 +508,7 @@ export default function Settings() {
               ) : (
                 <button
                   onClick={() => {
-                    window.location.href = '/api/auth/google-calendar';
+                    window.location.href = `/api/auth/google?userId=${user.id}`;
                   }}
                   style={{
                     padding: '8px 20px',
