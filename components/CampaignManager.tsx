@@ -31,7 +31,15 @@ interface CampaignVenue {
     email?: string;
     website?: string;
     venue_type?: string;
+    booking_contact?: string;
   };
+}
+
+interface EmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
@@ -56,6 +64,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
   const [isDiscovering, setIsDiscovering]     = useState(false);
   const [showCreate, setShowCreate]           = useState(false);
   const [statusMenuOpen, setStatusMenuOpen]   = useState<string | null>(null);
+  const [detailVenue, setDetailVenue]         = useState<CampaignVenue | null>(null);
 
   // ── Discovery selection state ────────────────────────────────────────────
   const [showDiscoveryModal, setShowDiscoveryModal] = useState(false);
@@ -109,7 +118,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
     setSelectedCampaign(campaign);
     const { data } = await supabase
       .from('campaign_venues')
-      .select(`id, status, venue:venues(id, name, city, state, address, phone, email, website, venue_type)`)
+      .select(`id, status, venue:venues(id, name, city, state, address, phone, email, website, venue_type, booking_contact)`)
       .eq('campaign_id', campaign.id)
       .order('status');
     setCampaignVenues((data as unknown as CampaignVenue[]) || []);
@@ -203,6 +212,19 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
     if (!confirm('Remove this venue from the run?')) return;
     await supabase.from('campaign_venues').delete().eq('id', cvId);
     if (selectedCampaign) openCampaignDetail(selectedCampaign);
+  };
+
+  // ── Detail panel callbacks ────────────────────────────────────────────────
+  const handleDetailStatusChange = async (cvId: string, status: string) => {
+    await updateStatus(cvId, status);
+    setDetailVenue(prev => prev?.id === cvId ? { ...prev, status } : prev);
+  };
+
+  const handleContactSaved = (venueId: string, patch: Record<string, string | null>) => {
+    const applyPatch = (cv: CampaignVenue) =>
+      cv.venue.id === venueId ? { ...cv, venue: { ...cv.venue, ...patch } } : cv;
+    setCampaignVenues(prev => prev.map(applyPatch));
+    setDetailVenue(prev => prev ? applyPatch(prev) : null);
   };
 
   const deleteCampaign = async (id: string, name: string) => {
@@ -363,6 +385,31 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
           content:'✓'; position:absolute; top:50%; left:50%;
           transform:translate(-50%,-50%);
           color:#e8f1f8; font-size:11px; font-weight:800;
+        }
+        /* ── Labels ── */
+        .cm-label {
+          display:block; color:#3d6285; font-size:11px;
+          font-weight:800; text-transform:uppercase;
+          letter-spacing:0.08em; margin-bottom:5px;
+        }
+        /* ── Venue detail slide-out ── */
+        @keyframes slideInRight {
+          from { transform: translateX(100%); }
+          to   { transform: translateX(0); }
+        }
+        .vdp-row {
+          display:flex; gap:10px; align-items:flex-start;
+          padding:10px 0; border-bottom:1px solid rgba(74,133,200,0.07);
+        }
+        .vdp-row:last-child { border-bottom:none; }
+        .vdp-icon { color:#3d6285; font-size:14px; flex-shrink:0; margin-top:1px; width:18px; text-align:center; }
+        .vdp-section {
+          background:rgba(9,24,40,0.8); border:1px solid rgba(74,133,200,0.15);
+          border-radius:12px; padding:1.25rem; margin-bottom:1rem;
+        }
+        .vdp-section-title {
+          color:#ffffff; font-weight:800; font-size:14px;
+          font-family:'Nunito',sans-serif; margin-bottom:1rem;
         }
         @media(max-width:900px) {
           .cm-wrap { padding:1rem; }
@@ -564,6 +611,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
                               setStatusMenuOpen={setStatusMenuOpen}
                               onStatusChange={updateStatus}
                               onRemove={removeVenue}
+                              onOpenDetail={setDetailVenue}
                             />
                           ))}
                           {group.length === 0 && (
@@ -703,6 +751,17 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
         </div>
       )}
 
+      {/* ── Venue Detail Slide-out ───────────────────────────────────────── */}
+      {detailVenue && (
+        <VenueDetailPanel
+          cv={detailVenue}
+          statuses={statuses}
+          onClose={() => setDetailVenue(null)}
+          onStatusChange={handleDetailStatusChange}
+          onContactSaved={handleContactSaved}
+        />
+      )}
+
       {/* ── Create Run Modal ──────────────────────────────────────────────── */}
       {showCreate && (
         <div className="cm-modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowCreate(false); }}>
@@ -809,7 +868,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
 }
 
 // ─── Venue card (kanban) ──────────────────────────────────────────────────────
-function VenueCard({ cv, cfg, statuses, statusMenuOpen, setStatusMenuOpen, onStatusChange, onRemove }: {
+function VenueCard({ cv, cfg, statuses, statusMenuOpen, setStatusMenuOpen, onStatusChange, onRemove, onOpenDetail }: {
   cv: CampaignVenue;
   cfg: { label: string; bg: string; text: string; border: string };
   statuses: string[];
@@ -817,17 +876,25 @@ function VenueCard({ cv, cfg, statuses, statusMenuOpen, setStatusMenuOpen, onSta
   setStatusMenuOpen: (id: string | null) => void;
   onStatusChange: (cvId: string, status: string) => void;
   onRemove: (cvId: string) => void;
+  onOpenDetail: (cv: CampaignVenue) => void;
 }) {
   const isOpen = statusMenuOpen === cv.id;
   return (
     <div style={{ background:'rgba(9,24,40,0.85)', border:'1px solid rgba(74,133,200,0.1)',
       borderRadius:10, padding:'12px 14px',
-      transition:'border-color .15s', position:'relative' }}
-      onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(74,133,200,0.28)')}
-      onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(74,133,200,0.1)')}>
+      transition:'border-color .15s, box-shadow .15s', position:'relative', cursor:'pointer' }}
+      onClick={() => onOpenDetail(cv)}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = 'rgba(74,133,200,0.35)';
+        e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = 'rgba(74,133,200,0.1)';
+        e.currentTarget.style.boxShadow = 'none';
+      }}>
 
       {/* Remove */}
-      <button onClick={() => onRemove(cv.id)}
+      <button onClick={e => { e.stopPropagation(); onRemove(cv.id); }}
         style={{ position:'absolute', top:8, right:8, background:'transparent',
           border:'none', color:'#3d6285', fontSize:14, cursor:'pointer',
           lineHeight:1, padding:'2px 5px', borderRadius:4,
@@ -860,7 +927,7 @@ function VenueCard({ cv, cfg, statuses, statusMenuOpen, setStatusMenuOpen, onSta
       <div style={{ position:'relative', display:'inline-block' }}>
         <button className="cm-status"
           style={{ background:cfg.bg, color:cfg.text, borderColor:cfg.border }}
-          onClick={() => setStatusMenuOpen(isOpen ? null : cv.id)}>
+          onClick={e => { e.stopPropagation(); setStatusMenuOpen(isOpen ? null : cv.id); }}>
           {cfg.label} <span style={{ fontSize:9 }}>▼</span>
         </button>
         {isOpen && (
@@ -887,10 +954,408 @@ function VenueCard({ cv, cfg, statuses, statusMenuOpen, setStatusMenuOpen, onSta
         <a href={cv.venue.website} target="_blank" rel="noopener noreferrer"
           style={{ display:'block', color:'#4a85c8', fontSize:11,
             marginTop:8, textDecoration:'none' }}
-          onClick={e => e.stopPropagation()}>
+          onClick={e => { e.stopPropagation(); }}>
           Website ↗
         </a>
       )}
+      {/* Click hint */}
+      <div style={{ color:'#3d6285', fontSize:10, fontWeight:600, marginTop:8, textAlign:'right' }}>
+        View details →
+      </div>
     </div>
+  );
+}
+
+// ─── Venue Detail Slide-out Panel ─────────────────────────────────────────────
+function VenueDetailPanel({
+  cv, statuses, onClose, onStatusChange, onContactSaved,
+}: {
+  cv: CampaignVenue;
+  statuses: string[];
+  onClose: () => void;
+  onStatusChange: (cvId: string, status: string) => Promise<void>;
+  onContactSaved: (venueId: string, patch: Record<string, string | null>) => void;
+}) {
+  const [mode, setMode] = useState<'view' | 'edit' | 'email'>('view');
+  const [editFields, setEditFields] = useState({
+    email:           cv.venue.email           || '',
+    phone:           cv.venue.phone           || '',
+    booking_contact: cv.venue.booking_contact || '',
+  });
+  const [saving, setSaving]       = useState(false);
+  const [copied, setCopied]       = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+
+  // Email compose
+  const [templates, setTemplates]           = useState<EmailTemplate[]>([]);
+  const [selectedTpl, setSelectedTpl]       = useState('');
+  const [emailSubject, setEmailSubject]     = useState('');
+  const [emailBody, setEmailBody]           = useState('');
+  const [sending, setSending]               = useState(false);
+  const [emailSent, setEmailSent]           = useState(false);
+
+  // Keep editFields in sync if cv.venue changes (e.g. after a save in another session)
+  useEffect(() => {
+    setEditFields({
+      email:           cv.venue.email           || '',
+      phone:           cv.venue.phone           || '',
+      booking_contact: cv.venue.booking_contact || '',
+    });
+  }, [cv.venue.email, cv.venue.phone, cv.venue.booking_contact]);
+
+  // Load templates the first time email mode opens
+  useEffect(() => {
+    if (mode !== 'email' || templates.length > 0) return;
+    supabase
+      .from('email_templates')
+      .select('id,name,subject,body')
+      .then(({ data }) => setTemplates((data as EmailTemplate[]) || []));
+  }, [mode, templates.length]);
+
+  // Pre-fill subject/body when a template is selected
+  useEffect(() => {
+    if (!selectedTpl) return;
+    const t = templates.find(t => t.id === selectedTpl);
+    if (!t) return;
+    const fill = (s: string) => s
+      .replace(/\{\{venue_name\}\}/gi, cv.venue.name)
+      .replace(/\{\{city\}\}/gi,       cv.venue.city)
+      .replace(/\{\{state\}\}/gi,      cv.venue.state);
+    setEmailSubject(fill(t.subject || ''));
+    setEmailBody(fill(t.body || ''));
+  }, [selectedTpl, templates, cv.venue.name, cv.venue.city, cv.venue.state]);
+
+  const saveContact = async () => {
+    setSaving(true);
+    try {
+      const patch = {
+        email:           editFields.email.trim()           || null,
+        phone:           editFields.phone.trim()           || null,
+        booking_contact: editFields.booking_contact.trim() || null,
+      };
+      const { error } = await supabase
+        .from('venues')
+        .update(patch)
+        .eq('id', cv.venue.id);
+      if (error) throw error;
+      onContactSaved(cv.venue.id, patch);
+      setMode('view');
+    } catch (err) {
+      console.error('Error saving contact info:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sendEmail = async () => {
+    if (!cv.venue.email || !emailSubject.trim() || !emailBody.trim()) return;
+    setSending(true);
+    try {
+      const stored = JSON.parse(localStorage.getItem('loggedInUser') || '{}');
+      const res = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(stored.token ? { Authorization: `Bearer ${stored.token}` } : {}),
+        },
+        body: JSON.stringify({
+          to: cv.venue.email,
+          subject: emailSubject,
+          body: emailBody,
+          venueId: cv.venue.id,
+          userId: stored.id,
+        }),
+      });
+      if (!res.ok) throw new Error('Send failed');
+      setEmailSent(true);
+      setTimeout(() => setEmailSent(false), 4000);
+    } catch (err) {
+      console.error('Error sending email:', err);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const copyEmail = () => {
+    if (!cv.venue.email) return;
+    navigator.clipboard.writeText(cv.venue.email);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const cfg = STATUS_CONFIG[cv.status] || STATUS_CONFIG['contact?'];
+  const v   = cv.venue;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 300,
+        background: 'rgba(3,13,24,0.65)', backdropFilter: 'blur(4px)',
+      }} onClick={onClose} />
+
+      {/* Panel */}
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0,
+        width: 'min(480px, 100vw)',
+        background: '#070f1c',
+        borderLeft: '1px solid rgba(74,133,200,0.2)',
+        zIndex: 301,
+        overflowY: 'auto',
+        padding: '1.5rem',
+        boxShadow: '-32px 0 80px rgba(0,0,0,0.6)',
+        animation: 'slideInRight 0.22s ease-out',
+        fontFamily: "'Nunito', sans-serif",
+      }}>
+
+        {/* ── Top bar: status + close ── */}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' }}>
+          <div style={{ position:'relative' }}>
+            <button className="cm-status"
+              style={{ background:cfg.bg, color:cfg.text, borderColor:cfg.border }}
+              onClick={() => setStatusOpen(o => !o)}>
+              {cfg.label} <span style={{ fontSize:9 }}>▼</span>
+            </button>
+            {statusOpen && (
+              <>
+                <div style={{ position:'fixed', inset:0, zIndex:350 }}
+                  onClick={() => setStatusOpen(false)} />
+                <div className="cm-status-menu" style={{ zIndex:351 }}>
+                  {statuses.map(s => {
+                    const c = STATUS_CONFIG[s];
+                    return (
+                      <button key={s} className="cm-status-opt" style={{ color:c.text }}
+                        onClick={() => { onStatusChange(cv.id, s); setStatusOpen(false); }}>
+                        {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+          <button onClick={onClose}
+            style={{ background:'transparent', border:'1px solid rgba(74,133,200,0.2)',
+              borderRadius:8, color:'#6baed6', fontSize:18, cursor:'pointer',
+              padding:'4px 10px', lineHeight:1, transition:'background .15s' }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(248,113,113,0.12)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+            ✕
+          </button>
+        </div>
+
+        {/* ── Venue name ── */}
+        <div style={{ marginBottom:'1.25rem' }}>
+          <h2 style={{ fontFamily:"'Bebas Neue',cursive", fontWeight:400,
+            fontSize:'clamp(1.7rem,4vw,2.2rem)', letterSpacing:'0.06em',
+            color:'#ffffff', margin:'0 0 4px', lineHeight:1.1 }}>
+            {v.name}
+          </h2>
+          {v.venue_type && (
+            <div style={{ color:'#3d6285', fontSize:12, fontWeight:700,
+              textTransform:'capitalize' }}>
+              {v.venue_type}
+            </div>
+          )}
+        </div>
+
+        {/* ── Contact info rows ── */}
+        <div style={{ marginBottom:'1.25rem' }}>
+          {/* Address */}
+          {(v.address || v.city) && (
+            <div className="vdp-row">
+              <span className="vdp-icon">📍</span>
+              <div style={{ color:'#e8f1f8', fontSize:13, fontWeight:600, lineHeight:1.5 }}>
+                {v.address && <div>{v.address}</div>}
+                <div>{v.city}, {v.state}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Phone */}
+          {v.phone && (
+            <div className="vdp-row">
+              <span className="vdp-icon">📞</span>
+              <a href={`tel:${v.phone}`}
+                style={{ color:'#6baed6', fontSize:13, fontWeight:600, textDecoration:'none' }}>
+                {v.phone}
+              </a>
+            </div>
+          )}
+
+          {/* Website */}
+          {v.website && (
+            <div className="vdp-row">
+              <span className="vdp-icon">🌐</span>
+              <a href={v.website} target="_blank" rel="noopener noreferrer"
+                style={{ color:'#4a85c8', fontSize:13, fontWeight:600, textDecoration:'none',
+                  wordBreak:'break-all' }}>
+                {v.website.replace(/^https?:\/\/(www\.)?/, '')} ↗
+              </a>
+            </div>
+          )}
+
+          {/* Email with copy button */}
+          <div className="vdp-row">
+            <span className="vdp-icon">✉️</span>
+            {v.email ? (
+              <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, flexWrap:'wrap' }}>
+                <span style={{ color:'#22c55e', fontSize:13, fontWeight:600 }}>{v.email}</span>
+                <button onClick={copyEmail}
+                  style={{
+                    background: copied ? 'rgba(34,197,94,0.15)' : 'rgba(74,133,200,0.1)',
+                    border: `1px solid ${copied ? 'rgba(34,197,94,0.3)' : 'rgba(74,133,200,0.2)'}`,
+                    borderRadius:6, color: copied ? '#22c55e' : '#6baed6',
+                    fontSize:11, fontWeight:700, cursor:'pointer',
+                    padding:'3px 10px', transition:'all .15s',
+                    fontFamily:"'Nunito',sans-serif",
+                  }}>
+                  {copied ? '✓ Copied' : 'Copy'}
+                </button>
+              </div>
+            ) : (
+              <span style={{ color:'#3d6285', fontSize:13, fontStyle:'italic' }}>No email on file</span>
+            )}
+          </div>
+
+          {/* Booking contact */}
+          {v.booking_contact && (
+            <div className="vdp-row">
+              <span className="vdp-icon">👤</span>
+              <span style={{ color:'#e8f1f8', fontSize:13, fontWeight:600 }}>{v.booking_contact}</span>
+            </div>
+          )}
+        </div>
+
+        {/* ── Action buttons (view mode only) ── */}
+        {mode === 'view' && (
+          <div style={{ display:'flex', gap:10, marginBottom:'1.25rem' }}>
+            <button className="cm-btn-ghost" style={{ flex:1 }}
+              onClick={() => setMode('edit')}>
+              ✏️ Edit Contact
+            </button>
+            <button
+              style={{
+                flex:1, padding:'8px 14px', borderRadius:8, border:'none',
+                background: v.email ? 'linear-gradient(135deg,#3a7fc1,#2563a8)' : 'rgba(74,133,200,0.08)',
+                color: v.email ? '#e8f1f8' : '#3d6285',
+                fontFamily:"'Nunito',sans-serif", fontSize:13, fontWeight:800,
+                cursor: v.email ? 'pointer' : 'not-allowed',
+                boxShadow: v.email ? '0 4px 14px rgba(37,99,168,0.3)' : 'none',
+                transition:'all .15s',
+              }}
+              onClick={() => { if (v.email) setMode('email'); }}
+              title={!v.email ? 'Add an email address first' : undefined}>
+              ✉ Send Email
+            </button>
+          </div>
+        )}
+
+        {/* ── Edit contact form ── */}
+        {mode === 'edit' && (
+          <div className="vdp-section">
+            <div className="vdp-section-title">Edit Contact Info</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+              <div>
+                <label className="cm-label">Email</label>
+                <input className="cm-input" type="email" placeholder="booking@venue.com"
+                  value={editFields.email}
+                  onChange={e => setEditFields(p => ({ ...p, email: e.target.value }))} />
+              </div>
+              <div>
+                <label className="cm-label">Phone</label>
+                <input className="cm-input" type="tel" placeholder="(555) 555-5555"
+                  value={editFields.phone}
+                  onChange={e => setEditFields(p => ({ ...p, phone: e.target.value }))} />
+              </div>
+              <div>
+                <label className="cm-label">Booking Contact</label>
+                <input className="cm-input" placeholder="Name or role"
+                  value={editFields.booking_contact}
+                  onChange={e => setEditFields(p => ({ ...p, booking_contact: e.target.value }))} />
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:8, marginTop:'1rem' }}>
+              <button className="cm-btn-ghost" style={{ flex:1 }} onClick={() => setMode('view')}>
+                Cancel
+              </button>
+              <button className="cm-btn-primary" style={{ flex:2 }}
+                onClick={saveContact} disabled={saving}>
+                {saving ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Email compose ── */}
+        {mode === 'email' && (
+          <div className="vdp-section">
+            <div className="vdp-section-title">Send Email · <span style={{ color:'#22c55e', fontWeight:700 }}>{v.email}</span></div>
+
+            {templates.length > 0 && (
+              <div style={{ marginBottom:12 }}>
+                <label className="cm-label">Template</label>
+                <select className="cm-select" style={{ width:'100%' }}
+                  value={selectedTpl}
+                  onChange={e => setSelectedTpl(e.target.value)}>
+                  <option value="">— Start from scratch —</option>
+                  {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div style={{ marginBottom:12 }}>
+              <label className="cm-label">Subject</label>
+              <input className="cm-input" placeholder="Subject line"
+                value={emailSubject}
+                onChange={e => setEmailSubject(e.target.value)} />
+            </div>
+
+            <div style={{ marginBottom:12 }}>
+              <label className="cm-label">Message</label>
+              <textarea className="cm-input"
+                value={emailBody}
+                onChange={e => setEmailBody(e.target.value)}
+                rows={9}
+                style={{ resize:'vertical', minHeight:140 }}
+                placeholder="Your message here…" />
+            </div>
+
+            {emailSent && (
+              <div style={{
+                background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.25)',
+                borderRadius:8, padding:'8px 12px', marginBottom:10,
+                color:'#22c55e', fontSize:13, fontWeight:700,
+              }}>
+                ✓ Email sent successfully!
+              </div>
+            )}
+
+            <div style={{ display:'flex', gap:8 }}>
+              <button className="cm-btn-ghost" style={{ flex:1 }} onClick={() => setMode('view')}>
+                Cancel
+              </button>
+              <button
+                disabled={sending || !emailSubject.trim() || !emailBody.trim()}
+                onClick={sendEmail}
+                style={{
+                  flex:2, padding:'10px', border:'none', borderRadius:9,
+                  background: (!emailSubject.trim() || !emailBody.trim())
+                    ? 'rgba(37,99,168,0.2)'
+                    : 'linear-gradient(135deg,#3a7fc1,#2563a8)',
+                  color:'#e8f1f8',
+                  fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:14,
+                  cursor: (sending || !emailSubject.trim() || !emailBody.trim()) ? 'not-allowed' : 'pointer',
+                  opacity: (sending || !emailSubject.trim() || !emailBody.trim()) ? 0.55 : 1,
+                  boxShadow: (!emailSubject.trim() || !emailBody.trim()) ? 'none' : '0 4px 16px rgba(37,99,168,0.35)',
+                  transition:'all .15s',
+                }}>
+                {sending ? 'Sending…' : 'Send Email'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }

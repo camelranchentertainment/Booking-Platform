@@ -67,10 +67,15 @@ async function fetchPage(url: string, timeoutMs = 8000): Promise<string | null> 
         'Accept': 'text/html,application/xhtml+xml',
       },
     });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    // Limit read to 500 KB to avoid giant pages
+    // BUG FIX: clear timer AFTER body read, not after headers.
+    // A server can send headers fast then stall on the body — without this
+    // the abort never fires and the process hangs indefinitely.
+    if (!res.ok) {
+      clearTimeout(timer);
+      return null;
+    }
     const text = await res.text();
+    clearTimeout(timer);
     return text.slice(0, 512_000);
   } catch {
     return null;
@@ -88,7 +93,10 @@ async function scrapeWebsiteForEmail(rawUrl: string): Promise<string | null> {
 
   for (const path of paths) {
     const html = await fetchPage(`${base}${path}`);
-    if (!html) continue;
+    if (!html) {
+      await pause(150); // BUG FIX: rate-limit even on failures; prevents rapid-fire 404 hammering
+      continue;
+    }
     const ranked = rankEmails(extractEmails(html));
     if (ranked.length > 0) return ranked[0];
     await pause(250);
@@ -118,8 +126,10 @@ async function getWebsiteFromGooglePlaces(name: string, city: string, state: str
 }
 
 async function getFacebookEmail(venueName: string): Promise<string | null> {
-  // Best-effort: try common Facebook URL slugs from venue name
-  const slug = venueName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  // Best-effort: try common Facebook URL slugs from venue name.
+  // BUG FIX: Facebook slugs use hyphens, not empty-collapsed strings.
+  // "Billy's Bar & Grill" → "billys-bar-grill", not "billysbarandgrill"
+  const slug = venueName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const candidates = [
     `https://www.facebook.com/${slug}/about`,
     `https://www.facebook.com/pg/${slug}/about`,
@@ -201,19 +211,30 @@ async function runEnrichmentJob(): Promise<void> {
           await pause(350);
         }
 
-        // 4. Persist — non-destructive: only update if email is still null
-        if (foundEmail || foundWebsite) {
-          const patch: Record<string, string> = {};
-          if (foundEmail) patch.email = foundEmail;
-          if (foundWebsite && !venue.website) patch.website = foundWebsite;
-
+        // 4. Persist — non-destructive, two separate updates so each guard is scoped correctly.
+        //
+        // BUG FIX (was combined): applying .is('email', null) to a combined patch containing
+        // {email, website} meant the website was never saved if the venue already had an email.
+        //
+        // BUG FIX (found counter): only increment after confirming the row was actually written,
+        // not unconditionally — another process may have set the email since our snapshot.
+        if (foundEmail) {
+          // .select('id') returns the rows actually updated.
+          // When IS NULL prevents the write, data will be an empty array.
+          const { data: written, error: emailErr } = await supabase
+            .from('venues')
+            .update({ email: foundEmail })
+            .eq('id', venue.id)
+            .is('email', null) // non-destructive guard: skip if email filled since snapshot
+            .select('id');
+          if (!emailErr && written && written.length > 0) enrichmentState.found++;
+        }
+        if (foundWebsite) {
           await supabase
             .from('venues')
-            .update(patch)
+            .update({ website: foundWebsite })
             .eq('id', venue.id)
-            .is('email', null); // guard: never overwrite an email set since job started
-
-          if (foundEmail) enrichmentState.found++;
+            .is('website', null); // non-destructive: skip if website already present
         }
 
         enrichmentState.processed++;
