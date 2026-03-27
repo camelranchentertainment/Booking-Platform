@@ -57,6 +57,12 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
   const [showCreate, setShowCreate]           = useState(false);
   const [statusMenuOpen, setStatusMenuOpen]   = useState<string | null>(null);
 
+  // ── Discovery selection state ────────────────────────────────────────────
+  const [showDiscoveryModal, setShowDiscoveryModal] = useState(false);
+  const [discoveredPool, setDiscoveredPool]         = useState<any[]>([]);
+  const [selectedVenueIds, setSelectedVenueIds]     = useState<Set<string>>(new Set());
+  const [addingVenues, setAddingVenues]             = useState(false);
+
   const [newRun, setNewRun] = useState({
     name: '',
     date_range_start: '',
@@ -141,24 +147,49 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
     } catch (err) { console.error(err); }
   };
 
-  // ── Discover venues ──────────────────────────────────────────────────────
+  // ── Discover venues — fetch only, show selection modal ─────────────────
   const discoverVenues = async () => {
     if (!selectedCampaign) return;
     setIsDiscovering(true);
     try {
-      const res = await fetch(`/api/campaigns/${selectedCampaign.id}/discover-venues`, { method: 'POST' });
+      const res    = await fetch(`/api/campaigns/${selectedCampaign.id}/discover-venues`, { method: 'POST' });
       const result = await res.json();
-      if (result.venues) {
-        const toInsert = result.venues
-          .filter((v: any) => !v.in_campaign)
-          .map((v: any) => ({ campaign_id: selectedCampaign.id, venue_id: v.id, status: 'contact?' }));
-        if (toInsert.length > 0) {
-          await supabase.from('campaign_venues').upsert(toInsert, { onConflict: 'campaign_id,venue_id' });
+
+      if (result.venues?.length) {
+        // Filter out venues already in this run
+        const newOnes = result.venues.filter((v: any) => !v.in_campaign);
+        if (newOnes.length === 0) {
+          alert('No new venues found that aren\'t already in this run.');
+          return;
         }
+        // Pre-select all by default so user just unchecks what they don't want
+        setDiscoveredPool(newOnes);
+        setSelectedVenueIds(new Set(newOnes.map((v: any) => v.id)));
+        setShowDiscoveryModal(true);
+      } else {
+        alert('No venues found for the cities in this run. Try expanding the radius or adding more cities.');
       }
-      await openCampaignDetail(selectedCampaign);
     } catch (err) { console.error(err); }
     finally { setIsDiscovering(false); }
+  };
+
+  // ── Confirm adding selected venues to run ────────────────────────────────
+  const confirmAddVenues = async () => {
+    if (!selectedCampaign || selectedVenueIds.size === 0) return;
+    setAddingVenues(true);
+    try {
+      const toInsert = Array.from(selectedVenueIds).map(venueId => ({
+        campaign_id: selectedCampaign.id,
+        venue_id:    venueId,
+        status:      'contact?',
+      }));
+      await supabase.from('campaign_venues').upsert(toInsert, { onConflict: 'campaign_id,venue_id' });
+      setShowDiscoveryModal(false);
+      setDiscoveredPool([]);
+      setSelectedVenueIds(new Set());
+      await openCampaignDetail(selectedCampaign);
+    } catch (err) { console.error(err); }
+    finally { setAddingVenues(false); }
   };
 
   // ── Venue actions ────────────────────────────────────────────────────────
@@ -310,9 +341,28 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
           letter-spacing:0.1em; padding:0 4px 10px;
           border-bottom:1px solid rgba(74,133,200,0.1); margin-bottom:10px;
         }
-        label.cm-label {
-          display:block; color:#7aa5c4; font-size:12px;
-          font-weight:700; margin-bottom:6px; letter-spacing:0.04em;
+        /* ── Discovery modal ── */
+        .disc-row {
+          display:flex; align-items:center; gap:12px;
+          padding:11px 14px;
+          background:rgba(9,24,40,0.7);
+          border:1px solid rgba(74,133,200,0.08);
+          border-radius:10px; cursor:pointer;
+          transition:background .15s, border-color .15s;
+        }
+        .disc-row:hover { background:rgba(9,24,40,1); border-color:rgba(74,133,200,0.25); }
+        .disc-row.selected { border-color:rgba(74,133,200,0.4); background:rgba(58,127,193,0.07); }
+        .disc-checkbox {
+          width:18px; height:18px; border-radius:5px;
+          border:2px solid rgba(74,133,200,0.4);
+          background:rgba(9,24,40,0.9); appearance:none;
+          cursor:pointer; flex-shrink:0; transition:all .15s; position:relative;
+        }
+        .disc-checkbox:checked { background:#3a7fc1; border-color:#3a7fc1; }
+        .disc-checkbox:checked::after {
+          content:'✓'; position:absolute; top:50%; left:50%;
+          transform:translate(-50%,-50%);
+          color:#e8f1f8; font-size:11px; font-weight:800;
         }
         @media(max-width:900px) {
           .cm-wrap { padding:1rem; }
@@ -530,6 +580,128 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
           )}
         </div>
       </div>
+
+      {/* ── Discovery Selection Modal ─────────────────────────────────── */}
+      {showDiscoveryModal && selectedCampaign && (
+        <div className="cm-modal-overlay"
+          onClick={e => { if (e.target === e.currentTarget) setShowDiscoveryModal(false); }}>
+          <div className="cm-modal" style={{ maxWidth: 620 }}>
+
+            {/* Header */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <h2 style={{ fontFamily:"'Bebas Neue',cursive", fontWeight:400,
+                fontSize:'1.8rem', letterSpacing:'0.06em',
+                color:'#ffffff', margin:'0 0 4px' }}>
+                Select Venues to Add
+              </h2>
+              <p style={{ color:'#3d6285', fontSize:13, fontWeight:600, margin:0 }}>
+                {discoveredPool.length} venue{discoveredPool.length !== 1 ? 's' : ''} found ·{' '}
+                <span style={{ color: selectedVenueIds.size > 0 ? '#22c55e' : '#3d6285' }}>
+                  {selectedVenueIds.size} selected
+                </span>
+              </p>
+            </div>
+
+            {/* Select all / none */}
+            <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+              <button className="cm-btn-ghost" style={{ padding:'5px 14px', fontSize:12 }}
+                onClick={() => setSelectedVenueIds(new Set(discoveredPool.map((v:any) => v.id)))}>
+                Select All
+              </button>
+              <button className="cm-btn-ghost" style={{ padding:'5px 14px', fontSize:12 }}
+                onClick={() => setSelectedVenueIds(new Set())}>
+                Select None
+              </button>
+              {/* Filter by city pills */}
+              <div style={{ marginLeft:'auto', display:'flex', gap:6, flexWrap:'wrap' }}>
+                {Array.from(new Set(discoveredPool.map((v:any) => v.city))).slice(0,4).map((city:any) => (
+                  <span key={city} style={{
+                    background:'rgba(74,133,200,0.08)',
+                    border:'1px solid rgba(74,133,200,0.18)',
+                    borderRadius:99, padding:'2px 10px',
+                    color:'#6baed6', fontSize:11, fontWeight:700,
+                  }}>{city}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* Venue list */}
+            <div style={{ maxHeight: 400, overflowY:'auto',
+              display:'flex', flexDirection:'column', gap:7,
+              marginBottom:16,
+              paddingRight:4 }}>
+              {discoveredPool.map((venue: any) => {
+                const checked = selectedVenueIds.has(venue.id);
+                return (
+                  <div key={venue.id}
+                    className={`disc-row${checked ? ' selected' : ''}`}
+                    onClick={() => setSelectedVenueIds(prev => {
+                      const next = new Set(prev);
+                      next.has(venue.id) ? next.delete(venue.id) : next.add(venue.id);
+                      return next;
+                    })}>
+                    <input type="checkbox" className="disc-checkbox"
+                      checked={checked} readOnly
+                      onClick={e => e.stopPropagation()} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ color:'#ffffff', fontWeight:800, fontSize:13,
+                        whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                        {venue.name}
+                      </div>
+                      <div style={{ color:'#3d6285', fontSize:11, fontWeight:600, marginTop:1 }}>
+                        {venue.city}, {venue.state}
+                        {venue.venue_type && ` · ${venue.venue_type}`}
+                      </div>
+                    </div>
+                    {/* Contact indicators */}
+                    <div style={{ flexShrink:0, display:'flex', gap:6, alignItems:'center' }}>
+                      {venue.email && (
+                        <span style={{ color:'#22c55e', fontSize:11, fontWeight:700 }}>✉</span>
+                      )}
+                      {venue.phone && (
+                        <span style={{ color:'#4a85c8', fontSize:11, fontWeight:700 }}>☎</span>
+                      )}
+                      {venue.website && (
+                        <span style={{ color:'#3d6285', fontSize:11, fontWeight:700 }}>🌐</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display:'flex', gap:10 }}>
+              <button className="cm-btn-ghost" style={{ flex:1 }}
+                onClick={() => { setShowDiscoveryModal(false); setDiscoveredPool([]); setSelectedVenueIds(new Set()); }}>
+                Cancel
+              </button>
+              <button
+                disabled={selectedVenueIds.size === 0 || addingVenues}
+                onClick={confirmAddVenues}
+                style={{
+                  flex:2, padding:'12px',
+                  background: selectedVenueIds.size === 0
+                    ? 'rgba(34,197,94,0.2)'
+                    : 'linear-gradient(135deg,#16a34a,#15803d)',
+                  border:'none', borderRadius:9,
+                  color:'#e8f1f8',
+                  fontFamily:"'Nunito',sans-serif",
+                  fontWeight:800, fontSize:15,
+                  cursor: selectedVenueIds.size === 0 ? 'not-allowed' : 'pointer',
+                  opacity: selectedVenueIds.size === 0 ? 0.5 : 1,
+                  boxShadow: selectedVenueIds.size > 0 ? '0 4px 16px rgba(22,163,74,0.4)' : 'none',
+                  transition:'all .15s',
+                }}>
+                {addingVenues
+                  ? 'Adding…'
+                  : `Add ${selectedVenueIds.size} Venue${selectedVenueIds.size !== 1 ? 's' : ''} to Run`}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* ── Create Run Modal ──────────────────────────────────────────────── */}
       {showCreate && (
