@@ -34,19 +34,22 @@ interface EnrichStatus {
   };
 }
 
-// Which field is being inline-edited
-interface EditingCell {
+type EditField = 'email' | 'phone' | 'booking_contact' | 'notes';
+
+// Single state object for the active inline edit
+interface ActiveEdit {
   venueId: string;
-  field: 'email' | 'phone' | 'booking_contact' | 'notes';
+  field: EditField;
+  value: string;
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  not_contacted:    { bg: 'rgba(74,133,200,0.1)',  text: '#6baed6',  border: 'rgba(74,133,200,0.25)'  },
-  awaiting_response:{ bg: 'rgba(245,158,11,0.1)',  text: '#f59e0b',  border: 'rgba(245,158,11,0.25)'  },
-  responded:        { bg: 'rgba(167,139,250,0.1)', text: '#a78bfa',  border: 'rgba(167,139,250,0.25)' },
-  booked:           { bg: 'rgba(34,197,94,0.1)',   text: '#22c55e',  border: 'rgba(34,197,94,0.25)'   },
-  declined:         { bg: 'rgba(248,113,113,0.1)', text: '#f87171',  border: 'rgba(248,113,113,0.25)' },
-  no_response:      { bg: 'rgba(100,116,139,0.1)', text: '#94a3b8',  border: 'rgba(100,116,139,0.25)' },
+  not_contacted:     { bg: 'rgba(74,133,200,0.1)',  text: '#6baed6',  border: 'rgba(74,133,200,0.25)'  },
+  awaiting_response: { bg: 'rgba(245,158,11,0.1)',  text: '#f59e0b',  border: 'rgba(245,158,11,0.25)'  },
+  responded:         { bg: 'rgba(167,139,250,0.1)', text: '#a78bfa',  border: 'rgba(167,139,250,0.25)' },
+  booked:            { bg: 'rgba(34,197,94,0.1)',   text: '#22c55e',  border: 'rgba(34,197,94,0.25)'   },
+  declined:          { bg: 'rgba(248,113,113,0.1)', text: '#f87171',  border: 'rgba(248,113,113,0.25)' },
+  no_response:       { bg: 'rgba(100,116,139,0.1)', text: '#94a3b8',  border: 'rgba(100,116,139,0.25)' },
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -58,72 +61,58 @@ const STATUS_LABELS: Record<string, string> = {
   no_response:       'No Response',
 };
 
+// ─── Main component ────────────────────────────────────────────────────────────
+
 export default function VenueContactManager() {
-  const [venues, setVenues]           = useState<Venue[]>([]);
-  const [filtered, setFiltered]       = useState<Venue[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [search, setSearch]           = useState('');
-  const [filterState, setFilterState] = useState('ALL');
+  const [venues, setVenues]             = useState<Venue[]>([]);
+  const [filtered, setFiltered]         = useState<Venue[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [search, setSearch]             = useState('');
+  const [filterState, setFilterState]   = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
-  const [editing, setEditing]         = useState<EditingCell | null>(null);
-  const [editValue, setEditValue]     = useState('');
-  const [saving, setSaving]           = useState(false);
-  const [states, setStates]           = useState<string[]>([]);
-  const inputRef                      = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  const [states, setStates]             = useState<string[]>([]);
+
+  // ── Inline editing ────────────────────────────────────────────────────────
+  const [activeEdit, setActiveEdit]   = useState<ActiveEdit | null>(null);
+  const [savedCell, setSavedCell]     = useState<{ venueId: string; field: EditField } | null>(null);
+
+  // Refs so callbacks are stable (never stale-closed over state)
+  const activeEditRef  = useRef(activeEdit);
+  const venuesRef      = useRef(venues);
+  const committingRef  = useRef(false); // mutex: prevents blur double-commit
+
+  // Keep refs current on every render (synchronous, not in useEffect)
+  activeEditRef.current = activeEdit;
+  venuesRef.current     = venues;
 
   // ── Enrichment state ──────────────────────────────────────────────────────
-  const [enrichStatus, setEnrichStatus] = useState<EnrichStatus | null>(null);
+  const [enrichStatus, setEnrichStatus]     = useState<EnrichStatus | null>(null);
   const [enrichStarting, setEnrichStarting] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchEnrichStatus = useCallback(async () => {
+  // ── Data loading ──────────────────────────────────────────────────────────
+
+  const loadVenues = useCallback(async () => {
     try {
-      const res = await fetch('/api/venues/enrich-status');
-      if (!res.ok) return;
-      const data: EnrichStatus = await res.json();
-      setEnrichStatus(data);
-
-      // If job just finished, reload venues to pick up new emails
-      if (!data.job.running && enrichStatus?.job.running) {
-        loadVenues();
-      }
-
-      // Stop polling when job is done
-      if (!data.job.running && pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    } catch { /* ignore */ }
-  }, [enrichStatus?.job.running]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const startEnrichment = async () => {
-    if (enrichStarting || enrichStatus?.job.running) return;
-    setEnrichStarting(true);
-    try {
-      await fetch('/api/venues/enrich-emails', { method: 'POST' });
-      // Begin polling
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(fetchEnrichStatus, 2000);
-      await fetchEnrichStatus();
-    } catch { /* ignore */ } finally {
-      setEnrichStarting(false);
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('venues')
+        .select('id,name,city,state,address,phone,email,booking_contact,venue_type,contact_status,website,notes')
+        .order('state').order('city').order('name');
+      if (error) throw error;
+      const list = (data || []) as Venue[];
+      setVenues(list);
+      setStates([...new Set(list.map(v => v.state))].sort());
+    } catch (err) {
+      console.error('Error loading venues:', err);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
-  // Fetch status on mount and clean up polling on unmount
-  useEffect(() => {
-    fetchEnrichStatus();
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadVenues(); }, [loadVenues]);
 
-  // Resume polling if a job was already running when component mounted
-  useEffect(() => {
-    if (enrichStatus?.job.running && !pollRef.current) {
-      pollRef.current = setInterval(fetchEnrichStatus, 2000);
-    }
-  }, [enrichStatus?.job.running, fetchEnrichStatus]);
-
-  useEffect(() => { loadVenues(); }, []);
+  // ── Filter ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     let list = [...venues];
@@ -137,72 +126,121 @@ export default function VenueContactManager() {
         (v.booking_contact || '').toLowerCase().includes(q)
       );
     }
-    if (filterState !== 'ALL') list = list.filter(v => v.state === filterState);
+    if (filterState !== 'ALL')  list = list.filter(v => v.state === filterState);
     if (filterStatus !== 'ALL') list = list.filter(v => (v.contact_status || 'not_contacted') === filterStatus);
     setFiltered(list);
   }, [venues, search, filterState, filterStatus]);
 
-  useEffect(() => {
-    if (editing && inputRef.current) inputRef.current.focus();
-  }, [editing]);
+  // ── Inline edit callbacks (all stable — read state via refs) ─────────────
 
-  const loadVenues = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('venues')
-        .select('id,name,city,state,address,phone,email,booking_contact,venue_type,contact_status,website,notes')
-        .order('state').order('city').order('name');
+  const startEdit = useCallback((venueId: string, field: EditField, current: string) => {
+    committingRef.current = false; // reset mutex when opening a new cell
+    setActiveEdit({ venueId, field, value: current });
+  }, []);
 
-      if (error) throw error;
-      const list = data || [];
-      setVenues(list);
-      const uniqueStates = [...new Set(list.map((v: Venue) => v.state))].sort() as string[];
-      setStates(uniqueStates);
-    } catch (err) {
-      console.error('Error loading venues:', err);
-    } finally {
-      setLoading(false);
+  const changeEdit = useCallback((value: string) => {
+    setActiveEdit(prev => prev ? { ...prev, value } : null);
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    committingRef.current = false;
+    setActiveEdit(null);
+  }, []);
+
+  const commitEdit = useCallback(async () => {
+    // Mutex: if a commit is already in flight (e.g. Enter then blur), skip
+    if (committingRef.current) return;
+
+    const edit = activeEditRef.current;
+    if (!edit) return;
+
+    const { venueId, field, value } = edit;
+    const trimmed = value.trim();
+
+    // No-op: value unchanged
+    const original = venuesRef.current.find(v => v.id === venueId);
+    if (!original || (original[field] || '') === trimmed) {
+      setActiveEdit(null);
+      return;
     }
-  };
 
-  // Start editing a cell
-  const startEdit = (venue: Venue, field: EditingCell['field']) => {
-    setEditing({ venueId: venue.id, field });
-    setEditValue((venue[field] as string) || '');
-  };
+    // Acquire mutex and close input immediately so blur can't re-trigger this
+    committingRef.current = true;
+    setActiveEdit(null);
 
-  // Save inline edit on blur or Enter
-  const commitEdit = async () => {
-    if (!editing || saving) return;
-    const { venueId, field } = editing;
-    const current = venues.find(v => v.id === venueId);
-    if (!current) { setEditing(null); return; }
-    // No change
-    if ((current[field] || '') === editValue.trim()) { setEditing(null); return; }
-
-    setSaving(true);
     try {
       const { error } = await supabase
         .from('venues')
-        .update({ [field]: editValue.trim() || null })
+        .update({ [field]: trimmed || null })
         .eq('id', venueId);
       if (error) throw error;
-      setVenues(prev => prev.map(v => v.id === venueId ? { ...v, [field]: editValue.trim() || null } : v));
+
+      setVenues(prev =>
+        prev.map(v => v.id === venueId ? { ...v, [field]: trimmed || null } : v)
+      );
+
+      // Flash green checkmark for 1.5 s
+      setSavedCell({ venueId, field });
+      setTimeout(() => setSavedCell(null), 1500);
     } catch (err) {
       console.error('Save error:', err);
     } finally {
-      setSaving(false);
-      setEditing(null);
+      committingRef.current = false;
     }
-  };
+  }, []); // stable — all reads go through refs
 
-  const updateStatus = async (venueId: string, status: string) => {
+  // ── Status update ─────────────────────────────────────────────────────────
+
+  const updateStatus = useCallback(async (venueId: string, status: string) => {
     try {
       await supabase.from('venues').update({ contact_status: status }).eq('id', venueId);
       setVenues(prev => prev.map(v => v.id === venueId ? { ...v, contact_status: status } : v));
     } catch (err) { console.error('Status update error:', err); }
-  };
+  }, []);
+
+  // ── Enrichment ────────────────────────────────────────────────────────────
+
+  const fetchEnrichStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/venues/enrich-status');
+      if (!res.ok) return;
+      const data: EnrichStatus = await res.json();
+      setEnrichStatus(prev => {
+        if (prev?.job.running && !data.job.running) loadVenues();
+        return data;
+      });
+      if (!data.job.running && pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    } catch { /* ignore */ }
+  }, [loadVenues]);
+
+  const startEnrichment = useCallback(async () => {
+    if (enrichStarting || enrichStatus?.job.running) return;
+    setEnrichStarting(true);
+    try {
+      await fetch('/api/venues/enrich-emails', { method: 'POST' });
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = setInterval(fetchEnrichStatus, 2000);
+      await fetchEnrichStatus();
+    } catch { /* ignore */ } finally {
+      setEnrichStarting(false);
+    }
+  }, [enrichStarting, enrichStatus?.job.running, fetchEnrichStatus]);
+
+  useEffect(() => {
+    fetchEnrichStatus();
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [fetchEnrichStatus]);
+
+  useEffect(() => {
+    if (enrichStatus?.job.running && !pollRef.current) {
+      pollRef.current = setInterval(fetchEnrichStatus, 2000);
+    }
+  }, [enrichStatus?.job.running, fetchEnrichStatus]);
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   const missingEmail = filtered.filter(v => !v.email).length;
 
@@ -303,22 +341,23 @@ export default function VenueContactManager() {
           display: flex; align-items: center;
           transition: background .15s;
           position: relative;
+          user-select: none;
         }
-        .vl-editable:hover {
-          background: rgba(74,133,200,0.1);
-        }
-        .vl-editable.empty {
-          color: #3d6285;
-          font-style: italic;
-        }
+        .vl-editable:hover { background: rgba(74,133,200,0.1); }
+        .vl-editable.empty { color: #3d6285; font-style: italic; }
         .vl-editable.empty:hover::after {
           content: '+ Add';
-          color: #4a85c8;
-          font-style: normal;
-          font-weight: 700;
-          font-size: 12px;
+          color: #4a85c8; font-style: normal;
+          font-weight: 700; font-size: 12px;
           margin-left: 4px;
         }
+        .vl-editable.saved {
+          background: rgba(34,197,94,0.08);
+          border-radius: 6px;
+          transition: background .3s;
+        }
+
+        /* ── Active input ── */
         .vl-input {
           width: 100%;
           background: rgba(9,24,40,0.95);
@@ -330,6 +369,10 @@ export default function VenueContactManager() {
           font-size: 13px;
           outline: none;
           box-shadow: 0 0 0 3px rgba(74,133,200,0.12);
+        }
+        .vl-input:focus {
+          border-color: rgba(74,133,200,0.8);
+          box-shadow: 0 0 0 3px rgba(74,133,200,0.18);
         }
 
         /* ── Status badge ── */
@@ -376,9 +419,7 @@ export default function VenueContactManager() {
           background: rgba(245,158,11,0.25);
           border-color: rgba(245,158,11,0.6);
         }
-        .vl-enrich-btn:disabled {
-          opacity: 0.7; cursor: not-allowed;
-        }
+        .vl-enrich-btn:disabled { opacity: 0.7; cursor: not-allowed; }
         .vl-enrich-pulse {
           width: 8px; height: 8px; border-radius: 50%;
           background: #f59e0b;
@@ -387,7 +428,7 @@ export default function VenueContactManager() {
         }
         @keyframes vl-pulse {
           0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.4; transform: scale(0.7); }
+          50%       { opacity: 0.4; transform: scale(0.7); }
         }
         .vl-enrich-bar-wrap {
           background: rgba(245,158,11,0.08);
@@ -459,16 +500,11 @@ export default function VenueContactManager() {
 
             {/* ── Enrich button ── */}
             {enrichStatus && enrichStatus.missingEmail > 0 && !enrichStatus.job.running && (
-              <button
-                className="vl-enrich-btn"
-                onClick={startEnrichment}
-                disabled={enrichStarting}
-              >
+              <button className="vl-enrich-btn" onClick={startEnrichment} disabled={enrichStarting}>
                 <span style={{ fontSize: 15 }}>✦</span>
                 {enrichStarting
                   ? 'Starting…'
-                  : `${enrichStatus.missingEmail} missing email${enrichStatus.missingEmail !== 1 ? 's' : ''} · Auto-find →`
-                }
+                  : `${enrichStatus.missingEmail} missing email${enrichStatus.missingEmail !== 1 ? 's' : ''} · Auto-find →`}
               </button>
             )}
             {enrichStatus?.job.running && (
@@ -491,9 +527,7 @@ export default function VenueContactManager() {
                   <span className="vl-enrich-pulse" style={{ display: 'inline-block', marginRight: 8, verticalAlign: 'middle' }} />
                   Auto-finding emails
                   {enrichStatus.job.currentVenue && (
-                    <span style={{ color: '#fbbf24', marginLeft: 8 }}>
-                      · {enrichStatus.job.currentVenue}
-                    </span>
+                    <span style={{ color: '#fbbf24', marginLeft: 8 }}>· {enrichStatus.job.currentVenue}</span>
                   )}
                 </span>
                 <span style={{ color: '#fbbf24' }}>
@@ -501,23 +535,19 @@ export default function VenueContactManager() {
                 </span>
               </div>
               <div className="vl-enrich-bar-track">
-                <div
-                  className="vl-enrich-bar-fill"
-                  style={{
-                    width: enrichStatus.job.totalMissing > 0
-                      ? `${Math.round((enrichStatus.job.processed / enrichStatus.job.totalMissing) * 100)}%`
-                      : '0%',
-                  }}
-                />
+                <div className="vl-enrich-bar-fill" style={{
+                  width: enrichStatus.job.totalMissing > 0
+                    ? `${Math.round((enrichStatus.job.processed / enrichStatus.job.totalMissing) * 100)}%`
+                    : '0%',
+                }} />
               </div>
             </div>
           )}
 
           {/* ── Enrichment completion flash ────────────────────────────────────── */}
           {enrichStatus?.job.finishedAt && !enrichStatus.job.running && enrichStatus.job.found > 0 && (() => {
-            const finishedMs = new Date(enrichStatus.job.finishedAt).getTime();
-            const ageMs = Date.now() - finishedMs;
-            if (ageMs > 30_000) return null; // hide after 30 s
+            const age = Date.now() - new Date(enrichStatus.job.finishedAt!).getTime();
+            if (age > 30_000) return null;
             return (
               <div style={{
                 background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)',
@@ -572,15 +602,13 @@ export default function VenueContactManager() {
                         venue={venue}
                         status={status}
                         sc={sc}
-                        editing={editing}
-                        editValue={editValue}
-                        saving={saving}
-                        inputRef={inputRef}
+                        activeEdit={activeEdit}
+                        savedCell={savedCell}
                         onStartEdit={startEdit}
-                        onEditChange={setEditValue}
+                        onChange={changeEdit}
                         onCommit={commitEdit}
+                        onCancel={cancelEdit}
                         onStatusChange={updateStatus}
-                        onCancelEdit={() => setEditing(null)}
                       />
                     );
                   })}
@@ -594,79 +622,95 @@ export default function VenueContactManager() {
   );
 }
 
-// ─── Venue Row ────────────────────────────────────────────────────────────────
+// ─── VenueRow ─────────────────────────────────────────────────────────────────
+// Defined at module level so React never treats it as a new component type
+// between renders — this is what prevents input remounting on every keystroke.
+
 function VenueRow({
-  venue, status, sc, editing, editValue, saving,
-  inputRef, onStartEdit, onEditChange, onCommit, onStatusChange, onCancelEdit,
+  venue, status, sc, activeEdit, savedCell,
+  onStartEdit, onChange, onCommit, onCancel, onStatusChange,
 }: {
   venue: Venue;
   status: string;
   sc: { bg: string; text: string; border: string };
-  editing: EditingCell | null;
-  editValue: string;
-  saving: boolean;
-  inputRef: React.RefObject<any>;
-  onStartEdit: (v: Venue, f: EditingCell['field']) => void;
-  onEditChange: (val: string) => void;
+  activeEdit: ActiveEdit | null;
+  savedCell: { venueId: string; field: EditField } | null;
+  onStartEdit: (venueId: string, field: EditField, current: string) => void;
+  onChange: (value: string) => void;
   onCommit: () => void;
+  onCancel: () => void;
   onStatusChange: (id: string, status: string) => void;
-  onCancelEdit: () => void;
 }) {
   const [statusOpen, setStatusOpen] = useState(false);
 
-  const isEditing = (field: EditingCell['field']) =>
-    editing?.venueId === venue.id && editing.field === field;
+  // Helper: is this specific cell currently being edited?
+  const isActive = (field: EditField) =>
+    activeEdit?.venueId === venue.id && activeEdit.field === field;
 
-  const EditableCell = ({
-    field, value, placeholder, multiline,
-  }: {
-    field: EditingCell['field'];
-    value: string | null;
-    placeholder: string;
-    multiline?: boolean;
-  }) => {
-    const active = isEditing(field);
-    if (active) {
-      return multiline ? (
+  // Helper: did this cell just save successfully?
+  const isSaved = (field: EditField) =>
+    savedCell?.venueId === venue.id && savedCell.field === field;
+
+  // Renders either the live input or the display value for a given field
+  const renderCell = (
+    field: EditField,
+    value: string | null,
+    placeholder: string,
+    opts: { multiline?: boolean; minWidth?: number } = {}
+  ) => {
+    if (isActive(field)) {
+      // Input is rendered directly here — NOT inside a sub-component.
+      // This keeps it as part of VenueRow's stable component tree so React
+      // updates it in-place on every keystroke rather than unmounting it.
+      return opts.multiline ? (
         <textarea
-          ref={inputRef as React.RefObject<HTMLTextAreaElement>}
           className="vl-input"
-          value={editValue}
+          // eslint-disable-next-line jsx-a11y/no-autofocus
+          autoFocus
+          value={activeEdit!.value}
           rows={2}
-          style={{ resize: 'vertical', minWidth: 180 }}
-          onChange={e => onEditChange(e.target.value)}
+          style={{ resize: 'vertical', minWidth: opts.minWidth ?? 180 }}
+          onChange={e => onChange(e.target.value)}
           onBlur={onCommit}
-          onKeyDown={e => { if (e.key === 'Escape') onCancelEdit(); }}
+          onKeyDown={e => { if (e.key === 'Escape') onCancel(); }}
         />
       ) : (
         <input
-          ref={inputRef as React.RefObject<HTMLInputElement>}
           className="vl-input"
-          value={editValue}
-          style={{ minWidth: 160 }}
-          onChange={e => onEditChange(e.target.value)}
+          // eslint-disable-next-line jsx-a11y/no-autofocus
+          autoFocus
+          value={activeEdit!.value}
+          style={{ minWidth: opts.minWidth ?? 160 }}
+          onChange={e => onChange(e.target.value)}
           onBlur={onCommit}
           onKeyDown={e => {
-            if (e.key === 'Enter') onCommit();
-            if (e.key === 'Escape') onCancelEdit();
+            if (e.key === 'Enter')  onCommit();
+            if (e.key === 'Escape') onCancel();
           }}
         />
       );
     }
+
+    const saved = isSaved(field);
     return (
       <div
-        className={`vl-editable${!value ? ' empty' : ''}`}
-        onClick={() => onStartEdit(venue, field)}
+        className={`vl-editable${!value ? ' empty' : ''}${saved ? ' saved' : ''}`}
+        onClick={() => onStartEdit(venue.id, field, value || '')}
         title="Click to edit"
       >
-        {value || placeholder}
+        {saved ? (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ color: '#22c55e', fontWeight: 800, fontSize: 14 }}>✓</span>
+            <span style={{ color: '#e8f1f8' }}>{value}</span>
+          </span>
+        ) : (value || placeholder)}
       </div>
     );
   };
 
   return (
     <tr className="vl-row">
-      {/* Name */}
+      {/* Venue name */}
       <td className="vl-td" style={{ minWidth: 180, maxWidth: 240 }}>
         <div style={{ fontWeight: 800, color: '#ffffff', fontSize: 13, lineHeight: 1.3 }}>
           {venue.name}
@@ -722,24 +766,20 @@ function VenueRow({
         </div>
       </td>
 
-      {/* Email */}
       <td className="vl-td" style={{ minWidth: 200 }}>
-        <EditableCell field="email" value={venue.email} placeholder="Add email" />
+        {renderCell('email', venue.email, 'Add email')}
       </td>
 
-      {/* Phone */}
       <td className="vl-td" style={{ minWidth: 140 }}>
-        <EditableCell field="phone" value={venue.phone} placeholder="Add phone" />
+        {renderCell('phone', venue.phone, 'Add phone')}
       </td>
 
-      {/* Booking Contact */}
       <td className="vl-td" style={{ minWidth: 160 }}>
-        <EditableCell field="booking_contact" value={venue.booking_contact} placeholder="Add contact" />
+        {renderCell('booking_contact', venue.booking_contact, 'Add contact')}
       </td>
 
-      {/* Notes */}
       <td className="vl-td" style={{ minWidth: 200 }}>
-        <EditableCell field="notes" value={venue.notes} placeholder="Add notes" multiline />
+        {renderCell('notes', venue.notes, 'Add notes', { multiline: true })}
       </td>
     </tr>
   );
