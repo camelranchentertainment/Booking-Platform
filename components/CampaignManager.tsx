@@ -21,6 +21,7 @@ interface Campaign {
 interface CampaignVenue {
   id: string;
   status: string;
+  show_date?: string; // YYYY-MM-DD — set when status = 'booked'
   venue: {
     id: string;
     name: string;
@@ -65,6 +66,9 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
   const [showCreate, setShowCreate]           = useState(false);
   const [statusMenuOpen, setStatusMenuOpen]   = useState<string | null>(null);
   const [detailVenue, setDetailVenue]         = useState<CampaignVenue | null>(null);
+  // Show-date modal — pops up when venue is marked Booked
+  const [showDateModal, setShowDateModal]     = useState<{ cvId: string; venueName: string } | null>(null);
+  const [showDateInput, setShowDateInput]     = useState('');
 
   // ── Discovery selection state ────────────────────────────────────────────
   const [showDiscoveryModal, setShowDiscoveryModal] = useState(false);
@@ -205,6 +209,51 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
   const updateStatus = async (cvId: string, status: string) => {
     await supabase.from('campaign_venues').update({ status }).eq('id', cvId);
     setStatusMenuOpen(null);
+    if (status === 'booked') {
+      // Find venue name for the modal title
+      const cv = campaignVenues.find(v => v.id === cvId);
+      setShowDateInput('');
+      setShowDateModal({ cvId, venueName: cv?.venue.name ?? 'Venue' });
+    }
+    if (selectedCampaign) openCampaignDetail(selectedCampaign);
+  };
+
+  // ── Save show date + create calendar event ────────────────────────────────
+  const confirmShowDate = async (cvId: string, date: string) => {
+    setShowDateModal(null);
+    if (!date) return;
+
+    // Save show_date to campaign_venues (column must exist in DB)
+    await supabase.from('campaign_venues').update({ show_date: date }).eq('id', cvId);
+
+    // Create calendar event (fire-and-forget — don't block the UI)
+    const cv = campaignVenues.find(v => v.id === cvId);
+    const stored = JSON.parse(localStorage.getItem('loggedInUser') || '{}');
+    if (cv && stored.id) {
+      const location = [cv.venue.address, cv.venue.city, cv.venue.state].filter(Boolean).join(', ');
+      const description = [
+        selectedCampaign ? `Tour: ${selectedCampaign.name}` : null,
+        cv.venue.phone ? `Phone: ${cv.venue.phone}` : null,
+        cv.venue.booking_contact ? `Booking contact: ${cv.venue.booking_contact}` : null,
+      ].filter(Boolean).join('\n');
+
+      fetch('/api/calendar/create-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId:      stored.id,
+          summary:     cv.venue.name,
+          description,
+          location,
+          date,
+        }),
+      }).then(r => r.json()).then(data => {
+        if (!data.success && data.error) {
+          console.warn('[calendar] Event creation skipped:', data.error);
+        }
+      }).catch(err => console.warn('[calendar] Event creation failed:', err));
+    }
+
     if (selectedCampaign) openCampaignDetail(selectedCampaign);
   };
 
@@ -218,6 +267,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
   const handleDetailStatusChange = async (cvId: string, status: string) => {
     await updateStatus(cvId, status);
     setDetailVenue(prev => prev?.id === cvId ? { ...prev, status } : prev);
+    // updateStatus already opens the date modal for 'booked'
   };
 
   const handleContactSaved = (venueId: string, patch: Record<string, string | null>) => {
@@ -774,6 +824,66 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
         />
       )}
 
+      {/* ── Show Date Modal (opens when venue marked Booked) ─────────────── */}
+      {showDateModal && (
+        <div className="cm-modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowDateModal(null); }}>
+          <div className="cm-modal" style={{ maxWidth: 380 }}>
+            <h2 style={{ fontFamily:"'Bebas Neue',cursive", fontWeight:400,
+              fontSize:'1.7rem', letterSpacing:'0.06em', color:'#22c55e', margin:'0 0 4px' }}>
+              Show Date
+            </h2>
+            <p style={{ color:'#7aa5c4', fontSize:13, margin:'0 0 1.25rem', fontWeight:600 }}>
+              {showDateModal.venueName}
+            </p>
+            <p style={{ color:'#3d6285', fontSize:12, margin:'0 0 1.25rem' }}>
+              Set the show date and it will be added to your Google Calendar automatically.
+            </p>
+
+            <input
+              type="date"
+              value={showDateInput}
+              onChange={e => setShowDateInput(e.target.value)}
+              autoFocus
+              style={{
+                width:'100%', padding:'0.75rem',
+                border:'1px solid rgba(74,133,200,0.3)',
+                borderRadius:6, background:'rgba(255,255,255,0.05)',
+                color:'#e8f1f8', fontSize:'1rem', marginBottom:16,
+                colorScheme:'dark',
+              }}
+            />
+
+            <div style={{ display:'flex', gap:8 }}>
+              <button
+                onClick={() => confirmShowDate(showDateModal.cvId, showDateInput)}
+                disabled={!showDateInput}
+                style={{
+                  flex:1, padding:'0.75rem',
+                  background: showDateInput ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'rgba(255,255,255,0.05)',
+                  border:'none', borderRadius:6,
+                  color: showDateInput ? '#fff' : '#3d6285',
+                  fontWeight:700, fontSize:14, cursor: showDateInput ? 'pointer' : 'default',
+                }}
+              >
+                Save & Add to Calendar
+              </button>
+              <button
+                onClick={() => { confirmShowDate(showDateModal.cvId, ''); }}
+                style={{
+                  padding:'0.75rem 1rem',
+                  background:'transparent',
+                  border:'1px solid rgba(74,133,200,0.2)',
+                  borderRadius:6, color:'#3d6285',
+                  fontWeight:600, fontSize:13, cursor:'pointer',
+                }}
+              >
+                Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Create Run Modal ──────────────────────────────────────────────── */}
       {showCreate && (
         <div className="cm-modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowCreate(false); }}>
@@ -928,12 +1038,19 @@ function VenueCard({ cv, cfg, statuses, statusMenuOpen, setStatusMenuOpen, onSta
       </div>
 
       {/* Contact info */}
-      <div style={{ fontSize:11, marginBottom:10 }}>
+      <div style={{ fontSize:11, marginBottom:8 }}>
         {cv.venue.email
           ? <span style={{ color:'#22c55e' }}>✉ {cv.venue.email}</span>
           : <span style={{ color:'#3d6285', fontStyle:'italic' }}>No email</span>}
         {cv.venue.phone && <span style={{ color:'#4a85c8', marginLeft:8 }}>☎ {cv.venue.phone}</span>}
       </div>
+
+      {/* Show date badge */}
+      {cv.status === 'booked' && cv.show_date && (
+        <div style={{ fontSize:11, color:'#22c55e', fontWeight:700, marginBottom:8 }}>
+          📅 {new Date(cv.show_date + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}
+        </div>
+      )}
 
       {/* Status badge / dropdown */}
       <div style={{ position:'relative', display:'inline-block' }}>

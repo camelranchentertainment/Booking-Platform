@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { supabase } from '../../../lib/supabase';
+import { fetchGoogleOAuthEvents } from '../../../lib/googleCalendar';
 
 interface GoogleCalendarEvent {
   id: string;
@@ -74,7 +75,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let events: ParsedEvent[] = [];
 
-    if (calendarSettings.calendar_type === 'google' && calendarSettings.calendar_api_key) {
+    if (calendarSettings.calendar_type === 'google_oauth') {
+      // OAuth-connected Google Calendar — uses encrypted refresh token
+      try {
+        events = await fetchGoogleOAuthEvents(userId, targetYear);
+      } catch (err: any) {
+        console.error('[calendar/sync] Google OAuth fetch failed:', err.message);
+        return res.status(200).json({ events: [], message: err.message });
+      }
+    } else if (calendarSettings.calendar_type === 'google' && calendarSettings.calendar_api_key) {
       events = await fetchGoogleCalendarEvents(calendarSettings.calendar_api_key, targetYear);
     } else if (calendarSettings.calendar_type === 'ical' && calendarSettings.ical_url) {
       events = await fetchICalEvents(calendarSettings.ical_url, targetYear);

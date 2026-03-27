@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 
@@ -55,6 +55,8 @@ export default function Settings() {
   const [calendarApiKey, setCalendarApiKey] = useState('');
   const [calendarRefreshToken, setCalendarRefreshToken] = useState('');
   const [icalUrl, setIcalUrl] = useState('');
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [calendarSaveMsg, setCalendarSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   // SMTP Email Configuration
   const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
@@ -77,11 +79,24 @@ export default function Settings() {
 
       const userData = JSON.parse(loggedInUser);
       setUser(userData);
-      
+
       await loadBandData(userData.id);
       await loadProfile(userData.id);
       await loadCalendarSettings(userData.id);
       await loadSmtpSettings(userData.id);
+
+      // Handle OAuth redirect result
+      const params = new URLSearchParams(window.location.search);
+      const calResult = params.get('calendar');
+      if (calResult === 'connected') {
+        setGoogleConnected(true);
+        setCalendarSaveMsg({ ok: true, text: '✓ Google Calendar connected successfully!' });
+        router.replace('/settings', undefined, { shallow: true });
+      } else if (calResult === 'error') {
+        const msg = params.get('message') || 'Connection failed';
+        setCalendarSaveMsg({ ok: false, text: `✗ ${msg}` });
+        router.replace('/settings', undefined, { shallow: true });
+      }
     } catch (error) {
       console.error('Auth error:', error);
       router.push('/');
@@ -175,8 +190,11 @@ export default function Settings() {
         .maybeSingle();
 
       if (error) throw error;
-      
+
       if (data) {
+        if (data.calendar_type === 'google_oauth' && data.is_active !== false) {
+          setGoogleConnected(true);
+        }
         setCalendarType(data.calendar_type || '');
         setCalendarApiKey(data.calendar_api_key || '');
         setCalendarRefreshToken(data.google_refresh_token || '');
@@ -1004,240 +1022,170 @@ For now, please provide their User ID instead of email.`);
           padding: '2rem'
         }}>
           <h2 style={{ color: '#e8f1f8', fontSize: '1.8rem', marginBottom: '1.5rem' }}>
-            Calendar Integration
+            📅 Calendar Integration
           </h2>
-          <div style={{
-            background: 'rgba(58,127,193,0.1)',
-            border: '1px solid rgba(74,133,200,0.4)',
-            borderRadius: '8px',
-            padding: '1.5rem',
-            marginBottom: '1.5rem'
-          }}>
-            <p style={{ color: '#6baed6', margin: 0, marginBottom: '0.5rem' }}>
-              📅 Connect your calendar to automatically sync bookings
-            </p>
-            <p style={{ color: '#7aa5c4', margin: 0, fontSize: '0.9rem' }}>
-              Your calendar credentials are stored securely and used only to sync your booking dates.
-            </p>
-          </div>
-          <form onSubmit={async (e) => { 
-            e.preventDefault();
-            
-            if (!user) return;
-            
-            try {
-              const calendarData: Record<string, string | boolean | null> = {
-                user_id: user.id,
-                calendar_type: calendarType,
-                is_active: true,
-                updated_at: new Date().toISOString()
-              };
 
-              if (calendarType === 'google') {
-                calendarData.calendar_api_key = calendarApiKey || null;
-                calendarData.google_refresh_token = calendarRefreshToken || null;
-              } else if (calendarType === 'outlook') {
-                calendarData.calendar_api_key = calendarApiKey || null;
-              } else if (calendarType === 'ical') {
-                calendarData.ical_url = icalUrl || null;
-              }
-
-              const { data: existingSettings } = await supabase
-                .from('user_calendar_settings')
-                .select('id')
-                .eq('user_id', user.id)
-                .maybeSingle();
-
-              let error;
-              if (existingSettings) {
-                const result = await supabase
-                  .from('user_calendar_settings')
-                  .update(calendarData)
-                  .eq('user_id', user.id);
-                error = result.error;
-              } else {
-                const result = await supabase
-                  .from('user_calendar_settings')
-                  .insert([calendarData]);
-                error = result.error;
-              }
-
-              if (error) throw error;
-
-              alert('✓ Calendar settings saved successfully!');
-            } catch (error) {
-              console.error('Error saving calendar settings:', error);
-              alert('Failed to save calendar settings. Please try again.');
-            }
-          }}>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{
-                display: 'block',
-                color: '#e8f1f8',
-                marginBottom: '0.5rem',
-                fontWeight: '600'
-              }}>
-                Calendar Type
-              </label>
-              <select
-                value={calendarType}
-                onChange={(e) => setCalendarType(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid rgba(74,133,200,0.2)',
-                  borderRadius: '6px',
-                  background: 'rgba(255,255,255,0.05)',
-                  color: '#e8f1f8',
-                  fontSize: '1rem',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="">Select calendar service...</option>
-                <option value="google">Google Calendar</option>
-                <option value="outlook">Outlook/Microsoft 365</option>
-                <option value="ical">iCal URL</option>
-              </select>
+          {/* Status message */}
+          {calendarSaveMsg && (
+            <div style={{
+              padding: '0.75rem 1rem',
+              marginBottom: '1.5rem',
+              borderRadius: '8px',
+              background: calendarSaveMsg.ok ? 'rgba(34,197,94,0.1)' : 'rgba(248,113,113,0.1)',
+              border: `1px solid ${calendarSaveMsg.ok ? 'rgba(34,197,94,0.3)' : 'rgba(248,113,113,0.3)'}`,
+              color: calendarSaveMsg.ok ? '#22c55e' : '#f87171',
+              fontWeight: 600, fontSize: 14,
+            }}>
+              {calendarSaveMsg.text}
             </div>
+          )}
 
-            {calendarType === 'google' && (
-              <>
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <label style={{
-                    display: 'block',
-                    color: '#e8f1f8',
-                    marginBottom: '0.5rem',
-                    fontWeight: '600'
-                  }}>
-                    Google Calendar API Key
-                  </label>
-                  <input
-                    type="password"
-                    value={calendarApiKey}
-                    onChange={(e) => setCalendarApiKey(e.target.value)}
-                    placeholder="AIza..."
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      border: '1px solid rgba(74,133,200,0.2)',
-                      borderRadius: '6px',
-                      background: 'rgba(255,255,255,0.05)',
-                      color: '#e8f1f8',
-                      fontSize: '1rem'
-                    }}
-                  />
-                  <p style={{ color: '#7aa5c4', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
-                    Get your API key from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style={{color: '#6baed6'}}>Google Cloud Console</a>
-                  </p>
+          {/* Google Calendar OAuth */}
+          <div style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(74,133,200,0.15)',
+            borderRadius: '10px',
+            padding: '1.5rem',
+            marginBottom: '1.5rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                    <rect x="3" y="3" width="18" height="18" rx="2" fill="rgba(74,133,200,0.2)" stroke="rgba(74,133,200,0.5)" strokeWidth="1.5"/>
+                    <path d="M8 2v4M16 2v4M3 10h18" stroke="rgba(74,133,200,0.8)" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                  <span style={{ color: '#e8f1f8', fontWeight: 700, fontSize: 15 }}>Google Calendar</span>
+                  {googleConnected && (
+                    <span style={{
+                      background: 'rgba(34,197,94,0.15)', color: '#22c55e',
+                      border: '1px solid rgba(34,197,94,0.3)',
+                      borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 700,
+                    }}>Connected</span>
+                  )}
                 </div>
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <label style={{
-                    display: 'block',
-                    color: '#e8f1f8',
-                    marginBottom: '0.5rem',
-                    fontWeight: '600'
-                  }}>
-                    Refresh Token (Optional for OAuth)
-                  </label>
-                  <input
-                    type="text"
-                    value={calendarRefreshToken}
-                    onChange={(e) => setCalendarRefreshToken(e.target.value)}
-                    placeholder="1//..."
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      border: '1px solid rgba(74,133,200,0.2)',
-                      borderRadius: '6px',
-                      background: 'rgba(255,255,255,0.05)',
-                      color: '#e8f1f8',
-                      fontSize: '1rem'
-                    }}
-                  />
-                </div>
-              </>
-            )}
-
-            {calendarType === 'outlook' && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{
-                  display: 'block',
-                  color: '#e8f1f8',
-                  marginBottom: '0.5rem',
-                  fontWeight: '600'
-                }}>
-                  Microsoft Graph API Key
-                </label>
-                <input
-                  type="password"
-                  value={calendarApiKey}
-                  onChange={(e) => setCalendarApiKey(e.target.value)}
-                  placeholder="Enter your Microsoft Graph API key..."
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '1px solid rgba(74,133,200,0.2)',
-                    borderRadius: '6px',
-                    background: 'rgba(255,255,255,0.05)',
-                    color: '#e8f1f8',
-                    fontSize: '1rem'
-                  }}
-                />
-                <p style={{ color: '#7aa5c4', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
-                  Get your API key from <a href="https://portal.azure.com" target="_blank" style={{color: '#6baed6'}}>Azure Portal</a>
+                <p style={{ color: '#7aa5c4', margin: 0, fontSize: 13 }}>
+                  {googleConnected
+                    ? 'Your Google Calendar is connected. Bookings will be added automatically when you mark a venue as Booked.'
+                    : 'Connect your Google Calendar to read events and automatically add show bookings.'}
                 </p>
               </div>
-            )}
 
-            {calendarType === 'ical' && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{
-                  display: 'block',
-                  color: '#e8f1f8',
-                  marginBottom: '0.5rem',
-                  fontWeight: '600'
-                }}>
-                  iCal URL
-                </label>
-                <input
-                  type="url"
-                  value={icalUrl}
-                  onChange={(e) => setIcalUrl(e.target.value)}
-                  placeholder="https://calendar.google.com/calendar/ical/..."
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '1px solid rgba(74,133,200,0.2)',
-                    borderRadius: '6px',
-                    background: 'rgba(255,255,255,0.05)',
-                    color: '#e8f1f8',
-                    fontSize: '1rem'
-                  }}
-                />
-                <p style={{ color: '#7aa5c4', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
-                  Copy your calendar's iCal/webcal URL from your calendar settings
-                </p>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                {googleConnected ? (
+                  <button
+                    onClick={async () => {
+                      if (!user || !confirm('Disconnect Google Calendar?')) return;
+                      await supabase
+                        .from('user_calendar_settings')
+                        .update({ is_active: false })
+                        .eq('user_id', user.id)
+                        .eq('calendar_type', 'google_oauth');
+                      setGoogleConnected(false);
+                      setCalendarSaveMsg({ ok: true, text: 'Google Calendar disconnected.' });
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                      background: 'rgba(248,113,113,0.1)',
+                      border: '1px solid rgba(248,113,113,0.3)',
+                      borderRadius: 6, color: '#f87171',
+                      fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    Disconnect
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      if (!user) return;
+                      window.location.href = `/api/auth/google?userId=${user.id}`;
+                    }}
+                    style={{
+                      padding: '10px 20px',
+                      background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
+                      border: 'none', borderRadius: 6,
+                      color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 5v14M5 12h14" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                    Connect Google Calendar
+                  </button>
+                )}
               </div>
-            )}
+            </div>
+          </div>
 
-            {calendarType && (
-              <button
-                type="submit"
+          {/* iCal URL fallback */}
+          <details style={{ marginTop: '0.5rem' }}>
+            <summary style={{
+              color: '#4a85c8', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              userSelect: 'none', marginBottom: 12,
+            }}>
+              Other options (iCal URL)
+            </summary>
+            <form
+              style={{ marginTop: 12 }}
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!user || !icalUrl) return;
+                try {
+                  const { data: existing } = await supabase
+                    .from('user_calendar_settings')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .maybeSingle();
+
+                  const payload = {
+                    user_id:       user.id,
+                    calendar_type: 'ical',
+                    ical_url:      icalUrl,
+                    is_active:     true,
+                    updated_at:    new Date().toISOString(),
+                  };
+
+                  if (existing) {
+                    await supabase.from('user_calendar_settings').update(payload).eq('user_id', user.id);
+                  } else {
+                    await supabase.from('user_calendar_settings').insert([payload]);
+                  }
+                  setCalendarSaveMsg({ ok: true, text: '✓ iCal URL saved.' });
+                } catch (err) {
+                  console.error(err);
+                  setCalendarSaveMsg({ ok: false, text: '✗ Failed to save iCal URL.' });
+                }
+              }}
+            >
+              <label style={{ display: 'block', color: '#e8f1f8', marginBottom: 6, fontWeight: 600, fontSize: 14 }}>
+                iCal URL
+              </label>
+              <input
+                type="url"
+                value={icalUrl}
+                onChange={(e) => setIcalUrl(e.target.value)}
+                placeholder="https://calendar.google.com/calendar/ical/..."
                 style={{
-                  padding: '0.75rem 2rem',
-                  background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
-                  border: 'none',
-                  borderRadius: '6px',
-                  color: 'white',
-                  fontSize: '1rem',
-                  fontWeight: '600',
-                  cursor: 'pointer'
+                  width: '100%', padding: '0.75rem',
+                  border: '1px solid rgba(74,133,200,0.2)',
+                  borderRadius: 6, background: 'rgba(255,255,255,0.05)',
+                  color: '#e8f1f8', fontSize: '1rem', marginBottom: 8,
                 }}
-              >
-                Save Calendar Settings
+              />
+              <p style={{ color: '#7aa5c4', fontSize: 12, margin: '0 0 12px' }}>
+                Read-only. Copy the iCal/webcal URL from your calendar app settings.
+              </p>
+              <button type="submit" style={{
+                padding: '8px 20px',
+                background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
+                border: 'none', borderRadius: 6,
+                color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              }}>
+                Save iCal URL
               </button>
-            )}
-          </form>
+            </form>
+          </details>
         </div>
       </div>
     </div>
