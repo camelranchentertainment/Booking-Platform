@@ -804,14 +804,12 @@ For now, please provide their User ID instead of email.`);
                   ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
                 body: JSON.stringify({
+                  userId:       user.id,
                   provider:     'smtp',
                   displayName:  smtpFromName || band?.band_name || '',
                   emailAddress: smtpEmail,
                   smtpHost,
                   smtpPort,
-                  imapHost:     '',
-                  imapPort:     '993',
-                  username:     smtpEmail,
                   password:     smtpPassword,
                 }),
               });
@@ -835,7 +833,17 @@ For now, please provide their User ID instead of email.`);
               <input
                 type="email"
                 value={smtpEmail}
-                onChange={(e) => setSmtpEmail(e.target.value)}
+                onChange={(e) => {
+                  setSmtpEmail(e.target.value);
+                  // Auto-detect SMTP host/port from email domain
+                  const domain = e.target.value.split('@')[1]?.toLowerCase() ?? '';
+                  if (domain === 'gmail.com' || domain === 'googlemail.com') { setSmtpHost('smtp.gmail.com'); setSmtpPort('587'); }
+                  else if (domain === 'outlook.com' || domain === 'hotmail.com' || domain === 'live.com') { setSmtpHost('smtp-mail.outlook.com'); setSmtpPort('587'); }
+                  else if (domain === 'yahoo.com' || domain === 'yahoo.co.uk') { setSmtpHost('smtp.mail.yahoo.com'); setSmtpPort('465'); }
+                  else if (domain === 'icloud.com' || domain === 'me.com') { setSmtpHost('smtp.mail.me.com'); setSmtpPort('587'); }
+                  else if (domain === 'protonmail.com' || domain === 'proton.me') { setSmtpHost('smtp.protonmail.com'); setSmtpPort('587'); }
+                  else if (domain) { setSmtpHost(`smtp.${domain}`); setSmtpPort('587'); }
+                }}
                 placeholder="yourband@gmail.com"
                 required
                 style={{

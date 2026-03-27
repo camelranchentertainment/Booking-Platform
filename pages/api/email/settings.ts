@@ -17,16 +17,41 @@ function encrypt(text: string): string {
   return iv.toString('hex') + ':' + encrypted.toString('hex');
 }
 
+function smtpFromDomain(email: string): string {
+  const domain = email.split('@')[1]?.toLowerCase() ?? '';
+  if (domain === 'gmail.com' || domain === 'googlemail.com') return 'smtp.gmail.com';
+  if (domain === 'outlook.com' || domain === 'hotmail.com' || domain === 'live.com') return 'smtp-mail.outlook.com';
+  if (domain === 'yahoo.com' || domain === 'yahoo.co.uk') return 'smtp.mail.yahoo.com';
+  if (domain === 'icloud.com' || domain === 'me.com') return 'smtp.mail.me.com';
+  if (domain === 'protonmail.com' || domain === 'proton.me') return 'smtp.protonmail.com';
+  // For custom domains, use their own SMTP
+  return `smtp.${domain}`;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Get the authenticated user from the session cookie
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Not authenticated' });
-
-  const token = authHeader.replace('Bearer ', '');
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-  if (authError || !user) return res.status(401).json({ error: 'Invalid session' });
+  // Resolve userId: try Supabase Bearer token first, fall back to userId in body
+  // (custom-JWT login flow sends userId in body, same pattern as /api/email/send)
+  let userId: string;
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      if (!error && user) {
+        userId = user.id;
+      } else {
+        throw new Error('token invalid');
+      }
+    } else {
+      throw new Error('no header');
+    }
+  } catch {
+    const bodyUserId = req.body?.userId as string | undefined;
+    if (!bodyUserId) return res.status(401).json({ error: 'Not authenticated' });
+    userId = bodyUserId;
+  }
 
   const {
     provider, displayName, emailAddress,
@@ -34,9 +59,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     username, password,
   } = req.body;
 
-  if (!smtpHost || !username || !password) {
-    return res.status(400).json({ error: 'Missing required fields' });
+  if (!emailAddress || !password) {
+    return res.status(400).json({ error: 'Email address and password are required' });
   }
+
+  // Auto-derive SMTP host/port from email domain if not provided
+  const resolvedHost = smtpHost || smtpFromDomain(emailAddress);
+  const resolvedPort = smtpPort || '587';
+  const resolvedUsername = username || emailAddress;
 
   try {
     // Encrypt the password before storing — never store plain text credentials
@@ -45,16 +75,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { error } = await supabase
       .from('user_email_settings')
       .upsert({
-        user_id:          user.id,
-        provider,
-        display_name:     displayName,
+        user_id:          userId,
+        provider:         provider || 'smtp',
+        display_name:     displayName || '',
         email_address:    emailAddress,
-        smtp_host:        smtpHost,
-        smtp_port:        parseInt(smtpPort),
-        imap_host:        imapHost,
-        imap_port:        parseInt(imapPort),
-        username,
-        password_enc:     encryptedPassword, // encrypted AES-256
+        smtp_host:        resolvedHost,
+        smtp_port:        parseInt(resolvedPort),
+        imap_host:        imapHost || '',
+        imap_port:        parseInt(imapPort) || 993,
+        username:         resolvedUsername,
+        password_enc:     encryptedPassword,
         updated_at:       new Date().toISOString(),
       }, {
         onConflict: 'user_id', // one row per user — upsert replaces existing
