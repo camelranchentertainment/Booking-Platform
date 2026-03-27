@@ -298,10 +298,20 @@ export default function EmailTemplateManager() {
       const subject = fillVars(editSubject, cv.venue, selectedCampaign);
       const body    = fillVars(editBody,    cv.venue, selectedCampaign);
       try {
+        const stored = JSON.parse(localStorage.getItem('loggedInUser') || '{}');
         const res = await fetch('/api/email/send', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ to:cv.venue.email, subject, body, venueId:cv.venue.id }),
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(stored.token ? { Authorization: `Bearer ${stored.token}` } : {}),
+          },
+          body: JSON.stringify({
+            to: cv.venue.email,
+            subject,
+            body,
+            venueId: cv.venue.id,
+            userId: stored.id,
+          }),
         });
         if (!res.ok) throw new Error((await res.json()).error || 'Send failed');
         results.push({ venueId:cv.venue.id, venueName:cv.venue.name, success:true });

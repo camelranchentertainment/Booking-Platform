@@ -190,22 +190,22 @@ export default function Settings() {
   const loadSmtpSettings = async (userId: string) => {
     try {
       const { data, error } = await supabase
-        .from('smtp_settings')
+        .from('user_email_settings')
         .select('*')
         .eq('user_id', userId)
         .maybeSingle();
 
       if (error) throw error;
-      
+
       if (data) {
         setSmtpHost(data.smtp_host || 'smtp.gmail.com');
         setSmtpPort(data.smtp_port?.toString() || '587');
-        setSmtpEmail(data.smtp_email || '');
-        setSmtpPassword(data.smtp_password || '');
-        setSmtpFromName(data.smtp_from_name || '');
+        setSmtpEmail(data.email_address || '');
+        setSmtpPassword(''); // never pre-fill encrypted password
+        setSmtpFromName(data.display_name || '');
       }
     } catch (error) {
-      console.error('Error loading SMTP settings:', error);
+      console.error('Error loading email settings:', error);
     }
   };
 
@@ -793,42 +793,30 @@ For now, please provide their User ID instead of email.`);
 
           <form onSubmit={async (e) => {
             e.preventDefault();
-            
             if (!user) return;
-            
             try {
-              const smtpData = {
-                user_id: user.id,
-                smtp_host: smtpHost,
-                smtp_port: parseInt(smtpPort),
-                smtp_email: smtpEmail,
-                smtp_password: smtpPassword,
-                smtp_from_name: smtpFromName || band?.band_name || '',
-                is_active: true,
-                updated_at: new Date().toISOString()
-              };
-
-              const { data: existing } = await supabase
-                .from('smtp_settings')
-                .select('id')
-                .eq('user_id', user.id)
-                .maybeSingle();
-
-              let error;
-              if (existing) {
-                const result = await supabase
-                  .from('smtp_settings')
-                  .update(smtpData)
-                  .eq('user_id', user.id);
-                error = result.error;
-              } else {
-                const result = await supabase
-                  .from('smtp_settings')
-                  .insert([smtpData]);
-                error = result.error;
-              }
-
-              if (error) throw error;
+              const stored = JSON.parse(localStorage.getItem('loggedInUser') || '{}');
+              const token = stored.token;
+              const res = await fetch('/api/email/settings', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                  provider:     'smtp',
+                  displayName:  smtpFromName || band?.band_name || '',
+                  emailAddress: smtpEmail,
+                  smtpHost,
+                  smtpPort,
+                  imapHost:     '',
+                  imapPort:     '993',
+                  username:     smtpEmail,
+                  password:     smtpPassword,
+                }),
+              });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.error || 'Failed to save');
               alert('✓ Email settings saved successfully!');
             } catch (error) {
               console.error('Error saving email settings:', error);

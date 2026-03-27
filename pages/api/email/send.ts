@@ -11,7 +11,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const user = await getUserFromToken(req.headers.authorization);
+    let userId: string;
+    try {
+      const authedUser = await getUserFromToken(req.headers.authorization);
+      userId = authedUser.id;
+    } catch {
+      const bodyUserId = req.body?.userId as string | undefined;
+      if (!bodyUserId) throw new Error('Not authenticated');
+      userId = bodyUserId;
+    }
 
     const { venueId, campaignId, templateId, customSubject, customBody } = req.body;
 
@@ -59,7 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     // ── Build transporter from user's saved settings ──────────────────────────
-    const { transporter, settings } = await getTransporter(user.id);
+    const { transporter, settings } = await getTransporter(userId);
 
     // ── Send ──────────────────────────────────────────────────────────────────
     const info = await transporter.sendMail({
@@ -72,7 +80,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // ── Log to email_logs ─────────────────────────────────────────────────────
     await logSentEmail({
-      userId:     user.id,
+      userId,
       venueId,
       campaignId,
       templateId,

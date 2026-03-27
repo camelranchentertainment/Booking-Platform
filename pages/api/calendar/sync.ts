@@ -22,7 +22,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { userId, year } = req.query;
+    const { year } = req.query;
+
+    // Prefer authenticated user from Bearer token; fall back to query param
+    let userId: string | undefined;
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user } } = await supabase.auth.getUser(token);
+      if (user) userId = user.id;
+    }
+    if (!userId) {
+      userId = req.query.userId as string | undefined;
+    }
 
     if (!userId) {
       return res.status(400).json({ error: 'User ID required' });
