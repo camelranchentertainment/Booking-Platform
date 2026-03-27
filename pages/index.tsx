@@ -205,12 +205,26 @@ export default function LandingPage() {
           display: flex; align-items: center; justify-content: center;
           font-size: 24px; margin-bottom: 20px; flex-shrink: 0;
         }
+
+        /* ── Responsive ── */
+        @media (max-width: 1023px) {
+          .lp-nav-links { display: none !important; }
+        }
+        @media (max-width: 767px) {
+          .lp-nav { padding: 0 1rem !important; }
+          .lp-modal-inner { padding: 1.5rem !important; }
+          .step-card { flex-direction: column !important; gap: 1rem !important; padding: 1.25rem !important; }
+          .btn-primary, .btn-ghost { min-height: 44px; }
+        }
+        @media (max-width: 480px) {
+          .lp-modal-inner { padding: 1.25rem !important; border-radius: 16px !important; }
+        }
       `}</style>
 
       <div style={S.page}>
 
         {/* ────────────────────────────────────────────────────────── NAV */}
-        <nav style={{
+        <nav className="lp-nav" style={{
           position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
           height: 64, padding: '0 2rem',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -232,12 +246,14 @@ export default function LandingPage() {
             </span>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            {[['How It Works','workflow'],['Features','features'],['Pricing','pricing']].map(([label, id]) => (
-              <a key={id} href={`#${id}`} onClick={smooth(id)} style={{
-                color: '#7aa5c4', fontSize: 13, fontWeight: 600,
-                textDecoration: 'none', padding: '0 12px',
-              }}>{label}</a>
-            ))}
+            <div className="lp-nav-links" style={{ display: 'flex', alignItems: 'center' }}>
+              {[['How It Works','workflow'],['Features','features'],['Pricing','pricing']].map(([label, id]) => (
+                <a key={id} href={`#${id}`} onClick={smooth(id)} style={{
+                  color: '#7aa5c4', fontSize: 13, fontWeight: 600,
+                  textDecoration: 'none', padding: '0 12px',
+                }}>{label}</a>
+              ))}
+            </div>
             <button className="btn-ghost" onClick={() => { setShowLogin(true); setAuthError(''); setEmail(''); setPassword(''); }}
               style={{ padding: '8px 18px', fontSize: 13 }}>Sign In</button>
             <button className="btn-primary" onClick={() => openSignup('free')}
@@ -644,7 +660,7 @@ function Modal({ children, onClose }: { children:React.ReactNode; onClose:()=>vo
       background:'rgba(5,17,31,0.88)', backdropFilter:'blur(12px)',
       display:'flex', alignItems:'center', justifyContent:'center', padding:'1rem',
     }}>
-      <div style={{
+      <div className="lp-modal-inner" style={{
         background:'#091828', border:'1px solid rgba(74,133,200,0.18)',
         borderRadius:20, padding:'2.5rem', width:'100%', maxWidth:460,
         boxShadow:'0 24px 80px rgba(0,0,0,0.6)',

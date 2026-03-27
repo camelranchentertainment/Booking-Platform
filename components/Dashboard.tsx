@@ -240,9 +240,16 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           .db-stats { grid-template-columns: repeat(2,1fr); }
           .db-main  { grid-template-columns: 1fr; }
         }
-        @media (max-width: 600px) {
+        @media (max-width: 767px) {
           .db-wrap { padding: 1rem; }
           .db-stats { grid-template-columns: repeat(2,1fr); gap: 10px; }
+          .db-card-body { padding: 12px 14px 16px; }
+          .stat-tile { padding: 16px 14px 14px; }
+          .campaign-mini-val { font-size: 1.15rem; }
+          .action-row { min-height: 44px; }
+        }
+        @media (max-width: 480px) {
+          .db-stats { grid-template-columns: repeat(2,1fr); gap: 8px; }
         }
       `}</style>
 

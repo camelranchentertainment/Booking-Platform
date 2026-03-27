@@ -178,6 +178,18 @@ export default function DashboardPage() {
         ::-webkit-scrollbar-track { background: #030d18; }
         ::-webkit-scrollbar-thumb { background: rgba(74,133,200,0.2); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(74,133,200,0.4); }
+
+        /* ── Responsive ── */
+        @media (max-width: 1023px) {
+          .crb-tab { padding: 12px 16px; font-size: 13px; }
+        }
+        @media (max-width: 767px) {
+          .crb-header-brand { display: none !important; }
+          .crb-header-inner { padding: 0 1rem !important; }
+          .crb-tab { padding: 10px 12px; font-size: 12px; margin: 6px 2px; }
+          .crb-user-email { display: none !important; }
+          .crb-main-padded { padding: 1rem !important; }
+        }
       `}</style>
 
       <div style={{ minHeight: '100vh', background: '#030d18', color: '#e8f1f8' }}>
@@ -190,7 +202,7 @@ export default function DashboardPage() {
           backdropFilter: 'blur(16px)',
         }}>
           {/* Brand + User row */}
-          <div style={{
+          <div className="crb-header-inner" style={{
             maxWidth: 1400, margin: '0 auto',
             padding: '0 2rem',
             height: 68,
@@ -203,6 +215,7 @@ export default function DashboardPage() {
                 background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: '#e8f1f8',
+                flexShrink: 0,
               }}>C</div>
               <span style={{
                 fontFamily: "'Bebas Neue', cursive",
@@ -212,19 +225,20 @@ export default function DashboardPage() {
 
             {/* Band name — centre */}
             {bandProfile?.band_name && (
-              <div style={{
+              <div className="crb-header-brand" style={{
                 position: 'absolute', left: '50%', transform: 'translateX(-50%)',
                 fontFamily: "'Bebas Neue', cursive",
                 fontSize: '1.9rem', letterSpacing: '0.09em',
                 color: '#ffffff',
                 textShadow: '0 0 24px rgba(74,133,200,0.5)',
+                pointerEvents: 'none',
               }}>
                 {bandProfile.band_name}
               </div>
             )}
 
             {/* User menu */}
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative', flexShrink: 0 }}>
               <button
                 onClick={() => setMenuOpen(o => !o)}
                 style={{
@@ -236,6 +250,7 @@ export default function DashboardPage() {
                   fontFamily: "'Nunito', sans-serif",
                   fontSize: 13, fontWeight: 600,
                   transition: 'background .2s',
+                  minHeight: 44,
                 }}
                 onMouseOver={e => (e.currentTarget.style.background = 'rgba(74,133,200,0.14)')}
                 onMouseOut={e => (e.currentTarget.style.background = 'rgba(74,133,200,0.08)')}
@@ -245,10 +260,11 @@ export default function DashboardPage() {
                   background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 12, fontWeight: 700, color: '#e8f1f8',
+                  flexShrink: 0,
                 }}>
                   {userEmail.charAt(0).toUpperCase()}
                 </span>
-                <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span className="crb-user-email" style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {userEmail}
                 </span>
                 <span style={{ fontSize: 10, opacity: 0.6 }}>▼</span>
@@ -304,10 +320,13 @@ export default function DashboardPage() {
         </header>
 
         {/* ── Page Content ────────────────────────────────────────────────────── */}
-        <main style={{
-          maxWidth: 1400, margin: '0 auto',
-          padding: activeTab === 'dashboard' || activeTab === 'calendar' ? 0 : '2rem',
-        }}>
+        <main
+          className={activeTab === 'dashboard' || activeTab === 'calendar' ? 'crb-main' : 'crb-main crb-main-padded'}
+          style={{
+            maxWidth: 1400, margin: '0 auto',
+            padding: activeTab === 'dashboard' || activeTab === 'calendar' ? 0 : '2rem',
+          }}
+        >
           {activeTab === 'dashboard'      && <Dashboard onNavigate={handleNavigate} />}
           {activeTab === 'calendar'       && <BookingCalendar />}
           {activeTab === 'campaigns'      && <CampaignManager initialData={navigationData} />}

@@ -400,6 +400,16 @@ export default function EmailTemplateManager() {
         .em-checkbox:checked::after{content:'✓';position:absolute;top:50%;left:50%;
           transform:translate(-50%,-50%);color:#e8f1f8;font-size:11px;font-weight:800;}
         .em-checkbox:disabled{opacity:.35;cursor:not-allowed;}
+        @media(max-width:1023px){
+          .em-wrap{padding:1.25rem;}
+          .em-edit-grid{grid-template-columns:1fr!important;}
+          .em-send-grid{grid-template-columns:1fr!important;}
+        }
+        @media(max-width:767px){
+          .em-wrap{padding:1rem;}
+          .em-btn-primary,.em-btn-ghost,.em-btn-success{min-height:44px;}
+          .em-tile{padding:1.25rem 1rem;}
+        }
       `}</style>
 
       <div className="em-wrap">
@@ -481,7 +491,7 @@ export default function EmailTemplateManager() {
 
               {/* ── EDIT TAB ────────────────────────────────────────────── */}
               {view==='edit' && (
-                <div style={{display:'grid',gridTemplateColumns:'1fr 260px',gap:20}}>
+                <div className="em-edit-grid" style={{display:'grid',gridTemplateColumns:'1fr 260px',gap:20}}>
                   {/* Editor */}
                   <div style={{background:'rgba(9,24,40,0.8)',border:'1px solid rgba(74,133,200,0.12)',
                     borderRadius:14,padding:'1.5rem'}}>
@@ -544,7 +554,7 @@ export default function EmailTemplateManager() {
 
               {/* ── SEND TAB ────────────────────────────────────────────── */}
               {view==='send' && (
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
+                <div className="em-send-grid" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
 
                   {/* LEFT: Run picker + venue checklist */}
                   <div style={{display:'flex',flexDirection:'column',gap:16}}>

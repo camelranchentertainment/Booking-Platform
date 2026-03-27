@@ -448,9 +448,21 @@ export default function VenueContactManager() {
           transition: width .4s ease;
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 1023px) {
+          .vl-wrap { padding: 1.25rem; }
+          .vl-search { width: 100%; }
+          .vl-th, .vl-td { padding: 10px 10px; font-size: 12px; }
+        }
+        @media (max-width: 767px) {
           .vl-wrap { padding: 1rem; }
           .vl-search { width: 100%; }
+          .vl-controls { flex-direction: column; align-items: stretch !important; }
+          .vl-controls > * { width: 100%; }
+          .vl-enrich-btn { width: 100%; justify-content: center; min-height: 44px; }
+          .vl-select { width: 100%; }
+          /* Keep table scrollable on mobile - reduce column widths */
+          .vl-th, .vl-td { padding: 8px 8px; font-size: 12px; white-space: normal; }
+          .vl-th { white-space: nowrap; }
         }
       `}</style>
 
@@ -479,7 +491,7 @@ export default function VenueContactManager() {
           </div>
 
           {/* ── Controls ──────────────────────────────────────────────────────── */}
-          <div style={{
+          <div className="vl-controls" style={{
             display: 'flex', gap: 10, flexWrap: 'wrap',
             alignItems: 'center', marginBottom: '1.25rem',
           }}>

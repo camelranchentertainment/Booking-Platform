@@ -411,8 +411,20 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
           color:#ffffff; font-weight:800; font-size:14px;
           font-family:'Nunito',sans-serif; margin-bottom:1rem;
         }
-        @media(max-width:900px) {
+        @media(max-width:1023px) {
+          .cm-wrap { padding:1.25rem; }
+        }
+        @media(max-width:767px) {
           .cm-wrap { padding:1rem; }
+          .cm-modal { padding:1.25rem; border-radius:14px; }
+          .cm-btn-primary, .cm-btn-ghost { min-height:44px; }
+          .kanban-board { flex-direction:column !important; overflow-x:visible !important; }
+          .kanban-col { min-width:0 !important; width:100% !important; }
+          .vdp-panel { width:100vw !important; }
+        }
+        @media(max-width:480px) {
+          .cm-modal { padding:1rem; }
+          .cm-status { font-size:10px; padding:3px 9px; }
         }
       `}</style>
 
@@ -590,7 +602,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
                   </button>
                 </div>
               ) : (
-                <div style={{ display:'flex', gap:14, overflowX:'auto', paddingBottom:8, alignItems:'flex-start' }}>
+                <div className="kanban-board" style={{ display:'flex', gap:14, overflowX:'auto', paddingBottom:8, alignItems:'flex-start' }}>
                   {statuses.map(status => {
                     const cfg   = STATUS_CONFIG[status];
                     const group = venuesByStatus(status);

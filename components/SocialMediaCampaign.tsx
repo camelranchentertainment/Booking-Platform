@@ -278,6 +278,16 @@ Return ONLY a valid JSON array, no markdown, no explanation:
           display:inline-block; padding:2px 9px; border-radius:99px;
           font-size:11px; font-weight:700; margin:2px;
         }
+        @media(max-width:1023px){
+          .sm-wrap{padding:1.25rem;}
+          .sm-main-grid{grid-template-columns:260px 1fr!important;}
+        }
+        @media(max-width:767px){
+          .sm-wrap{padding:1rem;}
+          .sm-main-grid{grid-template-columns:1fr!important;}
+          .sm-btn-primary,.sm-btn-ghost{min-height:44px;}
+          .booking-card{padding:12px 14px;}
+        }
       `}</style>
 
       <div className="sm-wrap">
@@ -306,7 +316,7 @@ Return ONLY a valid JSON array, no markdown, no explanation:
               </p>
             </div>
           ) : (
-            <div style={{ display:'grid', gridTemplateColumns:'320px 1fr', gap:20 }}>
+            <div className="sm-main-grid" style={{ display:'grid', gridTemplateColumns:'320px 1fr', gap:20 }}>
 
               {/* ── LEFT: Booking list ────────────────────────────────────── */}
               <div>

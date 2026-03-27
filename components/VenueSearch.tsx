@@ -244,6 +244,19 @@ export default function VenueSearch() {
           font-size: 12px; outline: none; cursor: pointer;
           max-width: 160px;
         }
+        @media (max-width: 1023px) {
+          .vs-wrap { padding: 1.25rem; }
+        }
+        @media (max-width: 767px) {
+          .vs-wrap { padding: 1rem; }
+          .vs-btn-primary { width: 100%; min-height: 44px; margin-left: 0 !important; }
+          .vs-btn-ghost { min-height: 44px; }
+          .vs-input { width: 100%; }
+          .vs-select { width: 100%; }
+          .vs-venue-card { flex-direction: column; gap: 10px; }
+          .vs-filter-row { flex-wrap: wrap; }
+          .vs-results-header { flex-direction: column; align-items: flex-start !important; gap: 8px; }
+        }
       `}</style>
 
       <div className="vs-wrap">

@@ -295,15 +295,21 @@ export default function BookingCalendar() {
         }
         .event-row:last-child { border-bottom: none; }
         .event-row:hover { background: rgba(74,133,200,0.04); }
-        @media (max-width: 768px) {
+        @media (max-width: 1023px) {
+          .cal-wrap { padding: 1.25rem; }
+          .year-grid { grid-template-columns: repeat(3,1fr); gap: 14px; }
+        }
+        @media (max-width: 767px) {
           .cal-wrap { padding: 1rem; }
           .year-grid { grid-template-columns: repeat(2,1fr); gap: 12px; }
           .month-modal { max-width: 100%; border-radius: 16px; }
           .month-modal-header { padding: 1rem; }
           .month-modal-body { padding: 1rem; }
           .day-cell-lg { height: 44px; font-size: 13px; }
+          .cal-btn { padding: 10px 14px; font-size: 13px; min-height: 44px; }
+          .cal-year-nav { flex-wrap: wrap; gap: 8px; }
         }
-        @media (max-width: 500px) {
+        @media (max-width: 480px) {
           .year-grid { grid-template-columns: 1fr; }
           .day-cell-lg { height: 38px; font-size: 12px; }
         }
@@ -325,7 +331,7 @@ export default function BookingCalendar() {
                 {syncStatus && <span style={{ marginLeft:12, color:'#22c55e' }}>{syncStatus}</span>}
               </p>
             </div>
-            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div className="cal-year-nav" style={{ display:'flex', alignItems:'center', gap:10 }}>
               <button className="cal-btn" onClick={() => setYear(y => y - 1)}>← {year - 1}</button>
               <div style={{ background:'rgba(9,24,40,0.9)',
                 border:'1px solid rgba(74,133,200,0.22)', borderRadius:9,
