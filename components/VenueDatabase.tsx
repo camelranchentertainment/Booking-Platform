@@ -1,8 +1,24 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
+interface Venue {
+  id: string;
+  name: string;
+  city: string;
+  state: string;
+  venue_type: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  address?: string;
+  zip_code?: string;
+  notes?: string;
+  contact_status: string;
+  created_at: string;
+}
+
 export default function VenueDatabase() {
-  const [venues, setVenues] = useState<any[]>([]);
+  const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     city: '',
@@ -10,7 +26,7 @@ export default function VenueDatabase() {
     venueType: '',
     contactStatus: ''
   });
-  const [selectedVenue, setSelectedVenue] = useState<any>(null);
+  const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {

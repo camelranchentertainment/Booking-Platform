@@ -53,7 +53,7 @@ export default function LandingPage() {
         if (checkout.url) { window.location.href = checkout.url; return; }
       }
       router.push('/dashboard');
-    } catch (err: any) { setAuthError(err.message); }
+    } catch (err) { setAuthError(err instanceof Error ? err.message : 'An error occurred'); }
     finally { setLoading(false); }
   };
 
@@ -76,7 +76,7 @@ export default function LandingPage() {
         token:    data.accessToken,
       }));
       router.push('/dashboard');
-    } catch (err: any) { setAuthError(err.message); }
+    } catch (err) { setAuthError(err instanceof Error ? err.message : 'An error occurred'); }
     finally { setLoading(false); }
   };
 

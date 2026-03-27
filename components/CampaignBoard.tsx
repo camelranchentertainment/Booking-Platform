@@ -1,16 +1,42 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
+interface Campaign {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  target_regions: string[];
+  created_at: string;
+  total_venues?: number;
+  contacted?: number;
+  responses?: number;
+  bookings?: number;
+}
+
+interface Venue {
+  id: string;
+  name: string;
+  city: string;
+  state: string;
+  venue_type: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  contact_status: string;
+  created_at: string;
+}
+
 export default function CampaignBoard() {
-  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [showNewCampaign, setShowNewCampaign] = useState(false);
   const [newCampaign, setNewCampaign] = useState({
     name: '',
     description: '',
     targetRegions: [] as string[]
   });
-  const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
-  const [venues, setVenues] = useState<any[]>([]);
+  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+  const [venues, setVenues] = useState<Venue[]>([]);
   const [selectedVenues, setSelectedVenues] = useState<string[]>([]);
   const [filterCity, setFilterCity] = useState('');
   const [filterState, setFilterState] = useState('');

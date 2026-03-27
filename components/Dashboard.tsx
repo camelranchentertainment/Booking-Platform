@@ -3,8 +3,36 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
+interface NavigationFilter {
+  campaignId?: string;
+}
+
+interface CampaignVenueRow {
+  id: string;
+  status: string;
+  venue?: { id: string; name: string; email?: string };
+}
+
+interface CampaignWithStats {
+  id: string;
+  name: string;
+  campaign_venues: CampaignVenueRow[];
+  total_venues: number;
+  contacted: number;
+  confirmed: number;
+  pending: number;
+  needEmail: number;
+}
+
+interface PendingAction {
+  type: string;
+  message: string;
+  action: string;
+  urgency: 'high' | 'medium' | 'low';
+}
+
 interface DashboardProps {
-  onNavigate?: (tab: string, filter?: any) => void;
+  onNavigate?: (tab: string, filter?: NavigationFilter) => void;
 }
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
@@ -17,8 +45,8 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     socialPostsPending: 0,
     responseRate: 0,
   });
-  const [campaigns, setCampaigns]         = useState<any[]>([]);
-  const [pendingActions, setPendingActions] = useState<any[]>([]);
+  const [campaigns, setCampaigns]         = useState<CampaignWithStats[]>([]);
+  const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
   const [loading, setLoading]             = useState(true);
 
   useEffect(() => { loadDashboardData(); }, []);
@@ -35,10 +63,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
       const campaignsWithStats = (campaignsData || []).map(campaign => {
         const venues    = campaign.campaign_venues || [];
-        const contacted = venues.filter((cv: any) => cv.status && cv.status !== 'contact?').length;
-        const confirmed = venues.filter((cv: any) => cv.status === 'booked').length;
-        const pending   = venues.filter((cv: any) => cv.status === 'pending').length;
-        const needEmail = venues.filter((cv: any) => !cv.venue?.email).length;
+        const contacted = venues.filter((cv: CampaignVenueRow) => cv.status && cv.status !== 'contact?').length;
+        const confirmed = venues.filter((cv: CampaignVenueRow) => cv.status === 'booked').length;
+        const pending   = venues.filter((cv: CampaignVenueRow) => cv.status === 'pending').length;
+        const needEmail = venues.filter((cv: CampaignVenueRow) => !cv.venue?.email).length;
         return { ...campaign, total_venues: venues.length, contacted, confirmed, pending, needEmail };
       });
 
@@ -57,7 +85,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       setStats({ activeCampaigns: campaignsWithStats.length, totalConfirmed, totalPending,
         totalContacted, venuesNeedingEmail, socialPostsPending: (postsData || []).length, responseRate });
 
-      const actions: Array<{ type: string; message: string; action: string; urgency: 'high'|'medium'|'low' }> = [];
+      const actions: PendingAction[] = [];
       if (venuesNeedingEmail > 0) actions.push({ type: 'email_needed',
         message: `${venuesNeedingEmail} venues need email addresses`, action: 'Add contact info', urgency: 'high' });
       if (totalPending > 0) actions.push({ type: 'pending_responses',

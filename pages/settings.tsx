@@ -25,9 +25,14 @@ interface Band {
   bio: string;
 }
 
+interface AuthUser {
+  id: string;
+  email: string;
+}
+
 export default function Settings() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [band, setBand] = useState<Band | null>(null);
   const [members, setMembers] = useState<BandMember[]>([]);
   
@@ -229,6 +234,7 @@ export default function Settings() {
 
   const updateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
     try {
       const { error } = await supabase
         .from('profiles')
@@ -245,8 +251,7 @@ export default function Settings() {
 
   const inviteMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!band) return;
+    if (!user || !band) return;
     
     try {
       alert(`To add a team member:
@@ -299,6 +304,7 @@ For now, please provide their User ID instead of email.`);
   };
 
   const removeMember = async (memberId: string) => {
+    if (!user) return;
     if (!confirm('Are you sure you want to remove this team member?')) return;
 
     try {
@@ -318,21 +324,22 @@ For now, please provide their User ID instead of email.`);
   };
 
   if (!user || !band) {
-    return <div style={{ padding: '2rem', color: '#E8DCC4' }}>Loading...</div>;
+    return <div style={{ padding: '2rem', color: '#7aa5c4', background: '#030d18', minHeight: '100vh' }}>Loading...</div>;
   }
 
   const isOwner = band.owner_user_id === user.id;
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #2C1810 0%, #3D2817 50%, #2C1810 100%)',
+      background: '#030d18',
       minHeight: '100vh'
     }}>
       {/* Header */}
       <div style={{
-        background: '#5D4E37',
+        background: 'rgba(3,13,24,0.97)',
         padding: '1rem 2rem',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        borderBottom: '1px solid rgba(74,133,200,0.12)',
+        backdropFilter: 'blur(16px)',
         marginBottom: '2rem'
       }}>
         <div style={{
@@ -345,7 +352,7 @@ For now, please provide their User ID instead of email.`);
           <a
             href="/dashboard"
             style={{
-              color: '#C8A882',
+              color: '#e8f1f8',
               textDecoration: 'none',
               fontSize: '1rem',
               display: 'flex',
@@ -371,7 +378,7 @@ For now, please provide their User ID instead of email.`);
         padding: '2rem'
       }}>
         <h1 style={{
-          color: '#C8A882',
+          color: '#e8f1f8',
           fontSize: '2.5rem',
           marginBottom: '2rem'
         }}>
@@ -380,20 +387,20 @@ For now, please provide their User ID instead of email.`);
 
         {/* Personal Profile Section */}
         <div style={{
-          background: 'rgba(61, 40, 23, 0.6)',
-          border: '2px solid #5C4A3A',
+          background: 'rgba(9,24,40,0.8)',
+          border: '1px solid rgba(74,133,200,0.2)',
           borderRadius: '12px',
           padding: '2rem',
           marginBottom: '2rem'
         }}>
-          <h2 style={{ color: '#C8A882', fontSize: '1.8rem', marginBottom: '1.5rem' }}>
+          <h2 style={{ color: '#e8f1f8', fontSize: '1.8rem', marginBottom: '1.5rem' }}>
             Your Profile
           </h2>
           <form onSubmit={updateProfile}>
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
-                color: '#C8A882',
+                color: '#e8f1f8',
                 marginBottom: '0.5rem',
                 fontWeight: '600'
               }}>
@@ -406,10 +413,10 @@ For now, please provide their User ID instead of email.`);
                 style={{
                   width: '100%',
                   padding: '0.75rem',
-                  border: '2px solid #5C4A3A',
+                  border: '1px solid rgba(74,133,200,0.2)',
                   borderRadius: '6px',
-                  background: 'rgba(245, 245, 240, 0.1)',
-                  color: '#E8DCC4',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: '#e8f1f8',
                   fontSize: '1rem'
                 }}
               />
@@ -417,7 +424,7 @@ For now, please provide their User ID instead of email.`);
             <div style={{ marginBottom: '1rem' }}>
               <label style={{
                 display: 'block',
-                color: '#9B8A7A',
+                color: '#7aa5c4',
                 marginBottom: '0.5rem'
               }}>
                 Email: {user.email}
@@ -427,7 +434,7 @@ For now, please provide their User ID instead of email.`);
               type="submit"
               style={{
                 padding: '0.75rem 2rem',
-                background: '#87AE73',
+                background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
                 border: 'none',
                 borderRadius: '6px',
                 color: 'white',
@@ -444,20 +451,20 @@ For now, please provide their User ID instead of email.`);
         {/* Band Information Section - Only owner can edit */}
         {isOwner && (
           <div style={{
-            background: 'rgba(61, 40, 23, 0.6)',
-            border: '2px solid #5C4A3A',
+            background: 'rgba(9,24,40,0.8)',
+            border: '1px solid rgba(74,133,200,0.2)',
             borderRadius: '12px',
             padding: '2rem',
             marginBottom: '2rem'
           }}>
-            <h2 style={{ color: '#C8A882', fontSize: '1.8rem', marginBottom: '1.5rem' }}>
+            <h2 style={{ color: '#e8f1f8', fontSize: '1.8rem', marginBottom: '1.5rem' }}>
               Band Information
             </h2>
             <form onSubmit={updateBandInfo}>
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{
                   display: 'block',
-                  color: '#C8A882',
+                  color: '#e8f1f8',
                   marginBottom: '0.5rem',
                   fontWeight: '600'
                 }}>
@@ -471,10 +478,10 @@ For now, please provide their User ID instead of email.`);
                   style={{
                     width: '100%',
                     padding: '0.75rem',
-                    border: '2px solid #5C4A3A',
+                    border: '1px solid rgba(74,133,200,0.2)',
                     borderRadius: '6px',
-                    background: 'rgba(245, 245, 240, 0.1)',
-                    color: '#E8DCC4',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: '#e8f1f8',
                     fontSize: '1rem'
                   }}
                 />
@@ -482,7 +489,7 @@ For now, please provide their User ID instead of email.`);
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{
                   display: 'block',
-                  color: '#C8A882',
+                  color: '#e8f1f8',
                   marginBottom: '0.5rem',
                   fontWeight: '600'
                 }}>
@@ -495,10 +502,10 @@ For now, please provide their User ID instead of email.`);
                   style={{
                     width: '100%',
                     padding: '0.75rem',
-                    border: '2px solid #5C4A3A',
+                    border: '1px solid rgba(74,133,200,0.2)',
                     borderRadius: '6px',
-                    background: 'rgba(245, 245, 240, 0.1)',
-                    color: '#E8DCC4',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: '#e8f1f8',
                     fontSize: '1rem'
                   }}
                 />
@@ -506,7 +513,7 @@ For now, please provide their User ID instead of email.`);
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{
                   display: 'block',
-                  color: '#C8A882',
+                  color: '#e8f1f8',
                   marginBottom: '0.5rem',
                   fontWeight: '600'
                 }}>
@@ -519,10 +526,10 @@ For now, please provide their User ID instead of email.`);
                   style={{
                     width: '100%',
                     padding: '0.75rem',
-                    border: '2px solid #5C4A3A',
+                    border: '1px solid rgba(74,133,200,0.2)',
                     borderRadius: '6px',
-                    background: 'rgba(245, 245, 240, 0.1)',
-                    color: '#E8DCC4',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: '#e8f1f8',
                     fontSize: '1rem'
                   }}
                 />
@@ -530,7 +537,7 @@ For now, please provide their User ID instead of email.`);
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{
                   display: 'block',
-                  color: '#C8A882',
+                  color: '#e8f1f8',
                   marginBottom: '0.5rem',
                   fontWeight: '600'
                 }}>
@@ -544,10 +551,10 @@ For now, please provide their User ID instead of email.`);
                   style={{
                     width: '100%',
                     padding: '0.75rem',
-                    border: '2px solid #5C4A3A',
+                    border: '1px solid rgba(74,133,200,0.2)',
                     borderRadius: '6px',
-                    background: 'rgba(245, 245, 240, 0.1)',
-                    color: '#E8DCC4',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: '#e8f1f8',
                     fontSize: '1rem'
                   }}
                 />
@@ -555,7 +562,7 @@ For now, please provide their User ID instead of email.`);
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{
                   display: 'block',
-                  color: '#C8A882',
+                  color: '#e8f1f8',
                   marginBottom: '0.5rem',
                   fontWeight: '600'
                 }}>
@@ -568,10 +575,10 @@ For now, please provide their User ID instead of email.`);
                   style={{
                     width: '100%',
                     padding: '0.75rem',
-                    border: '2px solid #5C4A3A',
+                    border: '1px solid rgba(74,133,200,0.2)',
                     borderRadius: '6px',
-                    background: 'rgba(245, 245, 240, 0.1)',
-                    color: '#E8DCC4',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: '#e8f1f8',
                     fontSize: '1rem',
                     resize: 'vertical',
                     fontFamily: 'inherit'
@@ -582,7 +589,7 @@ For now, please provide their User ID instead of email.`);
                 type="submit"
                 style={{
                   padding: '0.75rem 2rem',
-                  background: '#87AE73',
+                  background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
                   border: 'none',
                   borderRadius: '6px',
                   color: 'white',
@@ -599,8 +606,8 @@ For now, please provide their User ID instead of email.`);
 
         {/* Team Members Section */}
         <div style={{
-          background: 'rgba(61, 40, 23, 0.6)',
-          border: '2px solid #5C4A3A',
+          background: 'rgba(9,24,40,0.8)',
+          border: '1px solid rgba(74,133,200,0.2)',
           borderRadius: '12px',
           padding: '2rem',
           marginBottom: '2rem'
@@ -611,7 +618,7 @@ For now, please provide their User ID instead of email.`);
             alignItems: 'center',
             marginBottom: '1.5rem'
           }}>
-            <h2 style={{ color: '#C8A882', fontSize: '1.8rem', margin: 0 }}>
+            <h2 style={{ color: '#e8f1f8', fontSize: '1.8rem', margin: 0 }}>
               Team Members
             </h2>
             {isOwner && (
@@ -619,7 +626,7 @@ For now, please provide their User ID instead of email.`);
                 onClick={() => setShowInviteForm(!showInviteForm)}
                 style={{
                   padding: '0.5rem 1.5rem',
-                  background: '#87AE73',
+                  background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
                   border: 'none',
                   borderRadius: '6px',
                   color: 'white',
@@ -642,7 +649,7 @@ For now, please provide their User ID instead of email.`);
             }}>
               <label style={{
                 display: 'block',
-                color: '#C8A882',
+                color: '#e8f1f8',
                 marginBottom: '0.5rem',
                 fontWeight: '600'
               }}>
@@ -658,10 +665,10 @@ For now, please provide their User ID instead of email.`);
                   style={{
                     flex: 1,
                     padding: '0.75rem',
-                    border: '2px solid #5C4A3A',
+                    border: '1px solid rgba(74,133,200,0.2)',
                     borderRadius: '6px',
-                    background: 'rgba(245, 245, 240, 0.1)',
-                    color: '#E8DCC4',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: '#e8f1f8',
                     fontSize: '1rem'
                   }}
                 />
@@ -669,7 +676,7 @@ For now, please provide their User ID instead of email.`);
                   type="submit"
                   style={{
                     padding: '0.75rem 1.5rem',
-                    background: '#87AE73',
+                    background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
                     border: 'none',
                     borderRadius: '6px',
                     color: 'white',
@@ -686,9 +693,9 @@ For now, please provide their User ID instead of email.`);
                   style={{
                     padding: '0.75rem 1.5rem',
                     background: 'transparent',
-                    border: '2px solid #708090',
+                    border: '1px solid rgba(74,133,200,0.3)',
                     borderRadius: '6px',
-                    color: '#708090',
+                    color: '#7aa5c4',
                     fontSize: '1rem',
                     fontWeight: '600',
                     cursor: 'pointer'
@@ -697,7 +704,7 @@ For now, please provide their User ID instead of email.`);
                   Cancel
                 </button>
               </div>
-              <p style={{ color: '#9B8A7A', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
+              <p style={{ color: '#7aa5c4', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
                 Note: Team member invitation system coming soon
               </p>
             </form>
@@ -712,22 +719,22 @@ For now, please provide their User ID instead of email.`);
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   padding: '1rem',
-                  borderBottom: '1px solid #5C4A3A',
-                  color: '#E8DCC4'
+                  borderBottom: '1px solid rgba(74,133,200,0.12)',
+                  color: '#e8f1f8'
                 }}
               >
                 <div>
                   <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>
                     {member.profiles?.[0]?.display_name || 'Band Member'}
                   </div>
-                  <div style={{ fontSize: '0.9rem', color: '#9B8A7A' }}>
+                  <div style={{ fontSize: '0.9rem', color: '#7aa5c4' }}>
                     {member.user_id === user.id ? user.email : 'Team Member'}
                   </div>
                   <div style={{
                     display: 'inline-block',
                     marginTop: '0.25rem',
                     padding: '0.25rem 0.75rem',
-                    background: member.role === 'owner' ? '#87AE73' : '#5C4A3A',
+                    background: member.role === 'owner' ? '#3a7fc1' : 'rgba(74,133,200,0.15)',
                     borderRadius: '12px',
                     fontSize: '0.75rem',
                     fontWeight: '600',
@@ -741,8 +748,8 @@ For now, please provide their User ID instead of email.`);
                     onClick={() => removeMember(member.id)}
                     style={{
                       padding: '0.5rem 1rem',
-                      background: '#C85050',
-                      border: 'none',
+                      background: 'rgba(239,68,68,0.15)',
+                      border: '1px solid rgba(239,68,68,0.4)',
                       borderRadius: '6px',
                       color: 'white',
                       fontSize: '0.85rem',
@@ -760,27 +767,27 @@ For now, please provide their User ID instead of email.`);
 
         {/* Email SMTP Configuration Section */}
         <div style={{
-          background: 'rgba(61, 40, 23, 0.6)',
-          border: '2px solid #5C4A3A',
+          background: 'rgba(9,24,40,0.8)',
+          border: '1px solid rgba(74,133,200,0.2)',
           borderRadius: '12px',
           padding: '2rem',
           marginBottom: '2rem'
         }}>
-          <h2 style={{ color: '#C8A882', fontSize: '1.8rem', marginBottom: '1.5rem' }}>
+          <h2 style={{ color: '#e8f1f8', fontSize: '1.8rem', marginBottom: '1.5rem' }}>
             📧 Email Configuration
           </h2>
           <div style={{
-            background: 'rgba(135, 174, 115, 0.2)',
-            border: '1px solid #87AE73',
+            background: 'rgba(58,127,193,0.1)',
+            border: '1px solid rgba(74,133,200,0.4)',
             borderRadius: '8px',
             padding: '1.5rem',
             marginBottom: '1.5rem'
           }}>
-            <p style={{ color: '#87AE73', margin: 0, marginBottom: '0.5rem' }}>
+            <p style={{ color: '#6baed6', margin: 0, marginBottom: '0.5rem' }}>
               Configure your email to send booking inquiries from YOUR email address
             </p>
-            <p style={{ color: '#9B8A7A', margin: 0, fontSize: '0.9rem' }}>
-              For Gmail: Use your email and an <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer" style={{color: '#87AE73'}}>App Password</a> (not your regular password)
+            <p style={{ color: '#7aa5c4', margin: 0, fontSize: '0.9rem' }}>
+              For Gmail: Use your email and an <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer" style={{color: '#6baed6'}}>App Password</a> (not your regular password)
             </p>
           </div>
 
@@ -831,7 +838,7 @@ For now, please provide their User ID instead of email.`);
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
-                color: '#C8A882',
+                color: '#e8f1f8',
                 marginBottom: '0.5rem',
                 fontWeight: '600'
               }}>
@@ -846,10 +853,10 @@ For now, please provide their User ID instead of email.`);
                 style={{
                   width: '100%',
                   padding: '0.75rem',
-                  border: '2px solid #5C4A3A',
+                  border: '1px solid rgba(74,133,200,0.2)',
                   borderRadius: '6px',
-                  background: 'rgba(245, 245, 240, 0.1)',
-                  color: '#E8DCC4',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: '#e8f1f8',
                   fontSize: '1rem'
                 }}
               />
@@ -858,7 +865,7 @@ For now, please provide their User ID instead of email.`);
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
-                color: '#C8A882',
+                color: '#e8f1f8',
                 marginBottom: '0.5rem',
                 fontWeight: '600'
               }}>
@@ -873,22 +880,22 @@ For now, please provide their User ID instead of email.`);
                 style={{
                   width: '100%',
                   padding: '0.75rem',
-                  border: '2px solid #5C4A3A',
+                  border: '1px solid rgba(74,133,200,0.2)',
                   borderRadius: '6px',
-                  background: 'rgba(245, 245, 240, 0.1)',
-                  color: '#E8DCC4',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: '#e8f1f8',
                   fontSize: '1rem'
                 }}
               />
-              <p style={{ color: '#9B8A7A', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
-                For Gmail: Create an <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer" style={{color: '#87AE73'}}>App Password</a> in your Google Account settings
+              <p style={{ color: '#7aa5c4', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
+                For Gmail: Create an <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer" style={{color: '#6baed6'}}>App Password</a> in your Google Account settings
               </p>
             </div>
 
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
-                color: '#C8A882',
+                color: '#e8f1f8',
                 marginBottom: '0.5rem',
                 fontWeight: '600'
               }}>
@@ -902,10 +909,10 @@ For now, please provide their User ID instead of email.`);
                 style={{
                   width: '100%',
                   padding: '0.75rem',
-                  border: '2px solid #5C4A3A',
+                  border: '1px solid rgba(74,133,200,0.2)',
                   borderRadius: '6px',
-                  background: 'rgba(245, 245, 240, 0.1)',
-                  color: '#E8DCC4',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: '#e8f1f8',
                   fontSize: '1rem'
                 }}
               />
@@ -913,7 +920,7 @@ For now, please provide their User ID instead of email.`);
 
             <details style={{ marginBottom: '1.5rem' }}>
               <summary style={{ 
-                color: '#C8A882', 
+                color: '#e8f1f8', 
                 cursor: 'pointer',
                 fontWeight: '600',
                 marginBottom: '1rem'
@@ -925,7 +932,7 @@ For now, please provide their User ID instead of email.`);
                 <div>
                   <label style={{
                     display: 'block',
-                    color: '#C8A882',
+                    color: '#e8f1f8',
                     marginBottom: '0.5rem',
                     fontWeight: '600',
                     fontSize: '0.9rem'
@@ -939,10 +946,10 @@ For now, please provide their User ID instead of email.`);
                     style={{
                       width: '100%',
                       padding: '0.75rem',
-                      border: '2px solid #5C4A3A',
+                      border: '1px solid rgba(74,133,200,0.2)',
                       borderRadius: '6px',
-                      background: 'rgba(245, 245, 240, 0.1)',
-                      color: '#E8DCC4',
+                      background: 'rgba(255,255,255,0.05)',
+                      color: '#e8f1f8',
                       fontSize: '0.95rem'
                     }}
                   />
@@ -950,7 +957,7 @@ For now, please provide their User ID instead of email.`);
                 <div>
                   <label style={{
                     display: 'block',
-                    color: '#C8A882',
+                    color: '#e8f1f8',
                     marginBottom: '0.5rem',
                     fontWeight: '600',
                     fontSize: '0.9rem'
@@ -964,10 +971,10 @@ For now, please provide their User ID instead of email.`);
                     style={{
                       width: '100%',
                       padding: '0.75rem',
-                      border: '2px solid #5C4A3A',
+                      border: '1px solid rgba(74,133,200,0.2)',
                       borderRadius: '6px',
-                      background: 'rgba(245, 245, 240, 0.1)',
-                      color: '#E8DCC4',
+                      background: 'rgba(255,255,255,0.05)',
+                      color: '#e8f1f8',
                       fontSize: '0.95rem'
                     }}
                   />
@@ -979,7 +986,7 @@ For now, please provide their User ID instead of email.`);
               type="submit"
               style={{
                 padding: '0.75rem 2rem',
-                background: '#87AE73',
+                background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
                 border: 'none',
                 borderRadius: '6px',
                 color: 'white',
@@ -995,25 +1002,25 @@ For now, please provide their User ID instead of email.`);
 
         {/* Calendar Integration Section */}
         <div style={{
-          background: 'rgba(61, 40, 23, 0.6)',
-          border: '2px solid #5C4A3A',
+          background: 'rgba(9,24,40,0.8)',
+          border: '1px solid rgba(74,133,200,0.2)',
           borderRadius: '12px',
           padding: '2rem'
         }}>
-          <h2 style={{ color: '#C8A882', fontSize: '1.8rem', marginBottom: '1.5rem' }}>
+          <h2 style={{ color: '#e8f1f8', fontSize: '1.8rem', marginBottom: '1.5rem' }}>
             Calendar Integration
           </h2>
           <div style={{
-            background: 'rgba(135, 174, 115, 0.2)',
-            border: '1px solid #87AE73',
+            background: 'rgba(58,127,193,0.1)',
+            border: '1px solid rgba(74,133,200,0.4)',
             borderRadius: '8px',
             padding: '1.5rem',
             marginBottom: '1.5rem'
           }}>
-            <p style={{ color: '#87AE73', margin: 0, marginBottom: '0.5rem' }}>
+            <p style={{ color: '#6baed6', margin: 0, marginBottom: '0.5rem' }}>
               📅 Connect your calendar to automatically sync bookings
             </p>
-            <p style={{ color: '#9B8A7A', margin: 0, fontSize: '0.9rem' }}>
+            <p style={{ color: '#7aa5c4', margin: 0, fontSize: '0.9rem' }}>
               Your calendar credentials are stored securely and used only to sync your booking dates.
             </p>
           </div>
@@ -1023,7 +1030,7 @@ For now, please provide their User ID instead of email.`);
             if (!user) return;
             
             try {
-              const calendarData: any = {
+              const calendarData: Record<string, string | boolean | null> = {
                 user_id: user.id,
                 calendar_type: calendarType,
                 is_active: true,
@@ -1070,7 +1077,7 @@ For now, please provide their User ID instead of email.`);
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
-                color: '#C8A882',
+                color: '#e8f1f8',
                 marginBottom: '0.5rem',
                 fontWeight: '600'
               }}>
@@ -1082,10 +1089,10 @@ For now, please provide their User ID instead of email.`);
                 style={{
                   width: '100%',
                   padding: '0.75rem',
-                  border: '2px solid #5C4A3A',
+                  border: '1px solid rgba(74,133,200,0.2)',
                   borderRadius: '6px',
-                  background: 'rgba(245, 245, 240, 0.1)',
-                  color: '#E8DCC4',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: '#e8f1f8',
                   fontSize: '1rem',
                   cursor: 'pointer'
                 }}
@@ -1102,7 +1109,7 @@ For now, please provide their User ID instead of email.`);
                 <div style={{ marginBottom: '1.5rem' }}>
                   <label style={{
                     display: 'block',
-                    color: '#C8A882',
+                    color: '#e8f1f8',
                     marginBottom: '0.5rem',
                     fontWeight: '600'
                   }}>
@@ -1116,21 +1123,21 @@ For now, please provide their User ID instead of email.`);
                     style={{
                       width: '100%',
                       padding: '0.75rem',
-                      border: '2px solid #5C4A3A',
+                      border: '1px solid rgba(74,133,200,0.2)',
                       borderRadius: '6px',
-                      background: 'rgba(245, 245, 240, 0.1)',
-                      color: '#E8DCC4',
+                      background: 'rgba(255,255,255,0.05)',
+                      color: '#e8f1f8',
                       fontSize: '1rem'
                     }}
                   />
-                  <p style={{ color: '#9B8A7A', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
-                    Get your API key from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style={{color: '#87AE73'}}>Google Cloud Console</a>
+                  <p style={{ color: '#7aa5c4', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
+                    Get your API key from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style={{color: '#6baed6'}}>Google Cloud Console</a>
                   </p>
                 </div>
                 <div style={{ marginBottom: '1.5rem' }}>
                   <label style={{
                     display: 'block',
-                    color: '#C8A882',
+                    color: '#e8f1f8',
                     marginBottom: '0.5rem',
                     fontWeight: '600'
                   }}>
@@ -1144,10 +1151,10 @@ For now, please provide their User ID instead of email.`);
                     style={{
                       width: '100%',
                       padding: '0.75rem',
-                      border: '2px solid #5C4A3A',
+                      border: '1px solid rgba(74,133,200,0.2)',
                       borderRadius: '6px',
-                      background: 'rgba(245, 245, 240, 0.1)',
-                      color: '#E8DCC4',
+                      background: 'rgba(255,255,255,0.05)',
+                      color: '#e8f1f8',
                       fontSize: '1rem'
                     }}
                   />
@@ -1159,7 +1166,7 @@ For now, please provide their User ID instead of email.`);
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{
                   display: 'block',
-                  color: '#C8A882',
+                  color: '#e8f1f8',
                   marginBottom: '0.5rem',
                   fontWeight: '600'
                 }}>
@@ -1173,15 +1180,15 @@ For now, please provide their User ID instead of email.`);
                   style={{
                     width: '100%',
                     padding: '0.75rem',
-                    border: '2px solid #5C4A3A',
+                    border: '1px solid rgba(74,133,200,0.2)',
                     borderRadius: '6px',
-                    background: 'rgba(245, 245, 240, 0.1)',
-                    color: '#E8DCC4',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: '#e8f1f8',
                     fontSize: '1rem'
                   }}
                 />
-                <p style={{ color: '#9B8A7A', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
-                  Get your API key from <a href="https://portal.azure.com" target="_blank" style={{color: '#87AE73'}}>Azure Portal</a>
+                <p style={{ color: '#7aa5c4', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
+                  Get your API key from <a href="https://portal.azure.com" target="_blank" style={{color: '#6baed6'}}>Azure Portal</a>
                 </p>
               </div>
             )}
@@ -1190,7 +1197,7 @@ For now, please provide their User ID instead of email.`);
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{
                   display: 'block',
-                  color: '#C8A882',
+                  color: '#e8f1f8',
                   marginBottom: '0.5rem',
                   fontWeight: '600'
                 }}>
@@ -1204,14 +1211,14 @@ For now, please provide their User ID instead of email.`);
                   style={{
                     width: '100%',
                     padding: '0.75rem',
-                    border: '2px solid #5C4A3A',
+                    border: '1px solid rgba(74,133,200,0.2)',
                     borderRadius: '6px',
-                    background: 'rgba(245, 245, 240, 0.1)',
-                    color: '#E8DCC4',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: '#e8f1f8',
                     fontSize: '1rem'
                   }}
                 />
-                <p style={{ color: '#9B8A7A', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
+                <p style={{ color: '#7aa5c4', fontSize: '0.85rem', marginTop: '0.5rem', margin: '0.5rem 0 0 0' }}>
                   Copy your calendar's iCal/webcal URL from your calendar settings
                 </p>
               </div>
@@ -1222,7 +1229,7 @@ For now, please provide their User ID instead of email.`);
                 type="submit"
                 style={{
                   padding: '0.75rem 2rem',
-                  background: '#87AE73',
+                  background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
                   border: 'none',
                   borderRadius: '6px',
                   color: 'white',

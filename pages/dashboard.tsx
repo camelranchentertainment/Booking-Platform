@@ -10,12 +10,26 @@ import SocialMediaCampaign from '../components/SocialMediaCampaign';
 import VenueContactManager from '../components/VenueContactManager';
 import BookingCalendar from '../components/BookingCalendar';
 
+interface AuthUser {
+  id: string;
+  email: string;
+}
+
+interface BandProfile {
+  id: string;
+  band_name: string;
+}
+
+interface NavigationData {
+  campaignId?: string;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [activeTab, setActiveTab]       = useState('dashboard');
-  const [user, setUser]                 = useState<any>(null);
-  const [bandProfile, setBandProfile]   = useState<any>(null);
-  const [navigationData, setNavigationData] = useState<any>(null);
+  const [user, setUser]                 = useState<AuthUser | null>(null);
+  const [bandProfile, setBandProfile]   = useState<BandProfile | null>(null);
+  const [navigationData, setNavigationData] = useState<NavigationData | null>(null);
   const [menuOpen, setMenuOpen]         = useState(false);
 
   useEffect(() => { checkAuth(); }, [router]);
@@ -28,7 +42,7 @@ export default function DashboardPage() {
       setUser(JSON.parse(local));
       return;
     }
-    setUser(session.user);
+    setUser({ id: session.user.id, email: session.user.email ?? '' });
     loadBandProfile(session.user.id);
   };
 
@@ -46,9 +60,9 @@ export default function DashboardPage() {
     router.push('/');
   };
 
-  const handleNavigate = (tab: string, data?: any) => {
+  const handleNavigate = (tab: string, data?: NavigationData) => {
     setActiveTab(tab);
-    setNavigationData(data);
+    setNavigationData(data ?? null);
   };
 
   const tabs = [
