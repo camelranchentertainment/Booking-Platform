@@ -48,7 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .upsert(
         {
           user_id:              userId,
-          calendar_type:        'google_oauth',
+          calendar_type:        'google',
           google_refresh_token: encryptedRefreshToken,
           is_active:            true,
           updated_at:           new Date().toISOString(),
