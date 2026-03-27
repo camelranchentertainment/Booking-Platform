@@ -108,14 +108,28 @@ export default function BookingCalendar() {
       const headers: Record<string, string> = {};
       if (user.token) headers['Authorization'] = `Bearer ${user.token}`;
       const res = await fetch(`/api/calendar/sync?userId=${user.id}&year=${year}`, { headers });
-      if (!res.ok) { setSyncStatus(''); return; }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setSyncStatus(`Sync error: ${errData.error ?? res.status}`);
+        console.error('[BookingCalendar] syncGoogle failed:', res.status, errData);
+        return;
+      }
       const data = await res.json();
+      console.log('[BookingCalendar] syncGoogle response:', data);
+      if (data.message) console.log('[BookingCalendar] sync message:', data.message);
       if (data.events?.length) {
         setCalendarEvents(data.events);
         setSyncStatus(`✓ ${data.events.length} calendar events`);
         setTimeout(() => setSyncStatus(''), 3000);
-      } else setSyncStatus('');
-    } catch { setSyncStatus(''); }
+      } else {
+        setSyncStatus(data.message ? `Calendar: ${data.message}` : '0 events');
+        setTimeout(() => setSyncStatus(''), 4000);
+      }
+    } catch (err) {
+      console.error('[BookingCalendar] syncGoogle exception:', err);
+      setSyncStatus('Sync failed');
+      setTimeout(() => setSyncStatus(''), 4000);
+    }
   };
 
   const getEventsForDate = (dateStr: string): Booking[] => [
