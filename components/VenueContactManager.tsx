@@ -61,15 +61,20 @@ const STATUS_LABELS: Record<string, string> = {
   no_response:       'No Response',
 };
 
+interface VenueContactManagerProps {
+  filterMissingEmail?: boolean;
+}
+
 // ─── Main component ────────────────────────────────────────────────────────────
 
-export default function VenueContactManager() {
+export default function VenueContactManager({ filterMissingEmail }: VenueContactManagerProps) {
   const [venues, setVenues]             = useState<Venue[]>([]);
   const [filtered, setFiltered]         = useState<Venue[]>([]);
   const [loading, setLoading]           = useState(true);
   const [search, setSearch]             = useState('');
   const [filterState, setFilterState]   = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
+  const [showMissingEmail, setShowMissingEmail] = useState(!!filterMissingEmail);
   const [states, setStates]             = useState<string[]>([]);
 
   // ── Inline editing ────────────────────────────────────────────────────────
@@ -128,8 +133,9 @@ export default function VenueContactManager() {
     }
     if (filterState !== 'ALL')  list = list.filter(v => v.state === filterState);
     if (filterStatus !== 'ALL') list = list.filter(v => (v.contact_status || 'not_contacted') === filterStatus);
+    if (showMissingEmail)       list = list.filter(v => !v.email);
     setFiltered(list);
-  }, [venues, search, filterState, filterStatus]);
+  }, [venues, search, filterState, filterStatus, showMissingEmail]);
 
   // ── Inline edit callbacks (all stable — read state via refs) ─────────────
 
@@ -509,6 +515,21 @@ export default function VenueContactManager() {
               <option value="ALL">All Statuses</option>
               {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
+
+            {/* ── Missing email filter toggle ── */}
+            <button
+              onClick={() => setShowMissingEmail(v => !v)}
+              style={{
+                background: showMissingEmail ? 'rgba(248,113,113,0.15)' : 'transparent',
+                border: `1px solid ${showMissingEmail ? 'rgba(248,113,113,0.4)' : 'rgba(74,133,200,0.22)'}`,
+                borderRadius: 9, padding: '10px 14px',
+                color: showMissingEmail ? '#f87171' : '#6baed6',
+                fontFamily: "'Nunito', sans-serif", fontSize: 13, fontWeight: 700,
+                cursor: 'pointer', transition: 'all .15s', whiteSpace: 'nowrap',
+              }}
+            >
+              {showMissingEmail ? '✕ Clear Email Filter' : '⚠ Missing Email Only'}
+            </button>
 
             {/* ── Enrich button ── */}
             {enrichStatus && enrichStatus.missingEmail > 0 && !enrichStatus.job.running && (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
 interface NavigationFilter {
@@ -31,6 +31,19 @@ interface PendingAction {
   urgency: 'high' | 'medium' | 'low';
 }
 
+// ── Email modal types ──────────────────────────────────────────────────────────
+interface MissingEmailVenue {
+  venueId: string;
+  campaignVenueId: string;
+  name: string;
+  city: string;
+  state: string;
+  campaignName: string;
+  email: string;
+  phone: string;
+  saved: boolean; // turns on green check after a field is saved
+}
+
 interface DashboardProps {
   onNavigate?: (tab: string, filter?: NavigationFilter) => void;
 }
@@ -48,6 +61,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const [campaigns, setCampaigns]         = useState<CampaignWithStats[]>([]);
   const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
   const [loading, setLoading]             = useState(true);
+
+  // ── Email modal state ────────────────────────────────────────────────────────
+  const [showEmailModal, setShowEmailModal]         = useState(false);
+  const [emailVenues, setEmailVenues]               = useState<MissingEmailVenue[]>([]);
+  const [emailModalLoading, setEmailModalLoading]   = useState(false);
+  // Track which (venueId, field) is actively being edited inside the modal
+  const [modalEdit, setModalEdit] = useState<{ venueId: string; field: 'email' | 'phone'; value: string } | null>(null);
+  const modalCommitting = useRef(false);
 
   useEffect(() => { loadDashboardData(); }, []);
 
@@ -72,11 +93,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
       setCampaigns(campaignsWithStats);
 
-      const totalConfirmed    = campaignsWithStats.reduce((s, c) => s + c.confirmed, 0);
-      const totalPending      = campaignsWithStats.reduce((s, c) => s + c.pending, 0);
-      const totalContacted    = campaignsWithStats.reduce((s, c) => s + c.contacted, 0);
+      const totalConfirmed     = campaignsWithStats.reduce((s, c) => s + c.confirmed, 0);
+      const totalPending       = campaignsWithStats.reduce((s, c) => s + c.pending, 0);
+      const totalContacted     = campaignsWithStats.reduce((s, c) => s + c.contacted, 0);
       const venuesNeedingEmail = campaignsWithStats.reduce((s, c) => s + c.needEmail, 0);
-      const responseRate      = totalContacted > 0
+      const responseRate       = totalContacted > 0
         ? Math.round(((totalConfirmed + totalPending) / totalContacted) * 100) : 0;
 
       const { data: postsData } = await supabase
@@ -98,7 +119,110 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     finally { setLoading(false); }
   };
 
-  // ─── Loading ──────────────────────────────────────────────────────────────
+  // ── Open email modal: fetch venues missing emails from active campaigns ───────
+  const openEmailModal = async () => {
+    setShowEmailModal(true);
+    setEmailModalLoading(true);
+    setModalEdit(null);
+    modalCommitting.current = false;
+    try {
+      // Fetch campaign_venues joined with venues and campaigns — only where email IS NULL
+      const { data } = await supabase
+        .from('campaign_venues')
+        .select(`
+          id,
+          venue:venues(id, name, city, state, phone, email),
+          campaign:campaigns(id, name, status)
+        `)
+        .filter('campaign.status', 'eq', 'active')
+        .not('campaign', 'is', null);
+
+      const rows: MissingEmailVenue[] = [];
+      for (const cv of (data || [])) {
+        // Supabase FK joins can return object or array — normalise to object
+        const venue    = Array.isArray(cv.venue)    ? cv.venue[0]    : cv.venue;
+        const campaign = Array.isArray(cv.campaign) ? cv.campaign[0] : cv.campaign;
+        if (!venue || !campaign) continue;
+        if (venue.email) continue; // skip venues that already have email
+        // Deduplicate by venueId (same venue might be in multiple campaigns)
+        if (rows.find(r => r.venueId === venue.id)) continue;
+        rows.push({
+          venueId:          venue.id,
+          campaignVenueId:  cv.id,
+          name:             venue.name,
+          city:             venue.city,
+          state:            venue.state,
+          campaignName:     campaign.name,
+          email:            '',
+          phone:            venue.phone || '',
+          saved:            false,
+        });
+      }
+      setEmailVenues(rows);
+    } catch (err) {
+      console.error('Error loading missing-email venues:', err);
+    } finally {
+      setEmailModalLoading(false);
+    }
+  };
+
+  // ── Save a field in the modal ─────────────────────────────────────────────────
+  const commitModalEdit = useCallback(async () => {
+    if (modalCommitting.current) return;
+    if (!modalEdit) return;
+
+    const { venueId, field, value } = modalEdit;
+    const trimmed = value.trim();
+
+    // Get current value from state
+    const current = emailVenues.find(v => v.venueId === venueId);
+    if (!current) { setModalEdit(null); return; }
+    if ((current[field] || '') === trimmed) { setModalEdit(null); return; }
+
+    modalCommitting.current = true;
+    setModalEdit(null);
+
+    try {
+      const { error } = await supabase
+        .from('venues')
+        .update({ [field]: trimmed || null })
+        .eq('id', venueId);
+      if (error) throw error;
+
+      setEmailVenues(prev => prev.map(v => {
+        if (v.venueId !== venueId) return v;
+        const updated = { ...v, [field]: trimmed, saved: true };
+        return updated;
+      }));
+
+      // If email was saved (and is non-empty), decrement the live badge count
+      if (field === 'email' && trimmed) {
+        setStats(prev => ({
+          ...prev,
+          venuesNeedingEmail: Math.max(0, prev.venuesNeedingEmail - 1),
+        }));
+        setPendingActions(prev => prev.map(a => {
+          if (a.type !== 'email_needed') return a;
+          const newCount = Math.max(0, parseInt(a.message) - 1);
+          return newCount === 0
+            ? { ...a, message: '0 venues need email addresses' }
+            : { ...a, message: `${newCount} venues need email addresses` };
+        }).filter(a => {
+          if (a.type === 'email_needed') {
+            // Remove the action if count is now 0
+            return parseInt(a.message) > 0;
+          }
+          return true;
+        }));
+      }
+    } catch (err) {
+      console.error('Save error:', err);
+    } finally {
+      modalCommitting.current = false;
+    }
+  }, [modalEdit, emailVenues]);
+
+  // ── Loading ──────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div style={{
@@ -111,7 +235,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     );
   }
 
-  // ─── Stat card data ───────────────────────────────────────────────────────
+  // ── Stat card data ────────────────────────────────────────────────────────────
   const statCards = [
     {
       label: 'Active Campaigns',
@@ -151,9 +275,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     },
   ];
 
-  const urgencyColor = { high: '#f87171', medium: '#f59e0b', low: '#6baed6' };
-  const urgencyBg    = { high: 'rgba(248,113,113,0.08)', medium: 'rgba(245,158,11,0.08)', low: 'rgba(107,174,214,0.08)' };
+  const urgencyColor  = { high: '#f87171', medium: '#f59e0b', low: '#6baed6' };
+  const urgencyBg     = { high: 'rgba(248,113,113,0.08)', medium: 'rgba(245,158,11,0.08)', low: 'rgba(107,174,214,0.08)' };
   const urgencyBorder = { high: 'rgba(248,113,113,0.22)', medium: 'rgba(245,158,11,0.22)', low: 'rgba(107,174,214,0.22)' };
+
+  // Count how many modal venues still need email (for the modal header badge)
+  const stillMissingEmail = emailVenues.filter(v => !v.email || !v.saved || !emailVenues.find(x => x.venueId === v.venueId && x.email)).length;
 
   return (
     <>
@@ -236,6 +363,80 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         }
         .stat-tile:hover { transform: translateY(-3px); }
 
+        /* ── Email modal ── */
+        .em-overlay {
+          position: fixed; inset: 0; z-index: 300;
+          background: rgba(3,13,24,0.88); backdrop-filter: blur(14px);
+          display: flex; align-items: center; justify-content: center; padding: 1rem;
+        }
+        .em-modal {
+          background: #07111e;
+          border: 1px solid rgba(74,133,200,0.22);
+          border-radius: 20px;
+          width: 100%; max-width: 520px;
+          max-height: 88vh;
+          display: flex; flex-direction: column;
+          box-shadow: 0 32px 96px rgba(0,0,0,0.7);
+        }
+        .em-modal-header {
+          padding: 1.5rem 1.75rem 1rem;
+          border-bottom: 1px solid rgba(74,133,200,0.1);
+          display: flex; align-items: center; justify-content: space-between; gap: 12px;
+          flex-shrink: 0;
+        }
+        .em-modal-body {
+          overflow-y: auto; padding: 1.25rem 1.75rem; flex: 1;
+        }
+        .em-modal-footer {
+          padding: 1rem 1.75rem;
+          border-top: 1px solid rgba(74,133,200,0.1);
+          flex-shrink: 0;
+        }
+        .em-venue-card {
+          background: rgba(9,24,40,0.7);
+          border: 1px solid rgba(74,133,200,0.1);
+          border-radius: 12px;
+          padding: 14px 16px;
+          margin-bottom: 10px;
+          transition: border-color .15s;
+        }
+        .em-venue-card.has-email {
+          border-color: rgba(34,197,94,0.3);
+          background: rgba(34,197,94,0.04);
+        }
+        .em-field-input {
+          width: 100%;
+          background: rgba(9,24,40,0.95);
+          border: 1px solid rgba(74,133,200,0.35);
+          border-radius: 7px;
+          padding: 7px 10px;
+          color: #e8f1f8;
+          font-family: 'Nunito', sans-serif;
+          font-size: 13px;
+          outline: none;
+          transition: border-color .15s, box-shadow .15s;
+        }
+        .em-field-input:focus {
+          border-color: rgba(74,133,200,0.7);
+          box-shadow: 0 0 0 3px rgba(74,133,200,0.14);
+        }
+        .em-field-display {
+          cursor: text;
+          border-radius: 6px;
+          padding: 5px 8px;
+          min-height: 30px;
+          display: flex; align-items: center;
+          transition: background .15s;
+          font-size: 13px;
+        }
+        .em-field-display:hover { background: rgba(74,133,200,0.1); }
+        .em-field-display.empty { color: #3d6285; font-style: italic; }
+        .em-field-display.empty:hover::after {
+          content: '+ Add';
+          color: #4a85c8; font-style: normal; font-weight: 700;
+          font-size: 12px; margin-left: 4px;
+        }
+
         @media (max-width: 1100px) {
           .db-stats { grid-template-columns: repeat(2,1fr); }
           .db-main  { grid-template-columns: 1fr; }
@@ -247,6 +448,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           .stat-tile { padding: 16px 14px 14px; }
           .campaign-mini-val { font-size: 1.15rem; }
           .action-row { min-height: 44px; }
+          .em-modal { max-width: 100%; border-radius: 16px; }
+          .em-modal-header { padding: 1rem 1.25rem 0.75rem; }
+          .em-modal-body { padding: 1rem 1.25rem; }
+          .em-modal-footer { padding: 0.75rem 1.25rem; }
         }
         @media (max-width: 480px) {
           .db-stats { grid-template-columns: repeat(2,1fr); gap: 8px; }
@@ -439,9 +644,9 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                           border: `1px solid ${urgencyBorder[action.urgency]}`,
                         }}
                         onClick={() => {
-                          if (action.type === 'email_needed')   onNavigate?.('contact-info');
+                          if (action.type === 'email_needed')        openEmailModal();
                           else if (action.type === 'social_approval') onNavigate?.('social');
-                          else onNavigate?.('campaigns');
+                          else                                         onNavigate?.('campaigns');
                         }}
                       >
                         <div>
@@ -554,6 +759,218 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           </div>{/* end main grid */}
         </div>
       </div>
+
+      {/* ── Missing Email Modal ────────────────────────────────────────────────── */}
+      {showEmailModal && (
+        <>
+          {/* Click-away backdrop */}
+          <div className="em-overlay" onClick={e => { if (e.target === e.currentTarget) setShowEmailModal(false); }}>
+            <div className="em-modal" onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div className="em-modal-header">
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{
+                      fontFamily: "'Bebas Neue', cursive", fontSize: '1.35rem',
+                      letterSpacing: '0.05em', color: '#ffffff',
+                    }}>Missing Contact Info</span>
+                    {emailVenues.length > 0 && (
+                      <span style={{
+                        background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.3)',
+                        borderRadius: 99, padding: '2px 10px',
+                        color: '#f87171', fontSize: 12, fontWeight: 700,
+                      }}>
+                        {emailVenues.filter(v => !v.email).length} left
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ color: '#3d6285', fontSize: 13, margin: '4px 0 0', fontWeight: 600 }}>
+                    Click any field to add email or phone. Saves automatically.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowEmailModal(false)}
+                  style={{
+                    background: 'rgba(74,133,200,0.1)', border: '1px solid rgba(74,133,200,0.2)',
+                    borderRadius: 8, padding: '6px 14px', color: '#6baed6',
+                    fontFamily: "'Nunito', sans-serif", fontSize: 13, fontWeight: 700,
+                    cursor: 'pointer', flexShrink: 0,
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="em-modal-body">
+                {emailModalLoading ? (
+                  <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#3d6285', fontSize: 14 }}>
+                    Loading venues…
+                  </div>
+                ) : emailVenues.length === 0 ? (
+                  <div style={{
+                    textAlign: 'center', padding: '3rem 1rem',
+                    border: '1px solid rgba(34,197,94,0.2)', borderRadius: 12,
+                    background: 'rgba(34,197,94,0.05)',
+                  }}>
+                    <div style={{ fontSize: 32, marginBottom: 10 }}>✅</div>
+                    <p style={{ color: '#22c55e', fontWeight: 700, fontSize: 14, margin: 0 }}>
+                      All venues in active runs have email addresses!
+                    </p>
+                  </div>
+                ) : (
+                  emailVenues.map(venue => {
+                    const emailEditing = modalEdit?.venueId === venue.venueId && modalEdit.field === 'email';
+                    const phoneEditing = modalEdit?.venueId === venue.venueId && modalEdit.field === 'phone';
+                    const hasEmail = !!venue.email;
+
+                    return (
+                      <div
+                        key={venue.venueId}
+                        className={`em-venue-card${hasEmail ? ' has-email' : ''}`}
+                      >
+                        {/* Top row: name + campaign + checkmark */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                          <div>
+                            <div style={{ color: '#ffffff', fontWeight: 800, fontSize: 14, marginBottom: 2 }}>
+                              {venue.name}
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                              <span style={{ color: '#7aa5c4', fontSize: 12 }}>
+                                📍 {venue.city}, {venue.state}
+                              </span>
+                              <span style={{
+                                background: 'rgba(74,133,200,0.1)', border: '1px solid rgba(74,133,200,0.2)',
+                                borderRadius: 99, padding: '1px 8px',
+                                color: '#6baed6', fontSize: 11, fontWeight: 700,
+                              }}>
+                                {venue.campaignName}
+                              </span>
+                            </div>
+                          </div>
+                          {hasEmail && venue.saved && (
+                            <div style={{
+                              width: 28, height: 28, borderRadius: '50%',
+                              background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.35)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              color: '#22c55e', fontSize: 14, flexShrink: 0,
+                            }}>✓</div>
+                          )}
+                        </div>
+
+                        {/* Fields row */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                          {/* Email field */}
+                          <div>
+                            <div style={{ color: '#3d6285', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+                              Email ✦
+                            </div>
+                            {emailEditing ? (
+                              <input
+                                className="em-field-input"
+                                autoFocus
+                                type="email"
+                                value={modalEdit.value}
+                                placeholder="email@venue.com"
+                                onChange={e => setModalEdit(prev => prev ? { ...prev, value: e.target.value } : null)}
+                                onBlur={commitModalEdit}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') { e.preventDefault(); commitModalEdit(); }
+                                  if (e.key === 'Escape') { setModalEdit(null); }
+                                }}
+                              />
+                            ) : (
+                              <div
+                                className={`em-field-display${!venue.email ? ' empty' : ''}`}
+                                style={{ color: venue.email ? '#e8f1f8' : undefined }}
+                                onClick={() => {
+                                  modalCommitting.current = false;
+                                  setModalEdit({ venueId: venue.venueId, field: 'email', value: venue.email });
+                                }}
+                              >
+                                {venue.email || ''}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Phone field */}
+                          <div>
+                            <div style={{ color: '#3d6285', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+                              Phone
+                            </div>
+                            {phoneEditing ? (
+                              <input
+                                className="em-field-input"
+                                autoFocus
+                                type="tel"
+                                value={modalEdit.value}
+                                placeholder="(555) 000-0000"
+                                onChange={e => setModalEdit(prev => prev ? { ...prev, value: e.target.value } : null)}
+                                onBlur={commitModalEdit}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') { e.preventDefault(); commitModalEdit(); }
+                                  if (e.key === 'Escape') { setModalEdit(null); }
+                                }}
+                              />
+                            ) : (
+                              <div
+                                className={`em-field-display${!venue.phone ? ' empty' : ''}`}
+                                style={{ color: venue.phone ? '#e8f1f8' : undefined }}
+                                onClick={() => {
+                                  modalCommitting.current = false;
+                                  setModalEdit({ venueId: venue.venueId, field: 'phone', value: venue.phone });
+                                }}
+                              >
+                                {venue.phone || ''}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="em-modal-footer">
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#3d6285', fontSize: 12, fontWeight: 600 }}>
+                    {emailVenues.filter(v => !!v.email).length} of {emailVenues.length} have emails
+                  </span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => onNavigate?.('contact-info')}
+                      style={{
+                        background: 'transparent', border: '1px solid rgba(74,133,200,0.25)',
+                        borderRadius: 8, padding: '8px 16px', color: '#6baed6',
+                        fontFamily: "'Nunito', sans-serif", fontSize: 13, fontWeight: 700,
+                        cursor: 'pointer', transition: 'background .15s',
+                      }}
+                    >
+                      Open Full Venue List
+                    </button>
+                    <button
+                      onClick={() => setShowEmailModal(false)}
+                      style={{
+                        background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
+                        border: 'none', borderRadius: 8, padding: '8px 20px',
+                        color: '#e8f1f8', fontFamily: "'Nunito', sans-serif",
+                        fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                        boxShadow: '0 4px 14px rgba(37,99,168,0.4)',
+                      }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }
