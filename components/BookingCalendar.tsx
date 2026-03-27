@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface Booking {
   id: string;
   date: string;
@@ -29,480 +30,342 @@ interface CalendarEvent {
   type: 'calendar_event';
 }
 
+const MONTHS = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
+];
+
+const fmtDate = (d: string) =>
+  new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function BookingCalendar() {
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [year, setYear]                   = useState(new Date().getFullYear());
+  const [bookings, setBookings]           = useState<Booking[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [syncStatus, setSyncStatus] = useState<string>('');
-  const [user, setUser] = useState<any>(null);
+  const [selectedDate, setSelectedDate]   = useState<string | null>(null);
+  const [loading, setLoading]             = useState(true);
+  const [syncStatus, setSyncStatus]       = useState('');
+  const [user, setUser]                   = useState<any>(null);
 
   useEffect(() => {
-    checkAuth();
+    const local = localStorage.getItem('loggedInUser');
+    if (local) setUser(JSON.parse(local));
   }, []);
 
   useEffect(() => {
-    if (user) {
-      loadAllEvents();
-    }
+    if (user) { setLoading(true); Promise.all([loadBookings(), syncGoogle()]).finally(() => setLoading(false)); }
   }, [year, user]);
 
-  const checkAuth = async () => {
-    try {
-      const loggedInUser = localStorage.getItem('loggedInUser');
-      if (loggedInUser) {
-        setUser(JSON.parse(loggedInUser));
-      }
-    } catch (error) {
-      console.error('Auth error:', error);
-    }
-  };
-
-  const loadAllEvents = async () => {
-    setLoading(true);
-    await Promise.all([
-      loadBookings(),
-      syncGoogleCalendar()
-    ]);
-    setLoading(false);
-  };
-
+  // ── Data ─────────────────────────────────────────────────────────────────
   const loadBookings = async () => {
     try {
-      // Get all confirmed bookings for the year
-      const startDate = `${year}-01-01`;
-      const endDate = `${year}-12-31`;
-
-      const { data: campaignVenues } = await supabase
+      const { data } = await supabase
         .from('campaign_venues')
-        .select(`
-          id,
-          status,
-          booking_date,
+        .select(`id, status, booking_date,
           campaign:campaigns(id, name),
-          venue:venues(id, name, city, state, address, phone)
-        `)
+          venue:venues(id, name, city, state, address, phone)`)
         .eq('status', 'booked')
-        .gte('booking_date', startDate)
-        .lte('booking_date', endDate)
+        .gte('booking_date', `${year}-01-01`)
+        .lte('booking_date', `${year}-12-31`)
         .not('booking_date', 'is', null);
 
-      const bookingsList = (campaignVenues || []).map((cv: any) => ({
-        id: cv.id,
-        date: cv.booking_date,
-        venue_name: cv.venue?.name || 'Unknown Venue',
-        venue_city: cv.venue?.city || '',
-        venue_state: cv.venue?.state || '',
-        venue_address: cv.venue?.address,
-        venue_phone: cv.venue?.phone,
-        campaign_name: cv.campaign?.name,
-        status: cv.status,
-        type: 'booking' as const
-      }));
-
-      setBookings(bookingsList);
-    } catch (error) {
-      console.error('Error loading bookings:', error);
-    }
+      setBookings((data || []).map((cv: any) => ({
+        id:           cv.id,
+        date:         cv.booking_date,
+        venue_name:   cv.venue?.name    || 'Unknown Venue',
+        venue_city:   cv.venue?.city    || '',
+        venue_state:  cv.venue?.state   || '',
+        venue_address:cv.venue?.address,
+        venue_phone:  cv.venue?.phone,
+        campaign_name:cv.campaign?.name,
+        status:       cv.status,
+        type:         'booking' as const,
+      })));
+    } catch (err) { console.error(err); }
   };
 
-  const syncGoogleCalendar = async () => {
+  const syncGoogle = async () => {
     if (!user) return;
-
     try {
-      setSyncStatus('Syncing calendar...');
-      
-      const response = await fetch(`/api/calendar/sync?userId=${user.id}&year=${year}`);
-      
-      if (!response.ok) {
-        console.error('Calendar sync failed:', response.status);
-        setSyncStatus('');
-        return;
-      }
-
-      const data = await response.json();
-      
-      if (data.events && data.events.length > 0) {
+      setSyncStatus('Syncing…');
+      const res = await fetch(`/api/calendar/sync?userId=${user.id}&year=${year}`);
+      if (!res.ok) { setSyncStatus(''); return; }
+      const data = await res.json();
+      if (data.events?.length) {
         setCalendarEvents(data.events);
-        setSyncStatus(`✓ Synced ${data.events.length} calendar events`);
+        setSyncStatus(`✓ ${data.events.length} calendar events`);
         setTimeout(() => setSyncStatus(''), 3000);
-      } else {
-        setSyncStatus('');
-      }
-    } catch (error) {
-      console.error('Error syncing calendar:', error);
-      setSyncStatus('');
-    }
+      } else setSyncStatus('');
+    } catch { setSyncStatus(''); }
   };
 
-  const getAllEventsForDate = (dateStr: string) => {
-    const bookingsForDate = bookings.filter(b => b.date === dateStr);
-    const eventsForDate = calendarEvents.filter(e => e.date === dateStr);
-    
-    return [
-      ...bookingsForDate,
-      ...eventsForDate.map(e => ({
-        id: e.id,
-        date: e.date,
-        venue_name: e.title,
-        venue_city: '',
-        venue_state: '',
-        venue_address: e.location,
-        venue_phone: '',
-        campaign_name: e.description,
-        status: 'calendar_event',
-        type: 'calendar_event' as const,
-        source: e.source
-      }))
-    ];
-  };
-
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+  const getEventsForDate = (dateStr: string): Booking[] => [
+    ...bookings.filter(b => b.date === dateStr),
+    ...calendarEvents
+      .filter(e => e.date === dateStr)
+      .map(e => ({
+        id:           e.id,
+        date:         e.date,
+        venue_name:   e.title,
+        venue_city:   '',
+        venue_state:  '',
+        venue_address:e.location,
+        venue_phone:  '',
+        campaign_name:e.description,
+        status:       'calendar_event',
+        type:         'calendar_event' as const,
+        source:       e.source,
+      })),
   ];
 
-  const totalEvents = bookings.length + calendarEvents.length;
+  // ─── Loading ──────────────────────────────────────────────────────────────
+  if (loading) return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
+      minHeight:400, background:'#030d18', fontFamily:"'Nunito',sans-serif",
+      color:'#3d6285', fontSize:15 }}>
+      Loading calendar…
+    </div>
+  );
 
-  if (loading) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '60vh',
-        background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📅</div>
-          <p style={{ color: '#C8A882', fontSize: '1.1rem' }}>Loading calendar...</p>
-        </div>
-      </div>
-    );
-  }
+  const totalShows = bookings.length;
 
   return (
     <>
-      <style jsx>{`
-        * { box-sizing: border-box; }
-        
-        .calendar-container {
-          background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-          min-height: 100vh;
-          padding: 2rem;
+      <style>{`
+        *, *::before, *::after { box-sizing: border-box; }
+        .cal-wrap {
+          background: #030d18; min-height: 100vh;
+          padding: 2rem; font-family: 'Nunito', sans-serif;
         }
-        
+        /* ── Year grid ── */
         .year-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 2rem;
-          margin-top: 2rem;
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          gap: 18px;
         }
-        
+        /* ── Month card ── */
         .month-card {
-          background: linear-gradient(135deg, rgba(45, 35, 25, 0.95), rgba(61, 40, 23, 0.95));
-          border: 2px solid rgba(200, 168, 130, 0.3);
-          borderRadius: 12px;
-          padding: 1.5rem;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+          background: rgba(9,24,40,0.8);
+          border: 1px solid rgba(74,133,200,0.12);
+          border-radius: 14px;
+          padding: 18px;
         }
-        
+        /* ── Day cell ── */
         .day-cell {
           aspect-ratio: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          font-weight: 600;
+          display: flex; align-items: center; justify-content: center;
+          border-radius: 7px;
+          font-family: 'Nunito', sans-serif;
+          font-size: 12px; font-weight: 700;
           position: relative;
+          transition: transform .15s, box-shadow .15s;
+          color: #3d6285;
+          background: transparent;
         }
-        
-        .day-cell:hover {
-          transform: scale(1.1);
+        .day-cell.has-event {
+          cursor: pointer;
+          color: #e8f1f8;
         }
-        
-        .booked-day {
-          background: linear-gradient(135deg, #87AE73 0%, #6B8E5C 100%);
-          color: white;
-          box-shadow: 0 4px 12px rgba(135, 174, 115, 0.4);
+        .day-cell.has-event:hover {
+          transform: scale(1.12);
+          z-index: 2;
         }
-        
-        .calendar-event-day {
-          background: linear-gradient(135deg, #5D9CEC 0%, #4A89DC 100%);
-          color: white;
-          box-shadow: 0 4px 12px rgba(93, 156, 236, 0.4);
+        .day-cell.booked {
+          background: linear-gradient(135deg, #22c55e, #16a34a);
+          box-shadow: 0 4px 14px rgba(34,197,94,0.35);
         }
-        
-        .mixed-day {
-          background: linear-gradient(135deg, #C8A882 0%, #B7410E 100%);
-          color: white;
-          box-shadow: 0 4px 12px rgba(200, 168, 130, 0.4);
+        .day-cell.cal-event {
+          background: linear-gradient(135deg, #3a7fc1, #2563a8);
+          box-shadow: 0 4px 14px rgba(37,99,168,0.35);
         }
-        
-        .today {
-          border: 2px solid #C8A882;
+        .day-cell.mixed {
+          background: linear-gradient(135deg, #a78bfa, #7c3aed);
+          box-shadow: 0 4px 14px rgba(167,139,250,0.35);
         }
-        
-        @media (max-width: 1024px) {
-          .year-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
+        .day-cell.is-today {
+          outline: 2px solid #4a85c8;
+          outline-offset: 1px;
         }
-        
-        @media (max-width: 767px) {
-          .calendar-container {
-            padding: 1rem;
-          }
-          
-          .year-grid {
-            grid-template-columns: 1fr;
-            gap: 1.5rem;
-          }
+        .day-cell.is-today:not(.booked):not(.cal-event):not(.mixed) {
+          color: #4a85c8;
+          background: rgba(74,133,200,0.1);
+        }
+        /* ── Btn nav ── */
+        .cal-btn {
+          background: rgba(9,24,40,0.9);
+          border: 1px solid rgba(74,133,200,0.22);
+          border-radius: 9px; padding: 9px 20px;
+          color: #6baed6; font-family: 'Nunito', sans-serif;
+          font-size: 14px; font-weight: 800; cursor: pointer;
+          transition: background .15s, border-color .15s;
+        }
+        .cal-btn:hover { background: rgba(74,133,200,0.12); border-color: rgba(74,133,200,0.4); }
+        /* ── Legend dot ── */
+        .legend-dot {
+          width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0;
+        }
+        /* ── Modal ── */
+        .cal-modal-overlay {
+          position: fixed; inset: 0; z-index: 200;
+          background: rgba(3,13,24,0.88); backdrop-filter: blur(12px);
+          display: flex; align-items: center; justify-content: center; padding: 1rem;
+        }
+        .cal-modal {
+          background: #091828; border: 1px solid rgba(74,133,200,0.2);
+          border-radius: 18px; padding: 2rem; width: 100%; max-width: 540px;
+          max-height: 85vh; overflow-y: auto;
+          box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+        }
+        @media (max-width: 768px) {
+          .cal-wrap { padding: 1rem; }
+          .year-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        }
+        @media (max-width: 500px) {
+          .year-grid { grid-template-columns: 1fr; }
         }
       `}</style>
 
-      <div className="calendar-container">
-        <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
-          {/* Header */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '2rem',
-            flexWrap: 'wrap',
-            gap: '1rem'
-          }}>
+      <div className="cal-wrap">
+        <div style={{ maxWidth: 1600, margin: '0 auto' }}>
+
+          {/* ── Header ──────────────────────────────────────────────────── */}
+          <div style={{ marginBottom: '1.75rem',
+            display: 'flex', alignItems: 'flex-start',
+            justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
             <div>
-              <h1 style={{
-                fontSize: '2.5rem',
-                fontWeight: '700',
-                color: '#C8A882',
-                margin: 0,
-                marginBottom: '0.5rem'
-              }}>
-                Booking Calendar
-              </h1>
-              <p style={{ color: '#9B8A7A', margin: 0, fontSize: '1.1rem' }}>
-                {bookings.length} booking{bookings.length !== 1 ? 's' : ''} • {calendarEvents.length} calendar event{calendarEvents.length !== 1 ? 's' : ''} in {year}
+              <h1 style={{ fontFamily:"'Bebas Neue',cursive", fontWeight:400,
+                fontSize:'clamp(1.8rem,3vw,2.4rem)', letterSpacing:'0.06em',
+                color:'#ffffff', margin:0, lineHeight:1 }}>Band Calendar</h1>
+              <p style={{ color:'#3d6285', margin:'5px 0 0', fontSize:13, fontWeight:600 }}>
+                {totalShows} confirmed show{totalShows !== 1 ? 's' : ''} in {year}
+                {syncStatus && (
+                  <span style={{ marginLeft:12, color:'#22c55e' }}>{syncStatus}</span>
+                )}
               </p>
-              {syncStatus && (
-                <p style={{ color: '#87AE73', margin: '0.5rem 0 0 0', fontSize: '0.95rem' }}>
-                  {syncStatus}
-                </p>
-              )}
             </div>
 
-            {/* Year Navigation */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-              <button
-                onClick={syncGoogleCalendar}
-                style={{
-                  padding: '0.75rem 1.5rem',
-                  background: 'linear-gradient(135deg, #5D9CEC 0%, #4A89DC 100%)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: '700',
-                  fontSize: '0.95rem'
-                }}
-              >
-                🔄 Sync Calendar
-              </button>
-              
-              <button
-                onClick={() => setYear(year - 1)}
-                style={{
-                  padding: '0.75rem 1.5rem',
-                  background: 'linear-gradient(135deg, #5D4E37 0%, #8B7355 100%)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: '700',
-                  fontSize: '1rem'
-                }}
-              >
+            {/* Year nav */}
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <button className="cal-btn" onClick={() => setYear(y => y - 1)}>
                 ← {year - 1}
               </button>
-              
-              <div style={{
-                padding: '0.75rem 2rem',
-                background: 'linear-gradient(135deg, #C8A882 0%, #B8987A 100%)',
-                color: '#2d2d2d',
-                borderRadius: '8px',
-                fontWeight: '700',
-                fontSize: '1.3rem'
-              }}>
+              <div style={{ background:'rgba(9,24,40,0.9)',
+                border:'1px solid rgba(74,133,200,0.22)', borderRadius:9,
+                padding:'9px 22px', fontFamily:"'Bebas Neue',cursive",
+                fontSize:'1.3rem', letterSpacing:'0.08em', color:'#e8f1f8' }}>
                 {year}
               </div>
-              
-              <button
-                onClick={() => setYear(year + 1)}
-                style={{
-                  padding: '0.75rem 1.5rem',
-                  background: 'linear-gradient(135deg, #5D4E37 0%, #8B7355 100%)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: '700',
-                  fontSize: '1rem'
-                }}
-              >
+              <button className="cal-btn" onClick={() => setYear(y => y + 1)}>
                 {year + 1} →
               </button>
             </div>
           </div>
 
-          {/* Legend */}
-          <div style={{
-            display: 'flex',
-            gap: '1.5rem',
-            marginBottom: '2rem',
-            flexWrap: 'wrap',
-            padding: '1rem',
-            background: 'rgba(45, 35, 25, 0.5)',
-            borderRadius: '8px',
-            border: '1px solid rgba(200, 168, 130, 0.3)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{
-                width: '20px',
-                height: '20px',
-                background: 'linear-gradient(135deg, #87AE73 0%, #6B8E5C 100%)',
-                borderRadius: '4px'
-              }} />
-              <span style={{ color: '#E8DCC4', fontSize: '0.95rem' }}>Confirmed Bookings</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{
-                width: '20px',
-                height: '20px',
-                background: 'linear-gradient(135deg, #5D9CEC 0%, #4A89DC 100%)',
-                borderRadius: '4px'
-              }} />
-              <span style={{ color: '#E8DCC4', fontSize: '0.95rem' }}>Calendar Events</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{
-                width: '20px',
-                height: '20px',
-                background: 'linear-gradient(135deg, #C8A882 0%, #B7410E 100%)',
-                borderRadius: '4px'
-              }} />
-              <span style={{ color: '#E8DCC4', fontSize: '0.95rem' }}>Multiple Events</span>
+          {/* ── Legend ──────────────────────────────────────────────────── */}
+          <div style={{ display:'flex', gap:20, marginBottom:'1.5rem',
+            flexWrap:'wrap', alignItems:'center',
+            padding:'10px 16px',
+            background:'rgba(9,24,40,0.6)',
+            border:'1px solid rgba(74,133,200,0.1)', borderRadius:10 }}>
+            {[
+              { cls:'booked',    label:'Confirmed Booking',  color:'linear-gradient(135deg,#22c55e,#16a34a)' },
+              { cls:'cal-event', label:'Calendar Event',     color:'linear-gradient(135deg,#3a7fc1,#2563a8)' },
+              { cls:'mixed',     label:'Multiple Events',    color:'linear-gradient(135deg,#a78bfa,#7c3aed)' },
+            ].map(l => (
+              <div key={l.cls} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div className="legend-dot" style={{ background:l.color }} />
+                <span style={{ color:'#7aa5c4', fontSize:13, fontWeight:600 }}>{l.label}</span>
+              </div>
+            ))}
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <div style={{ width:12, height:12, borderRadius:3,
+                border:'2px solid #4a85c8', background:'rgba(74,133,200,0.1)' }} />
+              <span style={{ color:'#7aa5c4', fontSize:13, fontWeight:600 }}>Today</span>
             </div>
           </div>
 
-          {/* Year Grid */}
+          {/* ── 12-month year grid ───────────────────────────────────────── */}
           <div className="year-grid">
-            {months.map((monthName, monthIndex) => (
+            {MONTHS.map((name, idx) => (
               <MonthCard
-                key={monthIndex}
+                key={idx}
                 year={year}
-                monthIndex={monthIndex}
-                monthName={monthName}
+                monthIndex={idx}
+                monthName={name}
                 bookings={bookings}
                 calendarEvents={calendarEvents}
-                onDateClick={(date) => setSelectedDate(date)}
+                onDateClick={date => setSelectedDate(date)}
               />
             ))}
           </div>
-        </div>
 
-        {/* Event Detail Modal */}
-        {selectedDate && (
-          <EventModal
-            date={selectedDate}
-            events={getAllEventsForDate(selectedDate)}
-            onClose={() => setSelectedDate(null)}
-          />
-        )}
+        </div>
       </div>
+
+      {/* ── Event Modal ──────────────────────────────────────────────────── */}
+      {selectedDate && (
+        <EventModal
+          date={selectedDate}
+          events={getEventsForDate(selectedDate)}
+          onClose={() => setSelectedDate(null)}
+        />
+      )}
     </>
   );
 }
 
-function MonthCard({ 
-  year, 
-  monthIndex, 
-  monthName, 
-  bookings,
-  calendarEvents,
-  onDateClick 
-}: { 
-  year: number;
-  monthIndex: number;
-  monthName: string;
-  bookings: Booking[];
-  calendarEvents: CalendarEvent[];
+// ─── Month card ───────────────────────────────────────────────────────────────
+function MonthCard({ year, monthIndex, monthName, bookings, calendarEvents, onDateClick }: {
+  year: number; monthIndex: number; monthName: string;
+  bookings: Booking[]; calendarEvents: CalendarEvent[];
   onDateClick: (date: string) => void;
 }) {
-  const firstDay = new Date(year, monthIndex, 1);
-  const lastDay = new Date(year, monthIndex + 1, 0);
-  const daysInMonth = lastDay.getDate();
-  const startingDayOfWeek = firstDay.getDay();
-  
-  const today = new Date();
-  const isCurrentMonth = today.getMonth() === monthIndex && today.getFullYear() === year;
+  const firstDay    = new Date(year, monthIndex, 1).getDay();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const today       = new Date();
+  const isCurMonth  = today.getMonth() === monthIndex && today.getFullYear() === year;
 
-  const days: React.ReactElement[] = [];
-  
-  // Empty cells for days before month starts
-  for (let i = 0; i < startingDayOfWeek; i++) {
-    days.push(<div key={`empty-${i}`} />);
-  }
-  
-  // Days of the month
+  // Count events this month for header badge
+  const monthBookings = bookings.filter(b => {
+    const d = new Date(b.date);
+    return d.getMonth() === monthIndex && d.getFullYear() === year;
+  }).length;
+
+  const cells: React.ReactElement[] = [];
+
+  // Empty lead-in cells
+  for (let i = 0; i < firstDay; i++) cells.push(<div key={`e${i}`} />);
+
+  // Day cells
   for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const dayBookings = bookings.filter(b => b.date === dateStr);
-    const dayEvents = calendarEvents.filter(e => e.date === dateStr);
-    const isToday = isCurrentMonth && today.getDate() === day;
-    const totalCount = dayBookings.length + dayEvents.length;
-    const hasBooking = dayBookings.length > 0;
-    const hasEvent = dayEvents.length > 0;
-    const hasBoth = hasBooking && hasEvent;
+    const ds        = `${year}-${String(monthIndex+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const hasBook   = bookings.some(b => b.date === ds);
+    const hasEvt    = calendarEvents.some(e => e.date === ds);
+    const hasBoth   = hasBook && hasEvt;
+    const isToday   = isCurMonth && today.getDate() === day;
+    const total     = bookings.filter(b=>b.date===ds).length + calendarEvents.filter(e=>e.date===ds).length;
 
-    let className = 'day-cell';
-    if (hasBoth) className += ' mixed-day';
-    else if (hasBooking) className += ' booked-day';
-    else if (hasEvent) className += ' calendar-event-day';
-    if (isToday) className += ' today';
+    let cls = 'day-cell';
+    if (hasBoth)       cls += ' mixed has-event';
+    else if (hasBook)  cls += ' booked has-event';
+    else if (hasEvt)   cls += ' cal-event has-event';
+    if (isToday)       cls += ' is-today';
 
-    days.push(
-      <div
-        key={day}
-        className={className}
-        onClick={() => totalCount > 0 && onDateClick(dateStr)}
-        style={{
-          background: totalCount > 0 ? undefined : 'rgba(200, 168, 130, 0.1)',
-          color: totalCount > 0 ? 'white' : '#9B8A7A',
-          cursor: totalCount > 0 ? 'pointer' : 'default'
-        }}
-      >
+    cells.push(
+      <div key={day} className={cls}
+        onClick={() => total > 0 && onDateClick(ds)}
+        title={total > 0 ? `${total} event${total!==1?'s':''}` : undefined}>
         {day}
-        {totalCount > 1 && (
-          <div style={{
-            position: 'absolute',
-            top: '4px',
-            right: '4px',
-            background: '#B7410E',
-            color: 'white',
-            borderRadius: '50%',
-            width: '18px',
-            height: '18px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '0.7rem',
-            fontWeight: '700'
-          }}>
-            {totalCount}
+        {total > 1 && (
+          <div style={{ position:'absolute', top:2, right:2,
+            background:'rgba(3,13,24,0.7)', color:'#e8f1f8',
+            borderRadius:'50%', width:14, height:14,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            fontSize:9, fontWeight:800, lineHeight:1 }}>
+            {total}
           </div>
         )}
       </div>
@@ -511,220 +374,123 @@ function MonthCard({
 
   return (
     <div className="month-card">
-      <h3 style={{
-        color: '#C8A882',
-        fontSize: '1.3rem',
-        fontWeight: '700',
-        margin: '0 0 1rem 0',
-        textAlign: 'center'
-      }}>
-        {monthName}
-      </h3>
+      {/* Month header */}
+      <div style={{ display:'flex', alignItems:'center',
+        justifyContent:'space-between', marginBottom:12 }}>
+        <div style={{ fontFamily:"'Nunito',sans-serif", fontWeight:800,
+          fontSize:14, color:'#ffffff', letterSpacing:'0.02em' }}>
+          {monthName}
+        </div>
+        {monthBookings > 0 && (
+          <span style={{ background:'rgba(34,197,94,0.12)',
+            border:'1px solid rgba(34,197,94,0.28)', borderRadius:99,
+            padding:'2px 9px', color:'#22c55e', fontSize:11, fontWeight:700 }}>
+            {monthBookings} show{monthBookings!==1?'s':''}
+          </span>
+        )}
+      </div>
 
-      {/* Day Headers */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(7, 1fr)',
-        gap: '4px',
-        marginBottom: '0.5rem'
-      }}>
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-          <div
-            key={i}
-            style={{
-              textAlign: 'center',
-              color: '#9B8A7A',
-              fontSize: '0.8rem',
-              fontWeight: '700',
-              padding: '0.25rem'
-            }}
-          >
-            {day}
+      {/* Day-of-week headers */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:3, marginBottom:4 }}>
+        {['S','M','T','W','T','F','S'].map((d,i) => (
+          <div key={i} style={{ textAlign:'center', color:'#3d6285',
+            fontSize:10, fontWeight:800, padding:'2px 0',
+            textTransform:'uppercase', letterSpacing:'0.05em' }}>
+            {d}
           </div>
         ))}
       </div>
 
-      {/* Days Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(7, 1fr)',
-        gap: '4px'
-      }}>
-        {days}
+      {/* Days */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:3 }}>
+        {cells}
       </div>
     </div>
   );
 }
 
-function EventModal({ 
-  date, 
-  events, 
-  onClose 
-}: { 
-  date: string;
-  events: Booking[];
-  onClose: () => void;
+// ─── Event detail modal ───────────────────────────────────────────────────────
+function EventModal({ date, events, onClose }: {
+  date: string; events: Booking[]; onClose: () => void;
 }) {
-  const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0, 0, 0, 0.8)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        padding: '1rem'
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: 'linear-gradient(135deg, #2d2d2d 0%, #3d3d3d 100%)',
-          border: '2px solid #C8A882',
-          borderRadius: '16px',
-          padding: '2rem',
-          maxWidth: '600px',
-          width: '100%',
-          maxHeight: '80vh',
-          overflow: 'auto',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
-        }}
-      >
+    <div className="cal-modal-overlay"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="cal-modal">
         {/* Header */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'start',
-          marginBottom: '1.5rem'
-        }}>
+        <div style={{ display:'flex', justifyContent:'space-between',
+          alignItems:'flex-start', marginBottom:'1.5rem' }}>
           <div>
-            <h2 style={{
-              color: '#C8A882',
-              fontSize: '1.8rem',
-              fontWeight: '700',
-              margin: '0 0 0.5rem 0'
-            }}>
-              {formattedDate}
-            </h2>
-            <p style={{ color: '#9B8A7A', margin: 0, fontSize: '1rem' }}>
-              {events.length} event{events.length !== 1 ? 's' : ''}
-            </p>
+            <div style={{ fontFamily:"'Bebas Neue',cursive", fontWeight:400,
+              fontSize:'1.6rem', letterSpacing:'0.05em', color:'#ffffff',
+              lineHeight:1, marginBottom:4 }}>
+              {fmtDate(date)}
+            </div>
+            <div style={{ color:'#3d6285', fontSize:13, fontWeight:600 }}>
+              {events.length} event{events.length!==1?'s':''}
+            </div>
           </div>
-          
-          <button
-            onClick={onClose}
-            style={{
-              background: 'rgba(200, 168, 130, 0.2)',
-              border: '2px solid rgba(200, 168, 130, 0.5)',
-              color: '#C8A882',
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              cursor: 'pointer',
-              fontSize: '1.5rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: '700'
-            }}
-          >
-            ×
+          <button onClick={onClose}
+            style={{ background:'transparent', border:'none',
+              color:'#3d6285', fontSize:22, cursor:'pointer', lineHeight:1,
+              padding:'4px 8px', borderRadius:6, transition:'color .15s' }}
+            onMouseEnter={e=>(e.currentTarget.style.color='#e8f1f8')}
+            onMouseLeave={e=>(e.currentTarget.style.color='#3d6285')}>
+            ✕
           </button>
         </div>
 
-        {/* Events */}
-        <div style={{ display: 'grid', gap: '1rem' }}>
-          {events.map((event) => {
-            const isCalendarEvent = event.type === 'calendar_event';
-            const borderColor = isCalendarEvent 
-              ? 'rgba(93, 156, 236, 0.4)' 
-              : 'rgba(135, 174, 115, 0.4)';
-            const bgColor = isCalendarEvent
-              ? 'rgba(93, 156, 236, 0.2)'
-              : 'rgba(135, 174, 115, 0.2)';
-            const titleColor = isCalendarEvent ? '#5D9CEC' : '#87AE73';
+        {/* Event list */}
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          {events.map(ev => {
+            const isCalEvt = ev.type === 'calendar_event';
+            const accentColor = isCalEvt ? '#3a7fc1' : '#22c55e';
+            const accentBg    = isCalEvt ? 'rgba(58,127,193,0.08)' : 'rgba(34,197,94,0.08)';
+            const accentBord  = isCalEvt ? 'rgba(58,127,193,0.2)' : 'rgba(34,197,94,0.2)';
 
             return (
-              <div
-                key={event.id}
-                style={{
-                  background: `linear-gradient(135deg, ${bgColor}, ${bgColor})`,
-                  border: `2px solid ${borderColor}`,
-                  borderRadius: '12px',
-                  padding: '1.5rem'
-                }}
-              >
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'start',
-                  marginBottom: '0.75rem'
-                }}>
-                  <h3 style={{
-                    color: titleColor,
-                    fontSize: '1.4rem',
-                    fontWeight: '700',
-                    margin: 0
-                  }}>
-                    {event.venue_name}
-                  </h3>
-                  {isCalendarEvent && (
-                    <span style={{
-                      padding: '0.25rem 0.75rem',
-                      background: 'rgba(93, 156, 236, 0.3)',
-                      borderRadius: '12px',
-                      fontSize: '0.75rem',
-                      color: '#5D9CEC',
-                      fontWeight: '600'
-                    }}>
-                      {event.source}
-                    </span>
-                  )}
+              <div key={ev.id} style={{ background:accentBg,
+                border:`1px solid ${accentBord}`, borderRadius:12, padding:'16px 18px' }}>
+                {/* Type badge */}
+                <div style={{ marginBottom:10 }}>
+                  <span style={{ background:isCalEvt?'rgba(58,127,193,0.15)':'rgba(34,197,94,0.12)',
+                    border:`1px solid ${accentBord}`, borderRadius:99,
+                    padding:'3px 12px', color:accentColor, fontSize:11, fontWeight:700 }}>
+                    {isCalEvt ? 'Calendar Event' : 'Confirmed Show'}
+                  </span>
                 </div>
 
-                <div style={{ display: 'grid', gap: '0.5rem' }}>
-                  {event.venue_city && event.venue_state && (
-                    <div style={{ color: '#E8DCC4', fontSize: '1rem' }}>
-                      📍 {event.venue_city}, {event.venue_state}
+                {/* Venue / event name */}
+                <div style={{ color:'#ffffff', fontWeight:800, fontSize:16,
+                  marginBottom:6, lineHeight:1.3 }}>
+                  {ev.venue_name}
+                </div>
+
+                {/* Details */}
+                <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                  {(ev.venue_city || ev.venue_state) && (
+                    <div style={{ color:'#7aa5c4', fontSize:13, fontWeight:600 }}>
+                      📍 {[ev.venue_city, ev.venue_state].filter(Boolean).join(', ')}
                     </div>
                   )}
-
-                  {event.venue_address && (
-                    <div style={{ color: '#9B8A7A', fontSize: '0.95rem' }}>
-                      🏠 {event.venue_address}
+                  {ev.venue_address && (
+                    <div style={{ color:'#3d6285', fontSize:12 }}>{ev.venue_address}</div>
+                  )}
+                  {ev.venue_phone && (
+                    <div style={{ color:'#7aa5c4', fontSize:13 }}>☎ {ev.venue_phone}</div>
+                  )}
+                  {ev.campaign_name && (
+                    <div style={{ marginTop:4 }}>
+                      <span style={{ background:'rgba(74,133,200,0.1)',
+                        border:'1px solid rgba(74,133,200,0.2)', borderRadius:99,
+                        padding:'2px 10px', color:'#6baed6', fontSize:11, fontWeight:700 }}>
+                        {ev.campaign_name}
+                      </span>
                     </div>
                   )}
-
-                  {event.venue_phone && (
-                    <div style={{ color: '#9B8A7A', fontSize: '0.95rem' }}>
-                      📞 {event.venue_phone}
-                    </div>
-                  )}
-
-                  {event.campaign_name && (
-                    <div style={{
-                      marginTop: '0.5rem',
-                      padding: '0.5rem',
-                      background: 'rgba(200, 168, 130, 0.2)',
-                      borderRadius: '6px',
-                      color: '#C8A882',
-                      fontSize: '0.9rem',
-                      fontWeight: '600'
-                    }}>
-                      {isCalendarEvent ? 'Description: ' : 'Campaign: '}{event.campaign_name}
+                  {ev.source && (
+                    <div style={{ color:'#3d6285', fontSize:11, marginTop:4 }}>
+                      Source: {ev.source}
                     </div>
                   )}
                 </div>
@@ -732,6 +498,17 @@ function EventModal({
             );
           })}
         </div>
+
+        {/* Close button */}
+        <button onClick={onClose}
+          style={{ marginTop:'1.5rem', width:'100%', padding:'11px',
+            background:'transparent', border:'1px solid rgba(74,133,200,0.25)',
+            borderRadius:9, color:'#6baed6', fontFamily:"'Nunito',sans-serif",
+            fontSize:14, fontWeight:700, cursor:'pointer', transition:'background .15s' }}
+          onMouseEnter={e=>(e.currentTarget.style.background='rgba(74,133,200,0.1)')}
+          onMouseLeave={e=>(e.currentTarget.style.background='transparent')}>
+          Close
+        </button>
       </div>
     </div>
   );
