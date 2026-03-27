@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
 interface Venue {
@@ -16,6 +16,22 @@ interface Venue {
   contact_status: string | null;
   website: string | null;
   notes: string | null;
+}
+
+interface EnrichStatus {
+  totalVenues: number;
+  missingEmail: number;
+  enriched: number;
+  job: {
+    running: boolean;
+    totalMissing: number;
+    processed: number;
+    found: number;
+    currentVenue: string | null;
+    startedAt: string | null;
+    finishedAt: string | null;
+    error: string | null;
+  };
 }
 
 // Which field is being inline-edited
@@ -54,6 +70,58 @@ export default function VenueContactManager() {
   const [saving, setSaving]           = useState(false);
   const [states, setStates]           = useState<string[]>([]);
   const inputRef                      = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+
+  // ── Enrichment state ──────────────────────────────────────────────────────
+  const [enrichStatus, setEnrichStatus] = useState<EnrichStatus | null>(null);
+  const [enrichStarting, setEnrichStarting] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchEnrichStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/venues/enrich-status');
+      if (!res.ok) return;
+      const data: EnrichStatus = await res.json();
+      setEnrichStatus(data);
+
+      // If job just finished, reload venues to pick up new emails
+      if (!data.job.running && enrichStatus?.job.running) {
+        loadVenues();
+      }
+
+      // Stop polling when job is done
+      if (!data.job.running && pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    } catch { /* ignore */ }
+  }, [enrichStatus?.job.running]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startEnrichment = async () => {
+    if (enrichStarting || enrichStatus?.job.running) return;
+    setEnrichStarting(true);
+    try {
+      await fetch('/api/venues/enrich-emails', { method: 'POST' });
+      // Begin polling
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = setInterval(fetchEnrichStatus, 2000);
+      await fetchEnrichStatus();
+    } catch { /* ignore */ } finally {
+      setEnrichStarting(false);
+    }
+  };
+
+  // Fetch status on mount and clean up polling on unmount
+  useEffect(() => {
+    fetchEnrichStatus();
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Resume polling if a job was already running when component mounted
+  useEffect(() => {
+    if (enrichStatus?.job.running && !pollRef.current) {
+      pollRef.current = setInterval(fetchEnrichStatus, 2000);
+    }
+  }, [enrichStatus?.job.running, fetchEnrichStatus]);
 
   useEffect(() => { loadVenues(); }, []);
 
@@ -293,6 +361,52 @@ export default function VenueContactManager() {
         }
         .vl-status-opt:hover { background: rgba(74,133,200,0.1); }
 
+        /* ── Enrich button ── */
+        .vl-enrich-btn {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 9px 18px; border-radius: 9px;
+          background: rgba(245,158,11,0.15);
+          border: 1px solid rgba(245,158,11,0.4);
+          color: #f59e0b;
+          font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 800;
+          cursor: pointer; transition: background .15s, border-color .15s;
+          white-space: nowrap;
+        }
+        .vl-enrich-btn:hover:not(:disabled) {
+          background: rgba(245,158,11,0.25);
+          border-color: rgba(245,158,11,0.6);
+        }
+        .vl-enrich-btn:disabled {
+          opacity: 0.7; cursor: not-allowed;
+        }
+        .vl-enrich-pulse {
+          width: 8px; height: 8px; border-radius: 50%;
+          background: #f59e0b;
+          animation: vl-pulse 1s ease-in-out infinite;
+          flex-shrink: 0;
+        }
+        @keyframes vl-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(0.7); }
+        }
+        .vl-enrich-bar-wrap {
+          background: rgba(245,158,11,0.08);
+          border: 1px solid rgba(245,158,11,0.2);
+          border-radius: 10px; padding: 12px 16px;
+          margin-bottom: 1rem;
+          font-size: 13px; font-weight: 600; color: #f59e0b;
+        }
+        .vl-enrich-bar-track {
+          height: 4px; border-radius: 99px;
+          background: rgba(245,158,11,0.15);
+          margin-top: 8px; overflow: hidden;
+        }
+        .vl-enrich-bar-fill {
+          height: 100%; border-radius: 99px;
+          background: #f59e0b;
+          transition: width .4s ease;
+        }
+
         @media (max-width: 900px) {
           .vl-wrap { padding: 1rem; }
           .vl-search { width: 100%; }
@@ -342,10 +456,79 @@ export default function VenueContactManager() {
               <option value="ALL">All Statuses</option>
               {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
+
+            {/* ── Enrich button ── */}
+            {enrichStatus && enrichStatus.missingEmail > 0 && !enrichStatus.job.running && (
+              <button
+                className="vl-enrich-btn"
+                onClick={startEnrichment}
+                disabled={enrichStarting}
+              >
+                <span style={{ fontSize: 15 }}>✦</span>
+                {enrichStarting
+                  ? 'Starting…'
+                  : `${enrichStatus.missingEmail} missing email${enrichStatus.missingEmail !== 1 ? 's' : ''} · Auto-find →`
+                }
+              </button>
+            )}
+            {enrichStatus?.job.running && (
+              <button className="vl-enrich-btn" disabled>
+                <span className="vl-enrich-pulse" />
+                Finding emails… {enrichStatus.job.found} found
+              </button>
+            )}
+
             <span style={{ marginLeft: 'auto', color: '#3d6285', fontSize: 13, fontWeight: 600 }}>
               {filtered.length} result{filtered.length !== 1 ? 's' : ''}
             </span>
           </div>
+
+          {/* ── Enrichment progress banner ─────────────────────────────────────── */}
+          {enrichStatus?.job.running && (
+            <div className="vl-enrich-bar-wrap">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>
+                  <span className="vl-enrich-pulse" style={{ display: 'inline-block', marginRight: 8, verticalAlign: 'middle' }} />
+                  Auto-finding emails
+                  {enrichStatus.job.currentVenue && (
+                    <span style={{ color: '#fbbf24', marginLeft: 8 }}>
+                      · {enrichStatus.job.currentVenue}
+                    </span>
+                  )}
+                </span>
+                <span style={{ color: '#fbbf24' }}>
+                  {enrichStatus.job.processed} / {enrichStatus.job.totalMissing} checked · {enrichStatus.job.found} found
+                </span>
+              </div>
+              <div className="vl-enrich-bar-track">
+                <div
+                  className="vl-enrich-bar-fill"
+                  style={{
+                    width: enrichStatus.job.totalMissing > 0
+                      ? `${Math.round((enrichStatus.job.processed / enrichStatus.job.totalMissing) * 100)}%`
+                      : '0%',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── Enrichment completion flash ────────────────────────────────────── */}
+          {enrichStatus?.job.finishedAt && !enrichStatus.job.running && enrichStatus.job.found > 0 && (() => {
+            const finishedMs = new Date(enrichStatus.job.finishedAt).getTime();
+            const ageMs = Date.now() - finishedMs;
+            if (ageMs > 30_000) return null; // hide after 30 s
+            return (
+              <div style={{
+                background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)',
+                borderRadius: 10, padding: '10px 16px', marginBottom: '1rem',
+                display: 'flex', alignItems: 'center', gap: 10,
+                color: '#22c55e', fontSize: 13, fontWeight: 700,
+              }}>
+                ✓ Found {enrichStatus.job.found} email{enrichStatus.job.found !== 1 ? 's' : ''} across {enrichStatus.job.processed} venues
+              </div>
+            );
+          })()}
 
           {/* ── Tip banner ────────────────────────────────────────────────────── */}
           <div style={{
