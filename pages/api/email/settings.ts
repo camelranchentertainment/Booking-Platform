@@ -93,8 +93,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (error) throw error;
 
     return res.status(200).json({ success: true, message: 'Email settings saved' });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Save email settings error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to save settings' });
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to save settings' });
   }
 }

@@ -79,9 +79,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // OAuth-connected Google Calendar — uses encrypted refresh token
       try {
         events = await fetchGoogleOAuthEvents(userId, targetYear);
-      } catch (err: any) {
-        console.error('[calendar/sync] Google OAuth fetch failed:', err.message);
-        return res.status(200).json({ events: [], message: err.message });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Google OAuth fetch failed';
+        console.error('[calendar/sync] Google OAuth fetch failed:', msg);
+        return res.status(200).json({ events: [], message: msg });
       }
     } else if (calendarSettings.calendar_type === 'google' && calendarSettings.calendar_api_key) {
       events = await fetchGoogleCalendarEvents(calendarSettings.calendar_api_key, targetYear);

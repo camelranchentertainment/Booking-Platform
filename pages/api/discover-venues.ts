@@ -90,12 +90,8 @@ export default async function handler(
         `${city}, ${state}`
       )}&key=${googleApiKey}`;
       
-      console.log(`Geocoding: ${city}, ${state}`);
       const geocodeResponse = await fetch(geocodeUrl);
-
       const geocodeData: GoogleGeocodeResult = await geocodeResponse.json();
-      
-      console.log(`Geocode response for ${city}:`, JSON.stringify(geocodeData));
 
       // Check for API errors
       if (geocodeData.status !== 'OK') {
@@ -173,7 +169,6 @@ export default async function handler(
                 .single();
 
               if (existingVenue) {
-                console.log(`Venue already exists: ${details.name}`);
                 continue;
               }
 
@@ -239,18 +234,19 @@ export default async function handler(
   }
 }
 
+// Valid venue types per database CHECK constraint:
+// 'bar' | 'saloon' | 'pub' | 'club' | 'dancehall'
 function determineVenueType(name: string, description: string): string {
   const text = `${name} ${description}`.toLowerCase();
 
   if (text.includes('dancehall')) return 'dancehall';
-  if (text.includes('honky tonk') || text.includes('honkytonk')) return 'honky_tonk';
+  if (text.includes('honky tonk') || text.includes('honkytonk')) return 'saloon';
   if (text.includes('saloon')) return 'saloon';
   if (text.includes('pub') || text.includes('tavern')) return 'pub';
-  if (text.includes('music hall')) return 'music_hall';
-  if (text.includes('club') || text.includes('nightclub')) return 'club';
+  if (text.includes('music hall') || text.includes('nightclub') || text.includes('club')) return 'club';
   if (text.includes('bar') || text.includes('grill')) return 'bar';
 
-  return 'venue';
+  return 'bar';
 }
 
 function delay(ms: number): Promise<void> {

@@ -28,16 +28,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       success: true,
       message: 'SMTP connection verified successfully',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('SMTP test failed:', error);
+    const err = error as { code?: string; responseCode?: number };
 
     // Return a helpful message based on the error type
     let message = 'Connection failed. Check your server details and credentials.';
-    if (error.code === 'EAUTH')        message = 'Authentication failed. Check your username and password (or App Password).';
-    if (error.code === 'ECONNREFUSED') message = 'Could not connect to the server. Check your SMTP host and port.';
-    if (error.code === 'ETIMEDOUT')    message = 'Connection timed out. Check your SMTP host and port.';
-    if (error.responseCode === 535)    message = 'Wrong credentials. For Gmail, make sure you are using an App Password, not your regular password.';
+    if (err.code === 'EAUTH')        message = 'Authentication failed. Check your username and password (or App Password).';
+    if (err.code === 'ECONNREFUSED') message = 'Could not connect to the server. Check your SMTP host and port.';
+    if (err.code === 'ETIMEDOUT')    message = 'Connection timed out. Check your SMTP host and port.';
+    if (err.responseCode === 535)    message = 'Wrong credentials. For Gmail, make sure you are using an App Password, not your regular password.';
 
-    return res.status(400).json({ success: false, message, code: error.code });
+    return res.status(400).json({ success: false, message, code: err.code });
   }
 }

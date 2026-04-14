@@ -52,9 +52,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET!);
-  } catch (err: any) {
-    console.error('Webhook signature failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('Webhook signature failed:', msg);
+    return res.status(400).send(`Webhook Error: ${msg}`);
   }
 
   try {
@@ -113,9 +114,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       default:
         console.log(`Unhandled event: ${event.type}`);
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Webhook handler error:', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err instanceof Error ? err.message : 'Webhook handler error' });
   }
 
   res.status(200).json({ received: true });

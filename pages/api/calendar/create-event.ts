@@ -15,9 +15,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const eventId = await createCalendarEvent(userId, { summary, description, location, date });
     return res.status(200).json({ success: true, eventId });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[calendar/create-event]', err);
     // Return a non-fatal 200 with an error flag so the venue save still completes
-    return res.status(200).json({ success: false, error: err.message });
+    return res.status(200).json({ success: false, error: err instanceof Error ? err.message : 'Calendar event creation failed' });
   }
 }

@@ -59,10 +59,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (dbError) throw dbError;
 
     return res.redirect('/settings?calendar=connected');
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[google/callback] Error:', err);
+    const msg = err instanceof Error ? err.message : 'Connection failed';
     return res.redirect(
-      `/settings?calendar=error&message=${encodeURIComponent(err.message || 'Connection failed')}`,
+      `/settings?calendar=error&message=${encodeURIComponent(msg)}`,
     );
   }
 }

@@ -36,8 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       responses: responses || 0,
       bookings: bookings || 0
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Stats error:', error);
-    return res.status(500).json({ error: error.message || 'Internal server error' });
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error' });
   }
 }
