@@ -1,9 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl    = process.env.NEXT_PUBLIC_SUPABASE_URL    ?? '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
+// Validate at runtime, not at module-load time.
+// A module-level throw crashes the Next.js production build because Turbopack
+// imports every module during the compilation step — before NEXT_PUBLIC_* vars
+// are substituted into the bundle. Set both vars in Vercel → Project Settings →
+// Environment Variables so they are available at build time AND injected into
+// the browser bundle. Missing at runtime → Supabase requests fail with 401/network errors.
+if (process.env.NEXT_PHASE !== 'phase-production-build' && (!supabaseUrl || !supabaseAnonKey)) {
   throw new Error(
     'Missing Supabase environment variables. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.'
   );

@@ -317,8 +317,8 @@ export default function EmailTemplateManager() {
         results.push({ venueId:cv.venue.id, venueName:cv.venue.name, success:true });
         // Update venue status to 'pending' after sending
         await supabase.from('campaign_venues').update({ status:'pending' }).eq('id',cv.id);
-      } catch(err:any) {
-        results.push({ venueId:cv.venue.id, venueName:cv.venue.name, success:false, error:err.message });
+      } catch(err: unknown) {
+        results.push({ venueId:cv.venue.id, venueName:cv.venue.name, success:false, error: err instanceof Error ? err.message : 'Unknown error' });
       }
       setSendProgress(i+1);
       setSendResults([...results]);

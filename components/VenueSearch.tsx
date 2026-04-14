@@ -127,8 +127,8 @@ export default function VenueSearch() {
         return [...prev, ...toAdd];
       });
 
-    } catch (err: any) {
-      setSearchError(err.message || 'Search failed.');
+    } catch (err: unknown) {
+      setSearchError(err instanceof Error ? err.message : 'Search failed.');
     } finally {
       setSearching(false);
     }

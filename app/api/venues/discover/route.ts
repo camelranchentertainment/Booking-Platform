@@ -44,11 +44,7 @@ export async function POST(request: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-    console.log('Supabase URL:', supabaseUrl ? 'present' : 'MISSING');
-    console.log('Service role key:', serviceRoleKey ? 'present' : 'MISSING');
-
     if (!supabaseUrl || !serviceRoleKey) {
-      console.error('Missing Supabase credentials');
       return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
     }
 
@@ -74,10 +70,7 @@ export async function POST(request: NextRequest) {
     }
 
     const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
-    console.log('Google Places API key:', googleApiKey ? 'present' : 'MISSING');
-
     if (!googleApiKey) {
-      console.error('GOOGLE_PLACES_API_KEY environment variable is not set');
       return NextResponse.json({ error: 'Google Places API key not configured' }, { status: 500 });
     }
 

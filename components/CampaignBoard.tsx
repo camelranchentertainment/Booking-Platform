@@ -128,9 +128,9 @@ export default function CampaignBoard() {
       setSelectedVenues([]);
       setSelectedCampaign(null);
       loadCampaigns();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error adding venues to campaign:', error);
-      alert(`Error: ${error.message}`);
+      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -156,11 +156,17 @@ export default function CampaignBoard() {
 
     const templateId = templates[0].id;
 
+    let token = '';
+    try { token = JSON.parse(localStorage.getItem('loggedInUser') || '{}').token || ''; } catch { /* no token */ }
+
     for (const venueId of selectedVenues) {
       try {
         await fetch('/api/email/send', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({
             venueId,
             campaignId,
