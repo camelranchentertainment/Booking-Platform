@@ -7,6 +7,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Venues Table
 CREATE TABLE venues (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   name VARCHAR(255) NOT NULL,
   address TEXT,
   city VARCHAR(100) NOT NULL,
@@ -38,6 +39,7 @@ CREATE TABLE venues (
 CREATE INDEX idx_venues_name_city ON venues(LOWER(name), LOWER(city));
 CREATE INDEX idx_venues_email ON venues(email);
 CREATE INDEX idx_venues_contact_status ON venues(contact_status);
+CREATE INDEX idx_venues_user_id ON venues(user_id);
 
 -- Campaigns Table
 CREATE TABLE campaigns (
@@ -67,17 +69,45 @@ CREATE TABLE email_templates (
 );
 
 -- Email Logs Table
+-- Tracks every email sent (and optionally received) through the platform.
 CREATE TABLE email_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   venue_id UUID REFERENCES venues(id) ON DELETE CASCADE,
-  campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
-  email_template_id UUID REFERENCES email_templates(id),
+  campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL,
+  -- template_id is the canonical FK name used by the application code
+  template_id UUID REFERENCES email_templates(id) ON DELETE SET NULL,
+  direction VARCHAR(10) DEFAULT 'sent' CHECK (direction IN ('sent', 'received')),
+  to_address VARCHAR(255),
+  subject TEXT,
+  body TEXT,
+  message_id TEXT,                  -- SMTP message-id header
   sent_at TIMESTAMP DEFAULT NOW(),
   opened_at TIMESTAMP,
   clicked_at TIMESTAMP,
   responded_at TIMESTAMP,
   response_type VARCHAR(50) CHECK (response_type IN ('interested', 'not_interested', 'booked', 'more_info')),
   response_notes TEXT
+);
+
+CREATE INDEX idx_email_logs_user_id ON email_logs(user_id);
+CREATE INDEX idx_email_logs_venue_id ON email_logs(venue_id);
+CREATE INDEX idx_email_logs_campaign_id ON email_logs(campaign_id);
+
+-- User Email Settings Table
+-- Stores per-user SMTP credentials for outbound email.
+-- The password is stored AES-256-CBC encrypted (see ENCRYPTION_KEY env var).
+CREATE TABLE user_email_settings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
+  smtp_host VARCHAR(255),
+  smtp_port INTEGER DEFAULT 587,
+  username VARCHAR(255),
+  password_enc TEXT,                -- AES-256-CBC encrypted password
+  email_address VARCHAR(255),
+  display_name VARCHAR(255),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Search Regions Table
@@ -105,12 +135,60 @@ CREATE TABLE search_queue (
 );
 
 -- Campaign Venues Junction Table
+-- Tracks which venues are in each campaign and their booking status.
+-- Has its own UUID primary key so BookingCalendar and SocialMediaCampaign
+-- can reference rows by id.
 CREATE TABLE campaign_venues (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
   venue_id UUID REFERENCES venues(id) ON DELETE CASCADE,
+  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'contacted', 'booked', 'confirmed', 'declined', 'cancelled')),
+  booking_date DATE,
   added_at TIMESTAMP DEFAULT NOW(),
-  PRIMARY KEY (campaign_id, venue_id)
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (campaign_id, venue_id)
 );
+
+CREATE INDEX idx_campaign_venues_campaign_id ON campaign_venues(campaign_id);
+CREATE INDEX idx_campaign_venues_status ON campaign_venues(status);
+CREATE INDEX idx_campaign_venues_booking_date ON campaign_venues(booking_date);
+
+-- Booking Runs Table
+-- A "booking run" is a named touring period (e.g. "Summer 2026 Run").
+CREATE TABLE booking_runs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  status VARCHAR(50) DEFAULT 'planning' CHECK (status IN ('planning', 'active', 'completed', 'cancelled')),
+  start_date DATE,
+  end_date DATE,
+  target_regions TEXT[],
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_booking_runs_status ON booking_runs(status);
+CREATE INDEX idx_booking_runs_start_date ON booking_runs(start_date);
+
+-- Social Media Posts Table
+-- AI-generated social media posts tied to a confirmed booking (campaign_venues row).
+CREATE TABLE social_media_posts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  booking_id UUID REFERENCES campaign_venues(id) ON DELETE CASCADE,
+  platform VARCHAR(50) CHECK (platform IN ('facebook', 'instagram', 'twitter', 'tiktok')),
+  post_text TEXT,
+  post_date TIMESTAMP,
+  hashtags TEXT[],
+  mentions TEXT[],
+  image_prompt TEXT,
+  status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'scheduled', 'posted', 'cancelled')),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_social_media_posts_booking_id ON social_media_posts(booking_id);
+CREATE INDEX idx_social_media_posts_post_date ON social_media_posts(post_date);
+CREATE INDEX idx_social_media_posts_status ON social_media_posts(status);
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -131,9 +209,18 @@ CREATE TRIGGER update_campaigns_updated_at BEFORE UPDATE ON campaigns
 CREATE TRIGGER update_email_templates_updated_at BEFORE UPDATE ON email_templates
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_user_email_settings_updated_at BEFORE UPDATE ON user_email_settings
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_booking_runs_updated_at BEFORE UPDATE ON booking_runs
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_social_media_posts_updated_at BEFORE UPDATE ON social_media_posts
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- Insert default email template
 INSERT INTO email_templates (name, subject, body, variables) VALUES
-('Initial Booking Inquiry', 
+('Initial Booking Inquiry',
  'Live Music Booking Inquiry - Better Than Nothin''',
  'Hello {{booking_contact}},
 
@@ -152,4 +239,3 @@ Scott
 Better Than Nothin''
 [Your Contact Info]',
  ARRAY['booking_contact', 'venue_name', 'city', 'season']);
-

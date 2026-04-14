@@ -66,6 +66,18 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Require a valid Supabase user token
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const token = authHeader.replace('Bearer ', '');
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !authUser) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const userId: string = authUser.id;
+
   try {
     const { locations, radius }: DiscoverVenuesRequest = req.body;
 
@@ -170,16 +182,6 @@ export default async function handler(
 
               if (existingVenue) {
                 continue;
-              }
-
-              // Get user_id from session or use a default
-              // Note: In production, you should get this from auth
-              let userId: string | null = null;
-              const authHeader = req.headers.authorization;
-              if (authHeader) {
-                const token = authHeader.replace('Bearer ', '');
-                const { data: { user } } = await supabase.auth.getUser(token);
-                userId = user?.id || null; // Convert undefined to null
               }
 
               // Insert new venue

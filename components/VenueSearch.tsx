@@ -84,9 +84,18 @@ export default function VenueSearch() {
     setSearching(true);
 
     try {
+      let token = '';
+      try {
+        const u = JSON.parse(localStorage.getItem('loggedInUser') || '{}');
+        token = u.token || '';
+      } catch { /* no token */ }
+
       const res = await fetch('/api/discover-venues', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ locations: valid.map(l => ({ city: l.city.trim(), state: l.state })), radius }),
       });
 
