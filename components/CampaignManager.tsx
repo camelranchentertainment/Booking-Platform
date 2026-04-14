@@ -21,7 +21,7 @@ interface Campaign {
 interface CampaignVenue {
   id: string;
   status: string;
-  show_date?: string; // YYYY-MM-DD — set when status = 'booked'
+  booking_date?: string; // YYYY-MM-DD — set when status = 'booked'
   venue: {
     id: string;
     name: string;
@@ -64,6 +64,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
   const [loading, setLoading]                 = useState(true);
   const [isDiscovering, setIsDiscovering]     = useState(false);
   const [showCreate, setShowCreate]           = useState(false);
+  const [createError, setCreateError]         = useState('');
   const [statusMenuOpen, setStatusMenuOpen]   = useState<string | null>(null);
   const [detailVenue, setDetailVenue]         = useState<CampaignVenue | null>(null);
   // Show-date modal — pops up when venue is marked Booked
@@ -134,6 +135,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
     const validLocs = newRun.locations.filter(l => l.city.trim());
     if (validLocs.length === 0) return;
 
+    setCreateError('');
     try {
       const local = localStorage.getItem('loggedInUser');
       const userId = local ? JSON.parse(local).id : null;
@@ -157,7 +159,11 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
       setNewRun({ name: '', date_range_start: '', date_range_end: '', locations: [{ city: '', state: 'AR' }], radius: 25 });
       await loadCampaigns();
       if (data) openCampaignDetail(data);
-    } catch (err) { console.error(err); }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create run';
+      console.error('createRun error:', err);
+      setCreateError(msg);
+    }
   };
 
   // ── Discover venues — fetch only, show selection modal ─────────────────
@@ -165,7 +171,12 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
     if (!selectedCampaign) return;
     setIsDiscovering(true);
     try {
-      const res    = await fetch(`/api/campaigns/${selectedCampaign.id}/discover-venues`, { method: 'POST' });
+      let token = '';
+      try { token = JSON.parse(localStorage.getItem('loggedInUser') || '{}').token || ''; } catch { /* no token */ }
+      const res    = await fetch(`/api/campaigns/${selectedCampaign.id}/discover-venues`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const result = await res.json();
 
       if (result.venues?.length) {
@@ -223,8 +234,8 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
     setShowDateModal(null);
     if (!date) return;
 
-    // Save show_date to campaign_venues (column must exist in DB)
-    await supabase.from('campaign_venues').update({ show_date: date }).eq('id', cvId);
+    // Save booking_date to campaign_venues
+    await supabase.from('campaign_venues').update({ booking_date: date }).eq('id', cvId);
 
     // Create calendar event (fire-and-forget — don't block the UI)
     const cv = campaignVenues.find(v => v.id === cvId);
@@ -494,7 +505,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
                     {campaigns.length} run{campaigns.length !== 1 ? 's' : ''} total
                   </p>
                 </div>
-                <button className="cm-btn-primary" onClick={() => setShowCreate(true)}>
+                <button className="cm-btn-primary" onClick={() => { setShowCreate(true); setCreateError(''); }}>
                   + Create Run
                 </button>
               </div>
@@ -508,7 +519,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
                   <p style={{ color:'#3d6285', fontSize:14, margin:'0 0 20px' }}>
                     Create your first run to start organising venue outreach.
                   </p>
-                  <button className="cm-btn-primary" onClick={() => setShowCreate(true)}>Create First Run</button>
+                  <button className="cm-btn-primary" onClick={() => { setShowCreate(true); setCreateError(''); }}>Create First Run</button>
                 </div>
               ) : (
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))', gap:18 }}>
@@ -970,9 +981,20 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
                 </select>
               </div>
 
+              {/* Error message */}
+              {createError && (
+                <div style={{
+                  background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.35)',
+                  borderRadius: 8, padding: '10px 14px', color: '#f87171',
+                  fontSize: 13, fontWeight: 600,
+                }}>
+                  {createError}
+                </div>
+              )}
+
               {/* Actions */}
               <div style={{ display:'flex', gap:10, marginTop:6 }}>
-                <button className="cm-btn-ghost" style={{ flex:1 }} onClick={() => setShowCreate(false)}>
+                <button className="cm-btn-ghost" style={{ flex:1 }} onClick={() => { setShowCreate(false); setCreateError(''); }}>
                   Cancel
                 </button>
                 <button className="cm-btn-primary" style={{ flex:2 }}

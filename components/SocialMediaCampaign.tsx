@@ -7,12 +7,12 @@ import { supabase } from '../lib/supabase';
 interface Booking {
   id: string;
   venue_id: string;
+  booking_date?: string; // YYYY-MM-DD show date, stored on campaign_venues row
   venue: {
     id: string;
     name: string;
     city: string;
     state: string;
-    show_date?: string;
     website?: string;
   };
   campaign?: { name: string };
@@ -110,7 +110,7 @@ export default function SocialMediaCampaign() {
     setIsGenerating(true);
     setGenerateMsg('');
     try {
-      const showDate  = fmtDate(booking.venue.show_date);
+      const showDate  = fmtDate(booking.booking_date);
       const venue     = booking.venue.name;
       const city      = booking.venue.city;
       const state     = booking.venue.state;
@@ -131,17 +131,17 @@ export default function SocialMediaCampaign() {
       const parsed: Array<Record<string, unknown>> = data.posts;
 
       const showDateObj = new Date(booking.venue.show_date || Date.now());
-      const toInsert = parsed.map((p: any) => {
+      const toInsert = parsed.map((p: Record<string, unknown>) => {
         const d = new Date(showDateObj);
-        d.setDate(d.getDate() - (p.days_before || 0));
+        d.setDate(d.getDate() - ((p.days_before as number) || 0));
         return {
           booking_id:   booking.id,
-          platform:     p.platform,
-          post_text:    p.post_text,
+          platform:     p.platform as string,
+          post_text:    p.post_text as string,
           post_date:    d.toISOString(),
-          hashtags:     p.hashtags || [],
-          mentions:     p.mentions || [],
-          image_prompt: p.image_prompt || null,
+          hashtags:     (p.hashtags as string[]) || [],
+          mentions:     (p.mentions as string[]) || [],
+          image_prompt: (p.image_prompt as string) || null,
           status:       'draft',
         };
       });

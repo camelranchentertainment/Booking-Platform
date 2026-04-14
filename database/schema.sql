@@ -44,11 +44,16 @@ CREATE INDEX idx_venues_user_id ON venues(user_id);
 -- Campaigns Table
 CREATE TABLE campaigns (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   name VARCHAR(255) NOT NULL,
   description TEXT,
   status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'paused', 'completed')),
   email_template_id UUID,
+  cities TEXT[],                  -- Array of "City, ST" strings for this run
+  radius INTEGER DEFAULT 25,      -- Venue search radius in miles
   target_regions TEXT[],
+  date_range_start DATE,
+  date_range_end DATE,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   total_venues INTEGER DEFAULT 0,
@@ -142,7 +147,9 @@ CREATE TABLE campaign_venues (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
   venue_id UUID REFERENCES venues(id) ON DELETE CASCADE,
-  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'contacted', 'booked', 'confirmed', 'declined', 'cancelled')),
+  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'contact?', 'contacted', 'booked', 'confirmed', 'responded', 'declined', 'cancelled')),
+  -- booking_date is the canonical show date column used by all components.
+  -- (Previously referred to as "show_date" in some parts of the UI code — same field.)
   booking_date DATE,
   added_at TIMESTAMP DEFAULT NOW(),
   created_at TIMESTAMP DEFAULT NOW(),
