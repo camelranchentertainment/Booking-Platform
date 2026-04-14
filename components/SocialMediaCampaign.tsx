@@ -116,37 +116,19 @@ export default function SocialMediaCampaign() {
       const state     = booking.venue.state;
       const campaign  = booking.campaign?.name || '';
 
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/social/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 2000,
-          messages: [{
-            role: 'user',
-            content: `Create a social media campaign for a country/honky-tonk band called "Better Than Nothin'" (website: www.betterthannothin.com) performing at ${venue} in ${city}, ${state} on ${showDate}${campaign ? ` as part of the "${campaign}" run` : ''}.
-
-Generate exactly 6 posts — 2 Facebook, 2 Instagram, 2 Twitter/X — timed as: announcement (14 days before), hype post (3 days before), day-of post.
-
-Return ONLY a valid JSON array, no markdown, no explanation:
-[
-  {
-    "platform": "facebook",
-    "timing": "announcement",
-    "days_before": 14,
-    "post_text": "Post text with emojis",
-    "hashtags": ["#BetterThanNothin", "#CountryMusic", "#${city.replace(/\s/g,'')}"],
-    "mentions": [],
-    "image_prompt": "Short description for a show poster image"
-  }
-]`,
-          }],
-        }),
+        body: JSON.stringify({ venue, city, state, showDate, campaign }),
       });
 
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Generation failed (${res.status})`);
+      }
+
       const data   = await res.json();
-      const raw    = (data.content?.[0]?.text || '').trim().replace(/```json\n?|```\n?/g, '').trim();
-      const parsed = JSON.parse(raw);
+      const parsed: Array<Record<string, unknown>> = data.posts;
 
       const showDateObj = new Date(booking.venue.show_date || Date.now());
       const toInsert = parsed.map((p: any) => {
@@ -169,9 +151,9 @@ Return ONLY a valid JSON array, no markdown, no explanation:
 
       setGenerateMsg(`Generated ${toInsert.length} posts`);
       await loadPosts(booking.id);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Generate error:', err);
-      setGenerateMsg('error:' + err.message);
+      setGenerateMsg('error: ' + (err instanceof Error ? err.message : 'Generation failed'));
     } finally {
       setIsGenerating(false);
     }
