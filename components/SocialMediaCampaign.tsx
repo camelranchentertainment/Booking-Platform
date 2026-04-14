@@ -130,7 +130,7 @@ export default function SocialMediaCampaign() {
       const data   = await res.json();
       const parsed: Array<Record<string, unknown>> = data.posts;
 
-      const showDateObj = new Date(booking.venue.show_date || Date.now());
+      const showDateObj = new Date(booking.booking_date || Date.now());
       const toInsert = parsed.map((p: Record<string, unknown>) => {
         const d = new Date(showDateObj);
         d.setDate(d.getDate() - ((p.days_before as number) || 0));
@@ -323,9 +323,9 @@ export default function SocialMediaCampaign() {
                         <div style={{ color:'#3d6285', fontSize:12, fontWeight:600 }}>
                           {b.venue.city}, {b.venue.state}
                         </div>
-                        {b.venue.show_date && (
+                        {b.booking_date && (
                           <div style={{ color:'#4a85c8', fontSize:12, fontWeight:700, marginTop:4 }}>
-                            {fmtDate(b.venue.show_date)}
+                            {fmtDate(b.booking_date)}
                           </div>
                         )}
                         {b.campaign?.name && (
@@ -372,7 +372,7 @@ export default function SocialMediaCampaign() {
                         </div>
                         <div style={{ color:'#3d6285', fontSize:13, fontWeight:600 }}>
                           {selectedBooking.venue.city}, {selectedBooking.venue.state}
-                          {selectedBooking.venue.show_date && ` · ${fmtDate(selectedBooking.venue.show_date)}`}
+                          {selectedBooking.booking_date && ` · ${fmtDate(selectedBooking.booking_date)}`}
                         </div>
                       </div>
                       <div style={{ display:'flex', gap:10, alignItems:'center' }}>

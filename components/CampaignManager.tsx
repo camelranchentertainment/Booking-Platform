@@ -1075,9 +1075,9 @@ function VenueCard({ cv, cfg, statuses, statusMenuOpen, setStatusMenuOpen, onSta
       </div>
 
       {/* Show date badge */}
-      {cv.status === 'booked' && cv.show_date && (
+      {cv.status === 'booked' && cv.booking_date && (
         <div style={{ fontSize:11, color:'#22c55e', fontWeight:700, marginBottom:8 }}>
-          📅 {new Date(cv.show_date + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}
+          📅 {new Date(cv.booking_date + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}
         </div>
       )}
 
