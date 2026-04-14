@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
 
 export default function SignUp() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -61,7 +63,7 @@ export default function SignUp() {
 
       // Success! Redirect to login
       alert('✅ Account created! Please check your email to verify your account, then log in.');
-      window.location.href = '/login';
+      router.push('/login');
 
     } catch (err: any) {
       console.error('Signup error:', err);

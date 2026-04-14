@@ -93,7 +93,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // ── Update venue contact status ───────────────────────────────────────────
     await supabase
       .from('venues')
-      .update({ contact_status: 'awaiting_response', last_contacted_at: new Date().toISOString() })
+      .update({ contact_status: 'awaiting_response', last_contacted: new Date().toISOString() })
       .eq('id', venueId);
 
     return res.status(200).json({

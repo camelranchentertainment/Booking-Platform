@@ -1,12 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder'
-);
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Missing Supabase environment variables. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.'
+  );
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // ============================================
 // VENUE MANAGEMENT FUNCTIONS
@@ -48,7 +51,7 @@ export async function getVenueById(id: string) {
   return data;
 }
 
-export async function addVenue(venueData: any) {
+export async function addVenue(venueData: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('venues')
     .insert([venueData])
@@ -59,7 +62,7 @@ export async function addVenue(venueData: any) {
   return data;
 }
 
-export async function updateVenue(id: string, updates: any) {
+export async function updateVenue(id: string, updates: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('venues')
     .update(updates)
@@ -137,7 +140,7 @@ export async function getCampaignById(id: string) {
   return data;
 }
 
-export async function createCampaign(campaignData: any) {
+export async function createCampaign(campaignData: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('campaigns')
     .insert([campaignData])
@@ -148,7 +151,7 @@ export async function createCampaign(campaignData: any) {
   return data;
 }
 
-export async function updateCampaign(id: string, updates: any) {
+export async function updateCampaign(id: string, updates: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('campaigns')
     .update(updates)
@@ -232,7 +235,7 @@ export async function getEmailTemplateById(id: string) {
   return data;
 }
 
-export async function createEmailTemplate(templateData: any) {
+export async function createEmailTemplate(templateData: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('email_templates')
     .insert([templateData])
@@ -243,7 +246,7 @@ export async function createEmailTemplate(templateData: any) {
   return data;
 }
 
-export async function updateEmailTemplate(id: string, updates: any) {
+export async function updateEmailTemplate(id: string, updates: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('email_templates')
     .update(updates)
@@ -312,7 +315,7 @@ export async function getEmailLogs(filters?: {
   return data || [];
 }
 
-export async function updateEmailLog(id: string, updates: any) {
+export async function updateEmailLog(id: string, updates: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('email_logs')
     .update(updates)
@@ -349,7 +352,7 @@ export async function getActiveSearchRegions() {
   return getSearchRegions({ is_active: true });
 }
 
-export async function addSearchRegion(regionData: any) {
+export async function addSearchRegion(regionData: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('search_regions')
     .insert([regionData])
@@ -360,7 +363,7 @@ export async function addSearchRegion(regionData: any) {
   return data;
 }
 
-export async function updateSearchRegion(id: string, updates: any) {
+export async function updateSearchRegion(id: string, updates: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('search_regions')
     .update(updates)
@@ -413,7 +416,7 @@ export async function getSearchQueue(filters?: {
   return data || [];
 }
 
-export async function updateSearchQueue(id: string, updates: any) {
+export async function updateSearchQueue(id: string, updates: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('search_queue')
     .update(updates)
@@ -455,7 +458,7 @@ export async function getBookingRunById(id: string) {
   return data;
 }
 
-export async function createBookingRun(runData: any) {
+export async function createBookingRun(runData: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('booking_runs')
     .insert([runData])
@@ -466,7 +469,7 @@ export async function createBookingRun(runData: any) {
   return data;
 }
 
-export async function updateBookingRun(id: string, updates: any) {
+export async function updateBookingRun(id: string, updates: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('booking_runs')
     .update(updates)
@@ -510,7 +513,7 @@ export async function getSocialMediaPosts(filters?: {
   return data || [];
 }
 
-export async function createSocialMediaPost(postData: any) {
+export async function createSocialMediaPost(postData: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('social_media_posts')
     .insert([postData])
@@ -521,7 +524,7 @@ export async function createSocialMediaPost(postData: any) {
   return data;
 }
 
-export async function updateSocialMediaPost(id: string, updates: any) {
+export async function updateSocialMediaPost(id: string, updates: Record<string, unknown>) {
   const { data, error } = await supabase
     .from('social_media_posts')
     .update(updates)

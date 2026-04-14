@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
 
 export default function Login() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -45,7 +47,7 @@ export default function Login() {
       }));
 
       // Redirect to dashboard
-      window.location.href = '/dashboard';
+      router.push('/dashboard');
 
     } catch (err: any) {
       console.error('Login error:', err);
