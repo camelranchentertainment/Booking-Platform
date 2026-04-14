@@ -98,9 +98,11 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
   const loadCampaigns = async () => {
     try {
       setLoading(true);
+      // Use * for campaign_venues so the query succeeds even before the
+      // migration adds id/status columns — those are optional enrichment data.
       const { data, error } = await supabase
         .from('campaigns')
-        .select(`*, campaign_venues(id, status, venue:venues(id, name, email))`)
+        .select(`*, campaign_venues(*, venue:venues(id, name, email))`)
         .order('created_at', { ascending: false });
       if (error) throw error;
 
@@ -115,7 +117,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
         };
       });
       setCampaigns(enriched);
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error('loadCampaigns error:', err); }
     finally { setLoading(false); }
   };
 
@@ -123,7 +125,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
     setSelectedCampaign(campaign);
     const { data } = await supabase
       .from('campaign_venues')
-      .select(`id, status, venue:venues(id, name, city, state, address, phone, email, website, venue_type, booking_contact)`)
+      .select(`*, venue:venues(id, name, city, state, address, phone, email, website, venue_type, booking_contact)`)
       .eq('campaign_id', campaign.id)
       .order('status');
     setCampaignVenues((data as unknown as CampaignVenue[]) || []);
@@ -160,7 +162,12 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
       await loadCampaigns();
       if (data) openCampaignDetail(data);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create run';
+      // Supabase PostgrestError is not instanceof Error — extract .message directly
+      const msg = (err && typeof err === 'object' && 'message' in err)
+        ? String((err as { message: unknown }).message)
+        : err instanceof Error
+          ? err.message
+          : 'Failed to create run';
       console.error('createRun error:', err);
       setCreateError(msg);
     }
