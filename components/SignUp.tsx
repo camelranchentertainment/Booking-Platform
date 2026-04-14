@@ -65,9 +65,9 @@ export default function SignUp() {
       alert('✅ Account created! Please check your email to verify your account, then log in.');
       router.push('/login');
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Signup error:', err);
-      setError(err.message || 'Failed to create account');
+      setError(err instanceof Error ? err.message : 'Failed to create account');
     } finally {
       setLoading(false);
     }

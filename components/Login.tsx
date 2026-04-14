@@ -39,19 +39,22 @@ export default function Login() {
         .eq('id', data.user.id)
         .single();
 
-      // Store in localStorage for backward compatibility
+      // Store session for use by API calls that require Bearer token auth
       localStorage.setItem('loggedInUser', JSON.stringify({
-        email: data.user.email,
-        id: data.user.id,
-        bandName: profile?.band_name || 'Unknown Band'
+        email:    data.user.email,
+        id:       data.user.id,
+        bandName: profile?.band_name         || 'Unknown Band',
+        tier:     profile?.subscription_tier || 'free',
+        isAdmin:  profile?.is_admin          || false,
+        token:    data.session?.access_token || '',
       }));
 
       // Redirect to dashboard
       router.push('/dashboard');
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Login error:', err);
-      setError(err.message || 'Invalid email or password');
+      setError(err instanceof Error ? err.message : 'Invalid email or password');
     } finally {
       setLoading(false);
     }

@@ -100,17 +100,20 @@ CREATE INDEX idx_email_logs_venue_id ON email_logs(venue_id);
 CREATE INDEX idx_email_logs_campaign_id ON email_logs(campaign_id);
 
 -- User Email Settings Table
--- Stores per-user SMTP credentials for outbound email.
+-- Stores per-user SMTP/IMAP credentials for outbound (and optionally inbound) email.
 -- The password is stored AES-256-CBC encrypted (see ENCRYPTION_KEY env var).
 CREATE TABLE user_email_settings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
+  provider VARCHAR(50) DEFAULT 'smtp',  -- 'smtp', 'gmail', 'outlook', etc.
+  display_name VARCHAR(255),
+  email_address VARCHAR(255),
   smtp_host VARCHAR(255),
   smtp_port INTEGER DEFAULT 587,
+  imap_host VARCHAR(255),
+  imap_port INTEGER DEFAULT 993,
   username VARCHAR(255),
   password_enc TEXT,                -- AES-256-CBC encrypted password
-  email_address VARCHAR(255),
-  display_name VARCHAR(255),
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
