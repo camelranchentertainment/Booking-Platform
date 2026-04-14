@@ -40,25 +40,32 @@ interface GooglePlaceDetailsResponse {
 }
 
 export async function POST(request: NextRequest) {
-  console.log('=== VENUE DISCOVERY API CALLED ===');
   try {
-    console.log('Entering try block');
-    // Create Supabase client with SERVICE ROLE KEY inside request handler
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    
-    console.log('=== SUPABASE CLIENT INITIALIZATION ===');
-    console.log('Supabase URL:', supabaseUrl ? 'URL exists' : 'URL MISSING');
-    console.log('Service role key:', serviceRoleKey ? `Key exists, starts with: ${serviceRoleKey.substring(0, 15)}...` : 'KEY MISSING');
-    
+
+    console.log('Supabase URL:', supabaseUrl ? 'present' : 'MISSING');
+    console.log('Service role key:', serviceRoleKey ? 'present' : 'MISSING');
+
     if (!supabaseUrl || !serviceRoleKey) {
       console.error('Missing Supabase credentials');
       return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
     }
-    
+
     const supabase = createClient(supabaseUrl, serviceRoleKey);
-    console.log('Supabase client created with service role key');
-    
+
+    // Extract authenticated user from Authorization: Bearer <token>
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const userId: string = authUser.id;
+
     const body = await request.json();
     const { locations, radius }: { locations: Location[]; radius: number } = body;
 
@@ -67,8 +74,8 @@ export async function POST(request: NextRequest) {
     }
 
     const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
-    console.log('API Key check:', googleApiKey ? `Key exists (${googleApiKey.substring(0, 10)}...)` : 'KEY IS UNDEFINED OR EMPTY');
-    
+    console.log('Google Places API key:', googleApiKey ? 'present' : 'MISSING');
+
     if (!googleApiKey) {
       console.error('GOOGLE_PLACES_API_KEY environment variable is not set');
       return NextResponse.json({ error: 'Google Places API key not configured' }, { status: 500 });
@@ -85,15 +92,10 @@ export async function POST(request: NextRequest) {
       const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
         `${city}, ${state}`
       )}&key=${googleApiKey}`;
-      
-      console.log(`Geocoding: ${city}, ${state}`);
+
       const geocodeResponse = await fetch(geocodeUrl);
-
       const geocodeData: GoogleGeocodeResult = await geocodeResponse.json();
-      
-      console.log(`Geocode response for ${city}:`, JSON.stringify(geocodeData));
 
-      // Check for API errors
       if (geocodeData.status !== 'OK') {
         console.error(`Geocoding failed for ${city}, ${state}. Status: ${geocodeData.status}, Error: ${geocodeData.error_message || 'Unknown'}`);
         continue;
@@ -116,7 +118,6 @@ export async function POST(request: NextRequest) {
 
       for (const query of searchQueries) {
         try {
-          // Text Search
           const searchResponse = await fetch(
             `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
               query
@@ -124,20 +125,16 @@ export async function POST(request: NextRequest) {
           );
 
           const searchData: GooglePlacesSearchResult = await searchResponse.json();
-          
-          console.log(`Search query "${query}" returned ${searchData.results?.length || 0} results`);
 
           if (!searchData.results || searchData.results.length === 0) {
-            console.log(`No results for query: ${query}`);
             continue;
           }
 
           // Process each venue (limit to 5 per query to avoid quota issues)
           const placesToProcess = searchData.results.slice(0, 5);
-          
+
           for (const place of placesToProcess) {
             try {
-              // Get detailed place information
               const detailsResponse = await fetch(
                 `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=place_id,name,formatted_address,formatted_phone_number,website,rating,types,url&key=${googleApiKey}`
               );
@@ -158,7 +155,6 @@ export async function POST(request: NextRequest) {
                 venueState = stateZip.split(' ')[0];
               }
 
-              // Determine venue type
               const venueType = determineVenueType(details.name, details.types.join(' '));
 
               // Check if venue already exists
@@ -171,15 +167,9 @@ export async function POST(request: NextRequest) {
                 .single();
 
               if (existingVenue) {
-                console.log(`Venue already exists: ${details.name}`);
                 continue;
               }
 
-              // Get user_id - using Scott's user ID for now
-              // TODO: In production, get this from auth session
-              const userId: string | null = '41c554dc-a9cc-4605-8f65-dd474752ce55';
-
-              // Insert new venue
               const { error: insertError } = await supabase.from('venues').insert([
                 {
                   name: details.name,
@@ -200,7 +190,7 @@ export async function POST(request: NextRequest) {
                 continue;
               }
 
-              console.log(`✓ Successfully added venue: ${details.name} in ${venueCity}, ${venueState}`);
+              console.log(`Successfully added venue: ${details.name} in ${venueCity}, ${venueState}`);
               totalVenuesFound++;
 
               // Rate limiting - delay between API calls

@@ -158,16 +158,13 @@ export default function CampaignBoard() {
 
     for (const venueId of selectedVenues) {
       try {
-        await fetch('/api/emails/send', {
+        await fetch('/api/email/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             venueId,
             campaignId,
-            templateId,
-            customizations: {
-              season: 'summer 2026'
-            }
+            templateId
           })
         });
       } catch (error) {

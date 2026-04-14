@@ -272,7 +272,7 @@ All data is stored and can be:
 - `PUT /api/campaigns/[id]` - Update campaign
 
 ### Emails
-- `POST /api/emails/send` - Send emails via Outlook
+- `POST /api/email/send` - Send emails via configured email account
 
 ---
 
