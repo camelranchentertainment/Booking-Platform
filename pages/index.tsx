@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import { supabase } from '../lib/supabase';
 
 const STRIPE_PRICE_BASIC   = process.env.NEXT_PUBLIC_STRIPE_PRICE_BASIC   || 'price_REPLACE_BASIC';
 const STRIPE_PRICE_PREMIUM = process.env.NEXT_PUBLIC_STRIPE_PRICE_PREMIUM || 'price_REPLACE_PREMIUM';
@@ -66,14 +67,22 @@ export default function LandingPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Login failed');
+      // Restore the Supabase session on the browser client so that
+      // all subsequent client-side Supabase calls go as 'authenticated'
+      // (not 'anon') and pass RLS policies.
+      await supabase.auth.setSession({
+        access_token:  data.accessToken,
+        refresh_token: data.refreshToken,
+      });
       // Store session for dashboard auth check
       localStorage.setItem('loggedInUser', JSON.stringify({
-        id:       data.userId,
-        email:    data.email,
-        bandName: data.bandName,
-        tier:     data.subscriptionTier,
-        isAdmin:  data.isAdmin || false,
-        token:    data.accessToken,
+        id:           data.userId,
+        email:        data.email,
+        bandName:     data.bandName,
+        tier:         data.subscriptionTier,
+        isAdmin:      data.isAdmin || false,
+        token:        data.accessToken,
+        refreshToken: data.refreshToken,
       }));
       router.push('/dashboard');
     } catch (err) { setAuthError(err instanceof Error ? err.message : 'An error occurred'); }

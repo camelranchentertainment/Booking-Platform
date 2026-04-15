@@ -44,7 +44,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const userId = authData.user.id;
-    const accessToken = authData.session.access_token;
+    const accessToken  = authData.session.access_token;
+    const refreshToken = authData.session.refresh_token;
 
     // ── 2. Fetch band profile ────────────────────────────────────────────────
     const { data: profile } = await supabaseAdmin
@@ -69,6 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       subscriptionTier: effectiveTier,
       isAdmin,
       accessToken,
+      refreshToken,
     });
 
   } catch (err: unknown) {

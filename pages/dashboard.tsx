@@ -35,13 +35,29 @@ export default function DashboardPage() {
   useEffect(() => { checkAuth(); }, [router]);
 
   const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
+    let { data: { session } } = await supabase.auth.getSession();
+
+    // If no in-memory session, try to restore from the tokens stored in
+    // localStorage by the login flow (index.tsx calls /api/auth/login which
+    // returns access + refresh tokens, and we persist them there).
     if (!session) {
       const local = localStorage.getItem('loggedInUser');
       if (!local) { router.push('/'); return; }
-      setUser(JSON.parse(local));
-      return;
+      const localUser = JSON.parse(local);
+      if (localUser.token && localUser.refreshToken) {
+        const { data: restored } = await supabase.auth.setSession({
+          access_token:  localUser.token,
+          refresh_token: localUser.refreshToken,
+        });
+        session = restored.session;
+      }
+      if (!session) {
+        // Tokens missing or expired — send back to login
+        router.push('/');
+        return;
+      }
     }
+
     setUser({ id: session.user.id, email: session.user.email ?? '' });
     loadBandProfile(session.user.id);
   };
