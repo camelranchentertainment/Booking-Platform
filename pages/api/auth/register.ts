@@ -18,11 +18,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { email, password, name, bandName, tier } = req.body;
+  const { email, password, name, bandName, tier, role } = req.body;
+
+  // role: 'agent' (default) or 'band_admin' (band signing up independently)
+  const userRole: string = role === 'band_admin' ? 'band_admin' : 'agent';
 
   // ── Basic validation ──────────────────────────────────────────────────────
-  if (!email || !password || !bandName) {
-    return res.status(400).json({ error: 'Email, password, and band name are required.' });
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+  if (userRole === 'agent' && !bandName) {
+    return res.status(400).json({ error: 'Band name is required for agents.' });
+  }
+  if (userRole === 'band_admin' && !bandName) {
+    return res.status(400).json({ error: 'Band name is required.' });
   }
   if (password.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters.' });
@@ -61,16 +70,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: 'Failed to create band profile. Please try again.' });
     }
 
-    // ── 3. Also upsert into profiles table (used by email/settings components) ─
+    // ── 3. Upsert into profiles table with role ───────────────────────────────
     await supabase
       .from('profiles')
       .upsert({
         id:           userId,
         display_name: name?.trim() || bandName.trim(),
+        role:         userRole,
         updated_at:   new Date().toISOString(),
       }, { onConflict: 'id' });
 
-    return res.status(200).json({ userId, email });
+    // ── 4. For band_admin signups, create the band row they own ──────────────
+    if (userRole === 'band_admin') {
+      await supabase.from('bands').insert({
+        owner_user_id: userId,
+        band_name:     bandName.trim(),
+      });
+    }
+
+    return res.status(200).json({ userId, email, role: userRole });
 
   } catch (err: unknown) {
     console.error('Register error:', err);
