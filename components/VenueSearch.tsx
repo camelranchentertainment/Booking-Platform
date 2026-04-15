@@ -56,9 +56,12 @@ export default function VenueSearch() {
   const [results, setResults]       = useState<DiscoveredVenue[]>(() => loadSession());
   const [filterKey, setFilterKey]   = useState('ALL');
 
-  // Campaigns (for "Add to Run" dropdown)
+  // Campaigns (for "Add to Run" bulk flow)
   const [campaigns, setCampaigns]   = useState<Campaign[]>([]);
-  const [addingTo, setAddingTo]     = useState<{ venueId: string; campaignId: string } | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState('');
+  const [selectedVenueIds, setSelectedVenueIds] = useState<Set<string>>(new Set());
+  const [bulkAdding, setBulkAdding] = useState(false);
+  const [bulkMsg, setBulkMsg]       = useState<{ ok: boolean; text: string } | null>(null);
 
   // Persist results to sessionStorage whenever they change
   useEffect(() => { saveSession(results); }, [results]);
@@ -134,20 +137,69 @@ export default function VenueSearch() {
     }
   };
 
-  // ── Add venue to a campaign/run ──────────────────────────────────────────
-  const addToCampaign = async (venue: DiscoveredVenue, campaignId: string) => {
-    if (!venue._savedId || !campaignId) return;
-    setAddingTo({ venueId: venue._savedId, campaignId });
+  // ── Toggle individual venue checkbox ─────────────────────────────────────
+  const toggleVenue = (id: string) =>
+    setSelectedVenueIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const toggleAll = () => {
+    const ids = visible.map(v => v._savedId).filter(Boolean) as string[];
+    setSelectedVenueIds(prev =>
+      prev.size === ids.length ? new Set() : new Set(ids)
+    );
+  };
+
+  // ── Bulk add selected venues + cities to a run ────────────────────────────
+  const bulkAddToRun = async () => {
+    if (!selectedRunId || selectedVenueIds.size === 0) return;
+    setBulkAdding(true); setBulkMsg(null);
     try {
-      await supabase.from('campaign_venues').upsert({
-        campaign_id: campaignId,
-        venue_id: venue._savedId,
-        status: 'contact?',
-      }, { onConflict: 'campaign_id,venue_id' });
-    } catch (err) {
-      console.error('Add to campaign error:', err);
+      // 1. Add each selected venue to campaign_venues
+      const rows = Array.from(selectedVenueIds).map(venueId => ({
+        campaign_id: selectedRunId,
+        venue_id:    venueId,
+        status:      'contact?',
+      }));
+      const { error: cvErr } = await supabase
+        .from('campaign_venues')
+        .upsert(rows, { onConflict: 'campaign_id,venue_id' });
+      if (cvErr) throw cvErr;
+
+      // 2. Collect unique "City, ST" strings from selected venues
+      const citiesToAdd = Array.from(
+        new Set(
+          visible
+            .filter(v => v._savedId && selectedVenueIds.has(v._savedId))
+            .map(v => `${v.city}, ${v.state}`)
+        )
+      );
+
+      // 3. Fetch current cities on the campaign and merge
+      const { data: camp } = await supabase
+        .from('campaigns')
+        .select('cities')
+        .eq('id', selectedRunId)
+        .maybeSingle();
+
+      const existing: string[] = camp?.cities || [];
+      const merged = Array.from(new Set([...existing, ...citiesToAdd]));
+
+      await supabase
+        .from('campaigns')
+        .update({ cities: merged })
+        .eq('id', selectedRunId);
+
+      const runName = campaigns.find(c => c.id === selectedRunId)?.name || 'Run';
+      setBulkMsg({ ok: true, text: `✓ Added ${selectedVenueIds.size} venue${selectedVenueIds.size !== 1 ? 's' : ''} to "${runName}"` });
+      setSelectedVenueIds(new Set());
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to add venues';
+      setBulkMsg({ ok: false, text: `✗ ${msg}` });
     } finally {
-      setAddingTo(null);
+      setBulkAdding(false);
     }
   };
 
@@ -374,6 +426,51 @@ export default function VenueSearch() {
             </div>
           ) : (
             <>
+              {/* ── Add to Run bar ───────────────────────────────────────── */}
+              {campaigns.length > 0 && (
+                <div style={{
+                  background: 'rgba(9,24,40,0.9)',
+                  border: '1px solid rgba(74,133,200,0.2)',
+                  borderRadius: 12, padding: '14px 18px',
+                  marginBottom: 16,
+                  display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+                }}>
+                  <span style={{ color: '#7aa5c4', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>Add to Run:</span>
+                  <select
+                    className="vs-campaign-select"
+                    value={selectedRunId}
+                    style={{ flex: '1 1 180px', maxWidth: 260 }}
+                    onChange={e => { setSelectedRunId(e.target.value); setSelectedVenueIds(new Set()); setBulkMsg(null); }}
+                  >
+                    <option value="">— Select a run —</option>
+                    {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+
+                  {selectedRunId && (
+                    <>
+                      <button className="vs-btn-ghost" style={{ fontSize: 12, padding: '6px 12px', whiteSpace: 'nowrap' }}
+                        onClick={toggleAll}>
+                        {selectedVenueIds.size === visible.filter(v => v._savedId).length ? 'Deselect All' : 'Select All'}
+                      </button>
+                      <button
+                        className="vs-btn-primary"
+                        disabled={selectedVenueIds.size === 0 || bulkAdding}
+                        onClick={bulkAddToRun}
+                        style={{ fontSize: 13, padding: '8px 20px', whiteSpace: 'nowrap', opacity: selectedVenueIds.size === 0 ? 0.5 : 1 }}
+                      >
+                        {bulkAdding ? 'Adding…' : `Add ${selectedVenueIds.size > 0 ? selectedVenueIds.size + ' ' : ''}Venue${selectedVenueIds.size !== 1 ? 's' : ''} to Run`}
+                      </button>
+                    </>
+                  )}
+
+                  {bulkMsg && (
+                    <span style={{ fontSize: 13, fontWeight: 700, color: bulkMsg.ok ? '#22c55e' : '#f87171' }}>
+                      {bulkMsg.text}
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* Filter pills + clear */}
               <div style={{
                 display: 'flex', gap: 8, alignItems: 'center',
@@ -388,7 +485,7 @@ export default function VenueSearch() {
                 ))}
                 <button className="vs-btn-ghost"
                   style={{ marginLeft: 'auto', color: '#f87171', borderColor: 'rgba(248,113,113,0.25)', fontSize: 12 }}
-                  onClick={() => { setResults([]); setFilterKey('ALL'); }}>
+                  onClick={() => { setResults([]); setFilterKey('ALL'); setBulkMsg(null); setSelectedVenueIds(new Set()); setSelectedRunId(''); }}>
                   Clear Session
                 </button>
               </div>
@@ -396,7 +493,24 @@ export default function VenueSearch() {
               {/* Venue grid */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {visible.map((venue, i) => (
-                  <div key={venue._savedId || i} className="vs-venue-card">
+                  <div key={venue._savedId || i} className="vs-venue-card"
+                    style={{ cursor: selectedRunId && venue._savedId ? 'pointer' : undefined,
+                      borderColor: selectedRunId && venue._savedId && selectedVenueIds.has(venue._savedId) ? 'rgba(34,197,94,0.4)' : undefined,
+                      background:  selectedRunId && venue._savedId && selectedVenueIds.has(venue._savedId) ? 'rgba(34,197,94,0.06)' : undefined }}
+                    onClick={() => selectedRunId && venue._savedId && toggleVenue(venue._savedId)}
+                  >
+                    {/* Checkbox (visible when a run is selected) */}
+                    {selectedRunId && venue._savedId && (
+                      <div style={{
+                        width: 20, height: 20, flexShrink: 0, borderRadius: 5,
+                        border: `2px solid ${selectedVenueIds.has(venue._savedId) ? '#22c55e' : 'rgba(74,133,200,0.3)'}`,
+                        background: selectedVenueIds.has(venue._savedId) ? '#22c55e' : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all .12s', marginTop: 2,
+                      }}>
+                        {selectedVenueIds.has(venue._savedId) && <span style={{ color: '#030d18', fontSize: 12, fontWeight: 900 }}>✓</span>}
+                      </div>
+                    )}
 
                     {/* Left: info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -428,27 +542,6 @@ export default function VenueSearch() {
                       </div>
                     </div>
 
-                    {/* Right: Add to Run */}
-                    {campaigns.length > 0 && venue._savedId && (
-                      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <select
-                          className="vs-campaign-select"
-                          defaultValue=""
-                          onChange={e => {
-                            if (e.target.value) addToCampaign(venue, e.target.value);
-                            e.target.value = '';
-                          }}
-                        >
-                          <option value="" disabled>Add to Run…</option>
-                          {campaigns.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
-                        {addingTo?.venueId === venue._savedId && (
-                          <span style={{ color: '#22c55e', fontSize: 12, fontWeight: 700 }}>✓</span>
-                        )}
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
