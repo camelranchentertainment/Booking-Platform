@@ -88,11 +88,33 @@ export default function VenueSearch() {
 
     try {
       let token = '';
-      try {
-        const u = JSON.parse(localStorage.getItem('loggedInUser') || '{}');
-        token = u.token || '';
-      } catch { /* no token */ }
+      try { token = JSON.parse(localStorage.getItem('loggedInUser') || '{}').token || ''; } catch {}
 
+      // ── Step 1: load existing DB venues for these cities right away ────────
+      const freshFromDB = async () => {
+        const found: DiscoveredVenue[] = [];
+        for (const loc of valid) {
+          const { data } = await supabase
+            .from('venues')
+            .select('id, name, address, city, state, phone, website, venue_type, email')
+            .ilike('city', loc.city.trim())
+            .eq('state', loc.state);
+          for (const v of (data || [])) {
+            found.push({ ...v, _searchKey: `${v.city}, ${v.state}`, _savedId: v.id });
+          }
+        }
+        return found;
+      };
+
+      const existing = await freshFromDB();
+      if (existing.length > 0) {
+        setResults(prev => {
+          const ids = new Set(prev.map(v => v._savedId).filter(Boolean));
+          return [...prev, ...existing.filter(v => !ids.has(v._savedId))];
+        });
+      }
+
+      // ── Step 2: call Google Places via discover API for new venues ─────────
       const res = await fetch('/api/discover-venues', {
         method: 'POST',
         headers: {
@@ -102,33 +124,18 @@ export default function VenueSearch() {
         body: JSON.stringify({ locations: valid.map(l => ({ city: l.city.trim(), state: l.state })), radius }),
       });
 
-      if (!res.ok) throw new Error('Search failed. Please try again.');
-      const data = await res.json();
-
-      // The discover API saves to DB and returns count — fetch what was just saved
-      // We query the DB for venues matching our search cities, limited to recently created
-      const cityNames = valid.map(l => l.city.trim().toLowerCase());
-
-      const { data: fresh } = await supabase
-        .from('venues')
-        .select('id, name, address, city, state, phone, website, venue_type, email')
-        .order('created_at', { ascending: false })
-        .limit(200);
-
-      const newVenues: DiscoveredVenue[] = (fresh || [])
-        .filter((v: any) => cityNames.includes(v.city?.toLowerCase()))
-        .map((v: any) => ({
-          ...v,
-          _searchKey: `${v.city}, ${v.state}`,
-          _savedId: v.id,
-        }));
-
-      // Merge with existing session results — avoid dupes by id
-      setResults(prev => {
-        const existingIds = new Set(prev.map(v => v._savedId).filter(Boolean));
-        const toAdd = newVenues.filter(v => !existingIds.has(v._savedId));
-        return [...prev, ...toAdd];
-      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        // Show error but don't discard the existing venues already loaded
+        setSearchError(errData.error || 'Google search failed — showing existing venues only.');
+      } else {
+        // ── Step 3: re-query DB to pick up newly saved venues from Google ──
+        const fresh = await freshFromDB();
+        setResults(prev => {
+          const ids = new Set(prev.map(v => v._savedId).filter(Boolean));
+          return [...prev, ...fresh.filter(v => !ids.has(v._savedId))];
+        });
+      }
 
     } catch (err: unknown) {
       setSearchError(err instanceof Error ? err.message : 'Search failed.');
