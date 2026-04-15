@@ -41,7 +41,7 @@ const DEFAULT_SUBJECT =
   `Booking Inquiry – {{band_name}} | [Venue Name] | [Date 1]`;
 
 const DEFAULT_BODY =
-`Hi [Booker Name],
+`Hi [Booker Name / [Venue Name] Booking Team],
 
 I'm {{agent_name}} with {{agency_name}} — I rep {{band_name}}, a hard-driving Country/Honky Tonk band. The band is willing to cover up to 3 hours with breaks and [Venue Name] feels like a natural fit.
 
@@ -162,7 +162,10 @@ export default function BookingTemplateEditor({ userId }: { userId: string }) {
       setShowAddBand(false);
       setNewBand({ name: '', city: '', state: 'AR' });
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to add band');
+      const msg = (err && typeof err === 'object' && 'message' in err)
+        ? String((err as { message: unknown }).message)
+        : err instanceof Error ? err.message : 'Unknown error';
+      alert(`Failed to add band: ${msg}`);
     } finally { setAddingBand(false); }
   };
 
