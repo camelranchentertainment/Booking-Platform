@@ -302,7 +302,7 @@ export default function BandDashboard({ userId }: { userId: string }) {
                       <div style={{ marginTop: 10, borderTop: '1px solid rgba(74,133,200,0.1)', paddingTop: 8 }}>
                         {monthShows.map(([d, s]) => (
                           <div key={d} onClick={() => setSelectedShow(s[0])}
-                            style={{ fontSize: 11, color: '#7aa5c4', padding: '3px 0', cursor: 'pointer', borderRadius: 4, padding: '3px 6px' }}>
+                            style={{ fontSize: 11, color: '#7aa5c4', padding: '3px 6px', cursor: 'pointer', borderRadius: 4 }}>
                             <span style={{ color: '#22c55e', fontWeight: 700 }}>{new Date(d + 'T00:00:00').getDate()} </span>
                             {s[0].venue_name}, {s[0].venue_city}
                           </div>
