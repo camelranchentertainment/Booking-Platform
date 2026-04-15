@@ -11,13 +11,14 @@ export default function LandingPage() {
   const [scrolled, setScrolled]     = useState(false);
   const [showLogin, setShowLogin]   = useState(false);
   const [showSignup, setShowSignup] = useState(false);
-  const [signupTier, setSignupTier] = useState<'free'|'basic'|'premium'>('free');
-  const [email, setEmail]           = useState('');
-  const [password, setPassword]     = useState('');
-  const [name, setName]             = useState('');
-  const [bandName, setBandName]     = useState('');
-  const [authError, setAuthError]   = useState('');
-  const [loading, setLoading]       = useState(false);
+  const [signupTier, setSignupTier]     = useState<'free'|'basic'|'premium'>('free');
+  const [signupRole, setSignupRole]     = useState<'agent'|'band_admin'>('agent');
+  const [email, setEmail]               = useState('');
+  const [password, setPassword]         = useState('');
+  const [name, setName]                 = useState('');
+  const [bandName, setBandName]         = useState('');
+  const [authError, setAuthError]       = useState('');
+  const [loading, setLoading]           = useState(false);
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 50);
@@ -32,7 +33,7 @@ export default function LandingPage() {
 
   const openSignup = (tier: 'free'|'basic'|'premium') => {
     setSignupTier(tier); setShowSignup(true); setAuthError('');
-    setEmail(''); setPassword(''); setName(''); setBandName('');
+    setEmail(''); setPassword(''); setName(''); setBandName(''); setSignupRole('agent');
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -40,11 +41,11 @@ export default function LandingPage() {
     try {
       const res  = await fetch('/api/auth/register', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name, bandName, tier: signupTier }),
+        body: JSON.stringify({ email, password, name, bandName, tier: signupTier, role: signupRole }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Registration failed');
-      if (signupTier !== 'free') {
+      if (signupRole === 'agent' && signupTier !== 'free') {
         const priceId = signupTier === 'basic' ? STRIPE_PRICE_BASIC : STRIPE_PRICE_PREMIUM;
         const cr   = await fetch('/api/stripe/create-checkout', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -53,7 +54,8 @@ export default function LandingPage() {
         const checkout = await cr.json();
         if (checkout.url) { window.location.href = checkout.url; return; }
       }
-      router.push('/dashboard');
+      // Route by role
+      router.push(data.role === 'band_admin' ? '/band' : '/dashboard');
     } catch (err) { setAuthError(err instanceof Error ? err.message : 'An error occurred'); }
     finally { setLoading(false); }
   };
@@ -83,8 +85,13 @@ export default function LandingPage() {
         isAdmin:      data.isAdmin || false,
         token:        data.accessToken,
         refreshToken: data.refreshToken,
+        role:         data.role || 'agent',
       }));
-      router.push('/dashboard');
+      // Route by role
+      const role = data.role || 'agent';
+      if (role === 'band_member') router.push('/member');
+      else if (role === 'band_admin') router.push('/band');
+      else router.push('/dashboard');
     } catch (err) { setAuthError(err instanceof Error ? err.message : 'An error occurred'); }
     finally { setLoading(false); }
   };
@@ -602,13 +609,38 @@ export default function LandingPage() {
               : 'Complete your account, then you\'ll be taken to Stripe to finish payment.'}
           </p>
           {authError && <ErrBox msg={authError} />}
+
+          {/* ── Role toggle ───────────────────────────────────────────────── */}
+          <div style={{ display:'flex', gap:8, marginBottom:8 }}>
+            {(['agent','band_admin'] as const).map(r => (
+              <button key={r} type="button"
+                onClick={() => setSignupRole(r)}
+                style={{
+                  flex:1, padding:'9px 0',
+                  background: signupRole === r ? 'rgba(58,127,193,0.25)' : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${signupRole === r ? 'rgba(74,133,200,0.6)' : 'rgba(74,133,200,0.15)'}`,
+                  borderRadius:8, color: signupRole === r ? '#e8f1f8' : '#7aa5c4',
+                  fontSize:13, fontWeight:700, cursor:'pointer', transition:'all .15s',
+                }}>
+                {r === 'agent' ? 'Booking Agent' : 'Band / Artist'}
+              </button>
+            ))}
+          </div>
+          <p style={{ color:'#4a7a9b', fontSize:12, marginBottom:12, marginTop:-4 }}>
+            {signupRole === 'agent'
+              ? 'You book shows for one or more acts.'
+              : 'You\'re an artist or band managing your own calendar.'}
+          </p>
+
           <form onSubmit={handleSignup} style={{ display:'flex', flexDirection:'column', gap:14 }}>
-            <Field label="Your Name"  type="text"     value={name}     onChange={setName}     ph="First & Last Name" />
-            <Field label="Band Name"  type="text"     value={bandName} onChange={setBandName} ph="e.g. Jake Stringer & Better Than Nothin'" />
-            <Field label="Email"      type="email"    value={email}    onChange={setEmail}    ph="you@email.com" />
-            <Field label="Password"   type="password" value={password} onChange={setPassword} ph="Minimum 8 characters" />
+            <Field label="Your Name"   type="text"     value={name}     onChange={setName}     ph="First & Last Name" />
+            <Field label={signupRole === 'agent' ? 'Agency / Act Name' : 'Band Name'}
+                         type="text"     value={bandName} onChange={setBandName}
+                         ph={signupRole === 'agent' ? 'Camel Ranch Booking' : 'Jake Stringer & Better Than Nothin\''} />
+            <Field label="Email"       type="email"    value={email}    onChange={setEmail}    ph="you@email.com" />
+            <Field label="Password"    type="password" value={password} onChange={setPassword} ph="Minimum 8 characters" />
             <ModalBtns cancel={() => { setShowSignup(false); setAuthError(''); }}
-              submit={loading ? 'Creating Account…' : signupTier === 'free' ? 'Create Free Account' : 'Continue to Payment →'}
+              submit={loading ? 'Creating Account…' : signupTier === 'free' || signupRole === 'band_admin' ? 'Create Account' : 'Continue to Payment →'}
               disabled={loading} />
           </form>
         </Modal>

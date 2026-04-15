@@ -76,7 +76,7 @@ export default function BookingTemplateEditor({ userId }: { userId: string }) {
   const [saving,         setSaving]         = useState(false);
   const [saveMsg,        setSaveMsg]        = useState<SaveMsg | null>(null);
   const [showAddBand,    setShowAddBand]    = useState(false);
-  const [newBand,        setNewBand]        = useState({ name: '', city: '', state: 'AR' });
+  const [newBand,        setNewBand]        = useState({ name: '', city: '', state: 'AR', genre: '', epk_link: '' });
   const [addingBand,     setAddingBand]     = useState(false);
 
   const selectedBand = bands.find(b => b.id === selectedBandId) ?? null;
@@ -153,14 +153,14 @@ export default function BookingTemplateEditor({ userId }: { userId: string }) {
     try {
       const { data, error } = await supabase
         .from('bands')
-        .insert([{ owner_user_id: userId, band_name: newBand.name.trim(), home_city: newBand.city, home_state: newBand.state }])
+        .insert([{ owner_user_id: userId, band_name: newBand.name.trim(), home_city: newBand.city, home_state: newBand.state, genre: newBand.genre.trim(), epk_link: newBand.epk_link.trim() }])
         .select('id,band_name,genre,epk_link,home_city,home_state').single();
       if (error) throw error;
-      const nb: Band = { id: data.id, band_name: data.band_name, genre: '', epk_link: '', home_city: data.home_city ?? '', home_state: data.home_state ?? '' };
+      const nb: Band = { id: data.id, band_name: data.band_name, genre: data.genre ?? '', epk_link: data.epk_link ?? '', home_city: data.home_city ?? '', home_state: data.home_state ?? '' };
       setBands(prev => [...prev, nb]);
       setSelectedBandId(data.id);
       setShowAddBand(false);
-      setNewBand({ name: '', city: '', state: 'AR' });
+      setNewBand({ name: '', city: '', state: 'AR', genre: '', epk_link: '' });
     } catch (err: unknown) {
       const msg = (err && typeof err === 'object' && 'message' in err)
         ? String((err as { message: unknown }).message)
@@ -297,6 +297,16 @@ export default function BookingTemplateEditor({ userId }: { userId: string }) {
                     {US_STATES.map(s => <option key={s}>{s}</option>)}
                   </select>
                 </div>
+              </div>
+              <div style={S.field}>
+                <label style={S.label}>Genre</label>
+                <input className="bte-input" style={S.input} value={newBand.genre} placeholder="Country/Honky Tonk"
+                  onChange={e => setNewBand(n => ({ ...n, genre: e.target.value }))} />
+              </div>
+              <div style={S.field}>
+                <label style={S.label}>EPK Link</label>
+                <input className="bte-input" style={S.input} type="url" value={newBand.epk_link} placeholder="https://yourband.com/epk"
+                  onChange={e => setNewBand(n => ({ ...n, epk_link: e.target.value }))} />
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={addBand} disabled={addingBand || !newBand.name.trim()}

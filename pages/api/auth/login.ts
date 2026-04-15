@@ -44,19 +44,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const userId = authData.user.id;
-    const accessToken  = authData.session.access_token;
-    const refreshToken = authData.session.refresh_token;
+    const accessToken = authData.session.access_token;
 
-    // ── 2. Fetch band profile ────────────────────────────────────────────────
+    // ── 2. Fetch band profile + role ─────────────────────────────────────────
     const { data: profile } = await supabaseAdmin
       .from('band_profiles')
       .select('band_name, subscription_tier, is_admin')
       .eq('id', userId)
       .maybeSingle();
 
+    const { data: userProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle();
+
     // Admins always get premium access regardless of subscription_tier
     const isAdmin = profile?.is_admin === true;
     const effectiveTier = isAdmin ? 'premium' : (profile?.subscription_tier || 'free');
+    const role = userProfile?.role || 'agent';
+
+    const refreshToken = authData.session.refresh_token;
 
     // ── 3. Set session token as httpOnly cookie ───────────────────────────────
     res.setHeader('Set-Cookie', [
@@ -71,6 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       isAdmin,
       accessToken,
       refreshToken,
+      role,
     });
 
   } catch (err: unknown) {
