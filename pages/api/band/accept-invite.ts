@@ -31,35 +31,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const bandName = (Array.isArray(invite.band) ? invite.band[0] : invite.band)?.band_name || '';
 
-    // 2. Check if user already exists
-    const { data: { users } } = await supabase.auth.admin.listUsers();
-    const existingUser = users.find(u => u.email?.toLowerCase() === invite.email.toLowerCase());
-
+    // 2. Create user (or update password if account already exists)
     let userId: string;
     let accessToken: string;
     let refreshToken: string;
 
-    if (existingUser) {
-      // User exists — update their password and sign in
-      await supabase.auth.admin.updateUserById(existingUser.id, { password });
+    const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
+      email:         invite.email,
+      password,
+      email_confirm: true,
+    });
+
+    if (authErr) {
+      // Already registered — sign in directly (they may be re-accepting)
+      const alreadyExists = authErr.message.toLowerCase().includes('already') ||
+                            authErr.message.toLowerCase().includes('exists');
+      if (!alreadyExists) throw new Error(authErr.message);
+
       const { data: signIn, error: signInErr } = await supabase.auth.signInWithPassword({
         email: invite.email, password,
       });
-      if (signInErr || !signIn.session) throw new Error('Failed to sign in. Please try again.');
-      userId       = existingUser.id;
+      if (signInErr || !signIn.session) throw new Error('Account already exists. Please log in with your existing password.');
+      userId       = signIn.user.id;
       accessToken  = signIn.session.access_token;
       refreshToken = signIn.session.refresh_token;
     } else {
-      // New user — create account
-      const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
-        email:         invite.email,
-        password,
-        email_confirm: true,
-      });
-      if (authErr || !authData.user) throw new Error(authErr?.message || 'Failed to create account.');
+      if (!authData.user) throw new Error('Failed to create account.');
       userId = authData.user.id;
 
-      // Sign in to get session tokens
       const { data: signIn, error: signInErr } = await supabase.auth.signInWithPassword({
         email: invite.email, password,
       });
