@@ -71,7 +71,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       accessToken,
     });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Login error:', err);
     return res.status(500).json({ error: 'Login failed. Please try again.' });
   }

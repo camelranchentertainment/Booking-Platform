@@ -107,6 +107,17 @@ npm install
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# Anthropic (required for Social Media Campaign tab)
+ANTHROPIC_API_KEY=your-anthropic-api-key
+
+# Email encryption (required for email settings to work)
+# Generate a random 32-character string: openssl rand -hex 16
+ENCRYPTION_KEY=your-32-char-encryption-key
+
+# Google (required for Venue Discovery)
+GOOGLE_PLACES_API_KEY=your-google-places-api-key
 
 # SerpAPI
 SERP_API_KEY=your-serpapi-key
@@ -272,7 +283,7 @@ All data is stored and can be:
 - `PUT /api/campaigns/[id]` - Update campaign
 
 ### Emails
-- `POST /api/emails/send` - Send emails via Outlook
+- `POST /api/email/send` - Send emails via configured email account
 
 ---
 
@@ -303,6 +314,9 @@ git push -u origin main
 ---
 
 ## Troubleshooting
+
+### Issue: Social Media Campaign tab shows "Failed to generate posts"
+**Fix:** Add `ANTHROPIC_API_KEY` to `.env.local` and restart dev server. Get a key at https://console.anthropic.com.
 
 ### Issue: "SERP_API_KEY not configured"
 **Fix:** Add `SERP_API_KEY` to `.env.local` and restart dev server

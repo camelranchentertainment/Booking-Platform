@@ -116,8 +116,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       results[admin.email] += ' ✅ admin profile set';
 
-    } catch (err: any) {
-      results[admin.email] = `UNEXPECTED ERROR: ${err.message}`;
+    } catch (err: unknown) {
+      results[admin.email] = `UNEXPECTED ERROR: ${err instanceof Error ? err.message : String(err)}`;
     }
   }
 

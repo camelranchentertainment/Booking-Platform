@@ -7,12 +7,12 @@ import { supabase } from '../lib/supabase';
 interface Booking {
   id: string;
   venue_id: string;
+  booking_date?: string; // YYYY-MM-DD show date, stored on campaign_venues row
   venue: {
     id: string;
     name: string;
     city: string;
     state: string;
-    show_date?: string;
     website?: string;
   };
   campaign?: { name: string };
@@ -110,56 +110,38 @@ export default function SocialMediaCampaign() {
     setIsGenerating(true);
     setGenerateMsg('');
     try {
-      const showDate  = fmtDate(booking.venue.show_date);
+      const showDate  = fmtDate(booking.booking_date);
       const venue     = booking.venue.name;
       const city      = booking.venue.city;
       const state     = booking.venue.state;
       const campaign  = booking.campaign?.name || '';
 
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/social/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 2000,
-          messages: [{
-            role: 'user',
-            content: `Create a social media campaign for a country/honky-tonk band called "Better Than Nothin'" (website: www.betterthannothin.com) performing at ${venue} in ${city}, ${state} on ${showDate}${campaign ? ` as part of the "${campaign}" run` : ''}.
-
-Generate exactly 6 posts — 2 Facebook, 2 Instagram, 2 Twitter/X — timed as: announcement (14 days before), hype post (3 days before), day-of post.
-
-Return ONLY a valid JSON array, no markdown, no explanation:
-[
-  {
-    "platform": "facebook",
-    "timing": "announcement",
-    "days_before": 14,
-    "post_text": "Post text with emojis",
-    "hashtags": ["#BetterThanNothin", "#CountryMusic", "#${city.replace(/\s/g,'')}"],
-    "mentions": [],
-    "image_prompt": "Short description for a show poster image"
-  }
-]`,
-          }],
-        }),
+        body: JSON.stringify({ venue, city, state, showDate, campaign }),
       });
 
-      const data   = await res.json();
-      const raw    = (data.content?.[0]?.text || '').trim().replace(/```json\n?|```\n?/g, '').trim();
-      const parsed = JSON.parse(raw);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Generation failed (${res.status})`);
+      }
 
-      const showDateObj = new Date(booking.venue.show_date || Date.now());
-      const toInsert = parsed.map((p: any) => {
+      const data   = await res.json();
+      const parsed: Array<Record<string, unknown>> = data.posts;
+
+      const showDateObj = new Date(booking.booking_date || Date.now());
+      const toInsert = parsed.map((p: Record<string, unknown>) => {
         const d = new Date(showDateObj);
-        d.setDate(d.getDate() - (p.days_before || 0));
+        d.setDate(d.getDate() - ((p.days_before as number) || 0));
         return {
           booking_id:   booking.id,
-          platform:     p.platform,
-          post_text:    p.post_text,
+          platform:     p.platform as string,
+          post_text:    p.post_text as string,
           post_date:    d.toISOString(),
-          hashtags:     p.hashtags || [],
-          mentions:     p.mentions || [],
-          image_prompt: p.image_prompt || null,
+          hashtags:     (p.hashtags as string[]) || [],
+          mentions:     (p.mentions as string[]) || [],
+          image_prompt: (p.image_prompt as string) || null,
           status:       'draft',
         };
       });
@@ -169,9 +151,9 @@ Return ONLY a valid JSON array, no markdown, no explanation:
 
       setGenerateMsg(`Generated ${toInsert.length} posts`);
       await loadPosts(booking.id);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Generate error:', err);
-      setGenerateMsg('error:' + err.message);
+      setGenerateMsg('error: ' + (err instanceof Error ? err.message : 'Generation failed'));
     } finally {
       setIsGenerating(false);
     }
@@ -341,9 +323,9 @@ Return ONLY a valid JSON array, no markdown, no explanation:
                         <div style={{ color:'#3d6285', fontSize:12, fontWeight:600 }}>
                           {b.venue.city}, {b.venue.state}
                         </div>
-                        {b.venue.show_date && (
+                        {b.booking_date && (
                           <div style={{ color:'#4a85c8', fontSize:12, fontWeight:700, marginTop:4 }}>
-                            {fmtDate(b.venue.show_date)}
+                            {fmtDate(b.booking_date)}
                           </div>
                         )}
                         {b.campaign?.name && (
@@ -390,7 +372,7 @@ Return ONLY a valid JSON array, no markdown, no explanation:
                         </div>
                         <div style={{ color:'#3d6285', fontSize:13, fontWeight:600 }}>
                           {selectedBooking.venue.city}, {selectedBooking.venue.state}
-                          {selectedBooking.venue.show_date && ` · ${fmtDate(selectedBooking.venue.show_date)}`}
+                          {selectedBooking.booking_date && ` · ${fmtDate(selectedBooking.booking_date)}`}
                         </div>
                       </div>
                       <div style={{ display:'flex', gap:10, alignItems:'center' }}>

@@ -249,8 +249,8 @@ export default function EmailTemplateManager() {
       .replace(/{{city}}/g,            venue?.city             || '{{city}}')
       .replace(/{{state}}/g,           venue?.state            || '{{state}}')
       .replace(/{{booking_contact}}/g, venue?.booking_contact  || 'there')
-      .replace(/{{band_name}}/g,       u.bandName              || "Better Than Nothin'")
-      .replace(/{{sender_name}}/g,     u.bandName              || 'Scott')
+      .replace(/{{band_name}}/g,       u.bandName              || '')
+      .replace(/{{sender_name}}/g,     u.bandName              || '')
       .replace(/{{sender_email}}/g,    u.email                 || '')
       .replace(/{{sender_phone}}/g,    '')
       .replace(/{{tour_dates}}/g,      tourDates)
@@ -317,8 +317,8 @@ export default function EmailTemplateManager() {
         results.push({ venueId:cv.venue.id, venueName:cv.venue.name, success:true });
         // Update venue status to 'pending' after sending
         await supabase.from('campaign_venues').update({ status:'pending' }).eq('id',cv.id);
-      } catch(err:any) {
-        results.push({ venueId:cv.venue.id, venueName:cv.venue.name, success:false, error:err.message });
+      } catch(err: unknown) {
+        results.push({ venueId:cv.venue.id, venueName:cv.venue.name, success:false, error: err instanceof Error ? err.message : 'Unknown error' });
       }
       setSendProgress(i+1);
       setSendResults([...results]);

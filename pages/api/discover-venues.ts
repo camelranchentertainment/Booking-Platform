@@ -66,6 +66,18 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Require a valid Supabase user token
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const token = authHeader.replace('Bearer ', '');
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !authUser) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const userId: string = authUser.id;
+
   try {
     const { locations, radius }: DiscoverVenuesRequest = req.body;
 
@@ -90,12 +102,8 @@ export default async function handler(
         `${city}, ${state}`
       )}&key=${googleApiKey}`;
       
-      console.log(`Geocoding: ${city}, ${state}`);
       const geocodeResponse = await fetch(geocodeUrl);
-
       const geocodeData: GoogleGeocodeResult = await geocodeResponse.json();
-      
-      console.log(`Geocode response for ${city}:`, JSON.stringify(geocodeData));
 
       // Check for API errors
       if (geocodeData.status !== 'OK') {
@@ -173,18 +181,7 @@ export default async function handler(
                 .single();
 
               if (existingVenue) {
-                console.log(`Venue already exists: ${details.name}`);
                 continue;
-              }
-
-              // Get user_id from session or use a default
-              // Note: In production, you should get this from auth
-              let userId: string | null = null;
-              const authHeader = req.headers.authorization;
-              if (authHeader) {
-                const token = authHeader.replace('Bearer ', '');
-                const { data: { user } } = await supabase.auth.getUser(token);
-                userId = user?.id || null; // Convert undefined to null
               }
 
               // Insert new venue
@@ -239,18 +236,19 @@ export default async function handler(
   }
 }
 
+// Valid venue types per database CHECK constraint:
+// 'bar' | 'saloon' | 'pub' | 'club' | 'dancehall'
 function determineVenueType(name: string, description: string): string {
   const text = `${name} ${description}`.toLowerCase();
 
   if (text.includes('dancehall')) return 'dancehall';
-  if (text.includes('honky tonk') || text.includes('honkytonk')) return 'honky_tonk';
+  if (text.includes('honky tonk') || text.includes('honkytonk')) return 'saloon';
   if (text.includes('saloon')) return 'saloon';
   if (text.includes('pub') || text.includes('tavern')) return 'pub';
-  if (text.includes('music hall')) return 'music_hall';
-  if (text.includes('club') || text.includes('nightclub')) return 'club';
+  if (text.includes('music hall') || text.includes('nightclub') || text.includes('club')) return 'club';
   if (text.includes('bar') || text.includes('grill')) return 'bar';
 
-  return 'venue';
+  return 'bar';
 }
 
 function delay(ms: number): Promise<void> {

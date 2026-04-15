@@ -149,18 +149,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       messages: results,
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Inbox fetch error:', error);
+    const err = error as { message?: string; source?: string };
 
-    if (error.message?.includes('No email account connected')) {
-      return res.status(400).json({ error: error.message });
+    if (err.message?.includes('No email account connected')) {
+      return res.status(400).json({ error: err.message });
     }
-    if (error.source === 'authentication') {
+    if (err.source === 'authentication') {
       return res.status(400).json({
         error: 'IMAP authentication failed. Check your credentials in Settings → Email Account.',
       });
     }
 
-    return res.status(500).json({ error: error.message || 'Failed to fetch inbox' });
+    return res.status(500).json({ error: err.message || 'Failed to fetch inbox' });
   }
 }

@@ -72,7 +72,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({ userId, email });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Register error:', err);
     return res.status(500).json({ error: 'Registration failed. Please try again.' });
   }

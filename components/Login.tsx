@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
 
 export default function Login() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -37,19 +39,22 @@ export default function Login() {
         .eq('id', data.user.id)
         .single();
 
-      // Store in localStorage for backward compatibility
+      // Store session for use by API calls that require Bearer token auth
       localStorage.setItem('loggedInUser', JSON.stringify({
-        email: data.user.email,
-        id: data.user.id,
-        bandName: profile?.band_name || 'Unknown Band'
+        email:    data.user.email,
+        id:       data.user.id,
+        bandName: profile?.band_name         || 'Unknown Band',
+        tier:     profile?.subscription_tier || 'free',
+        isAdmin:  profile?.is_admin          || false,
+        token:    data.session?.access_token || '',
       }));
 
       // Redirect to dashboard
-      window.location.href = '/dashboard';
+      router.push('/dashboard');
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Login error:', err);
-      setError(err.message || 'Invalid email or password');
+      setError(err instanceof Error ? err.message : 'Invalid email or password');
     } finally {
       setLoading(false);
     }
@@ -59,16 +64,16 @@ export default function Login() {
     <>
       <style jsx>{`
         * { box-sizing: border-box; }
-        
+
         .login-container {
           min-height: 100vh;
           display: flex;
           align-items: center;
           justify-content: center;
-          background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+          background: linear-gradient(135deg, #030d18 0%, #0a1f35 100%);
           padding: 2rem;
         }
-        
+
         @media (max-width: 767px) {
           .login-container {
             padding: 1rem;
@@ -78,8 +83,8 @@ export default function Login() {
 
       <div className="login-container">
         <div style={{
-          background: 'linear-gradient(135deg, rgba(45, 35, 25, 0.95), rgba(61, 40, 23, 0.95))',
-          border: '2px solid rgba(200, 168, 130, 0.3)',
+          background: 'linear-gradient(135deg, rgba(5, 17, 31, 0.95), rgba(10, 31, 53, 0.95))',
+          border: '2px solid rgba(56, 189, 248, 0.25)',
           borderRadius: '16px',
           padding: '3rem',
           maxWidth: '450px',
@@ -91,12 +96,12 @@ export default function Login() {
             <h1 style={{
               fontSize: '2rem',
               fontWeight: '700',
-              color: '#C8A882',
+              color: '#38bdf8',
               margin: '0 0 0.5rem 0'
             }}>
               Camel Ranch Booking
             </h1>
-            <p style={{ color: '#9B8A7A', margin: 0, fontSize: '1rem' }}>
+            <p style={{ color: '#7aa5c4', margin: 0, fontSize: '1rem' }}>
               Log in to your account
             </p>
           </div>
@@ -123,7 +128,7 @@ export default function Login() {
               <div>
                 <label style={{
                   display: 'block',
-                  color: '#C8A882',
+                  color: '#38bdf8',
                   marginBottom: '0.5rem',
                   fontWeight: '600',
                   fontSize: '0.95rem'
@@ -141,9 +146,9 @@ export default function Login() {
                     width: '100%',
                     padding: '0.875rem',
                     borderRadius: '8px',
-                    border: '2px solid rgba(200, 168, 130, 0.3)',
-                    background: 'rgba(0,0,0,0.3)',
-                    color: '#E8DCC4',
+                    border: '2px solid rgba(56, 189, 248, 0.3)',
+                    background: 'rgba(5, 17, 31, 0.6)',
+                    color: '#e8f1f8',
                     fontSize: '1rem',
                     outline: 'none'
                   }}
@@ -154,7 +159,7 @@ export default function Login() {
               <div>
                 <label style={{
                   display: 'block',
-                  color: '#C8A882',
+                  color: '#38bdf8',
                   marginBottom: '0.5rem',
                   fontWeight: '600',
                   fontSize: '0.95rem'
@@ -172,9 +177,9 @@ export default function Login() {
                     width: '100%',
                     padding: '0.875rem',
                     borderRadius: '8px',
-                    border: '2px solid rgba(200, 168, 130, 0.3)',
-                    background: 'rgba(0,0,0,0.3)',
-                    color: '#E8DCC4',
+                    border: '2px solid rgba(56, 189, 248, 0.3)',
+                    background: 'rgba(5, 17, 31, 0.6)',
+                    color: '#e8f1f8',
                     fontSize: '1rem',
                     outline: 'none'
                   }}
@@ -187,7 +192,7 @@ export default function Login() {
               <a
                 href="/forgot-password"
                 style={{
-                  color: '#9B8A7A',
+                  color: '#7aa5c4',
                   fontSize: '0.9rem',
                   textDecoration: 'none'
                 }}
@@ -204,16 +209,16 @@ export default function Login() {
                 width: '100%',
                 padding: '1rem',
                 marginTop: '2rem',
-                background: loading 
-                  ? '#708090' 
-                  : 'linear-gradient(135deg, #C8A882 0%, #B8987A 100%)',
-                color: loading ? 'white' : '#2d2d2d',
+                background: loading
+                  ? '#708090'
+                  : 'linear-gradient(135deg, #2563a8 0%, #38bdf8 100%)',
+                color: 'white',
                 border: 'none',
                 borderRadius: '8px',
                 cursor: loading ? 'not-allowed' : 'pointer',
                 fontWeight: '700',
                 fontSize: '1.05rem',
-                boxShadow: '0 4px 12px rgba(200, 168, 130, 0.3)'
+                boxShadow: '0 4px 12px rgba(56, 189, 248, 0.3)'
               }}
             >
               {loading ? 'Logging in...' : 'Log In'}
@@ -224,14 +229,14 @@ export default function Login() {
           <div style={{
             textAlign: 'center',
             marginTop: '1.5rem',
-            color: '#9B8A7A',
+            color: '#7aa5c4',
             fontSize: '0.95rem'
           }}>
             Don't have an account?{' '}
             <a
               href="/signup"
               style={{
-                color: '#C8A882',
+                color: '#38bdf8',
                 textDecoration: 'none',
                 fontWeight: '600'
               }}
