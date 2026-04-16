@@ -1,5 +1,29 @@
--- Schema v5: profiles.role column + repair corrupted band_admin accounts
+-- Schema v5: create band_profiles, profiles.role column, repair band_admin accounts
 -- Run in Supabase SQL Editor. Safe to run multiple times.
+
+-- ── band_profiles (agent subscription table) ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS band_profiles (
+  id                UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  band_name         TEXT,
+  username          TEXT,
+  subscription_tier TEXT DEFAULT 'free',
+  is_admin          BOOLEAN DEFAULT false,
+  created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE band_profiles ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='band_profiles' AND policyname='bp_select') THEN
+    CREATE POLICY "bp_select" ON band_profiles FOR SELECT TO authenticated USING (auth.uid() = id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='band_profiles' AND policyname='bp_insert') THEN
+    CREATE POLICY "bp_insert" ON band_profiles FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='band_profiles' AND policyname='bp_update') THEN
+    CREATE POLICY "bp_update" ON band_profiles FOR UPDATE TO authenticated USING (auth.uid() = id);
+  END IF;
+END $$;
 
 -- ── Add role column to profiles ──────────────────────────────────────────────
 ALTER TABLE profiles
