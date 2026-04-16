@@ -51,17 +51,25 @@ export default function MemberPage() {
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #030d18; font-family: 'Nunito', sans-serif; }
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #030d18; } ::-webkit-scrollbar-thumb { background: rgba(74,133,200,0.2); border-radius: 3px; }
+        .hdr-inner { max-width:1100px; margin:0 auto; padding:0 2rem; height:60px; display:flex; align-items:center; justify-content:space-between; }
+        .hdr-brand { font-family:'Bebas Neue',cursive; font-size:1.3rem; letter-spacing:0.07em; color:#e8f1f8; }
+        .hdr-email { color:#4a7a9b; font-size:13px; }
+        @media (max-width:600px) {
+          .hdr-inner { padding:0 1rem; }
+          .hdr-brand { display:none; }
+          .hdr-email { display:none; }
+        }
       `}</style>
       <div style={{ minHeight: '100vh', background: '#030d18', color: '#e8f1f8' }}>
         <header style={{ background: 'rgba(3,13,24,0.97)', borderBottom: '1px solid rgba(74,133,200,0.12)', position: 'sticky', top: 0, zIndex: 40, backdropFilter: 'blur(16px)' }}>
-          <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 2rem', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div className="hdr-inner">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,#3a7fc1,#2563a8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Bebas Neue', cursive", fontSize: 20, color: '#e8f1f8' }}>C</div>
-              <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: '1.3rem', letterSpacing: '0.07em', color: '#e8f1f8' }}>Camel Ranch Booking</span>
+              <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,#3a7fc1,#2563a8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Bebas Neue', cursive", fontSize: 20, color: '#e8f1f8', flexShrink: 0 }}>C</div>
+              <span className="hdr-brand">Camel Ranch Booking</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ color: '#4a7a9b', fontSize: 13 }}>{email}</span>
-              <button onClick={handleLogout} style={{ padding: '6px 14px', background: 'transparent', border: '1px solid rgba(74,133,200,0.2)', borderRadius: 7, color: '#7aa5c4', fontSize: 13, cursor: 'pointer' }}>Sign Out</button>
+              <span className="hdr-email">{email}</span>
+              <button onClick={handleLogout} style={{ padding: '6px 14px', background: 'transparent', border: '1px solid rgba(74,133,200,0.2)', borderRadius: 7, color: '#7aa5c4', fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' }}>Sign Out</button>
             </div>
           </div>
         </header>
