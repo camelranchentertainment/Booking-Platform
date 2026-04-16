@@ -287,7 +287,6 @@ export default function BandDashboard({ userId }: { userId: string }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        // Show a full-page style error so it can't be missed
         setCreateErr(data.error || 'Server error — check your connection and try again');
         setCreating(false);
         return;
