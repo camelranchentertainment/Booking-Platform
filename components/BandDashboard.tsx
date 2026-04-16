@@ -108,12 +108,15 @@ export default function BandDashboard({ userId }: { userId: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // Band
-      const { data: bandData } = await supabase
-        .from('bands')
-        .select('*')
-        .eq('owner_user_id', userId)
-        .maybeSingle();
+      // Fetch band via server endpoint (service role — bypasses RLS completely)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setLoading(false); return; }
+
+      const bandRes = await fetch('/api/band/me', {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      });
+      const bandJson = await bandRes.json();
+      const bandData = bandJson.band;
       if (!bandData) { setLoading(false); return; }
       setBand(bandData);
 
@@ -261,7 +264,6 @@ export default function BandDashboard({ userId }: { userId: string }) {
     if (!newBandName.trim()) return;
     setCreating(true); setCreateErr('');
     try {
-      // Get the current session token to pass to the server-side API
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setCreateErr('Session expired — please sign in again.');
@@ -277,10 +279,22 @@ export default function BandDashboard({ userId }: { userId: string }) {
         body: JSON.stringify({ bandName: newBandName.trim() }),
       });
       const data = await res.json();
-      if (!res.ok) { setCreateErr(data.error || 'Failed to create band'); setCreating(false); return; }
+      if (!res.ok) {
+        // Show a full-page style error so it can't be missed
+        setCreateErr(data.error || 'Server error — check your connection and try again');
+        setCreating(false);
+        return;
+      }
+      // Use the band returned by the API directly — never depends on client-side RLS
+      if (data.band) {
+        setBand(data.band);
+        setCreating(false);
+        return;
+      }
+      // Fallback: re-fetch via load()
       await load();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Unknown error';
+      const msg = e instanceof Error ? e.message : 'Network error — check your connection';
       setCreateErr(msg);
     }
     setCreating(false);
@@ -299,7 +313,11 @@ export default function BandDashboard({ userId }: { userId: string }) {
         onChange={e => setNewBandName(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && createBand()}
       />
-      {createErr && <div style={{ color: '#f87171', fontSize: 12, marginBottom: 10 }}>{createErr}</div>}
+      {createErr && (
+        <div style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.4)', borderRadius: 8, padding: '10px 14px', marginBottom: 12, color: '#f87171', fontSize: 13, fontWeight: 600 }}>
+          {createErr}
+        </div>
+      )}
       <button onClick={createBand} disabled={creating || !newBandName.trim()}
         style={{ width: '100%', padding: '11px', background: 'linear-gradient(135deg,#3a7fc1,#2563a8)', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', opacity: creating || !newBandName.trim() ? 0.6 : 1 }}>
         {creating ? 'Creating…' : 'Create Band'}

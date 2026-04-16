@@ -26,7 +26,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .eq('owner_user_id', user.id)
     .maybeSingle();
 
-  if (existing) return res.status(409).json({ error: 'A band already exists for this account' });
+  // If band already exists, return it (idempotent — don't block the user)
+  if (existing) {
+    const { data: existingBand } = await supabase
+      .from('bands').select('*').eq('owner_user_id', user.id).single();
+    return res.status(200).json({ band: existingBand, existed: true });
+  }
 
   // Create the band (service role bypasses RLS)
   const { data: band, error: bandError } = await supabase
