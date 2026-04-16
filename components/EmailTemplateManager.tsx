@@ -357,8 +357,10 @@ export default function EmailTemplateManager() {
             to: cv.venue.email,
             subject,
             body,
-            venueId: cv.venue.id,
-            userId: stored.id,
+            venueId:    cv.venue.id,
+            userId:     stored.id,
+            bandId:     selectedBandId || null,
+            campaignId: selectedCampaign?.id || null,
           }),
         });
         if (!res.ok) throw new Error((await res.json()).error || 'Send failed');

@@ -44,6 +44,17 @@ interface Show {
   venue_state: string;
   campaign_name: string;
   status: string;
+  source: 'agent' | 'band';
+}
+
+interface OutreachEntry {
+  id: string;
+  venue_name: string;
+  venue_city: string;
+  venue_state: string;
+  sent_at: string;
+  subject: string;
+  days_ago: number;
 }
 
 interface Run {
@@ -87,6 +98,11 @@ export default function BandDashboard({ userId }: { userId: string }) {
   const [activeTab,    setActiveTab]    = useState<'calendar' | 'profile' | 'members' | 'runs'>('calendar');
   const [calYear,      setCalYear]      = useState(new Date().getFullYear());
   const [selectedShow, setSelectedShow] = useState<Show | null>(null);
+  const [outreach,     setOutreach]     = useState<OutreachEntry[]>([]);
+  // Add-show form
+  const [showForm,     setShowForm]     = useState(false);
+  const [newShow,      setNewShow]      = useState({ date: '', venue_name: '', notes: '' });
+  const [addingShow,   setAddingShow]   = useState(false);
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -138,15 +154,30 @@ export default function BandDashboard({ userId }: { userId: string }) {
         .not('booking_date', 'is', null)
         .order('booking_date');
 
-      const filtered = (showData || []).filter((cv: any) => {
-        const camp = Array.isArray(cv.campaign) ? cv.campaign[0] : cv.campaign;
-        return camp?.user_id === agentId;
-      });
-      setShows(filtered.map((cv: any) => {
-        const venue = Array.isArray(cv.venue) ? cv.venue[0] : cv.venue;
-        const camp  = Array.isArray(cv.campaign) ? cv.campaign[0] : cv.campaign;
-        return { id: cv.id, date: cv.booking_date, venue_name: venue?.name || 'Unknown', venue_city: venue?.city || '', venue_state: venue?.state || '', campaign_name: camp?.name || '', status: cv.status };
+      const agentShows = (showData || [])
+        .filter((cv: any) => {
+          const camp = Array.isArray(cv.campaign) ? cv.campaign[0] : cv.campaign;
+          return camp?.user_id === agentId;
+        })
+        .map((cv: any) => {
+          const venue = Array.isArray(cv.venue) ? cv.venue[0] : cv.venue;
+          const camp  = Array.isArray(cv.campaign) ? cv.campaign[0] : cv.campaign;
+          return { id: cv.id, date: cv.booking_date, venue_name: venue?.name || 'Unknown', venue_city: venue?.city || '', venue_state: venue?.state || '', campaign_name: camp?.name || '', status: cv.status, source: 'agent' as const };
+        });
+
+      // Band's own shows (from band_shows table)
+      const { data: bandShowData } = await supabase
+        .from('band_shows')
+        .select('id, show_date, venue_name, notes, status')
+        .eq('band_id', bandData.id)
+        .order('show_date');
+      const bandShows = (bandShowData || []).map((s: any) => ({
+        id: s.id, date: s.show_date, venue_name: s.venue_name || 'TBD',
+        venue_city: '', venue_state: '', campaign_name: s.notes || '',
+        status: s.status, source: 'band' as const,
       }));
+
+      setShows([...agentShows, ...bandShows].sort((a, b) => a.date?.localeCompare(b.date || '') || 0));
 
       // Runs
       const { data: runData } = await supabase
@@ -156,6 +187,24 @@ export default function BandDashboard({ userId }: { userId: string }) {
         .in('status', ['active', 'completed'])
         .order('date_range_start', { ascending: false });
       setRuns(runData || []);
+
+      // 30-day outreach log — emails agent sent on behalf of this band
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: outreachData } = await supabase
+        .from('email_logs')
+        .select('id, sent_at, subject, venue:venues(name, city, state)')
+        .eq('band_id', bandData.id)
+        .gte('sent_at', since)
+        .order('sent_at', { ascending: false });
+      const now = Date.now();
+      setOutreach((outreachData || []).map((e: any) => {
+        const v = Array.isArray(e.venue) ? e.venue[0] : e.venue;
+        return {
+          id: e.id, sent_at: e.sent_at, subject: e.subject,
+          venue_name: v?.name || '—', venue_city: v?.city || '', venue_state: v?.state || '',
+          days_ago: Math.floor((now - new Date(e.sent_at).getTime()) / 86400000),
+        };
+      }));
 
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -281,15 +330,77 @@ export default function BandDashboard({ userId }: { userId: string }) {
         {/* ── Calendar ────────────────────────────────────────────────────── */}
         {activeTab === 'calendar' && (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
               <h2 style={{ color: '#e8f1f8', fontWeight: 700, fontSize: '1.1rem', margin: 0 }}>
-                {calYear} · {shows.filter(s => s.date?.startsWith(String(calYear))).length} confirmed show{shows.filter(s => s.date?.startsWith(String(calYear))).length !== 1 ? 's' : ''}
+                {calYear} · {shows.filter(s => s.date?.startsWith(String(calYear))).length} show{shows.filter(s => s.date?.startsWith(String(calYear))).length !== 1 ? 's' : ''}
               </h2>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => setCalYear(y => y - 1)} style={{ padding: '6px 12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(74,133,200,0.2)', borderRadius: 6, color: '#7aa5c4', cursor: 'pointer' }}>←</button>
                 <button onClick={() => setCalYear(y => y + 1)} style={{ padding: '6px 12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(74,133,200,0.2)', borderRadius: 6, color: '#7aa5c4', cursor: 'pointer' }}>→</button>
+                <button onClick={() => setShowForm(f => !f)}
+                  style={{ padding: '6px 16px', background: 'linear-gradient(135deg,#3a7fc1,#2563a8)', border: 'none', borderRadius: 6, color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                  + Add Show
+                </button>
               </div>
             </div>
+
+            {/* Add Show form */}
+            {showForm && (
+              <div style={{ background: 'rgba(9,24,40,0.9)', border: '1px solid rgba(74,133,200,0.2)', borderRadius: 12, padding: '1.25rem', marginBottom: 20 }}>
+                <div style={{ color: '#e8f1f8', fontWeight: 700, fontSize: 13, marginBottom: 14 }}>Add a Show</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr 1fr', gap: 10, marginBottom: 10 }}>
+                  <div>
+                    <label style={S.label}>Date</label>
+                    <input type="date" className="bd-input" style={S.input} value={newShow.date}
+                      onChange={e => setNewShow(s => ({ ...s, date: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={S.label}>Venue Name</label>
+                    <input className="bd-input" style={S.input} value={newShow.venue_name} placeholder="Venue or TBD"
+                      onChange={e => setNewShow(s => ({ ...s, venue_name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={S.label}>Notes</label>
+                    <input className="bd-input" style={S.input} value={newShow.notes} placeholder="Optional"
+                      onChange={e => setNewShow(s => ({ ...s, notes: e.target.value }))} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button disabled={addingShow || !newShow.date} onClick={async () => {
+                    if (!band || !newShow.date) return;
+                    setAddingShow(true);
+                    await supabase.from('band_shows').insert({ band_id: band.id, show_date: newShow.date, venue_name: newShow.venue_name || 'TBD', notes: newShow.notes, created_by: userId });
+                    setNewShow({ date: '', venue_name: '', notes: '' });
+                    setShowForm(false);
+                    setAddingShow(false);
+                    await load();
+                  }} style={{ padding: '8px 20px', background: 'linear-gradient(135deg,#3a7fc1,#2563a8)', border: 'none', borderRadius: 7, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: addingShow || !newShow.date ? 0.5 : 1 }}>
+                    {addingShow ? 'Saving…' : 'Save Show'}
+                  </button>
+                  <button onClick={() => setShowForm(false)} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid rgba(74,133,200,0.2)', borderRadius: 7, color: '#7aa5c4', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {/* 30-day outreach log */}
+            {outreach.length > 0 && (
+              <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: 20 }}>
+                <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: 12, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>
+                  Agent Outreach — Last 30 Days
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {outreach.map(o => (
+                    <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+                      <span style={{ color: '#f59e0b', fontWeight: 700, minWidth: 60 }}>{o.days_ago === 0 ? 'Today' : `${o.days_ago}d ago`}</span>
+                      <span style={{ color: '#e8f1f8', fontWeight: 600 }}>{o.venue_name}</span>
+                      {o.venue_city && <span style={{ color: '#4a7a9b' }}>{o.venue_city}{o.venue_state ? `, ${o.venue_state}` : ''}</span>}
+                      <span style={{ color: '#4a7a9b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.subject}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ color: '#4a7a9b', fontSize: 11, marginTop: 8 }}>Don't contact these venues independently — your agent is already working them.</div>
+              </div>
+            )}
 
             {/* Year grid — 12 months */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
@@ -320,7 +431,7 @@ export default function BandDashboard({ userId }: { userId: string }) {
                           >
                             <div style={{ fontSize: 11, color: dayShows.length ? '#e8f1f8' : '#4a7a9b', fontWeight: dayShows.length ? 700 : 400, textAlign: 'center' }}>{day}</div>
                             {dayShows.length > 0 && (
-                              <div style={{ fontSize: 9, color: '#22c55e', textAlign: 'center', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <div style={{ fontSize: 9, color: dayShows[0].source === 'band' ? '#38bdf8' : '#22c55e', textAlign: 'center', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {dayShows[0].venue_name}
                               </div>
                             )}

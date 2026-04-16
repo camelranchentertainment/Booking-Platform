@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       userId = bodyUserId;
     }
 
-    const { venueId, campaignId, templateId, customSubject, customBody } = req.body;
+    const { venueId, campaignId, templateId, bandId, customSubject, customBody } = req.body;
 
     if (!venueId) return res.status(400).json({ error: 'venueId is required' });
 
@@ -84,6 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       venueId,
       campaignId,
       templateId,
+      bandId,
       toAddress:  venue.email,
       subject,
       body,
