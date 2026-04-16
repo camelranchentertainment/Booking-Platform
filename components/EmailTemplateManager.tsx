@@ -79,17 +79,56 @@ Best regards,
     subject: "Booking Confirmed — {{band_name}} at {{venue_name}}",
     body: `Hello {{booking_contact}},
 
-We're thrilled to confirm our booking at {{venue_name}}!
+We're thrilled to confirm {{band_name}} at {{venue_name}} on {{show_date}}! Please fill out the advance information below and reply to this email so we can make sure the night runs smoothly.
 
-Here are the details:
-- Venue: {{venue_name}}, {{city}}, {{state}}
-- Date: {{show_date}}
-- Set time: {{show_time}}
-- Set length: {{set_length}}
+═══════════════════════════════════════════
+  SHOW ADVANCE — {{band_name}}
+  {{venue_name}} | {{city}}, {{state}}
+═══════════════════════════════════════════
 
-Please let us know if anything needs adjusting. We'll be in touch closer to the date with our full set list and technical requirements.
+── SHOW SCHEDULE ───────────────────────────
+Date:            {{show_date}}
+Load-in:         _______________
+Sound Check:     _______________
+Doors Open:      _______________
+Set Time:        _______________
+Set Length:      _______________
+Curfew:          _______________
 
-Looking forward to playing for your crowd!
+── DEAL & SETTLEMENT ───────────────────────
+Deal Type:       [ ] Guarantee  [ ] Door Deal  [ ] Split
+Guarantee:       $_______________
+Door Deal %:     _______________
+Deposit Req'd:   [ ] Yes  [ ] No   Amount: $_______________
+Merch Cut:       _______________  (if none, write "0%")
+Payment Method:  [ ] Cash  [ ] Check  [ ] Venmo/Zelle
+
+── DAY-OF CONTACTS ─────────────────────────
+Venue Manager:   ___________________________   Ph: _______________
+Sound Engineer:  ___________________________   Ph: _______________
+Door/Box Office: ___________________________   Ph: _______________
+
+── PRODUCTION / BACKLINE ───────────────────
+PA System:       [ ] Provided  [ ] Band Brings
+Monitor Mix:     [ ] Provided  [ ] Band Brings
+Drum Kit:        [ ] Provided  [ ] Band Brings
+Bass Amp:        [ ] Provided  [ ] Band Brings
+Guitar Amp:      [ ] Provided  [ ] Band Brings
+DI Boxes:        [ ] Provided  [ ] Band Brings — How many: _____
+
+── HOSPITALITY ─────────────────────────────
+Meals Provided:  [ ] Yes  [ ] No   Details: ________________
+Drink Tickets:   [ ] Yes  [ ] No   How many: _______________
+Parking:         [ ] Lot  [ ] Street  [ ] Loading zone only
+Hotel/Lodging:   [ ] Provided  [ ] Not provided
+
+── ADDITIONAL NOTES ────────────────────────
+________________________________________________________
+________________________________________________________
+
+═══════════════════════════════════════════
+
+Please reply with the completed form at your earliest convenience. Looking forward to playing for your crowd!
 
 Best,
 {{sender_name}}
