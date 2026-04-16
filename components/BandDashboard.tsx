@@ -77,6 +77,9 @@ export default function BandDashboard({ userId }: { userId: string }) {
   const [runs,         setRuns]         = useState<Run[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [saving,       setSaving]       = useState(false);
+  const [newBandName,  setNewBandName]  = useState('');
+  const [creating,     setCreating]     = useState(false);
+  const [createErr,    setCreateErr]    = useState('');
   const [saveMsg,      setSaveMsg]      = useState<{ ok: boolean; text: string } | null>(null);
   const [inviteEmail,  setInviteEmail]  = useState('');
   const [inviting,     setInviting]     = useState(false);
@@ -205,8 +208,35 @@ export default function BandDashboard({ userId }: { userId: string }) {
     return acc;
   }, {});
 
+  const createBand = async () => {
+    if (!newBandName.trim()) return;
+    setCreating(true); setCreateErr('');
+    const { error } = await supabase.from('bands').insert({ owner_user_id: userId, band_name: newBandName.trim() });
+    if (error) { setCreateErr(error.message); setCreating(false); return; }
+    await load();
+    setCreating(false);
+  };
+
   if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: '#7aa5c4' }}>Loading…</div>;
-  if (!band)   return <div style={{ padding: '3rem', textAlign: 'center', color: '#f87171' }}>No band found. Please contact support.</div>;
+
+  if (!band) return (
+    <div style={{ maxWidth: 420, margin: '6rem auto', padding: '2rem', background: 'rgba(9,24,40,0.9)', border: '1px solid rgba(74,133,200,0.2)', borderRadius: 14 }}>
+      <div style={{ fontFamily: "'Bebas Neue',cursive", fontSize: '1.6rem', color: '#fff', letterSpacing: '0.06em', marginBottom: 6 }}>Set Up Your Band</div>
+      <p style={{ color: '#7aa5c4', fontSize: 13, marginBottom: 20 }}>Enter your band name to finish setting up your dashboard.</p>
+      <input
+        style={{ width: '100%', padding: '10px 12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(74,133,200,0.25)', borderRadius: 8, color: '#e8f1f8', fontSize: 14, marginBottom: 12, boxSizing: 'border-box' as const }}
+        placeholder="Jake Stringer & Better Than Nothin'"
+        value={newBandName}
+        onChange={e => setNewBandName(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && createBand()}
+      />
+      {createErr && <div style={{ color: '#f87171', fontSize: 12, marginBottom: 10 }}>{createErr}</div>}
+      <button onClick={createBand} disabled={creating || !newBandName.trim()}
+        style={{ width: '100%', padding: '11px', background: 'linear-gradient(135deg,#3a7fc1,#2563a8)', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', opacity: creating || !newBandName.trim() ? 0.6 : 1 }}>
+        {creating ? 'Creating…' : 'Create Band'}
+      </button>
+    </div>
+  );
 
   const tabs = [
     { id: 'calendar', label: 'Calendar' },
