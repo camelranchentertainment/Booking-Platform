@@ -52,22 +52,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const userId = authData.user.id;
 
-    // ── 2. Create band_profiles row ──────────────────────────────────────────
-    const { error: profileError } = await supabase
-      .from('band_profiles')
-      .insert({
-        id:                userId,
-        band_name:         bandName.trim(),
-        username:          bandName.trim().toLowerCase().replace(/[^a-z0-9]/g, ''),
-        subscription_tier: tier || 'free',
-        is_admin:          false,
-      });
+    // ── 2. band_profiles row — agents only ──────────────────────────────────
+    // band_admin accounts use profiles + bands tables, not band_profiles
+    if (userRole === 'agent') {
+      const { error: profileError } = await supabase
+        .from('band_profiles')
+        .insert({
+          id:                userId,
+          band_name:         bandName.trim(),
+          username:          bandName.trim().toLowerCase().replace(/[^a-z0-9]/g, ''),
+          subscription_tier: tier || 'free',
+          is_admin:          false,
+        });
 
-    // If profile insert fails, clean up the auth user so we don't leave orphans
-    if (profileError) {
-      await supabase.auth.admin.deleteUser(userId);
-      console.error('Profile insert failed:', profileError);
-      return res.status(500).json({ error: 'Failed to create band profile. Please try again.' });
+      if (profileError) {
+        await supabase.auth.admin.deleteUser(userId);
+        console.error('Profile insert failed:', profileError);
+        return res.status(500).json({ error: 'Failed to create band profile. Please try again.' });
+      }
     }
 
     // ── 3. Upsert into profiles table with role ───────────────────────────────
@@ -82,10 +84,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // ── 4. For band_admin signups, create the band row they own ──────────────
     if (userRole === 'band_admin') {
-      await supabase.from('bands').insert({
+      const { error: bandError } = await supabase.from('bands').insert({
         owner_user_id: userId,
         band_name:     bandName.trim(),
       });
+      if (bandError) {
+        await supabase.auth.admin.deleteUser(userId);
+        console.error('Band insert failed:', bandError);
+        return res.status(500).json({ error: 'Failed to create band. Please try again.' });
+      }
     }
 
     return res.status(200).json({ userId, email, role: userRole });
