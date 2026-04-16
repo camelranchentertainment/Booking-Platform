@@ -70,8 +70,7 @@ Looking forward to hearing from you!
 
 Best regards,
 Scott
-Better Than Nothin'
-scott@camelranchbooking.com`);
+Better Than Nothin'`);
     }
   };
 

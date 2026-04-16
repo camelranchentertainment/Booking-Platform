@@ -35,12 +35,6 @@ const ADMINS = [
     bandName:  "Better Than Nothin'",
   },
   {
-    email:     'jake@camelranchbooking.com',
-    password:  'CamelRanch2025!',
-    name:      'Jake Stringer',
-    bandName:  "Jake Stringer & Better Than Nothin'",
-  },
-  {
     email:     'chrisbrothertonband@yahoo.com',
     password:  'CamelRanch2025!',
     name:      'Chris Brotherton',
