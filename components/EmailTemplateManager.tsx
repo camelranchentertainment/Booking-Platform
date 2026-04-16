@@ -148,6 +148,8 @@ export default function EmailTemplateManager() {
   const [bulkSending, setBulkSending]       = useState(false);
   const [sendProgress, setSendProgress]     = useState(0);
   const [agentProfile, setAgentProfile]     = useState<AgentProfile>({ agent_name:'', agency_name:'', contact_phone:'', contact_email:'' });
+  const [bands, setBands]                   = useState<{id:string;band_name:string;epk_link:string}[]>([]);
+  const [selectedBandId, setSelectedBandId] = useState('');
   const [confirmSend, setConfirmSend]       = useState(false);
 
   useEffect(() => { loadData(); }, []);
@@ -175,18 +177,24 @@ export default function EmailTemplateManager() {
         const { data } = await supabase.from('email_templates').select('*').eq('user_id', userId);
         const map: Record<string,EmailTemplate> = {};
         (data||[]).forEach((t:EmailTemplate) => {
+          // Only map templates that explicitly match a tile (exclude booking_inquiry — that belongs to Settings)
           const key = TEMPLATE_TILES.find(ti =>
             t.name.toLowerCase().includes(ti.id) ||
             ti.name.toLowerCase().includes(t.name.toLowerCase().split(' ')[0])
-          )?.id || t.id;
-          map[key] = t;
+          )?.id;
+          if (key) map[key] = t;
         });
-        // If user saved a booking_inquiry template in Settings → use it as the 'initial' tile
-        if (!map['initial']) {
-          const bq = (data||[]).find((t:EmailTemplate) => t.name === 'booking_inquiry');
-          if (bq) map['initial'] = bq;
-        }
         setTemplates(map);
+
+        // Load agent's bands for the band selector in Send tab
+        const { data: bandsData } = await supabase
+          .from('bands')
+          .select('id,band_name,epk_link')
+          .eq('owner_user_id', userId)
+          .order('band_name');
+        const bandList = (bandsData||[]).map(b => ({ id: b.id, band_name: b.band_name||'', epk_link: b.epk_link||'' }));
+        setBands(bandList);
+        if (bandList.length > 0) setSelectedBandId(prev => prev || bandList[0].id);
       }
 
       const { data: camps } = await supabase
@@ -268,23 +276,28 @@ export default function EmailTemplateManager() {
           .filter(Boolean).map(d => fmtDate(d!)).join(' – ')
       : '';
     // Resolve sender identity — prefer loaded agent profile, fall back to localStorage
-    const agentName  = agentProfile.agent_name    || u.bandName  || '';
+    const agentName  = agentProfile.agent_name    || u.email || '';
     const agencyName = agentProfile.agency_name   || '';
     const agentPhone = agentProfile.contact_phone || '';
-    const agentEmail = agentProfile.contact_email || u.email     || '';
+    const agentEmail = agentProfile.contact_email || u.email || '';
+    // Resolve band — use the band selected in the Send tab
+    const selectedBand = bands.find(b => b.id === selectedBandId);
+    const bandName = selectedBand?.band_name || '[Band Name]';
+    const epkLink  = selectedBand?.epk_link  || '[EPK Link]';
     return text
       // Venue placeholders
       .replace(/{{venue_name}}/g,      venue?.name            || '[Venue Name]')
       .replace(/{{city}}/g,            venue?.city            || '[City]')
       .replace(/{{state}}/g,           venue?.state           || '[State]')
       .replace(/{{booking_contact}}/g, venue?.booking_contact || 'there')
-      // Agent / sender identity (BookingTemplateEditor format)
+      // Band
+      .replace(/{{band_name}}/g,       bandName)
+      .replace(/{{epk_link}}/g,        epkLink)
+      // Agent / sender identity
       .replace(/{{agent_name}}/g,      agentName)
       .replace(/{{agency_name}}/g,     agencyName)
       .replace(/{{contact_phone}}/g,   agentPhone)
       .replace(/{{contact_email}}/g,   agentEmail)
-      // EmailTemplateManager default format
-      .replace(/{{band_name}}/g,       u.bandName  || agentName)
       .replace(/{{sender_name}}/g,     agentName)
       .replace(/{{sender_email}}/g,    agentEmail)
       .replace(/{{sender_phone}}/g,    agentPhone)
@@ -593,14 +606,34 @@ export default function EmailTemplateManager() {
               {view==='send' && (
                 <div className="em-send-grid" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
 
-                  {/* LEFT: Run picker + venue checklist */}
+                  {/* LEFT: Band + Run picker + venue checklist */}
                   <div style={{display:'flex',flexDirection:'column',gap:16}}>
 
-                    {/* Step 1: Pick a Run */}
+                    {/* Step 1: Pick a Band */}
+                    {bands.length > 0 && (
+                      <div style={{background:'rgba(9,24,40,0.8)',
+                        border:'1px solid rgba(74,133,200,0.12)',borderRadius:14,padding:'1.25rem'}}>
+                        <div style={{color:'#ffffff',fontWeight:800,fontSize:14,marginBottom:4}}>
+                          Step 1 — Choose a Band
+                        </div>
+                        <p style={{color:'#3d6285',fontSize:12,margin:'0 0 10px',lineHeight:1.6}}>
+                          The band name and EPK link will fill into the email automatically.
+                        </p>
+                        <select className="em-select"
+                          value={selectedBandId}
+                          onChange={e => setSelectedBandId(e.target.value)}>
+                          {bands.map(b => (
+                            <option key={b.id} value={b.id}>{b.band_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Step 2: Pick a Run */}
                     <div style={{background:'rgba(9,24,40,0.8)',
                       border:'1px solid rgba(74,133,200,0.12)',borderRadius:14,padding:'1.25rem'}}>
                       <div style={{color:'#ffffff',fontWeight:800,fontSize:14,marginBottom:4}}>
-                        Step 1 — Choose a Run
+                        {bands.length > 0 ? 'Step 2' : 'Step 1'} — Choose a Run
                       </div>
                       <p style={{color:'#3d6285',fontSize:12,margin:'0 0 12px',lineHeight:1.6}}>
                         Select the Run you're booking for. Only venues in that Run will appear below.
@@ -642,7 +675,7 @@ export default function EmailTemplateManager() {
                         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
                           <div>
                             <div style={{color:'#ffffff',fontWeight:800,fontSize:14}}>
-                              Step 2 — Select Venues
+                              {bands.length > 0 ? 'Step 3' : 'Step 2'} — Select Venues
                             </div>
                             <div style={{color:'#3d6285',fontSize:12,marginTop:2}}>
                               {runVenues.length} venues in this run ·{' '}
