@@ -1,6 +1,9 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import VenueSearch from './VenueSearch';
+import CampaignManager from './CampaignManager';
+import EmailTemplateManager from './EmailTemplateManager';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface BandProfile {
@@ -95,7 +98,7 @@ export default function BandDashboard({ userId }: { userId: string }) {
   const [inviteEmail,  setInviteEmail]  = useState('');
   const [inviting,     setInviting]     = useState(false);
   const [inviteMsg,    setInviteMsg]    = useState<{ ok: boolean; text: string } | null>(null);
-  const [activeTab,    setActiveTab]    = useState<'calendar' | 'profile' | 'members' | 'runs'>('calendar');
+  const [activeTab,    setActiveTab]    = useState<'calendar' | 'venues' | 'campaigns' | 'email' | 'settings'>('calendar');
   const [calYear,      setCalYear]      = useState(new Date().getFullYear());
   const [selectedShow, setSelectedShow] = useState<Show | null>(null);
   const [outreach,     setOutreach]     = useState<OutreachEntry[]>([]);
@@ -236,9 +239,13 @@ export default function BandDashboard({ userId }: { userId: string }) {
     if (!band || !inviteEmail.trim()) return;
     setInviting(true); setInviteMsg(null);
     try {
+      const { data: { session: invSess } } = await supabase.auth.getSession();
       const res = await fetch('/api/band/invite', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${invSess?.access_token ?? ''}`,
+        },
         body: JSON.stringify({ bandId: band.id, email: inviteEmail.trim(), role: 'member' }),
       });
       const data = await res.json();
@@ -326,10 +333,11 @@ export default function BandDashboard({ userId }: { userId: string }) {
   );
 
   const tabs = [
-    { id: 'calendar', label: 'Calendar' },
-    { id: 'profile',  label: 'Band Profile' },
-    { id: 'members',  label: 'Members' },
-    { id: 'runs',     label: 'Runs & Tours' },
+    { id: 'calendar',  label: 'Calendar' },
+    { id: 'venues',    label: 'Venues' },
+    { id: 'campaigns', label: 'Campaigns' },
+    { id: 'email',     label: 'Email' },
+    { id: 'settings',  label: 'Settings' },
   ] as const;
 
   return (
@@ -495,9 +503,21 @@ export default function BandDashboard({ userId }: { userId: string }) {
           </div>
         )}
 
-        {/* ── Band Profile ─────────────────────────────────────────────────── */}
-        {activeTab === 'profile' && (
+        {/* ── Venues ───────────────────────────────────────────────────────── */}
+        {activeTab === 'venues' && <VenueSearch />}
+
+        {/* ── Campaigns ────────────────────────────────────────────────────── */}
+        {activeTab === 'campaigns' && <CampaignManager />}
+
+        {/* ── Email ────────────────────────────────────────────────────────── */}
+        {activeTab === 'email' && <EmailTemplateManager />}
+
+        {/* ── Settings ─────────────────────────────────────────────────────── */}
+        {activeTab === 'settings' && (
           <div style={{ maxWidth: 680 }}>
+
+            {/* Band Profile */}
+            <div style={{ ...S.sectionHead, marginTop: 0 }}>Band Profile</div>
             {saveMsg && (
               <div style={{ padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13, fontWeight: 600,
                 background: saveMsg.ok ? 'rgba(34,197,94,0.1)' : 'rgba(248,113,113,0.1)',
@@ -506,7 +526,6 @@ export default function BandDashboard({ userId }: { userId: string }) {
                 {saveMsg.text}
               </div>
             )}
-
             <div style={S.field}>
               <label style={S.label}>Band Name</label>
               <input className="bd-input" style={S.input} value={band.band_name}
@@ -537,7 +556,6 @@ export default function BandDashboard({ userId }: { userId: string }) {
                 placeholder="https://yourband.com/epk"
                 onChange={e => setBand(b => b && ({ ...b, epk_link: e.target.value }))} />
             </div>
-
             <div style={{ ...S.sectionHead }}>Socials & Contact</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
               <div>
@@ -563,18 +581,13 @@ export default function BandDashboard({ userId }: { userId: string }) {
                   onChange={e => setBand(b => b && ({ ...b, contact_email: e.target.value }))} />
               </div>
             </div>
-
             <button onClick={save} disabled={saving}
               style={{ padding: '11px 28px', background: 'linear-gradient(135deg,#3a7fc1,#2563a8)', border: 'none', borderRadius: 8, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
               {saving ? 'Saving…' : 'Save Profile'}
             </button>
-          </div>
-        )}
 
-        {/* ── Members ──────────────────────────────────────────────────────── */}
-        {activeTab === 'members' && (
-          <div style={{ maxWidth: 600 }}>
-            {/* Invite form */}
+            {/* Members */}
+            <div style={{ ...S.sectionHead }}>Band Members</div>
             <div style={{ background: 'rgba(9,24,40,0.6)', border: '1px solid rgba(74,133,200,0.15)', borderRadius: 10, padding: 20, marginBottom: 24 }}>
               <div style={{ color: '#e8f1f8', fontWeight: 700, fontSize: 14, marginBottom: 12 }}>Invite a Band Member</div>
               {inviteMsg && (
@@ -598,8 +611,6 @@ export default function BandDashboard({ userId }: { userId: string }) {
                 </button>
               </div>
             </div>
-
-            {/* Pending invites */}
             {invites.length > 0 && (
               <>
                 <div style={{ color: '#7aa5c4', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Pending Invites</div>
@@ -612,8 +623,6 @@ export default function BandDashboard({ userId }: { userId: string }) {
                 <div style={{ marginBottom: 20 }} />
               </>
             )}
-
-            {/* Active members */}
             <div style={{ color: '#7aa5c4', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Members ({members.length})</div>
             {members.length === 0 ? (
               <div style={{ color: '#4a7a9b', fontSize: 13, padding: '16px 0' }}>No members yet. Invite your bandmates above.</div>
@@ -624,43 +633,6 @@ export default function BandDashboard({ userId }: { userId: string }) {
                   <div style={{ color: '#4a7a9b', fontSize: 12 }}>{m.profile?.contact_email || ''}</div>
                 </div>
                 <span style={{ color: '#7aa5c4', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{m.role}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── Runs & Tours ─────────────────────────────────────────────────── */}
-        {activeTab === 'runs' && (
-          <div style={{ maxWidth: 720 }}>
-            {runs.length === 0 ? (
-              <div style={{ color: '#4a7a9b', fontSize: 14, padding: '2rem 0' }}>No active runs yet. Your agent will add them.</div>
-            ) : runs.map(r => (
-              <div key={r.id} style={{ background: 'rgba(9,24,40,0.6)', border: '1px solid rgba(74,133,200,0.12)', borderRadius: 10, padding: '16px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-                <div>
-                  <div style={{ color: '#e8f1f8', fontWeight: 700, fontSize: 15 }}>{r.name}</div>
-                  {(r.date_range_start || r.date_range_end) && (
-                    <div style={{ color: '#7aa5c4', fontSize: 12, marginTop: 3 }}>
-                      {r.date_range_start ? new Date(r.date_range_start + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
-                      {r.date_range_end ? ` – ${new Date(r.date_range_end + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ color: '#22c55e', fontWeight: 700, fontSize: 18 }}>{r.bookings || 0}</div>
-                    <div style={{ color: '#4a7a9b', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Confirmed</div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ color: '#7aa5c4', fontWeight: 700, fontSize: 18 }}>{r.total_venues || 0}</div>
-                    <div style={{ color: '#4a7a9b', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Contacted</div>
-                  </div>
-                  <div style={{
-                    padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-                    background: r.status === 'active' ? 'rgba(34,197,94,0.12)' : 'rgba(74,133,200,0.1)',
-                    color: r.status === 'active' ? '#22c55e' : '#7aa5c4',
-                    border: `1px solid ${r.status === 'active' ? 'rgba(34,197,94,0.3)' : 'rgba(74,133,200,0.2)'}`,
-                  }}>{r.status}</div>
-                </div>
               </div>
             ))}
           </div>
