@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+interface AgentProfile {
+  agent_name: string; agency_name: string;
+  contact_phone: string; contact_email: string;
+}
 interface EmailTemplate {
   id: string; name: string; subject: string;
   body: string; variables: string[]; created_at: string; user_id?: string;
@@ -143,6 +147,8 @@ export default function EmailTemplateManager() {
   const [sendResults, setSendResults]       = useState<SendResult[]>([]);
   const [bulkSending, setBulkSending]       = useState(false);
   const [sendProgress, setSendProgress]     = useState(0);
+  const [agentProfile, setAgentProfile]     = useState<AgentProfile>({ agent_name:'', agency_name:'', contact_phone:'', contact_email:'' });
+  const [confirmSend, setConfirmSend]       = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -154,6 +160,18 @@ export default function EmailTemplateManager() {
       const userId = local ? JSON.parse(local).id : null;
 
       if (userId) {
+        // Load agent profile so fillVars can substitute {{agent_name}} etc.
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('agent_name,agency_name,contact_phone,contact_email')
+          .eq('id', userId).maybeSingle();
+        if (profileData) setAgentProfile({
+          agent_name:    profileData.agent_name    || '',
+          agency_name:   profileData.agency_name   || '',
+          contact_phone: profileData.contact_phone || '',
+          contact_email: profileData.contact_email || '',
+        });
+
         const { data } = await supabase.from('email_templates').select('*').eq('user_id', userId);
         const map: Record<string,EmailTemplate> = {};
         (data||[]).forEach((t:EmailTemplate) => {
@@ -163,6 +181,11 @@ export default function EmailTemplateManager() {
           )?.id || t.id;
           map[key] = t;
         });
+        // If user saved a booking_inquiry template in Settings → use it as the 'initial' tile
+        if (!map['initial']) {
+          const bq = (data||[]).find((t:EmailTemplate) => t.name === 'booking_inquiry');
+          if (bq) map['initial'] = bq;
+        }
         setTemplates(map);
       }
 
@@ -243,20 +266,33 @@ export default function EmailTemplateManager() {
     const tourDates = campaign
       ? [campaign.date_range_start, campaign.date_range_end]
           .filter(Boolean).map(d => fmtDate(d!)).join(' – ')
-      : '{{tour_dates}}';
+      : '';
+    // Resolve sender identity — prefer loaded agent profile, fall back to localStorage
+    const agentName  = agentProfile.agent_name    || u.bandName  || '';
+    const agencyName = agentProfile.agency_name   || '';
+    const agentPhone = agentProfile.contact_phone || '';
+    const agentEmail = agentProfile.contact_email || u.email     || '';
     return text
-      .replace(/{{venue_name}}/g,      venue?.name             || '{{venue_name}}')
-      .replace(/{{city}}/g,            venue?.city             || '{{city}}')
-      .replace(/{{state}}/g,           venue?.state            || '{{state}}')
-      .replace(/{{booking_contact}}/g, venue?.booking_contact  || 'there')
-      .replace(/{{band_name}}/g,       u.bandName              || '')
-      .replace(/{{sender_name}}/g,     u.bandName              || '')
-      .replace(/{{sender_email}}/g,    u.email                 || '')
-      .replace(/{{sender_phone}}/g,    '')
+      // Venue placeholders
+      .replace(/{{venue_name}}/g,      venue?.name            || '[Venue Name]')
+      .replace(/{{city}}/g,            venue?.city            || '[City]')
+      .replace(/{{state}}/g,           venue?.state           || '[State]')
+      .replace(/{{booking_contact}}/g, venue?.booking_contact || 'there')
+      // Agent / sender identity (BookingTemplateEditor format)
+      .replace(/{{agent_name}}/g,      agentName)
+      .replace(/{{agency_name}}/g,     agencyName)
+      .replace(/{{contact_phone}}/g,   agentPhone)
+      .replace(/{{contact_email}}/g,   agentEmail)
+      // EmailTemplateManager default format
+      .replace(/{{band_name}}/g,       u.bandName  || agentName)
+      .replace(/{{sender_name}}/g,     agentName)
+      .replace(/{{sender_email}}/g,    agentEmail)
+      .replace(/{{sender_phone}}/g,    agentPhone)
+      // Campaign / dates
       .replace(/{{tour_dates}}/g,      tourDates)
-      .replace(/{{tour_name}}/g,       campaign?.name          || '')
-      .replace(/{{show_date}}/g,       '{{show_date}}')
-      .replace(/{{show_time}}/g,       '{{show_time}}')
+      .replace(/{{tour_name}}/g,       campaign?.name || '')
+      .replace(/{{show_date}}/g,       '[Show Date]')
+      .replace(/{{show_time}}/g,       '[Show Time]')
       .replace(/{{set_length}}/g,      '3–4 hours');
   };
 
@@ -286,8 +322,7 @@ export default function EmailTemplateManager() {
   const sendBulk = async () => {
     const toSend = runVenues.filter(cv => checkedIds.has(cv.id) && cv.venue.email);
     if (toSend.length === 0) return;
-    if (!confirm(`Send emails to ${toSend.length} venue${toSend.length!==1?'s':''}?`)) return;
-
+    setConfirmSend(false);
     setBulkSending(true);
     setSendResults([]);
     setSendProgress(0);
@@ -332,8 +367,10 @@ export default function EmailTemplateManager() {
 
   const tile = TEMPLATE_TILES.find(t=>t.id===activeTemplate);
   const checkedWithEmail = runVenues.filter(cv=>checkedIds.has(cv.id) && cv.venue.email);
-  const previewSubject   = previewVenue ? fillVars(editSubject, previewVenue.venue, selectedCampaign) : editSubject;
-  const previewBody      = previewVenue ? fillVars(editBody,    previewVenue.venue, selectedCampaign) : editBody;
+  // Preview: hover > first checked > raw template
+  const activePreviewVenue = previewVenue ?? checkedWithEmail[0] ?? null;
+  const previewSubject = fillVars(editSubject, activePreviewVenue?.venue, selectedCampaign);
+  const previewBody    = fillVars(editBody,    activePreviewVenue?.venue, selectedCampaign);
 
   if (loading) return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',
@@ -676,12 +713,12 @@ export default function EmailTemplateManager() {
                           </div>
                         )}
 
-                        {/* Send button */}
+                        {/* Send button → opens preview/confirm modal */}
                         {checkedWithEmail.length>0 && !bulkSending && sendResults.length===0 && (
                           <button className="em-btn-success"
                             style={{width:'100%',marginTop:14,padding:13,fontSize:15}}
-                            onClick={sendBulk}>
-                            ✉ Send to {checkedWithEmail.length} Venue{checkedWithEmail.length!==1?'s':''}
+                            onClick={()=>setConfirmSend(true)}>
+                            Preview &amp; Send to {checkedWithEmail.length} Venue{checkedWithEmail.length!==1?'s':''}
                           </button>
                         )}
 
@@ -737,11 +774,11 @@ export default function EmailTemplateManager() {
                     border:'1px solid rgba(74,133,200,0.12)',borderRadius:14,
                     padding:'1.25rem',display:'flex',flexDirection:'column',gap:12}}>
                     <div style={{color:'#ffffff',fontWeight:800,fontSize:14}}>
-                      {previewVenue ? `Preview — ${previewVenue.venue.name}` : 'Email Preview'}
+                      {activePreviewVenue ? `Preview — ${activePreviewVenue.venue.name}` : 'Email Preview'}
                     </div>
-                    {!previewVenue && (
+                    {!activePreviewVenue && (
                       <p style={{color:'#3d6285',fontSize:12,margin:0,lineHeight:1.6}}>
-                        Hover over a venue to see how the email will look for that venue,
+                        Select venues on the left to preview the exact email that will be sent,
                         with all variables filled in automatically.
                       </p>
                     )}
@@ -776,6 +813,94 @@ export default function EmailTemplateManager() {
 
         </div>
       </div>
+
+      {/* ── SEND CONFIRMATION MODAL ──────────────────────────────────────── */}
+      {confirmSend && checkedWithEmail.length > 0 && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',
+          display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:'1rem'}}>
+          <div style={{background:'#030d18',border:'1px solid rgba(74,133,200,0.25)',
+            borderRadius:16,padding:'1.75rem',maxWidth:680,width:'100%',
+            maxHeight:'90vh',overflowY:'auto',boxShadow:'0 24px 64px rgba(0,0,0,0.6)'}}>
+            {/* Header */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.25rem'}}>
+              <div>
+                <div style={{color:'#ffffff',fontWeight:800,fontSize:17}}>
+                  Confirm Send — {checkedWithEmail.length} Venue{checkedWithEmail.length!==1?'s':''}
+                </div>
+                <div style={{color:'#3d6285',fontSize:12,marginTop:3}}>
+                  Review the email below before sending. Variables are filled in per-venue at send time.
+                </div>
+              </div>
+              <button onClick={()=>setConfirmSend(false)}
+                style={{background:'transparent',border:'none',color:'#3d6285',fontSize:20,cursor:'pointer',padding:'0 4px'}}>
+                ✕
+              </button>
+            </div>
+
+            {/* Sample preview — first venue */}
+            <div style={{marginBottom:'1.25rem'}}>
+              <div style={{color:'#7aa5c4',fontSize:11,fontWeight:700,
+                textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:8}}>
+                Sample — {checkedWithEmail[0].venue.name}
+              </div>
+              <div style={{background:'rgba(9,24,40,0.9)',border:'1px solid rgba(74,133,200,0.15)',
+                borderRadius:10,overflow:'hidden'}}>
+                <div style={{padding:'10px 14px',borderBottom:'1px solid rgba(74,133,200,0.1)'}}>
+                  <span style={{color:'#3d6285',fontSize:11,fontWeight:700,textTransform:'uppercase',marginRight:8}}>To:</span>
+                  <span style={{color:'#6baed6',fontSize:13}}>{checkedWithEmail[0].venue.email}</span>
+                </div>
+                <div style={{padding:'10px 14px',borderBottom:'1px solid rgba(74,133,200,0.1)'}}>
+                  <span style={{color:'#3d6285',fontSize:11,fontWeight:700,textTransform:'uppercase',marginRight:8}}>Subject:</span>
+                  <span style={{color:'#e8f1f8',fontSize:13,fontWeight:600}}>
+                    {fillVars(editSubject, checkedWithEmail[0].venue, selectedCampaign)}
+                  </span>
+                </div>
+                <div style={{padding:'14px',maxHeight:280,overflowY:'auto'}}>
+                  <pre style={{color:'#c8dff0',fontSize:12,lineHeight:1.8,
+                    whiteSpace:'pre-wrap',fontFamily:"'Nunito',sans-serif",margin:0}}>
+                    {fillVars(editBody, checkedWithEmail[0].venue, selectedCampaign)}
+                  </pre>
+                </div>
+              </div>
+            </div>
+
+            {/* Venue list summary */}
+            {checkedWithEmail.length > 1 && (
+              <div style={{marginBottom:'1.25rem'}}>
+                <div style={{color:'#7aa5c4',fontSize:11,fontWeight:700,
+                  textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:8}}>
+                  All {checkedWithEmail.length} Recipients
+                </div>
+                <div style={{display:'flex',flexDirection:'column',gap:5,maxHeight:160,overflowY:'auto'}}>
+                  {checkedWithEmail.map(cv=>(
+                    <div key={cv.id} style={{display:'flex',alignItems:'center',gap:10,
+                      padding:'7px 12px',background:'rgba(9,24,40,0.6)',
+                      border:'1px solid rgba(74,133,200,0.08)',borderRadius:8}}>
+                      <span style={{color:'#e8f1f8',fontSize:13,fontWeight:700,flex:1}}>
+                        {cv.venue.name}
+                      </span>
+                      <span style={{color:'#3d6285',fontSize:12}}>{cv.venue.city}, {cv.venue.state}</span>
+                      <span style={{color:'#6baed6',fontSize:12}}>{cv.venue.email}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+              <button className="em-btn-ghost" onClick={()=>setConfirmSend(false)}>
+                Cancel
+              </button>
+              <button className="em-btn-success" style={{padding:'11px 28px',fontSize:15}}
+                onClick={sendBulk}>
+                ✉ Send to {checkedWithEmail.length} Venue{checkedWithEmail.length!==1?'s':''}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </>
   );
 }
