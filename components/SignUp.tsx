@@ -19,17 +19,14 @@ export default function SignUp() {
     e.preventDefault();
     setError('');
 
-    // Validation
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
     }
-
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters');
       return;
     }
-
     if (!formData.bandName.trim()) {
       setError('Band name is required');
       return;
@@ -38,32 +35,39 @@ export default function SignUp() {
     try {
       setLoading(true);
 
-      // 1. Create auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password
+      // 1. Register via server-side API — creates auth user + profiles row + bands row
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email:    formData.email,
+          password: formData.password,
+          bandName: formData.bandName.trim(),
+          role:     'band_admin',
+        }),
       });
+      const regData = await res.json();
+      if (!res.ok) throw new Error(regData.error || 'Failed to create account');
 
-      if (authError) throw authError;
+      // 2. Auto sign-in (register uses email_confirm:true so user is already confirmed)
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email:    formData.email,
+        password: formData.password,
+      });
+      if (signInError) throw signInError;
 
-      if (!authData.user) {
-        throw new Error('Failed to create user');
-      }
+      // 3. Store session and redirect straight to band dashboard
+      localStorage.setItem('loggedInUser', JSON.stringify({
+        email:        formData.email,
+        id:           regData.userId,
+        bandName:     formData.bandName.trim(),
+        tier:         'free',
+        isAdmin:      false,
+        token:        signInData.session?.access_token  || '',
+        refreshToken: signInData.session?.refresh_token || '',
+      }));
 
-      // 2. Create band profile
-      const { error: profileError } = await supabase
-        .from('band_profiles')
-        .insert({
-          id: authData.user.id,
-          band_name: formData.bandName.trim(),
-          username: formData.bandName.toLowerCase().replace(/[^a-z0-9]/g, '')
-        });
-
-      if (profileError) throw profileError;
-
-      // Success! Redirect to login
-      alert('✅ Account created! Please check your email to verify your account, then log in.');
-      router.push('/login');
+      router.push('/band');
 
     } catch (err: unknown) {
       console.error('Signup error:', err);

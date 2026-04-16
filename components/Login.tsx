@@ -32,25 +32,30 @@ export default function Login() {
         throw new Error('Login failed');
       }
 
-      // Get band profile
+      // Check if user is an agent (has a band_profiles row) or a band admin
       const { data: profile } = await supabase
         .from('band_profiles')
-        .select('*')
+        .select('id, band_name, subscription_tier, is_admin')
         .eq('id', data.user.id)
-        .single();
+        .maybeSingle();
 
-      // Store session for use by API calls that require Bearer token auth
+      // Store session — include refreshToken so /band can restore it after page navigations
       localStorage.setItem('loggedInUser', JSON.stringify({
-        email:    data.user.email,
-        id:       data.user.id,
-        bandName: profile?.band_name         || 'Unknown Band',
-        tier:     profile?.subscription_tier || 'free',
-        isAdmin:  profile?.is_admin          || false,
-        token:    data.session?.access_token || '',
+        email:        data.user.email,
+        id:           data.user.id,
+        bandName:     profile?.band_name         || '',
+        tier:         profile?.subscription_tier || 'free',
+        isAdmin:      profile?.is_admin          || false,
+        token:        data.session?.access_token  || '',
+        refreshToken: data.session?.refresh_token || '',
       }));
 
-      // Redirect to dashboard
-      router.push('/dashboard');
+      // Route: agents (have band_profiles row) → dashboard, band admins → band page
+      if (profile) {
+        router.push('/dashboard');
+      } else {
+        router.push('/band');
+      }
 
     } catch (err: unknown) {
       console.error('Login error:', err);

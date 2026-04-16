@@ -260,9 +260,29 @@ export default function BandDashboard({ userId }: { userId: string }) {
   const createBand = async () => {
     if (!newBandName.trim()) return;
     setCreating(true); setCreateErr('');
-    const { error } = await supabase.from('bands').insert({ owner_user_id: userId, band_name: newBandName.trim() });
-    if (error) { setCreateErr(error.message); setCreating(false); return; }
-    await load();
+    try {
+      // Get the current session token to pass to the server-side API
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setCreateErr('Session expired — please sign in again.');
+        setCreating(false);
+        return;
+      }
+      const res = await fetch('/api/band/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ bandName: newBandName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setCreateErr(data.error || 'Failed to create band'); setCreating(false); return; }
+      await load();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      setCreateErr(msg);
+    }
     setCreating(false);
   };
 
