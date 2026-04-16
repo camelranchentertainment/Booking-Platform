@@ -1,4 +1,4 @@
--- Schema v5: create band_profiles, profiles.role column, repair band_admin accounts
+-- Schema v5: complete migration — creates all missing tables/columns
 -- Run in Supabase SQL Editor. Safe to run multiple times.
 
 -- ── band_profiles (agent subscription table) ─────────────────────────────────
@@ -10,9 +10,7 @@ CREATE TABLE IF NOT EXISTS band_profiles (
   is_admin          BOOLEAN DEFAULT false,
   created_at        TIMESTAMPTZ DEFAULT NOW()
 );
-
 ALTER TABLE band_profiles ENABLE ROW LEVEL SECURITY;
-
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='band_profiles' AND policyname='bp_select') THEN
     CREATE POLICY "bp_select" ON band_profiles FOR SELECT TO authenticated USING (auth.uid() = id);
@@ -25,58 +23,64 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- ── Add role column to profiles ──────────────────────────────────────────────
-ALTER TABLE profiles
-  ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'agent'
-  CHECK (role IN ('agent', 'band_admin'));
+-- ── user_calendar_settings (missing entirely) ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_calendar_settings (
+  id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id              UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  user_email           TEXT,
+  calendar_type        TEXT DEFAULT 'google' CHECK (calendar_type IN ('google','ical','none')),
+  google_access_token  TEXT,
+  google_refresh_token TEXT,
+  ical_url             TEXT,
+  calendar_api_key     TEXT,
+  is_active            BOOLEAN DEFAULT false,
+  last_synced_at       TIMESTAMPTZ,
+  updated_at           TIMESTAMPTZ DEFAULT NOW(),
+  created_at           TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id)
+);
+ALTER TABLE user_calendar_settings ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='user_calendar_settings' AND policyname='ucs_select') THEN
+    CREATE POLICY "ucs_select" ON user_calendar_settings FOR SELECT TO authenticated USING (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='user_calendar_settings' AND policyname='ucs_insert') THEN
+    CREATE POLICY "ucs_insert" ON user_calendar_settings FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='user_calendar_settings' AND policyname='ucs_update') THEN
+    CREATE POLICY "ucs_update" ON user_calendar_settings FOR UPDATE TO authenticated USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
--- ── Confirm any unconfirmed band_admin emails so they can log in ─────────────
--- (old SignUp.tsx used client-side signUp() which left emails unconfirmed)
-UPDATE auth.users
-SET email_confirmed_at = COALESCE(email_confirmed_at, NOW())
-WHERE id IN (
-  SELECT owner_user_id FROM bands
-)
-AND email_confirmed_at IS NULL;
+-- ── Missing columns on existing tables ───────────────────────────────────────
+ALTER TABLE email_logs ADD COLUMN IF NOT EXISTS from_address TEXT;
+ALTER TABLE venues     ADD COLUMN IF NOT EXISTS last_reply_at TIMESTAMPTZ;
+ALTER TABLE profiles   ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'agent' CHECK (role IN ('agent','band_admin'));
 
--- Also confirm any users who have no band_profiles row (they're band admins)
-UPDATE auth.users
-SET email_confirmed_at = COALESCE(email_confirmed_at, NOW())
-WHERE id NOT IN (SELECT id FROM band_profiles)
-AND email_confirmed_at IS NULL;
-
--- ── Backfill role for existing users ─────────────────────────────────────────
--- Users with a band_profiles row are agents
-INSERT INTO profiles (id, role, display_name)
-SELECT bp.id, 'agent', bp.band_name
-FROM band_profiles bp
-ON CONFLICT (id) DO UPDATE SET role = 'agent';
-
--- Users who own a bands row are band_admins
-INSERT INTO profiles (id, role, display_name)
-SELECT b.owner_user_id, 'band_admin', b.band_name
-FROM bands b
-ON CONFLICT (id) DO UPDATE SET role = 'band_admin';
-
--- ── Fix Jake: create missing bands row + correct profile ──────────────────────
--- Replace 'jake@' with Jake's full email if needed (ILIKE matches any jake@... address)
-INSERT INTO bands (owner_user_id, band_name)
-SELECT au.id, 'Jake Stringer'
-FROM auth.users au
-WHERE au.email ILIKE 'jake@%'
-  AND NOT EXISTS (
-    SELECT 1 FROM bands b WHERE b.owner_user_id = au.id
-  );
-
-INSERT INTO profiles (id, role, display_name)
-SELECT au.id, 'band_admin', au.email
-FROM auth.users au
-WHERE au.email ILIKE 'jake@%'
-ON CONFLICT (id) DO UPDATE SET role = 'band_admin';
-
--- ── RLS: allow users to read their own profile role ──────────────────────────
+-- ── profiles RLS ─────────────────────────────────────────────────────────────
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='profiles' AND policyname='profiles_select') THEN
     CREATE POLICY "profiles_select" ON profiles FOR SELECT TO authenticated USING (auth.uid() = id);
   END IF;
 END $$;
+
+-- ── Backfill roles ────────────────────────────────────────────────────────────
+INSERT INTO profiles (id, role, display_name)
+SELECT owner_user_id, 'band_admin', band_name FROM bands
+ON CONFLICT (id) DO UPDATE SET role = 'band_admin';
+
+-- ── Fix Jake: create bands row + profile if missing ───────────────────────────
+INSERT INTO bands (owner_user_id, band_name)
+SELECT id, 'Jake Stringer' FROM auth.users
+WHERE email ILIKE 'jake@%'
+AND id NOT IN (SELECT owner_user_id FROM bands);
+
+INSERT INTO profiles (id, role, display_name)
+SELECT id, 'band_admin', email FROM auth.users
+WHERE email ILIKE 'jake@%'
+ON CONFLICT (id) DO UPDATE SET role = 'band_admin';
+
+UPDATE auth.users
+SET email_confirmed_at = COALESCE(email_confirmed_at, NOW())
+WHERE email ILIKE 'jake@%';
