@@ -22,7 +22,7 @@ interface Campaign {
   date_range_start?: string; date_range_end?: string;
 }
 interface CampaignVenue {
-  id: string; status: string;
+  id: string; status: string; booking_date?: string | null;
   venue: Venue;
 }
 interface SendResult {
@@ -79,7 +79,7 @@ Best regards,
     subject: "Booking Confirmed — {{band_name}} at {{venue_name}}",
     body: `Hello {{booking_contact}},
 
-We're thrilled to confirm {{band_name}} at {{venue_name}} on {{show_date}}! Please fill out the advance information below and reply to this email so we can make sure the night runs smoothly.
+We're thrilled to confirm {{band_name}} at {{venue_name}} on {{booking_date}}! Please fill out the advance information below and reply to this email so we can make sure the night runs smoothly.
 
 ═══════════════════════════════════════════
   SHOW ADVANCE — {{band_name}}
@@ -87,7 +87,7 @@ We're thrilled to confirm {{band_name}} at {{venue_name}} on {{show_date}}! Plea
 ═══════════════════════════════════════════
 
 ── SHOW SCHEDULE ───────────────────────────
-Date:            {{show_date}}
+Date:            {{booking_date}}
 Load-in:         _______________
 Sound Check:     _______________
 Doors Open:      _______________
@@ -140,7 +140,7 @@ Best,
     subject: "Thank You — {{band_name}}",
     body: `Hello {{booking_contact}},
 
-We just wanted to say a huge thank you for having us at {{venue_name}} on {{show_date}}.
+We just wanted to say a huge thank you for having us at {{venue_name}} on {{booking_date}}.
 
 Your staff was incredibly welcoming and the crowd was fantastic. We hope the night was a great success for you as well.
 
@@ -254,7 +254,7 @@ export default function EmailTemplateManager() {
     try {
       const { data } = await supabase
         .from('campaign_venues')
-        .select(`id, status, venue:venues(id,name,email,city,state,address,phone,booking_contact)`)
+        .select(`id, status, booking_date, venue:venues(id,name,email,city,state,address,phone,booking_contact)`)
         .eq('campaign_id', campaign.id)
         .order('status');
       setRunVenues((data as unknown as CampaignVenue[])||[]);
@@ -307,7 +307,7 @@ export default function EmailTemplateManager() {
   };
 
   // ── Variable fill ────────────────────────────────────────────────────────
-  const fillVars = (text: string, venue?: Venue|null, campaign?: Campaign|null): string => {
+  const fillVars = (text: string, venue?: Venue|null, campaign?: Campaign|null, cv?: CampaignVenue|null): string => {
     const local = localStorage.getItem('loggedInUser');
     const u     = local ? JSON.parse(local) : {};
     const tourDates = campaign
@@ -343,7 +343,7 @@ export default function EmailTemplateManager() {
       // Campaign / dates
       .replace(/{{tour_dates}}/g,      tourDates)
       .replace(/{{tour_name}}/g,       campaign?.name || '')
-      .replace(/{{show_date}}/g,       '[Show Date]')
+      .replace(/{{booking_date}}/g,    cv?.booking_date ? fmtDate(cv.booking_date) : '[Booking Date]')
       .replace(/{{show_time}}/g,       '[Show Time]')
       .replace(/{{set_length}}/g,      '3–4 hours');
   };
@@ -382,8 +382,8 @@ export default function EmailTemplateManager() {
     const results: SendResult[] = [];
     for (let i = 0; i < toSend.length; i++) {
       const cv = toSend[i];
-      const subject = fillVars(editSubject, cv.venue, selectedCampaign);
-      const body    = fillVars(editBody,    cv.venue, selectedCampaign);
+      const subject = fillVars(editSubject, cv.venue, selectedCampaign, cv);
+      const body    = fillVars(editBody,    cv.venue, selectedCampaign, cv);
       try {
         const stored = JSON.parse(localStorage.getItem('loggedInUser') || '{}');
         const res = await fetch('/api/email/send', {
@@ -423,8 +423,8 @@ export default function EmailTemplateManager() {
   const checkedWithEmail = runVenues.filter(cv=>checkedIds.has(cv.id) && cv.venue.email);
   // Preview: hover > first checked > raw template
   const activePreviewVenue = previewVenue ?? checkedWithEmail[0] ?? null;
-  const previewSubject = fillVars(editSubject, activePreviewVenue?.venue, selectedCampaign);
-  const previewBody    = fillVars(editBody,    activePreviewVenue?.venue, selectedCampaign);
+  const previewSubject = fillVars(editSubject, activePreviewVenue?.venue, selectedCampaign, activePreviewVenue);
+  const previewBody    = fillVars(editBody,    activePreviewVenue?.venue, selectedCampaign, activePreviewVenue);
 
   if (loading) return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',
@@ -629,7 +629,7 @@ export default function EmailTemplateManager() {
                       ['{{band_name}}',      'Your band name'],
                       ['{{sender_name}}',    'Your name'],
                       ['{{sender_email}}',   'Your email'],
-                      ['{{show_date}}',      'Show date'],
+                      ['{{booking_date}}',   'Booking date'],
                       ['{{show_time}}',      'Show time'],
                     ].map(([v,label])=>(
                       <div key={v} style={{display:'flex',justifyContent:'space-between',
@@ -926,13 +926,13 @@ export default function EmailTemplateManager() {
                 <div style={{padding:'10px 14px',borderBottom:'1px solid rgba(74,133,200,0.1)'}}>
                   <span style={{color:'#3d6285',fontSize:11,fontWeight:700,textTransform:'uppercase',marginRight:8}}>Subject:</span>
                   <span style={{color:'#e8f1f8',fontSize:13,fontWeight:600}}>
-                    {fillVars(editSubject, checkedWithEmail[0].venue, selectedCampaign)}
+                    {fillVars(editSubject, checkedWithEmail[0].venue, selectedCampaign, checkedWithEmail[0])}
                   </span>
                 </div>
                 <div style={{padding:'14px',maxHeight:280,overflowY:'auto'}}>
                   <pre style={{color:'#c8dff0',fontSize:12,lineHeight:1.8,
                     whiteSpace:'pre-wrap',fontFamily:"'Nunito',sans-serif",margin:0}}>
-                    {fillVars(editBody, checkedWithEmail[0].venue, selectedCampaign)}
+                    {fillVars(editBody, checkedWithEmail[0].venue, selectedCampaign, checkedWithEmail[0])}
                   </pre>
                 </div>
               </div>

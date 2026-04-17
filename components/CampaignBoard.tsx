@@ -116,10 +116,14 @@ export default function CampaignBoard() {
 
       if (error) throw error;
 
-      // Update campaign total_venues count
+      // Recalculate total_venues from actual campaign_venues rows
+      const { count } = await supabase
+        .from('campaign_venues')
+        .select('id', { count: 'exact', head: true })
+        .eq('campaign_id', campaignId);
       const { error: updateError } = await supabase
         .from('campaigns')
-        .update({ total_venues: selectedVenues.length })
+        .update({ total_venues: count ?? selectedVenues.length })
         .eq('id', campaignId);
 
       if (updateError) throw updateError;

@@ -123,22 +123,16 @@ export default function BandDashboard({ userId }: { userId: string }) {
       if (!bandData) { setLoading(false); return; }
       setBand(bandData);
 
-      // Members
+      // Members — single query with profile join
       const { data: memberData } = await supabase
         .from('band_members')
-        .select('id, user_id, role')
+        .select('id, user_id, role, profile:profiles(display_name, contact_email)')
         .eq('band_id', bandData.id);
-      // Fetch display names separately (profiles may not exist for all members)
-      const memberList: Member[] = [];
-      for (const m of (memberData || [])) {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('display_name, contact_email')
-          .eq('id', m.user_id)
-          .maybeSingle();
-        const { data: au } = await supabase.auth.getUser();
-        memberList.push({ ...m, profile: prof ?? null, email: '' });
-      }
+      const memberList: Member[] = (memberData || []).map((m: any) => ({
+        ...m,
+        profile: Array.isArray(m.profile) ? (m.profile[0] ?? null) : (m.profile ?? null),
+        email: '',
+      }));
       setMembers(memberList);
 
       // Pending invites
@@ -185,14 +179,24 @@ export default function BandDashboard({ userId }: { userId: string }) {
 
       setShows([...agentShows, ...bandShows].sort((a, b) => a.date?.localeCompare(b.date || '') || 0));
 
-      // Runs
+      // Runs — calculate live counts from campaign_venues
       const { data: runData } = await supabase
         .from('campaigns')
-        .select('id, name, status, date_range_start, date_range_end, bookings, total_venues')
+        .select(`id, name, status, date_range_start, date_range_end,
+          campaign_venues(id, status)`)
         .eq('user_id', agentId)
         .in('status', ['active', 'completed'])
         .order('date_range_start', { ascending: false });
-      setRuns(runData || []);
+      const runs = (runData || []).map((r: any) => {
+        const cvs: { status: string }[] = Array.isArray(r.campaign_venues) ? r.campaign_venues : [];
+        return {
+          id: r.id, name: r.name, status: r.status,
+          date_range_start: r.date_range_start, date_range_end: r.date_range_end,
+          total_venues: cvs.length,
+          bookings: cvs.filter(cv => cv.status === 'booked' || cv.status === 'confirmed').length,
+        };
+      });
+      setRuns(runs);
 
       // 30-day outreach log — emails agent sent on behalf of this band
       const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();

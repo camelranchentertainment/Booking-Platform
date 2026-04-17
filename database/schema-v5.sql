@@ -55,7 +55,7 @@ END $$;
 -- ── Missing columns on existing tables ───────────────────────────────────────
 ALTER TABLE email_logs ADD COLUMN IF NOT EXISTS from_address TEXT;
 ALTER TABLE venues     ADD COLUMN IF NOT EXISTS last_reply_at TIMESTAMPTZ;
-ALTER TABLE profiles   ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'agent' CHECK (role IN ('agent','band_admin'));
+ALTER TABLE profiles   ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'agent' CHECK (role IN ('agent','band_admin','band_member'));
 
 -- ── profiles RLS ─────────────────────────────────────────────────────────────
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;

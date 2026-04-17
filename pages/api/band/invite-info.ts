@@ -18,8 +18,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { data: invite } = await supabase
     .from('band_invites')
-    .select(`id, email, role, status, expires_at,
-      band:bands(band_name, owner_user_id)`)
+    .select(`id, band_id, email, role, status, expires_at,
+      band:bands(band_name)`)
     .eq('token', token)
     .maybeSingle();
 
@@ -29,12 +29,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const band = Array.isArray(invite.band) ? invite.band[0] : invite.band;
 
-  // Load agent profile for display
-  const { data: agentProfile } = await supabase
-    .from('profiles')
-    .select('agency_name, agent_name')
-    .eq('id', band?.owner_user_id)
+  // Load agent profile via band ownership — separate query keeps owner_user_id server-side only
+  const { data: bandRow } = await supabase
+    .from('bands')
+    .select('owner_user_id')
+    .eq('id', invite.band_id)
     .maybeSingle();
+
+  const { data: agentProfile } = bandRow?.owner_user_id
+    ? await supabase
+        .from('profiles')
+        .select('agency_name, agent_name')
+        .eq('id', bandRow.owner_user_id)
+        .maybeSingle()
+    : { data: null };
 
   return res.status(200).json({
     bandName:   band?.band_name || '',

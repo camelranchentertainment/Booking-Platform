@@ -11,7 +11,7 @@ interface SearchQueueItem {
   id: string;
   region_id: string;
   search_query: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
   created_at: string;
 }
 
@@ -107,10 +107,10 @@ export class VenueSearchWorker {
   private async processSearch(search: SearchQueueItem) {
     console.log(`🔍 Processing search: ${search.search_query}`);
 
-    // Mark as processing
+    // Mark as in_progress
     await supabase
       .from('search_queue')
-      .update({ status: 'processing' })
+      .update({ status: 'in_progress' })
       .eq('id', search.id);
 
     // Get region details
@@ -156,15 +156,15 @@ export class VenueSearchWorker {
             place_id: venue.placeId,
             rating: venue.rating,
             google_maps_url: venue.googleMapsUrl,
-            contact_status: venue.email ? 'ready' : 'needs_contact_info',
+            contact_status: 'not_contacted',
             discovery_score: venueDiscovery.scoreVenue(venue)
           });
           savedCount++;
         } else {
           duplicateCount++;
-          
+
           // Update existing venue if we found new contact info
-          if ((venue.email && !duplicate.email) || 
+          if ((venue.email && !duplicate.email) ||
               (venue.phone && !duplicate.phone) ||
               (venue.website && !duplicate.website)) {
             await supabase
@@ -173,7 +173,7 @@ export class VenueSearchWorker {
                 email: venue.email || duplicate.email,
                 phone: venue.phone || duplicate.phone,
                 website: venue.website || duplicate.website,
-                contact_status: venue.email ? 'ready' : duplicate.contact_status
+                contact_status: duplicate.contact_status || 'not_contacted'
               })
               .eq('id', duplicate.id);
           }
@@ -200,7 +200,7 @@ export class VenueSearchWorker {
       .from('search_regions')
       .update({
         last_searched: new Date().toISOString(),
-        total_venues_found: region.total_venues_found + savedCount
+        venues_found: (region.venues_found || 0) + savedCount,
       })
       .eq('id', search.region_id);
   }
@@ -274,7 +274,7 @@ export class VenueSearchWorker {
           place_id: venue.placeId,
           rating: venue.rating,
           google_maps_url: venue.googleMapsUrl,
-          contact_status: venue.email ? 'ready' : 'needs_contact_info',
+          contact_status: 'not_contacted',
           discovery_score: venueDiscovery.scoreVenue(venue)
         });
         savedVenues.push(saved);
