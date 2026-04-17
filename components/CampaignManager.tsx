@@ -21,7 +21,7 @@ interface Campaign {
 interface CampaignVenue {
   id: string;
   status: string;
-  show_date?: string; // YYYY-MM-DD — set when status = 'booked'
+  booking_date?: string; // YYYY-MM-DD — set when status = 'booked'
   venue: {
     id: string;
     name: string;
@@ -64,6 +64,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
   const [loading, setLoading]                 = useState(true);
   const [isDiscovering, setIsDiscovering]     = useState(false);
   const [showCreate, setShowCreate]           = useState(false);
+  const [createError, setCreateError]         = useState('');
   const [statusMenuOpen, setStatusMenuOpen]   = useState<string | null>(null);
   const [detailVenue, setDetailVenue]         = useState<CampaignVenue | null>(null);
   // Show-date modal — pops up when venue is marked Booked
@@ -97,9 +98,11 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
   const loadCampaigns = async () => {
     try {
       setLoading(true);
+      // Use * for campaign_venues so the query succeeds even before the
+      // migration adds id/status columns — those are optional enrichment data.
       const { data, error } = await supabase
         .from('campaigns')
-        .select(`*, campaign_venues(id, status, venue:venues(id, name, email))`)
+        .select(`*, campaign_venues(*, venue:venues(id, name, email))`)
         .order('created_at', { ascending: false });
       if (error) throw error;
 
@@ -114,7 +117,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
         };
       });
       setCampaigns(enriched);
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error('loadCampaigns error:', err); }
     finally { setLoading(false); }
   };
 
@@ -122,7 +125,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
     setSelectedCampaign(campaign);
     const { data } = await supabase
       .from('campaign_venues')
-      .select(`id, status, venue:venues(id, name, city, state, address, phone, email, website, venue_type, booking_contact)`)
+      .select(`*, venue:venues(id, name, city, state, address, phone, email, website, venue_type, booking_contact)`)
       .eq('campaign_id', campaign.id)
       .order('status');
     setCampaignVenues((data as unknown as CampaignVenue[]) || []);
@@ -134,6 +137,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
     const validLocs = newRun.locations.filter(l => l.city.trim());
     if (validLocs.length === 0) return;
 
+    setCreateError('');
     try {
       const local = localStorage.getItem('loggedInUser');
       const userId = local ? JSON.parse(local).id : null;
@@ -157,7 +161,16 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
       setNewRun({ name: '', date_range_start: '', date_range_end: '', locations: [{ city: '', state: 'AR' }], radius: 25 });
       await loadCampaigns();
       if (data) openCampaignDetail(data);
-    } catch (err) { console.error(err); }
+    } catch (err: unknown) {
+      // Supabase PostgrestError is not instanceof Error — extract .message directly
+      const msg = (err && typeof err === 'object' && 'message' in err)
+        ? String((err as { message: unknown }).message)
+        : err instanceof Error
+          ? err.message
+          : 'Failed to create run';
+      console.error('createRun error:', err);
+      setCreateError(msg);
+    }
   };
 
   // ── Discover venues — fetch only, show selection modal ─────────────────
@@ -165,7 +178,12 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
     if (!selectedCampaign) return;
     setIsDiscovering(true);
     try {
-      const res    = await fetch(`/api/campaigns/${selectedCampaign.id}/discover-venues`, { method: 'POST' });
+      let token = '';
+      try { token = JSON.parse(localStorage.getItem('loggedInUser') || '{}').token || ''; } catch { /* no token */ }
+      const res    = await fetch(`/api/campaigns/${selectedCampaign.id}/discover-venues`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const result = await res.json();
 
       if (result.venues?.length) {
@@ -223,8 +241,8 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
     setShowDateModal(null);
     if (!date) return;
 
-    // Save show_date to campaign_venues (column must exist in DB)
-    await supabase.from('campaign_venues').update({ show_date: date }).eq('id', cvId);
+    // Save booking_date to campaign_venues
+    await supabase.from('campaign_venues').update({ booking_date: date }).eq('id', cvId);
 
     // Create calendar event (fire-and-forget — don't block the UI)
     const cv = campaignVenues.find(v => v.id === cvId);
@@ -494,7 +512,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
                     {campaigns.length} run{campaigns.length !== 1 ? 's' : ''} total
                   </p>
                 </div>
-                <button className="cm-btn-primary" onClick={() => setShowCreate(true)}>
+                <button className="cm-btn-primary" onClick={() => { setShowCreate(true); setCreateError(''); }}>
                   + Create Run
                 </button>
               </div>
@@ -508,7 +526,7 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
                   <p style={{ color:'#3d6285', fontSize:14, margin:'0 0 20px' }}>
                     Create your first run to start organising venue outreach.
                   </p>
-                  <button className="cm-btn-primary" onClick={() => setShowCreate(true)}>Create First Run</button>
+                  <button className="cm-btn-primary" onClick={() => { setShowCreate(true); setCreateError(''); }}>Create First Run</button>
                 </div>
               ) : (
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))', gap:18 }}>
@@ -970,9 +988,20 @@ export default function CampaignManager({ initialData }: CampaignManagerProps) {
                 </select>
               </div>
 
+              {/* Error message */}
+              {createError && (
+                <div style={{
+                  background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.35)',
+                  borderRadius: 8, padding: '10px 14px', color: '#f87171',
+                  fontSize: 13, fontWeight: 600,
+                }}>
+                  {createError}
+                </div>
+              )}
+
               {/* Actions */}
               <div style={{ display:'flex', gap:10, marginTop:6 }}>
-                <button className="cm-btn-ghost" style={{ flex:1 }} onClick={() => setShowCreate(false)}>
+                <button className="cm-btn-ghost" style={{ flex:1 }} onClick={() => { setShowCreate(false); setCreateError(''); }}>
                   Cancel
                 </button>
                 <button className="cm-btn-primary" style={{ flex:2 }}
@@ -1046,9 +1075,9 @@ function VenueCard({ cv, cfg, statuses, statusMenuOpen, setStatusMenuOpen, onSta
       </div>
 
       {/* Show date badge */}
-      {cv.status === 'booked' && cv.show_date && (
+      {cv.status === 'booked' && cv.booking_date && (
         <div style={{ fontSize:11, color:'#22c55e', fontWeight:700, marginBottom:8 }}>
-          📅 {new Date(cv.show_date + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}
+          📅 {new Date(cv.booking_date + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}
         </div>
       )}
 

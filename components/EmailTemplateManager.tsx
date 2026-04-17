@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+interface AgentProfile {
+  agent_name: string; agency_name: string;
+  contact_phone: string; contact_email: string;
+}
 interface EmailTemplate {
   id: string; name: string; subject: string;
   body: string; variables: string[]; created_at: string; user_id?: string;
@@ -18,7 +22,7 @@ interface Campaign {
   date_range_start?: string; date_range_end?: string;
 }
 interface CampaignVenue {
-  id: string; status: string;
+  id: string; status: string; booking_date?: string | null;
   venue: Venue;
 }
 interface SendResult {
@@ -75,17 +79,56 @@ Best regards,
     subject: "Booking Confirmed — {{band_name}} at {{venue_name}}",
     body: `Hello {{booking_contact}},
 
-We're thrilled to confirm our booking at {{venue_name}}!
+We're thrilled to confirm {{band_name}} at {{venue_name}} on {{booking_date}}! Please fill out the advance information below and reply to this email so we can make sure the night runs smoothly.
 
-Here are the details:
-- Venue: {{venue_name}}, {{city}}, {{state}}
-- Date: {{show_date}}
-- Set time: {{show_time}}
-- Set length: {{set_length}}
+═══════════════════════════════════════════
+  SHOW ADVANCE — {{band_name}}
+  {{venue_name}} | {{city}}, {{state}}
+═══════════════════════════════════════════
 
-Please let us know if anything needs adjusting. We'll be in touch closer to the date with our full set list and technical requirements.
+── SHOW SCHEDULE ───────────────────────────
+Date:            {{booking_date}}
+Load-in:         _______________
+Sound Check:     _______________
+Doors Open:      _______________
+Set Time:        _______________
+Set Length:      _______________
+Curfew:          _______________
 
-Looking forward to playing for your crowd!
+── DEAL & SETTLEMENT ───────────────────────
+Deal Type:       [ ] Guarantee  [ ] Door Deal  [ ] Split
+Guarantee:       $_______________
+Door Deal %:     _______________
+Deposit Req'd:   [ ] Yes  [ ] No   Amount: $_______________
+Merch Cut:       _______________  (if none, write "0%")
+Payment Method:  [ ] Cash  [ ] Check  [ ] Venmo/Zelle
+
+── DAY-OF CONTACTS ─────────────────────────
+Venue Manager:   ___________________________   Ph: _______________
+Sound Engineer:  ___________________________   Ph: _______________
+Door/Box Office: ___________________________   Ph: _______________
+
+── PRODUCTION / BACKLINE ───────────────────
+PA System:       [ ] Provided  [ ] Band Brings
+Monitor Mix:     [ ] Provided  [ ] Band Brings
+Drum Kit:        [ ] Provided  [ ] Band Brings
+Bass Amp:        [ ] Provided  [ ] Band Brings
+Guitar Amp:      [ ] Provided  [ ] Band Brings
+DI Boxes:        [ ] Provided  [ ] Band Brings — How many: _____
+
+── HOSPITALITY ─────────────────────────────
+Meals Provided:  [ ] Yes  [ ] No   Details: ________________
+Drink Tickets:   [ ] Yes  [ ] No   How many: _______________
+Parking:         [ ] Lot  [ ] Street  [ ] Loading zone only
+Hotel/Lodging:   [ ] Provided  [ ] Not provided
+
+── ADDITIONAL NOTES ────────────────────────
+________________________________________________________
+________________________________________________________
+
+═══════════════════════════════════════════
+
+Please reply with the completed form at your earliest convenience. Looking forward to playing for your crowd!
 
 Best,
 {{sender_name}}
@@ -97,7 +140,7 @@ Best,
     subject: "Thank You — {{band_name}}",
     body: `Hello {{booking_contact}},
 
-We just wanted to say a huge thank you for having us at {{venue_name}} on {{show_date}}.
+We just wanted to say a huge thank you for having us at {{venue_name}} on {{booking_date}}.
 
 Your staff was incredibly welcoming and the crowd was fantastic. We hope the night was a great success for you as well.
 
@@ -143,6 +186,10 @@ export default function EmailTemplateManager() {
   const [sendResults, setSendResults]       = useState<SendResult[]>([]);
   const [bulkSending, setBulkSending]       = useState(false);
   const [sendProgress, setSendProgress]     = useState(0);
+  const [agentProfile, setAgentProfile]     = useState<AgentProfile>({ agent_name:'', agency_name:'', contact_phone:'', contact_email:'' });
+  const [bands, setBands]                   = useState<{id:string;band_name:string;epk_link:string}[]>([]);
+  const [selectedBandId, setSelectedBandId] = useState('');
+  const [confirmSend, setConfirmSend]       = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -154,16 +201,39 @@ export default function EmailTemplateManager() {
       const userId = local ? JSON.parse(local).id : null;
 
       if (userId) {
+        // Load agent profile so fillVars can substitute {{agent_name}} etc.
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('agent_name,agency_name,contact_phone,contact_email')
+          .eq('id', userId).maybeSingle();
+        if (profileData) setAgentProfile({
+          agent_name:    profileData.agent_name    || '',
+          agency_name:   profileData.agency_name   || '',
+          contact_phone: profileData.contact_phone || '',
+          contact_email: profileData.contact_email || '',
+        });
+
         const { data } = await supabase.from('email_templates').select('*').eq('user_id', userId);
         const map: Record<string,EmailTemplate> = {};
         (data||[]).forEach((t:EmailTemplate) => {
+          // Only map templates that explicitly match a tile (exclude booking_inquiry — that belongs to Settings)
           const key = TEMPLATE_TILES.find(ti =>
             t.name.toLowerCase().includes(ti.id) ||
             ti.name.toLowerCase().includes(t.name.toLowerCase().split(' ')[0])
-          )?.id || t.id;
-          map[key] = t;
+          )?.id;
+          if (key) map[key] = t;
         });
         setTemplates(map);
+
+        // Load agent's bands for the band selector in Send tab
+        const { data: bandsData } = await supabase
+          .from('bands')
+          .select('id,band_name,epk_link')
+          .eq('owner_user_id', userId)
+          .order('band_name');
+        const bandList = (bandsData||[]).map(b => ({ id: b.id, band_name: b.band_name||'', epk_link: b.epk_link||'' }));
+        setBands(bandList);
+        if (bandList.length > 0) setSelectedBandId(prev => prev || bandList[0].id);
       }
 
       const { data: camps } = await supabase
@@ -184,7 +254,7 @@ export default function EmailTemplateManager() {
     try {
       const { data } = await supabase
         .from('campaign_venues')
-        .select(`id, status, venue:venues(id,name,email,city,state,address,phone,booking_contact)`)
+        .select(`id, status, booking_date, venue:venues(id,name,email,city,state,address,phone,booking_contact)`)
         .eq('campaign_id', campaign.id)
         .order('status');
       setRunVenues((data as unknown as CampaignVenue[])||[]);
@@ -237,26 +307,44 @@ export default function EmailTemplateManager() {
   };
 
   // ── Variable fill ────────────────────────────────────────────────────────
-  const fillVars = (text: string, venue?: Venue|null, campaign?: Campaign|null): string => {
+  const fillVars = (text: string, venue?: Venue|null, campaign?: Campaign|null, cv?: CampaignVenue|null): string => {
     const local = localStorage.getItem('loggedInUser');
     const u     = local ? JSON.parse(local) : {};
     const tourDates = campaign
       ? [campaign.date_range_start, campaign.date_range_end]
           .filter(Boolean).map(d => fmtDate(d!)).join(' – ')
-      : '{{tour_dates}}';
+      : '';
+    // Resolve sender identity — prefer loaded agent profile, fall back to localStorage
+    const agentName  = agentProfile.agent_name    || u.email || '';
+    const agencyName = agentProfile.agency_name   || '';
+    const agentPhone = agentProfile.contact_phone || '';
+    const agentEmail = agentProfile.contact_email || u.email || '';
+    // Resolve band — use the band selected in the Send tab
+    const selectedBand = bands.find(b => b.id === selectedBandId);
+    const bandName = selectedBand?.band_name || '[Band Name]';
+    const epkLink  = selectedBand?.epk_link  || '[EPK Link]';
     return text
-      .replace(/{{venue_name}}/g,      venue?.name             || '{{venue_name}}')
-      .replace(/{{city}}/g,            venue?.city             || '{{city}}')
-      .replace(/{{state}}/g,           venue?.state            || '{{state}}')
-      .replace(/{{booking_contact}}/g, venue?.booking_contact  || 'there')
-      .replace(/{{band_name}}/g,       u.bandName              || "Better Than Nothin'")
-      .replace(/{{sender_name}}/g,     u.bandName              || 'Scott')
-      .replace(/{{sender_email}}/g,    u.email                 || '')
-      .replace(/{{sender_phone}}/g,    '')
+      // Venue placeholders
+      .replace(/{{venue_name}}/g,      venue?.name            || '[Venue Name]')
+      .replace(/{{city}}/g,            venue?.city            || '[City]')
+      .replace(/{{state}}/g,           venue?.state           || '[State]')
+      .replace(/{{booking_contact}}/g, venue?.booking_contact || 'there')
+      // Band
+      .replace(/{{band_name}}/g,       bandName)
+      .replace(/{{epk_link}}/g,        epkLink)
+      // Agent / sender identity
+      .replace(/{{agent_name}}/g,      agentName)
+      .replace(/{{agency_name}}/g,     agencyName)
+      .replace(/{{contact_phone}}/g,   agentPhone)
+      .replace(/{{contact_email}}/g,   agentEmail)
+      .replace(/{{sender_name}}/g,     agentName)
+      .replace(/{{sender_email}}/g,    agentEmail)
+      .replace(/{{sender_phone}}/g,    agentPhone)
+      // Campaign / dates
       .replace(/{{tour_dates}}/g,      tourDates)
-      .replace(/{{tour_name}}/g,       campaign?.name          || '')
-      .replace(/{{show_date}}/g,       '{{show_date}}')
-      .replace(/{{show_time}}/g,       '{{show_time}}')
+      .replace(/{{tour_name}}/g,       campaign?.name || '')
+      .replace(/{{booking_date}}/g,    cv?.booking_date ? fmtDate(cv.booking_date) : '[Booking Date]')
+      .replace(/{{show_time}}/g,       '[Show Time]')
       .replace(/{{set_length}}/g,      '3–4 hours');
   };
 
@@ -286,8 +374,7 @@ export default function EmailTemplateManager() {
   const sendBulk = async () => {
     const toSend = runVenues.filter(cv => checkedIds.has(cv.id) && cv.venue.email);
     if (toSend.length === 0) return;
-    if (!confirm(`Send emails to ${toSend.length} venue${toSend.length!==1?'s':''}?`)) return;
-
+    setConfirmSend(false);
     setBulkSending(true);
     setSendResults([]);
     setSendProgress(0);
@@ -295,8 +382,8 @@ export default function EmailTemplateManager() {
     const results: SendResult[] = [];
     for (let i = 0; i < toSend.length; i++) {
       const cv = toSend[i];
-      const subject = fillVars(editSubject, cv.venue, selectedCampaign);
-      const body    = fillVars(editBody,    cv.venue, selectedCampaign);
+      const subject = fillVars(editSubject, cv.venue, selectedCampaign, cv);
+      const body    = fillVars(editBody,    cv.venue, selectedCampaign, cv);
       try {
         const stored = JSON.parse(localStorage.getItem('loggedInUser') || '{}');
         const res = await fetch('/api/email/send', {
@@ -309,16 +396,18 @@ export default function EmailTemplateManager() {
             to: cv.venue.email,
             subject,
             body,
-            venueId: cv.venue.id,
-            userId: stored.id,
+            venueId:    cv.venue.id,
+            userId:     stored.id,
+            bandId:     selectedBandId || null,
+            campaignId: selectedCampaign?.id || null,
           }),
         });
         if (!res.ok) throw new Error((await res.json()).error || 'Send failed');
         results.push({ venueId:cv.venue.id, venueName:cv.venue.name, success:true });
         // Update venue status to 'pending' after sending
         await supabase.from('campaign_venues').update({ status:'pending' }).eq('id',cv.id);
-      } catch(err:any) {
-        results.push({ venueId:cv.venue.id, venueName:cv.venue.name, success:false, error:err.message });
+      } catch(err: unknown) {
+        results.push({ venueId:cv.venue.id, venueName:cv.venue.name, success:false, error: err instanceof Error ? err.message : 'Unknown error' });
       }
       setSendProgress(i+1);
       setSendResults([...results]);
@@ -332,8 +421,10 @@ export default function EmailTemplateManager() {
 
   const tile = TEMPLATE_TILES.find(t=>t.id===activeTemplate);
   const checkedWithEmail = runVenues.filter(cv=>checkedIds.has(cv.id) && cv.venue.email);
-  const previewSubject   = previewVenue ? fillVars(editSubject, previewVenue.venue, selectedCampaign) : editSubject;
-  const previewBody      = previewVenue ? fillVars(editBody,    previewVenue.venue, selectedCampaign) : editBody;
+  // Preview: hover > first checked > raw template
+  const activePreviewVenue = previewVenue ?? checkedWithEmail[0] ?? null;
+  const previewSubject = fillVars(editSubject, activePreviewVenue?.venue, selectedCampaign, activePreviewVenue);
+  const previewBody    = fillVars(editBody,    activePreviewVenue?.venue, selectedCampaign, activePreviewVenue);
 
   if (loading) return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',
@@ -538,7 +629,7 @@ export default function EmailTemplateManager() {
                       ['{{band_name}}',      'Your band name'],
                       ['{{sender_name}}',    'Your name'],
                       ['{{sender_email}}',   'Your email'],
-                      ['{{show_date}}',      'Show date'],
+                      ['{{booking_date}}',   'Booking date'],
                       ['{{show_time}}',      'Show time'],
                     ].map(([v,label])=>(
                       <div key={v} style={{display:'flex',justifyContent:'space-between',
@@ -556,14 +647,34 @@ export default function EmailTemplateManager() {
               {view==='send' && (
                 <div className="em-send-grid" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
 
-                  {/* LEFT: Run picker + venue checklist */}
+                  {/* LEFT: Band + Run picker + venue checklist */}
                   <div style={{display:'flex',flexDirection:'column',gap:16}}>
 
-                    {/* Step 1: Pick a Run */}
+                    {/* Step 1: Pick a Band */}
+                    {bands.length > 0 && (
+                      <div style={{background:'rgba(9,24,40,0.8)',
+                        border:'1px solid rgba(74,133,200,0.12)',borderRadius:14,padding:'1.25rem'}}>
+                        <div style={{color:'#ffffff',fontWeight:800,fontSize:14,marginBottom:4}}>
+                          Step 1 — Choose a Band
+                        </div>
+                        <p style={{color:'#3d6285',fontSize:12,margin:'0 0 10px',lineHeight:1.6}}>
+                          The band name and EPK link will fill into the email automatically.
+                        </p>
+                        <select className="em-select"
+                          value={selectedBandId}
+                          onChange={e => setSelectedBandId(e.target.value)}>
+                          {bands.map(b => (
+                            <option key={b.id} value={b.id}>{b.band_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Step 2: Pick a Run */}
                     <div style={{background:'rgba(9,24,40,0.8)',
                       border:'1px solid rgba(74,133,200,0.12)',borderRadius:14,padding:'1.25rem'}}>
                       <div style={{color:'#ffffff',fontWeight:800,fontSize:14,marginBottom:4}}>
-                        Step 1 — Choose a Run
+                        {bands.length > 0 ? 'Step 2' : 'Step 1'} — Choose a Run
                       </div>
                       <p style={{color:'#3d6285',fontSize:12,margin:'0 0 12px',lineHeight:1.6}}>
                         Select the Run you're booking for. Only venues in that Run will appear below.
@@ -605,7 +716,7 @@ export default function EmailTemplateManager() {
                         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
                           <div>
                             <div style={{color:'#ffffff',fontWeight:800,fontSize:14}}>
-                              Step 2 — Select Venues
+                              {bands.length > 0 ? 'Step 3' : 'Step 2'} — Select Venues
                             </div>
                             <div style={{color:'#3d6285',fontSize:12,marginTop:2}}>
                               {runVenues.length} venues in this run ·{' '}
@@ -676,12 +787,12 @@ export default function EmailTemplateManager() {
                           </div>
                         )}
 
-                        {/* Send button */}
+                        {/* Send button → opens preview/confirm modal */}
                         {checkedWithEmail.length>0 && !bulkSending && sendResults.length===0 && (
                           <button className="em-btn-success"
                             style={{width:'100%',marginTop:14,padding:13,fontSize:15}}
-                            onClick={sendBulk}>
-                            ✉ Send to {checkedWithEmail.length} Venue{checkedWithEmail.length!==1?'s':''}
+                            onClick={()=>setConfirmSend(true)}>
+                            Preview &amp; Send to {checkedWithEmail.length} Venue{checkedWithEmail.length!==1?'s':''}
                           </button>
                         )}
 
@@ -737,11 +848,11 @@ export default function EmailTemplateManager() {
                     border:'1px solid rgba(74,133,200,0.12)',borderRadius:14,
                     padding:'1.25rem',display:'flex',flexDirection:'column',gap:12}}>
                     <div style={{color:'#ffffff',fontWeight:800,fontSize:14}}>
-                      {previewVenue ? `Preview — ${previewVenue.venue.name}` : 'Email Preview'}
+                      {activePreviewVenue ? `Preview — ${activePreviewVenue.venue.name}` : 'Email Preview'}
                     </div>
-                    {!previewVenue && (
+                    {!activePreviewVenue && (
                       <p style={{color:'#3d6285',fontSize:12,margin:0,lineHeight:1.6}}>
-                        Hover over a venue to see how the email will look for that venue,
+                        Select venues on the left to preview the exact email that will be sent,
                         with all variables filled in automatically.
                       </p>
                     )}
@@ -776,6 +887,94 @@ export default function EmailTemplateManager() {
 
         </div>
       </div>
+
+      {/* ── SEND CONFIRMATION MODAL ──────────────────────────────────────── */}
+      {confirmSend && checkedWithEmail.length > 0 && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',
+          display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:'1rem'}}>
+          <div style={{background:'#030d18',border:'1px solid rgba(74,133,200,0.25)',
+            borderRadius:16,padding:'1.75rem',maxWidth:680,width:'100%',
+            maxHeight:'90vh',overflowY:'auto',boxShadow:'0 24px 64px rgba(0,0,0,0.6)'}}>
+            {/* Header */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.25rem'}}>
+              <div>
+                <div style={{color:'#ffffff',fontWeight:800,fontSize:17}}>
+                  Confirm Send — {checkedWithEmail.length} Venue{checkedWithEmail.length!==1?'s':''}
+                </div>
+                <div style={{color:'#3d6285',fontSize:12,marginTop:3}}>
+                  Review the email below before sending. Variables are filled in per-venue at send time.
+                </div>
+              </div>
+              <button onClick={()=>setConfirmSend(false)}
+                style={{background:'transparent',border:'none',color:'#3d6285',fontSize:20,cursor:'pointer',padding:'0 4px'}}>
+                ✕
+              </button>
+            </div>
+
+            {/* Sample preview — first venue */}
+            <div style={{marginBottom:'1.25rem'}}>
+              <div style={{color:'#7aa5c4',fontSize:11,fontWeight:700,
+                textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:8}}>
+                Sample — {checkedWithEmail[0].venue.name}
+              </div>
+              <div style={{background:'rgba(9,24,40,0.9)',border:'1px solid rgba(74,133,200,0.15)',
+                borderRadius:10,overflow:'hidden'}}>
+                <div style={{padding:'10px 14px',borderBottom:'1px solid rgba(74,133,200,0.1)'}}>
+                  <span style={{color:'#3d6285',fontSize:11,fontWeight:700,textTransform:'uppercase',marginRight:8}}>To:</span>
+                  <span style={{color:'#6baed6',fontSize:13}}>{checkedWithEmail[0].venue.email}</span>
+                </div>
+                <div style={{padding:'10px 14px',borderBottom:'1px solid rgba(74,133,200,0.1)'}}>
+                  <span style={{color:'#3d6285',fontSize:11,fontWeight:700,textTransform:'uppercase',marginRight:8}}>Subject:</span>
+                  <span style={{color:'#e8f1f8',fontSize:13,fontWeight:600}}>
+                    {fillVars(editSubject, checkedWithEmail[0].venue, selectedCampaign, checkedWithEmail[0])}
+                  </span>
+                </div>
+                <div style={{padding:'14px',maxHeight:280,overflowY:'auto'}}>
+                  <pre style={{color:'#c8dff0',fontSize:12,lineHeight:1.8,
+                    whiteSpace:'pre-wrap',fontFamily:"'Nunito',sans-serif",margin:0}}>
+                    {fillVars(editBody, checkedWithEmail[0].venue, selectedCampaign, checkedWithEmail[0])}
+                  </pre>
+                </div>
+              </div>
+            </div>
+
+            {/* Venue list summary */}
+            {checkedWithEmail.length > 1 && (
+              <div style={{marginBottom:'1.25rem'}}>
+                <div style={{color:'#7aa5c4',fontSize:11,fontWeight:700,
+                  textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:8}}>
+                  All {checkedWithEmail.length} Recipients
+                </div>
+                <div style={{display:'flex',flexDirection:'column',gap:5,maxHeight:160,overflowY:'auto'}}>
+                  {checkedWithEmail.map(cv=>(
+                    <div key={cv.id} style={{display:'flex',alignItems:'center',gap:10,
+                      padding:'7px 12px',background:'rgba(9,24,40,0.6)',
+                      border:'1px solid rgba(74,133,200,0.08)',borderRadius:8}}>
+                      <span style={{color:'#e8f1f8',fontSize:13,fontWeight:700,flex:1}}>
+                        {cv.venue.name}
+                      </span>
+                      <span style={{color:'#3d6285',fontSize:12}}>{cv.venue.city}, {cv.venue.state}</span>
+                      <span style={{color:'#6baed6',fontSize:12}}>{cv.venue.email}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+              <button className="em-btn-ghost" onClick={()=>setConfirmSend(false)}>
+                Cancel
+              </button>
+              <button className="em-btn-success" style={{padding:'11px 28px',fontSize:15}}
+                onClick={sendBulk}>
+                ✉ Send to {checkedWithEmail.length} Venue{checkedWithEmail.length!==1?'s':''}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </>
   );
 }

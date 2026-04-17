@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
 
 export default function SignUp() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -17,17 +19,14 @@ export default function SignUp() {
     e.preventDefault();
     setError('');
 
-    // Validation
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
     }
-
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters');
       return;
     }
-
     if (!formData.bandName.trim()) {
       setError('Band name is required');
       return;
@@ -36,36 +35,43 @@ export default function SignUp() {
     try {
       setLoading(true);
 
-      // 1. Create auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password
+      // 1. Register via server-side API — creates auth user + profiles row + bands row
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email:    formData.email,
+          password: formData.password,
+          bandName: formData.bandName.trim(),
+          role:     'band_admin',
+        }),
       });
+      const regData = await res.json();
+      if (!res.ok) throw new Error(regData.error || 'Failed to create account');
 
-      if (authError) throw authError;
+      // 2. Auto sign-in (register uses email_confirm:true so user is already confirmed)
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email:    formData.email,
+        password: formData.password,
+      });
+      if (signInError) throw signInError;
 
-      if (!authData.user) {
-        throw new Error('Failed to create user');
-      }
+      // 3. Store session and redirect straight to band dashboard
+      localStorage.setItem('loggedInUser', JSON.stringify({
+        email:        formData.email,
+        id:           regData.userId,
+        bandName:     formData.bandName.trim(),
+        tier:         'free',
+        isAdmin:      false,
+        token:        signInData.session?.access_token  || '',
+        refreshToken: signInData.session?.refresh_token || '',
+      }));
 
-      // 2. Create band profile
-      const { error: profileError } = await supabase
-        .from('band_profiles')
-        .insert({
-          id: authData.user.id,
-          band_name: formData.bandName.trim(),
-          username: formData.bandName.toLowerCase().replace(/[^a-z0-9]/g, '')
-        });
+      router.push('/band');
 
-      if (profileError) throw profileError;
-
-      // Success! Redirect to login
-      alert('✅ Account created! Please check your email to verify your account, then log in.');
-      window.location.href = '/login';
-
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Signup error:', err);
-      setError(err.message || 'Failed to create account');
+      setError(err instanceof Error ? err.message : 'Failed to create account');
     } finally {
       setLoading(false);
     }
@@ -75,16 +81,16 @@ export default function SignUp() {
     <>
       <style jsx>{`
         * { box-sizing: border-box; }
-        
+
         .signup-container {
           min-height: 100vh;
           display: flex;
           align-items: center;
           justify-content: center;
-          background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+          background: linear-gradient(135deg, #030d18 0%, #0a1f35 100%);
           padding: 2rem;
         }
-        
+
         @media (max-width: 767px) {
           .signup-container {
             padding: 1rem;
@@ -94,8 +100,8 @@ export default function SignUp() {
 
       <div className="signup-container">
         <div style={{
-          background: 'linear-gradient(135deg, rgba(45, 35, 25, 0.95), rgba(61, 40, 23, 0.95))',
-          border: '2px solid rgba(200, 168, 130, 0.3)',
+          background: 'linear-gradient(135deg, rgba(5, 17, 31, 0.95), rgba(10, 31, 53, 0.95))',
+          border: '2px solid rgba(56, 189, 248, 0.25)',
           borderRadius: '16px',
           padding: '3rem',
           maxWidth: '450px',
@@ -107,12 +113,12 @@ export default function SignUp() {
             <h1 style={{
               fontSize: '2rem',
               fontWeight: '700',
-              color: '#C8A882',
+              color: '#38bdf8',
               margin: '0 0 0.5rem 0'
             }}>
               Camel Ranch Booking
             </h1>
-            <p style={{ color: '#9B8A7A', margin: 0, fontSize: '1rem' }}>
+            <p style={{ color: '#7aa5c4', margin: 0, fontSize: '1rem' }}>
               Create your band account
             </p>
           </div>
@@ -139,7 +145,7 @@ export default function SignUp() {
               <div>
                 <label style={{
                   display: 'block',
-                  color: '#C8A882',
+                  color: '#38bdf8',
                   marginBottom: '0.5rem',
                   fontWeight: '600',
                   fontSize: '0.95rem'
@@ -157,9 +163,9 @@ export default function SignUp() {
                     width: '100%',
                     padding: '0.875rem',
                     borderRadius: '8px',
-                    border: '2px solid rgba(200, 168, 130, 0.3)',
-                    background: 'rgba(0,0,0,0.3)',
-                    color: '#E8DCC4',
+                    border: '2px solid rgba(56, 189, 248, 0.3)',
+                    background: 'rgba(5, 17, 31, 0.6)',
+                    color: '#e8f1f8',
                     fontSize: '1rem',
                     outline: 'none'
                   }}
@@ -170,7 +176,7 @@ export default function SignUp() {
               <div>
                 <label style={{
                   display: 'block',
-                  color: '#C8A882',
+                  color: '#38bdf8',
                   marginBottom: '0.5rem',
                   fontWeight: '600',
                   fontSize: '0.95rem'
@@ -188,9 +194,9 @@ export default function SignUp() {
                     width: '100%',
                     padding: '0.875rem',
                     borderRadius: '8px',
-                    border: '2px solid rgba(200, 168, 130, 0.3)',
-                    background: 'rgba(0,0,0,0.3)',
-                    color: '#E8DCC4',
+                    border: '2px solid rgba(56, 189, 248, 0.3)',
+                    background: 'rgba(5, 17, 31, 0.6)',
+                    color: '#e8f1f8',
                     fontSize: '1rem',
                     outline: 'none'
                   }}
@@ -201,7 +207,7 @@ export default function SignUp() {
               <div>
                 <label style={{
                   display: 'block',
-                  color: '#C8A882',
+                  color: '#38bdf8',
                   marginBottom: '0.5rem',
                   fontWeight: '600',
                   fontSize: '0.95rem'
@@ -219,9 +225,9 @@ export default function SignUp() {
                     width: '100%',
                     padding: '0.875rem',
                     borderRadius: '8px',
-                    border: '2px solid rgba(200, 168, 130, 0.3)',
-                    background: 'rgba(0,0,0,0.3)',
-                    color: '#E8DCC4',
+                    border: '2px solid rgba(56, 189, 248, 0.3)',
+                    background: 'rgba(5, 17, 31, 0.6)',
+                    color: '#e8f1f8',
                     fontSize: '1rem',
                     outline: 'none'
                   }}
@@ -232,7 +238,7 @@ export default function SignUp() {
               <div>
                 <label style={{
                   display: 'block',
-                  color: '#C8A882',
+                  color: '#38bdf8',
                   marginBottom: '0.5rem',
                   fontWeight: '600',
                   fontSize: '0.95rem'
@@ -250,9 +256,9 @@ export default function SignUp() {
                     width: '100%',
                     padding: '0.875rem',
                     borderRadius: '8px',
-                    border: '2px solid rgba(200, 168, 130, 0.3)',
-                    background: 'rgba(0,0,0,0.3)',
-                    color: '#E8DCC4',
+                    border: '2px solid rgba(56, 189, 248, 0.3)',
+                    background: 'rgba(5, 17, 31, 0.6)',
+                    color: '#e8f1f8',
                     fontSize: '1rem',
                     outline: 'none'
                   }}
@@ -268,16 +274,16 @@ export default function SignUp() {
                 width: '100%',
                 padding: '1rem',
                 marginTop: '2rem',
-                background: loading 
-                  ? '#708090' 
-                  : 'linear-gradient(135deg, #C8A882 0%, #B8987A 100%)',
-                color: loading ? 'white' : '#2d2d2d',
+                background: loading
+                  ? '#708090'
+                  : 'linear-gradient(135deg, #2563a8 0%, #38bdf8 100%)',
+                color: 'white',
                 border: 'none',
                 borderRadius: '8px',
                 cursor: loading ? 'not-allowed' : 'pointer',
                 fontWeight: '700',
                 fontSize: '1.05rem',
-                boxShadow: '0 4px 12px rgba(200, 168, 130, 0.3)'
+                boxShadow: '0 4px 12px rgba(56, 189, 248, 0.3)'
               }}
             >
               {loading ? 'Creating Account...' : 'Create Account'}
@@ -288,14 +294,14 @@ export default function SignUp() {
           <div style={{
             textAlign: 'center',
             marginTop: '1.5rem',
-            color: '#9B8A7A',
+            color: '#7aa5c4',
             fontSize: '0.95rem'
           }}>
             Already have an account?{' '}
             <a
               href="/login"
               style={{
-                color: '#C8A882',
+                color: '#38bdf8',
                 textDecoration: 'none',
                 fontWeight: '600'
               }}

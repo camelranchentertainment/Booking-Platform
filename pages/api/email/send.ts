@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       userId = bodyUserId;
     }
 
-    const { venueId, campaignId, templateId, customSubject, customBody } = req.body;
+    const { venueId, campaignId, templateId, bandId, customSubject, customBody } = req.body;
 
     if (!venueId) return res.status(400).json({ error: 'venueId is required' });
 
@@ -84,6 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       venueId,
       campaignId,
       templateId,
+      bandId,
       toAddress:  venue.email,
       subject,
       body,
@@ -93,7 +94,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // ── Update venue contact status ───────────────────────────────────────────
     await supabase
       .from('venues')
-      .update({ contact_status: 'awaiting_response', last_contacted_at: new Date().toISOString() })
+      .update({ contact_status: 'awaiting_response', last_contacted: new Date().toISOString() })
       .eq('id', venueId);
 
     return res.status(200).json({
@@ -102,17 +103,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       messageId: info.messageId,
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Send email error:', error);
+    const err = error as { message?: string; code?: string; responseCode?: number };
 
     // Surface friendly messages for common auth failures
-    if (error.message?.includes('No email account connected')) {
-      return res.status(400).json({ error: error.message });
+    if (err.message?.includes('No email account connected')) {
+      return res.status(400).json({ error: err.message });
     }
-    if (error.code === 'EAUTH' || error.responseCode === 535) {
+    if (err.code === 'EAUTH' || err.responseCode === 535) {
       return res.status(400).json({ error: 'Email authentication failed. Check your credentials in Settings → Email Account.' });
     }
 
-    return res.status(500).json({ error: error.message || 'Failed to send email' });
+    return res.status(500).json({ error: err.message || 'Failed to send email' });
   }
 }

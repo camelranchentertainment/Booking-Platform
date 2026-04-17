@@ -116,10 +116,14 @@ export default function CampaignBoard() {
 
       if (error) throw error;
 
-      // Update campaign total_venues count
+      // Recalculate total_venues from actual campaign_venues rows
+      const { count } = await supabase
+        .from('campaign_venues')
+        .select('id', { count: 'exact', head: true })
+        .eq('campaign_id', campaignId);
       const { error: updateError } = await supabase
         .from('campaigns')
-        .update({ total_venues: selectedVenues.length })
+        .update({ total_venues: count ?? selectedVenues.length })
         .eq('id', campaignId);
 
       if (updateError) throw updateError;
@@ -128,9 +132,9 @@ export default function CampaignBoard() {
       setSelectedVenues([]);
       setSelectedCampaign(null);
       loadCampaigns();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error adding venues to campaign:', error);
-      alert(`Error: ${error.message}`);
+      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -156,18 +160,21 @@ export default function CampaignBoard() {
 
     const templateId = templates[0].id;
 
+    let token = '';
+    try { token = JSON.parse(localStorage.getItem('loggedInUser') || '{}').token || ''; } catch { /* no token */ }
+
     for (const venueId of selectedVenues) {
       try {
-        await fetch('/api/emails/send', {
+        await fetch('/api/email/send', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({
             venueId,
             campaignId,
-            templateId,
-            customizations: {
-              season: 'summer 2026'
-            }
+            templateId
           })
         });
       } catch (error) {

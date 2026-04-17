@@ -18,7 +18,7 @@ interface EmailComposerProps {
 }
 
 export default function EmailComposer({ venue, campaignId, onClose, onSent }: EmailComposerProps) {
-  const [template, setTemplate] = useState<any>(null);
+  const [template, setTemplate] = useState<Record<string, unknown> | null>(null);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
@@ -70,8 +70,7 @@ Looking forward to hearing from you!
 
 Best regards,
 Scott
-Better Than Nothin'
-scott@camelranchbooking.com`);
+Better Than Nothin'`);
     }
   };
 

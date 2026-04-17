@@ -206,9 +206,19 @@ export default function VenueContactManager({ filterMissingEmail }: VenueContact
 
   // ── Enrichment ────────────────────────────────────────────────────────────
 
+  const getAuthToken = (): string => {
+    try {
+      const u = JSON.parse(localStorage.getItem('loggedInUser') || '{}');
+      return u.token || '';
+    } catch { return ''; }
+  };
+
   const fetchEnrichStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/venues/enrich-status');
+      const token = getAuthToken();
+      const res = await fetch('/api/venues/enrich-status', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) return;
       const data: EnrichStatus = await res.json();
       setEnrichStatus(prev => {
@@ -226,7 +236,11 @@ export default function VenueContactManager({ filterMissingEmail }: VenueContact
     if (enrichStarting || enrichStatus?.job.running) return;
     setEnrichStarting(true);
     try {
-      await fetch('/api/venues/enrich-emails', { method: 'POST' });
+      const token = getAuthToken();
+      await fetch('/api/venues/enrich-emails', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = setInterval(fetchEnrichStatus, 2000);
       await fetchEnrichStatus();

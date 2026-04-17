@@ -60,6 +60,7 @@ export async function logSentEmail(params: {
   venueId: string;
   campaignId?: string;
   templateId?: string;
+  bandId?: string;
   toAddress: string;
   subject: string;
   body: string;
@@ -70,6 +71,7 @@ export async function logSentEmail(params: {
     venue_id:    params.venueId,
     campaign_id: params.campaignId ?? null,
     template_id: params.templateId ?? null,
+    band_id:     params.bandId     ?? null,
     direction:   'sent',
     to_address:  params.toAddress,
     subject:     params.subject,
