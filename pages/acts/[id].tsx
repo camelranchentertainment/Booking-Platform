@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { Act, ActInvitation, UserProfile, BOOKING_STATUS_LABELS, Booking } from '../../lib/types';
 import Link from 'next/link';
 
-export default function ActDetail() {
+export default function BandDetail() {
   const router = useRouter();
   const { id } = router.query;
   const [act, setAct]         = useState<Act | null>(null);
@@ -198,7 +198,7 @@ export default function ActDetail() {
                 <label className="field-label">Role</label>
                 <select className="select" value={inviteRole} onChange={e => setInviteRole(e.target.value as any)}>
                   <option value="member">Member</option>
-                  <option value="act_admin">Act Admin</option>
+                  <option value="act_admin">Band Admin</option>
                 </select>
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-end' }}>

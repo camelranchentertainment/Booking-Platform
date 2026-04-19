@@ -1,5 +1,6 @@
 -- ============================================================
 -- CAMEL RANCH BOOKING PLATFORM — SCHEMA v2
+-- Supports: independent bands, agent-managed bands, invites
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -23,7 +24,9 @@ DO $$ BEGIN
   );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+-- ============================================================
 -- user_profiles
+-- ============================================================
 CREATE TABLE IF NOT EXISTS user_profiles (
   id            UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   role          user_role NOT NULL DEFAULT 'agent',
@@ -32,20 +35,32 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   agency_name   TEXT,
   phone         TEXT,
   avatar_url    TEXT,
+  -- For invited members: which act they belong to
   act_id        UUID,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "user_profiles_own" ON user_profiles FOR ALL USING (auth.uid() = id);
-CREATE POLICY "agent_reads_act_members" ON user_profiles FOR SELECT USING (
-  auth.uid() IN (SELECT agent_id FROM acts WHERE id = user_profiles.act_id)
+-- Agents can read profiles of members in acts they manage
+CREATE POLICY "agent_reads_members" ON user_profiles FOR SELECT USING (
+  act_id IN (
+    SELECT id FROM acts
+    WHERE agent_id = auth.uid() OR owner_id = auth.uid()
+  )
 );
 
+-- ============================================================
 -- acts
+--   owner_id: the act_admin who IS this act (null = agent-only act)
+--   agent_id: the booking agent managing this act (null = self-managed)
+-- ============================================================
 CREATE TABLE IF NOT EXISTS acts (
   id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  agent_id         UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  -- Who manages bookings for this act (booking agent, or the band itself)
+  agent_id         UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  -- The act_admin user who "is" this act (null when agent creates act pre-band)
+  owner_id         UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   act_name         TEXT NOT NULL,
   genre            TEXT,
   bio              TEXT,
@@ -60,29 +75,75 @@ CREATE TABLE IF NOT EXISTS acts (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE acts ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "acts_agent_all" ON acts FOR ALL USING (agent_id = auth.uid());
+-- Agent who manages the act
+CREATE POLICY "acts_agent_all"  ON acts FOR ALL USING (agent_id = auth.uid());
+-- Band admin who owns the act
+CREATE POLICY "acts_owner_all"  ON acts FOR ALL USING (owner_id = auth.uid());
+-- Band members
 CREATE POLICY "acts_member_select" ON acts FOR SELECT USING (
   id IN (SELECT act_id FROM user_profiles WHERE id = auth.uid())
 );
+-- Linked agents (via agent_act_links)
+CREATE POLICY "acts_linked_agent_select" ON acts FOR SELECT USING (
+  id IN (
+    SELECT act_id FROM agent_act_links
+    WHERE agent_id = auth.uid() AND status = 'active'
+  )
+);
 
--- act_invitations
+-- ============================================================
+-- agent_act_links
+-- Agent sends a link invite to a band; band accepts → agent gets visibility
+-- ============================================================
+CREATE TABLE IF NOT EXISTS agent_act_links (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  agent_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  act_id       UUID NOT NULL REFERENCES acts(id) ON DELETE CASCADE,
+  status       TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','active','revoked','declined')),
+  permissions  TEXT NOT NULL DEFAULT 'view'
+    CHECK (permissions IN ('view','manage')),
+  token        TEXT NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(32), 'hex'),
+  message      TEXT,
+  invited_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  accepted_at  TIMESTAMPTZ,
+  UNIQUE (agent_id, act_id)
+);
+ALTER TABLE agent_act_links ENABLE ROW LEVEL SECURITY;
+-- Agent can see and manage links they created
+CREATE POLICY "links_agent" ON agent_act_links FOR ALL USING (agent_id = auth.uid());
+-- Band owner can see and respond to incoming link requests
+CREATE POLICY "links_act_owner" ON agent_act_links FOR ALL USING (
+  act_id IN (SELECT id FROM acts WHERE owner_id = auth.uid())
+);
+
+-- ============================================================
+-- act_invitations  (band/agent inviting members to join)
+-- ============================================================
 CREATE TABLE IF NOT EXISTS act_invitations (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   act_id      UUID NOT NULL REFERENCES acts(id) ON DELETE CASCADE,
   email       TEXT NOT NULL,
   role        user_role NOT NULL DEFAULT 'member',
   token       TEXT NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(32), 'hex'),
-  status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','expired','revoked')),
+  status      TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','accepted','expired','revoked')),
   invited_by  UUID NOT NULL REFERENCES auth.users(id),
   expires_at  TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '7 days',
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE act_invitations ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "invitations_agent" ON act_invitations FOR ALL USING (
-  act_id IN (SELECT id FROM acts WHERE agent_id = auth.uid())
+-- Agent or band owner can manage invitations
+CREATE POLICY "invitations_manage" ON act_invitations FOR ALL USING (
+  act_id IN (
+    SELECT id FROM acts
+    WHERE agent_id = auth.uid() OR owner_id = auth.uid()
+  )
 );
 
+-- ============================================================
 -- act_visibility_rules
+-- ============================================================
 CREATE TABLE IF NOT EXISTS act_visibility_rules (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   act_id      UUID NOT NULL REFERENCES acts(id) ON DELETE CASCADE,
@@ -92,11 +153,13 @@ CREATE TABLE IF NOT EXISTS act_visibility_rules (
   UNIQUE (act_id, field_name)
 );
 ALTER TABLE act_visibility_rules ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "visibility_rules_agent" ON act_visibility_rules FOR ALL USING (
-  act_id IN (SELECT id FROM acts WHERE agent_id = auth.uid())
+CREATE POLICY "visibility_rules_manage" ON act_visibility_rules FOR ALL USING (
+  act_id IN (SELECT id FROM acts WHERE agent_id = auth.uid() OR owner_id = auth.uid())
 );
 
+-- ============================================================
 -- venues
+-- ============================================================
 CREATE TABLE IF NOT EXISTS venues (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agent_id        UUID REFERENCES auth.users(id),
@@ -122,9 +185,12 @@ CREATE TABLE IF NOT EXISTS venues (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE venues ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "venues_agent_all" ON venues FOR ALL USING (agent_id = auth.uid() OR agent_id IS NULL);
+CREATE POLICY "venues_agent_all" ON venues FOR ALL
+  USING (agent_id = auth.uid() OR agent_id IS NULL);
 
+-- ============================================================
 -- contacts
+-- ============================================================
 CREATE TABLE IF NOT EXISTS contacts (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agent_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -143,30 +209,50 @@ CREATE TABLE IF NOT EXISTS contacts (
 ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "contacts_agent_all" ON contacts FOR ALL USING (agent_id = auth.uid());
 
+-- ============================================================
 -- tours
+-- ============================================================
 CREATE TABLE IF NOT EXISTS tours (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  agent_id      UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  -- created_by: the user who made this tour (agent or band admin)
+  created_by    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   act_id        UUID NOT NULL REFERENCES acts(id) ON DELETE CASCADE,
   name          TEXT NOT NULL,
   description   TEXT,
   start_date    DATE,
   end_date      DATE,
   routing_notes TEXT,
-  status        TEXT NOT NULL DEFAULT 'planning' CHECK (status IN ('planning','active','completed','cancelled')),
+  status        TEXT NOT NULL DEFAULT 'planning'
+    CHECK (status IN ('planning','active','completed','cancelled')),
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE tours ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "tours_agent_all" ON tours FOR ALL USING (agent_id = auth.uid());
-CREATE POLICY "tours_act_select" ON tours FOR SELECT USING (
+-- Creator can manage
+CREATE POLICY "tours_creator_all" ON tours FOR ALL USING (created_by = auth.uid());
+-- Act owner can manage their act's tours
+CREATE POLICY "tours_act_owner" ON tours FOR ALL USING (
+  act_id IN (SELECT id FROM acts WHERE owner_id = auth.uid())
+);
+-- Linked agent can view
+CREATE POLICY "tours_linked_agent" ON tours FOR SELECT USING (
+  act_id IN (
+    SELECT act_id FROM agent_act_links
+    WHERE agent_id = auth.uid() AND status = 'active'
+  )
+);
+-- Members can view
+CREATE POLICY "tours_member_select" ON tours FOR SELECT USING (
   act_id IN (SELECT act_id FROM user_profiles WHERE id = auth.uid())
 );
 
+-- ============================================================
 -- bookings
+-- ============================================================
 CREATE TABLE IF NOT EXISTS bookings (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  agent_id        UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  -- created_by: the user who created this booking (agent or band admin)
+  created_by      UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   act_id          UUID NOT NULL REFERENCES acts(id) ON DELETE CASCADE,
   venue_id        UUID REFERENCES venues(id) ON DELETE SET NULL,
   tour_id         UUID REFERENCES tours(id) ON DELETE SET NULL,
@@ -192,15 +278,30 @@ CREATE TABLE IF NOT EXISTS bookings (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "bookings_agent_all" ON bookings FOR ALL USING (agent_id = auth.uid());
-CREATE POLICY "bookings_act_select" ON bookings FOR SELECT USING (
+-- Creator manages
+CREATE POLICY "bookings_creator_all" ON bookings FOR ALL USING (created_by = auth.uid());
+-- Act owner sees all bookings for their act
+CREATE POLICY "bookings_act_owner" ON bookings FOR ALL USING (
+  act_id IN (SELECT id FROM acts WHERE owner_id = auth.uid())
+);
+-- Linked agent sees bookings for linked acts
+CREATE POLICY "bookings_linked_agent" ON bookings FOR SELECT USING (
+  act_id IN (
+    SELECT act_id FROM agent_act_links
+    WHERE agent_id = auth.uid() AND status = 'active'
+  )
+);
+-- Members see confirmed+ bookings for their act
+CREATE POLICY "bookings_member_select" ON bookings FOR SELECT USING (
   act_id IN (SELECT act_id FROM user_profiles WHERE id = auth.uid())
 );
 
+-- ============================================================
 -- email_log
+-- ============================================================
 CREATE TABLE IF NOT EXISTS email_log (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  agent_id    UUID REFERENCES auth.users(id),
+  sent_by     UUID REFERENCES auth.users(id),
   booking_id  UUID REFERENCES bookings(id) ON DELETE SET NULL,
   venue_id    UUID REFERENCES venues(id) ON DELETE SET NULL,
   contact_id  UUID REFERENCES contacts(id) ON DELETE SET NULL,
@@ -213,9 +314,11 @@ CREATE TABLE IF NOT EXISTS email_log (
   sent_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE email_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "email_log_agent" ON email_log FOR ALL USING (agent_id = auth.uid());
+CREATE POLICY "email_log_sender" ON email_log FOR ALL USING (sent_by = auth.uid());
 
+-- ============================================================
 -- routing_rules
+-- ============================================================
 CREATE TABLE IF NOT EXISTS routing_rules (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agent_id        UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -229,22 +332,30 @@ CREATE TABLE IF NOT EXISTS routing_rules (
 ALTER TABLE routing_rules ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "routing_rules_agent" ON routing_rules FOR ALL USING (agent_id = auth.uid());
 
+-- ============================================================
 -- INDEXES
-CREATE INDEX IF NOT EXISTS idx_bookings_agent     ON bookings(agent_id);
-CREATE INDEX IF NOT EXISTS idx_bookings_act       ON bookings(act_id);
-CREATE INDEX IF NOT EXISTS idx_bookings_status    ON bookings(status);
-CREATE INDEX IF NOT EXISTS idx_bookings_tour      ON bookings(tour_id);
-CREATE INDEX IF NOT EXISTS idx_bookings_show_date ON bookings(show_date);
-CREATE INDEX IF NOT EXISTS idx_venues_agent       ON venues(agent_id);
-CREATE INDEX IF NOT EXISTS idx_contacts_agent     ON contacts(agent_id);
-CREATE INDEX IF NOT EXISTS idx_contacts_venue     ON contacts(venue_id);
-CREATE INDEX IF NOT EXISTS idx_tours_agent        ON tours(agent_id);
-CREATE INDEX IF NOT EXISTS idx_tours_act          ON tours(act_id);
-CREATE INDEX IF NOT EXISTS idx_acts_agent         ON acts(agent_id);
-CREATE INDEX IF NOT EXISTS idx_email_log_booking  ON email_log(booking_id);
-CREATE INDEX IF NOT EXISTS idx_invitations_token  ON act_invitations(token);
+-- ============================================================
+CREATE INDEX IF NOT EXISTS idx_bookings_created_by  ON bookings(created_by);
+CREATE INDEX IF NOT EXISTS idx_bookings_act         ON bookings(act_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_status      ON bookings(status);
+CREATE INDEX IF NOT EXISTS idx_bookings_tour        ON bookings(tour_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_show_date   ON bookings(show_date);
+CREATE INDEX IF NOT EXISTS idx_venues_agent         ON venues(agent_id);
+CREATE INDEX IF NOT EXISTS idx_contacts_agent       ON contacts(agent_id);
+CREATE INDEX IF NOT EXISTS idx_contacts_venue       ON contacts(venue_id);
+CREATE INDEX IF NOT EXISTS idx_tours_created_by     ON tours(created_by);
+CREATE INDEX IF NOT EXISTS idx_tours_act            ON tours(act_id);
+CREATE INDEX IF NOT EXISTS idx_acts_agent           ON acts(agent_id);
+CREATE INDEX IF NOT EXISTS idx_acts_owner           ON acts(owner_id);
+CREATE INDEX IF NOT EXISTS idx_agent_act_links_agent ON agent_act_links(agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_act_links_act   ON agent_act_links(act_id);
+CREATE INDEX IF NOT EXISTS idx_agent_act_links_token ON agent_act_links(token);
+CREATE INDEX IF NOT EXISTS idx_email_log_booking    ON email_log(booking_id);
+CREATE INDEX IF NOT EXISTS idx_invitations_token    ON act_invitations(token);
 
+-- ============================================================
 -- updated_at trigger
+-- ============================================================
 CREATE OR REPLACE FUNCTION touch_updated_at()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN NEW.updated_at = NOW(); RETURN NEW; END $$;

@@ -3,11 +3,11 @@ import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BookingStatus, BOOKING_STATUS_LABELS, BOOKING_STATUS_ORDER } from '../../lib/types';
+import Link from 'next/link';
 
-type ActPick  = { id: string; act_name: string };
+type ActPick   = { id: string; act_name: string };
 type VenuePick = { id: string; name: string; city: string; state: string };
 type TourPick  = { id: string; name: string; act_id: string };
-import Link from 'next/link';
 
 export default function BookingDetail() {
   const router = useRouter();
@@ -29,9 +29,9 @@ export default function BookingDetail() {
       supabase.from('bookings').select(`
         *, act:acts(*), venue:venues(*), tour:tours(id, name), contact:contacts(*)
       `).eq('id', id).single(),
-      supabase.from('acts').select('id, act_name').eq('agent_id', user.id).order('act_name'),
-      supabase.from('venues').select('id, name, city, state').eq('agent_id', user.id).order('name'),
-      supabase.from('tours').select('id, name, act_id').eq('agent_id', user.id).order('name'),
+      supabase.from('acts').select('id, act_name').order('act_name'),
+      supabase.from('venues').select('id, name, city, state').order('name'),
+      supabase.from('tours').select('id, name, act_id').order('name'),
     ]);
     if (bookingRes.data) { setBooking(bookingRes.data); setForm(bookingRes.data); }
     setActs(actsRes.data || []);
@@ -121,7 +121,7 @@ export default function BookingDetail() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div className="grid-2">
               <div className="field">
-                <label className="field-label">Act</label>
+                <label className="field-label">Band</label>
                 <select className="select" value={form.act_id || ''} onChange={set('act_id')}>
                   {acts.map(a => <option key={a.id} value={a.id}>{a.act_name}</option>)}
                 </select>
@@ -198,7 +198,7 @@ export default function BookingDetail() {
             <div className="card-header"><span className="card-title">SHOW DETAILS</span></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.88rem' }}>
               {[
-                ['Act', booking.act?.act_name],
+                ['Band', booking.act?.act_name],
                 ['Venue', booking.venue ? `${booking.venue.name}, ${booking.venue.city} ${booking.venue.state}` : null],
                 ['Tour', booking.tour?.name],
                 ['Show Date', booking.show_date ? new Date(booking.show_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : null],

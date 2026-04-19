@@ -21,12 +21,12 @@ export default function Dashboard() {
       if (!user) return;
 
       const [actsRes, bookingsRes] = await Promise.all([
-        supabase.from('acts').select('*').eq('agent_id', user.id).eq('is_active', true).order('act_name'),
+        supabase.from('acts').select('*').eq('created_by', user.id).eq('is_active', true).order('act_name'),
         supabase.from('bookings').select(`
           id, status, show_date, fee, created_at,
           act:acts(act_name),
           venue:venues(name, city, state)
-        `).eq('agent_id', user.id).order('created_at', { ascending: false }).limit(50),
+        `).eq('created_by', user.id).order('created_at', { ascending: false }).limit(50),
       ]);
 
       const bookings = (bookingsRes.data || []) as any[];
@@ -61,7 +61,7 @@ export default function Dashboard() {
       <div className="grid-4 mb-6">
         <div className="stat-block">
           <div className="stat-value">{acts.length}</div>
-          <div className="stat-label">Active Acts</div>
+          <div className="stat-label">Active Bands</div>
         </div>
         <div className="stat-block">
           <div className="stat-value">{totalActive}</div>
@@ -73,7 +73,7 @@ export default function Dashboard() {
         </div>
         <div className="stat-block">
           <div className="stat-value">{acts.length > 0 ? acts.length : '—'}</div>
-          <div className="stat-label">Acts Managed</div>
+          <div className="stat-label">Bands Managed</div>
         </div>
       </div>
 
@@ -81,13 +81,13 @@ export default function Dashboard() {
         {/* Acts */}
         <div className="card">
           <div className="card-header">
-            <span className="card-title">YOUR ACTS</span>
+            <span className="card-title">YOUR BANDS</span>
             <Link href="/acts" className="btn btn-ghost btn-sm">View All</Link>
           </div>
           {acts.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
-              No acts yet.<br />
-              <Link href="/acts/new" style={{ color: 'var(--accent)' }}>Create your first act →</Link>
+              No bands yet.<br />
+              <Link href="/acts/new" style={{ color: 'var(--accent)' }}>Add your first band →</Link>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -138,7 +138,7 @@ export default function Dashboard() {
             <table>
               <thead>
                 <tr>
-                  <th>Act</th>
+                  <th>Band</th>
                   <th>Venue</th>
                   <th>Date</th>
                   <th>Status</th>

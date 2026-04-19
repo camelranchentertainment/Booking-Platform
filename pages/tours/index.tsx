@@ -20,7 +20,7 @@ export default function ToursPage() {
     if (!user) return;
     const [toursRes, actsRes] = await Promise.all([
       supabase.from('tours').select('*, act:acts(act_name)').eq('agent_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('acts').select('id, act_name').eq('agent_id', user.id).order('act_name'),
+      supabase.from('acts').select('id, act_name').order('act_name'),
     ]);
     setTours(toursRes.data || []);
     setActs(actsRes.data || []);
@@ -32,7 +32,7 @@ export default function ToursPage() {
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from('tours').insert({
-      agent_id:    user!.id,
+      created_by: user!.id,
       act_id:      form.act_id,
       name:        form.name,
       description: form.description || null,
@@ -105,9 +105,9 @@ export default function ToursPage() {
             <form onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <div className="field"><label className="field-label">Tour Name *</label><input className="input" value={form.name} onChange={set('name')} required autoFocus /></div>
               <div className="field">
-                <label className="field-label">Act *</label>
+                <label className="field-label">Band *</label>
                 <select className="select" value={form.act_id} onChange={set('act_id')} required>
-                  <option value="">Select act...</option>
+                  <option value="">Select band...</option>
                   {acts.map(a => <option key={a.id} value={a.id}>{a.act_name}</option>)}
                 </select>
               </div>

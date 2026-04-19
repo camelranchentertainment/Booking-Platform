@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 
-export default function NewAct() {
+export default function NewBand() {
   const router = useRouter();
   const [form, setForm] = useState({ act_name: '', genre: '', bio: '', website: '', instagram: '', spotify: '' });
   const [error, setError]   = useState('');
@@ -37,7 +37,7 @@ export default function NewAct() {
     <AppShell requireRole="agent">
       <div className="page-header">
         <div>
-          <h1 className="page-title">New Act</h1>
+          <h1 className="page-title">New Band</h1>
           <div className="page-sub">Add to your roster</div>
         </div>
       </div>
@@ -45,10 +45,10 @@ export default function NewAct() {
       <div style={{ maxWidth: 600 }}>
         <form onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div className="card">
-            <div className="card-header"><span className="card-title">ACT INFO</span></div>
+            <div className="card-header"><span className="card-title">BAND INFO</span></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div className="field">
-                <label className="field-label">Act Name *</label>
+                <label className="field-label">Band Name *</label>
                 <input className="input" value={form.act_name} onChange={set('act_name')} placeholder="The Band Name" required autoFocus />
               </div>
               <div className="field">
@@ -88,7 +88,7 @@ export default function NewAct() {
 
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button type="button" onClick={() => router.back()} className="btn btn-secondary">Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Create Act'}</button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Create Band'}</button>
           </div>
         </form>
       </div>

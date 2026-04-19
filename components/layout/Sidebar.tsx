@@ -9,7 +9,7 @@ interface Props {
 
 const agentNav = [
   { label: 'Dashboard', href: '/dashboard', icon: '◈' },
-  { label: 'Acts',      href: '/acts',      icon: '♪' },
+  { label: 'Bands',     href: '/acts',      icon: '♪' },
   { label: 'Bookings',  href: '/bookings',  icon: '◉' },
   { label: 'Tours',     href: '/tours',     icon: '⟴' },
   { label: 'Venues',    href: '/venues',    icon: '⌂' },
@@ -53,7 +53,7 @@ export default function Sidebar({ profile, onSignOut }: Props) {
           </div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '0.15rem' }}>
             {profile.role === 'agent' ? (profile.agency_name || 'Agent') :
-             profile.role === 'act_admin' ? 'Act Admin' : 'Member'}
+             profile.role === 'act_admin' ? 'Band Admin' : 'Member'}
           </div>
         </div>
       )}

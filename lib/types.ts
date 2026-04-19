@@ -10,6 +10,8 @@ export type ContactStatus =
 
 export type TourStatus = 'planning' | 'active' | 'completed' | 'cancelled';
 
+export type LinkStatus = 'pending' | 'active' | 'revoked' | 'declined';
+
 export interface UserProfile {
   id: string;
   role: UserRole;
@@ -25,7 +27,10 @@ export interface UserProfile {
 
 export interface Act {
   id: string;
-  agent_id: string;
+  // agent_id: booking agent managing this act (null = self-managed by band)
+  agent_id?: string | null;
+  // owner_id: the act_admin user who IS this act
+  owner_id?: string | null;
   act_name: string;
   genre?: string | null;
   bio?: string | null;
@@ -38,6 +43,20 @@ export interface Act {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface AgentActLink {
+  id: string;
+  agent_id: string;
+  act_id: string;
+  status: LinkStatus;
+  permissions: 'view' | 'manage';
+  token: string;
+  message?: string | null;
+  invited_at: string;
+  accepted_at?: string | null;
+  act?: Act | null;
+  agent?: { display_name: string; agency_name?: string | null; email: string } | null;
 }
 
 export interface ActInvitation {
@@ -96,7 +115,7 @@ export interface Contact {
 
 export interface Tour {
   id: string;
-  agent_id: string;
+  created_by: string;
   act_id: string;
   name: string;
   description?: string | null;
@@ -111,7 +130,7 @@ export interface Tour {
 
 export interface Booking {
   id: string;
-  agent_id: string;
+  created_by: string;
   act_id: string;
   venue_id?: string | null;
   tour_id?: string | null;
@@ -143,7 +162,7 @@ export interface Booking {
 
 export interface EmailLogEntry {
   id: string;
-  agent_id?: string | null;
+  sent_by?: string | null;
   booking_id?: string | null;
   venue_id?: string | null;
   contact_id?: string | null;

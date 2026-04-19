@@ -24,9 +24,9 @@ export default function NewBooking() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const [actsRes, venuesRes, toursRes] = await Promise.all([
-        supabase.from('acts').select('id, act_name').eq('agent_id', user.id).eq('is_active', true).order('act_name'),
-        supabase.from('venues').select('id, name, city, state').eq('agent_id', user.id).order('name'),
-        supabase.from('tours').select('id, name, act_id').eq('agent_id', user.id).eq('status', 'active').order('name'),
+        supabase.from('acts').select('id, act_name').eq('is_active', true).order('act_name'),
+        supabase.from('venues').select('id, name, city, state').order('name'),
+        supabase.from('tours').select('id, name, act_id').eq('status', 'active').order('name'),
       ]);
       setActs(actsRes.data || []);
       setVenues(venuesRes.data || []);
@@ -45,7 +45,7 @@ export default function NewBooking() {
     setError(''); setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     const { data, error: err } = await supabase.from('bookings').insert({
-      agent_id:   user!.id,
+      created_by: user!.id,
       act_id:     form.act_id,
       venue_id:   form.venue_id || null,
       tour_id:    form.tour_id  || null,
@@ -79,9 +79,9 @@ export default function NewBooking() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div className="grid-2">
                 <div className="field">
-                  <label className="field-label">Act *</label>
+                  <label className="field-label">Band *</label>
                   <select className="select" value={form.act_id} onChange={set('act_id')} required>
-                    <option value="">Select act...</option>
+                    <option value="">Select band...</option>
                     {acts.map(a => <option key={a.id} value={a.id}>{a.act_name}</option>)}
                   </select>
                 </div>
