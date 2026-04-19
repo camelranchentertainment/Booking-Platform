@@ -1,357 +1,172 @@
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
-import Head from 'next/head';
+import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
-import Dashboard from '../components/Dashboard';
-import VenueSearch from '../components/VenueSearch';
-import CampaignManager from '../components/CampaignManager';
-import EmailTemplateManager from '../components/EmailTemplateManager';
-import SocialMediaCampaign from '../components/SocialMediaCampaign';
-import VenueContactManager from '../components/VenueContactManager';
-import BookingCalendar from '../components/BookingCalendar';
+import { Act, Booking, BOOKING_STATUS_LABELS } from '../lib/types';
+import Link from 'next/link';
 
-interface AuthUser {
-  id: string;
-  email: string;
+interface PipelineSummary {
+  status: string;
+  count: number;
 }
 
-interface BandProfile {
-  id: string;
-  band_name: string;
-}
+export default function Dashboard() {
+  const [acts, setActs]         = useState<Act[]>([]);
+  const [pipeline, setPipeline] = useState<PipelineSummary[]>([]);
+  const [recent, setRecent]     = useState<Booking[]>([]);
+  const [loading, setLoading]   = useState(true);
 
-interface NavigationData {
-  campaignId?: string;
-}
+  useEffect(() => {
+    const load = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-export default function DashboardPage() {
-  const router = useRouter();
-  const [activeTab, setActiveTab]       = useState('dashboard');
-  const [user, setUser]                 = useState<AuthUser | null>(null);
-  const [bandProfile, setBandProfile]   = useState<BandProfile | null>(null);
-  const [navigationData, setNavigationData] = useState<NavigationData | null>(null);
-  const [menuOpen, setMenuOpen]         = useState(false);
+      const [actsRes, bookingsRes] = await Promise.all([
+        supabase.from('acts').select('*').eq('agent_id', user.id).eq('is_active', true).order('act_name'),
+        supabase.from('bookings').select(`
+          id, status, show_date, fee, created_at,
+          act:acts(act_name),
+          venue:venues(name, city, state)
+        `).eq('agent_id', user.id).order('created_at', { ascending: false }).limit(50),
+      ]);
 
-  useEffect(() => { checkAuth(); }, [router]);
+      const bookings = (bookingsRes.data || []) as any[];
+      setActs(actsRes.data || []);
 
-  const checkAuth = async () => {
-    let { data: { session } } = await supabase.auth.getSession();
-
-    // If no in-memory session, try to restore from the tokens stored in
-    // localStorage by the login flow (index.tsx calls /api/auth/login which
-    // returns access + refresh tokens, and we persist them there).
-    if (!session) {
-      const local = localStorage.getItem('loggedInUser');
-      if (!local) { router.push('/'); return; }
-      const localUser = JSON.parse(local);
-      if (localUser.token && localUser.refreshToken) {
-        const { data: restored } = await supabase.auth.setSession({
-          access_token:  localUser.token,
-          refresh_token: localUser.refreshToken,
-        });
-        session = restored.session;
+      // Pipeline counts
+      const counts: Record<string, number> = {};
+      for (const b of bookings) {
+        counts[b.status] = (counts[b.status] || 0) + 1;
       }
-      if (!session) {
-        // Tokens missing or expired — send back to login
-        router.push('/');
-        return;
-      }
-    }
+      setPipeline(Object.entries(counts).map(([status, count]) => ({ status, count })));
+      setRecent(bookings.slice(0, 8));
+      setLoading(false);
+    };
+    load();
+  }, []);
 
-    setUser({ id: session.user.id, email: session.user.email ?? '' });
-    loadBandProfile(session.user.id);
-  };
-
-  const loadBandProfile = async (userId: string) => {
-    try {
-      const { data } = await supabase
-        .from('band_profiles').select('*').eq('id', userId).single();
-      if (data) setBandProfile(data);
-    } catch (e) { console.error('Error loading band profile:', e); }
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem('loggedInUser');
-    router.push('/');
-  };
-
-  const handleNavigate = (tab: string, data?: NavigationData) => {
-    setActiveTab(tab);
-    setNavigationData(data ?? null);
-  };
-
-  const tabs = [
-    { id: 'dashboard',      label: 'Dashboard'       },
-    { id: 'campaigns',      label: 'Runs & Tours'     },
-    { id: 'venue-database', label: 'Venue Search'     },
-    { id: 'emails',         label: 'Email Templates'  },
-    { id: 'social',         label: 'Social Media'     },
-    { id: 'calendar',       label: 'Calendar'         },
-    { id: 'contact-info',   label: 'Venue List'       },
-  ];
-
-  // ─── Loading state ───────────────────────────────────────────────────────────
-  if (!user) {
-    return (
-      <>
-        <Head>
-          <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet" />
-        </Head>
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          height: '100vh',
-          background: '#030d18',
-          fontFamily: "'Nunito', sans-serif", color: '#7aa5c4', fontSize: 16,
-        }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 12, margin: '0 auto 16px',
-              background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: "'Bebas Neue', cursive", fontSize: 26, color: '#e8f1f8',
-            }}>C</div>
-            Loading…
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  const displayName = bandProfile?.band_name || user?.email || 'My Band';
-  const userEmail   = user?.email || '';
+  const totalActive = pipeline.filter(p => !['completed','cancelled'].includes(p.status)).reduce((s, p) => s + p.count, 0);
+  const totalConfirmed = pipeline.find(p => p.status === 'confirmed')?.count || 0;
 
   return (
-    <>
-      <Head>
-        <title>{displayName} — Camel Ranch Booking</title>
-        <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&display=swap" rel="stylesheet" />
-      </Head>
-
-      <style>{`
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html { scroll-behavior: smooth; }
-        body { background: #030d18; font-family: 'Nunito', sans-serif; }
-
-        /* ── Tab bar ── */
-        .crb-tab {
-          padding: 14px 22px;
-          background: rgba(255,255,255,0.04);
-          border: 1px solid rgba(74,133,200,0.1);
-          border-radius: 8px;
-          margin: 8px 4px;
-          color: rgba(255,255,255,0.55);
-          font-family: 'Nunito', sans-serif;
-          font-size: 15px;
-          font-weight: 800;
-          cursor: pointer;
-          white-space: nowrap;
-          letter-spacing: 0.01em;
-          transition: background .18s, color .18s, border-color .18s, box-shadow .18s;
-        }
-        .crb-tab:hover {
-          background: rgba(74,133,200,0.1);
-          color: #ffffff;
-          border-color: rgba(74,133,200,0.3);
-        }
-        .crb-tab.active {
-          background: rgba(58,127,193,0.18);
-          color: #ffffff;
-          border-color: rgba(74,133,200,0.5);
-          box-shadow: 0 0 16px rgba(58,127,193,0.2);
-        }
-
-        /* ── User menu dropdown ── */
-        .user-menu {
-          position: absolute; top: calc(100% + 8px); right: 0;
-          background: #091828;
-          border: 1px solid rgba(74,133,200,0.2);
-          border-radius: 12px;
-          padding: 8px;
-          min-width: 200px;
-          box-shadow: 0 16px 48px rgba(0,0,0,0.5);
-          z-index: 50;
-        }
-        .user-menu-item {
-          display: block; width: 100%;
-          padding: 10px 14px;
-          background: transparent; border: none;
-          border-radius: 8px;
-          color: #7aa5c4; font-family: 'Nunito', sans-serif;
-          font-size: 14px; font-weight: 600;
-          cursor: pointer; text-align: left; text-decoration: none;
-          transition: background .15s, color .15s;
-        }
-        .user-menu-item:hover {
-          background: rgba(74,133,200,0.1); color: #e8f1f8;
-        }
-        .user-menu-item.danger:hover {
-          background: rgba(248,113,113,0.1); color: #f87171;
-        }
-
-        /* ── Scrollbar ── */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #030d18; }
-        ::-webkit-scrollbar-thumb { background: rgba(74,133,200,0.2); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(74,133,200,0.4); }
-
-        /* ── Responsive ── */
-        @media (max-width: 1023px) {
-          .crb-tab { padding: 12px 16px; font-size: 13px; }
-        }
-        @media (max-width: 767px) {
-          .crb-header-brand { display: none !important; }
-          .crb-header-inner { padding: 0 1rem !important; }
-          .crb-tab { padding: 10px 12px; font-size: 12px; margin: 6px 2px; }
-          .crb-user-email { display: none !important; }
-          .crb-main-padded { padding: 1rem !important; }
-        }
-      `}</style>
-
-      <div style={{ minHeight: '100vh', background: '#030d18', color: '#e8f1f8' }}>
-
-        {/* ── Top Header ──────────────────────────────────────────────────────── */}
-        <header style={{
-          background: 'rgba(3,13,24,0.97)',
-          borderBottom: '1px solid rgba(74,133,200,0.12)',
-          position: 'sticky', top: 0, zIndex: 40,
-          backdropFilter: 'blur(16px)',
-        }}>
-          {/* Brand + User row */}
-          <div className="crb-header-inner" style={{
-            maxWidth: 1400, margin: '0 auto',
-            padding: '0 2rem',
-            height: 68,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}>
-            {/* Logo */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{
-                width: 38, height: 38, borderRadius: 10,
-                background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: '#e8f1f8',
-                flexShrink: 0,
-              }}>C</div>
-              <span style={{
-                fontFamily: "'Bebas Neue', cursive",
-                fontSize: '1.5rem', letterSpacing: '0.07em', color: '#e8f1f8',
-              }}>Camel Ranch Booking</span>
-            </div>
-
-            {/* Band name — centre */}
-            {bandProfile?.band_name && (
-              <div className="crb-header-brand" style={{
-                position: 'absolute', left: '50%', transform: 'translateX(-50%)',
-                fontFamily: "'Bebas Neue', cursive",
-                fontSize: '1.9rem', letterSpacing: '0.09em',
-                color: '#ffffff',
-                textShadow: '0 0 24px rgba(74,133,200,0.5)',
-                pointerEvents: 'none',
-              }}>
-                {bandProfile.band_name}
-              </div>
-            )}
-
-            {/* User menu */}
-            <div style={{ position: 'relative', flexShrink: 0 }}>
-              <button
-                onClick={() => setMenuOpen(o => !o)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  background: 'rgba(74,133,200,0.08)',
-                  border: '1px solid rgba(74,133,200,0.2)',
-                  borderRadius: 8, padding: '6px 12px',
-                  color: '#7aa5c4', cursor: 'pointer',
-                  fontFamily: "'Nunito', sans-serif",
-                  fontSize: 13, fontWeight: 600,
-                  transition: 'background .2s',
-                  minHeight: 44,
-                }}
-                onMouseOver={e => (e.currentTarget.style.background = 'rgba(74,133,200,0.14)')}
-                onMouseOut={e => (e.currentTarget.style.background = 'rgba(74,133,200,0.08)')}
-              >
-                <span style={{
-                  width: 26, height: 26, borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #3a7fc1, #2563a8)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 12, fontWeight: 700, color: '#e8f1f8',
-                  flexShrink: 0,
-                }}>
-                  {userEmail.charAt(0).toUpperCase()}
-                </span>
-                <span className="crb-user-email" style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {userEmail}
-                </span>
-                <span style={{ fontSize: 10, opacity: 0.6 }}>▼</span>
-              </button>
-
-              {menuOpen && (
-                <>
-                  {/* Click-away overlay */}
-                  <div
-                    style={{ position: 'fixed', inset: 0, zIndex: 49 }}
-                    onClick={() => setMenuOpen(false)}
-                  />
-                  <div className="user-menu">
-                    <div style={{
-                      padding: '8px 14px 10px',
-                      borderBottom: '1px solid rgba(74,133,200,0.1)',
-                      marginBottom: 6,
-                    }}>
-                      <div style={{ color: '#e8f1f8', fontWeight: 700, fontSize: 13 }}>
-                        {bandProfile?.band_name || 'My Band'}
-                      </div>
-                      <div style={{ color: '#3d6285', fontSize: 12, marginTop: 2 }}>{userEmail}</div>
-                    </div>
-                    <a href="/settings" className="user-menu-item" onClick={() => setMenuOpen(false)}>
-                      ⚙️&nbsp; Settings
-                    </a>
-                    <button className="user-menu-item danger" onClick={handleLogout}>
-                      ← &nbsp;Sign Out
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* ── Nav Tab Bar ─────────────────────────────────────────────────── */}
-          <div style={{
-            maxWidth: 1400, margin: '0 auto',
-            padding: '0 1.5rem',
-            display: 'flex', overflowX: 'auto', gap: 2,
-            borderTop: '1px solid rgba(74,133,200,0.07)',
-          }}>
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                className={`crb-tab${activeTab === tab.id ? ' active' : ''}`}
-                onClick={() => handleNavigate(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </header>
-
-        {/* ── Page Content ────────────────────────────────────────────────────── */}
-        <main
-          className={activeTab === 'dashboard' || activeTab === 'calendar' ? 'crb-main' : 'crb-main crb-main-padded'}
-          style={{
-            maxWidth: 1400, margin: '0 auto',
-            padding: activeTab === 'dashboard' || activeTab === 'calendar' ? 0 : '2rem',
-          }}
-        >
-          {activeTab === 'dashboard'      && <Dashboard onNavigate={handleNavigate} />}
-          {activeTab === 'calendar'       && <BookingCalendar />}
-          {activeTab === 'campaigns'      && <CampaignManager initialData={navigationData} />}
-          {activeTab === 'contact-info'   && <VenueContactManager />}
-          {activeTab === 'venue-database' && <VenueSearch />}
-          {activeTab === 'emails'         && <EmailTemplateManager />}
-          {activeTab === 'social'         && <SocialMediaCampaign />}
-        </main>
+    <AppShell requireRole="agent">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Dashboard</h1>
+          <div className="page-sub">Overview · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
+        </div>
+        <Link href="/bookings/new" className="btn btn-primary">+ New Booking</Link>
       </div>
-    </>
+
+      {/* Top stats */}
+      <div className="grid-4 mb-6">
+        <div className="stat-block">
+          <div className="stat-value">{acts.length}</div>
+          <div className="stat-label">Active Acts</div>
+        </div>
+        <div className="stat-block">
+          <div className="stat-value">{totalActive}</div>
+          <div className="stat-label">In Pipeline</div>
+        </div>
+        <div className="stat-block">
+          <div className="stat-value">{totalConfirmed}</div>
+          <div className="stat-label">Confirmed Shows</div>
+        </div>
+        <div className="stat-block">
+          <div className="stat-value">{acts.length > 0 ? acts.length : '—'}</div>
+          <div className="stat-label">Acts Managed</div>
+        </div>
+      </div>
+
+      <div className="grid-2">
+        {/* Acts */}
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">YOUR ACTS</span>
+            <Link href="/acts" className="btn btn-ghost btn-sm">View All</Link>
+          </div>
+          {acts.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+              No acts yet.<br />
+              <Link href="/acts/new" style={{ color: 'var(--accent)' }}>Create your first act →</Link>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {acts.map(act => (
+                <Link key={act.id} href={`/acts/${act.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', textDecoration: 'none' }}>
+                  <div>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.9rem' }}>{act.act_name}</div>
+                    {act.genre && <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>{act.genre}</div>}
+                  </div>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>→</span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Pipeline */}
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">PIPELINE</span>
+            <Link href="/bookings" className="btn btn-ghost btn-sm">View All</Link>
+          </div>
+          {pipeline.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+              No bookings yet.<br />
+              <Link href="/bookings/new" style={{ color: 'var(--accent)' }}>Start pitching →</Link>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {pipeline.map(({ status, count }) => (
+                <div key={status} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)' }}>
+                  <span className={`badge badge-${status}`}>{BOOKING_STATUS_LABELS[status as keyof typeof BOOKING_STATUS_LABELS] || status}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 600 }}>{count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Recent bookings */}
+      {recent.length > 0 && (
+        <div className="card" style={{ marginTop: '1.5rem' }}>
+          <div className="card-header">
+            <span className="card-title">RECENT BOOKINGS</span>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Act</th>
+                  <th>Venue</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Fee</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recent.map((b: any) => (
+                  <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => window.location.href = `/bookings/${b.id}`}>
+                    <td style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>{b.act?.act_name || '—'}</td>
+                    <td>
+                      <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{b.venue?.name || '—'}</div>
+                      {b.venue?.city && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{b.venue.city}, {b.venue.state}</div>}
+                    </td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                      {b.show_date ? new Date(b.show_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                    </td>
+                    <td><span className={`badge badge-${b.status}`}>{BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS] || b.status}</span></td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--accent)' }}>
+                      {b.fee ? `$${Number(b.fee).toLocaleString()}` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </AppShell>
   );
 }

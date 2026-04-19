@@ -1,120 +1,47 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
-import { getTransporter, getUserFromToken, logSentEmail } from '../../../lib/emailHelper';
+import { Resend } from 'resend';
+import { getServiceClient } from '../../../lib/supabase';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const resend = new Resend(process.env.RESEND_API_KEY);
+const FROM   = process.env.RESEND_FROM_EMAIL || 'booking@mail.camelranchbooking.com';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  const { to, subject, html, bookingId, venueId, contactId, actId, templateId } = req.body;
+  if (!to || !subject || !html) return res.status(400).json({ error: 'to, subject, html required' });
+
+  const supabase = getServiceClient();
+
   try {
-    let userId: string;
+    const { data, error } = await resend.emails.send({ from: FROM, to, subject, html });
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Log to email_log (agent_id pulled from auth token if provided)
+    let agentId: string | null = null;
     try {
-      const authedUser = await getUserFromToken(req.headers.authorization);
-      userId = authedUser.id;
-    } catch {
-      const bodyUserId = req.body?.userId as string | undefined;
-      if (!bodyUserId) throw new Error('Not authenticated');
-      userId = bodyUserId;
-    }
+      const authHeader = req.headers.authorization?.replace('Bearer ', '');
+      if (authHeader) {
+        const { data: { user } } = await supabase.auth.getUser(authHeader);
+        agentId = user?.id || null;
+      }
+    } catch {}
 
-    const { venueId, campaignId, templateId, bandId, customSubject, customBody } = req.body;
-
-    if (!venueId) return res.status(400).json({ error: 'venueId is required' });
-
-    // ── Load venue ────────────────────────────────────────────────────────────
-    const { data: venue, error: venueErr } = await supabase
-      .from('venues')
-      .select('*')
-      .eq('id', venueId)
-      .single();
-
-    if (venueErr || !venue) return res.status(404).json({ error: 'Venue not found' });
-    if (!venue.email)       return res.status(400).json({ error: 'This venue has no email address on file' });
-
-    // ── Resolve subject + body (template or custom) ───────────────────────────
-    let subject = customSubject ?? '';
-    let body    = customBody    ?? '';
-
-    if (templateId && (!customSubject || !customBody)) {
-      const { data: template, error: tplErr } = await supabase
-        .from('email_templates')
-        .select('*')
-        .eq('id', templateId)
-        .single();
-
-      if (tplErr || !template) return res.status(404).json({ error: 'Template not found' });
-
-      subject = subject || template.subject;
-      body    = body    || template.body;
-    }
-
-    if (!subject || !body) return res.status(400).json({ error: 'Email subject and body are required' });
-
-    // ── Replace template variables ────────────────────────────────────────────
-    const vars: Record<string, string> = {
-      venue_name:      venue.name       ?? '',
-      city:            venue.city       ?? '',
-      state:           venue.state      ?? '',
-      booking_contact: venue.booking_contact ?? 'Booking Manager',
-    };
-    Object.entries(vars).forEach(([k, v]) => {
-      subject = subject.replace(new RegExp(`{{${k}}}`, 'g'), v);
-      body    = body.replace(new RegExp(`{{${k}}}`, 'g'), v);
-    });
-
-    // ── Build transporter from user's saved settings ──────────────────────────
-    const { transporter, settings } = await getTransporter(userId);
-
-    // ── Send ──────────────────────────────────────────────────────────────────
-    const info = await transporter.sendMail({
-      from:    `"${settings.display_name}" <${settings.email_address}>`,
-      to:      venue.email,
+    await supabase.from('email_log').insert({
+      agent_id:    agentId,
+      booking_id:  bookingId  || null,
+      venue_id:    venueId    || null,
+      contact_id:  contactId  || null,
+      act_id:      actId      || null,
+      template_id: templateId || null,
+      resend_id:   data?.id   || null,
       subject,
-      text:    body,
-      html:    body.replace(/\n/g, '<br>'),
+      recipient:   to,
+      status:      'sent',
     });
 
-    // ── Log to email_logs ─────────────────────────────────────────────────────
-    await logSentEmail({
-      userId,
-      venueId,
-      campaignId,
-      templateId,
-      bandId,
-      toAddress:  venue.email,
-      subject,
-      body,
-      messageId:  info.messageId,
-    });
-
-    // ── Update venue contact status ───────────────────────────────────────────
-    await supabase
-      .from('venues')
-      .update({ contact_status: 'awaiting_response', last_contacted: new Date().toISOString() })
-      .eq('id', venueId);
-
-    return res.status(200).json({
-      success: true,
-      message: `Email sent to ${venue.name}`,
-      messageId: info.messageId,
-    });
-
-  } catch (error: unknown) {
-    console.error('Send email error:', error);
-    const err = error as { message?: string; code?: string; responseCode?: number };
-
-    // Surface friendly messages for common auth failures
-    if (err.message?.includes('No email account connected')) {
-      return res.status(400).json({ error: err.message });
-    }
-    if (err.code === 'EAUTH' || err.responseCode === 535) {
-      return res.status(400).json({ error: 'Email authentication failed. Check your credentials in Settings → Email Account.' });
-    }
-
-    return res.status(500).json({ error: err.message || 'Failed to send email' });
+    return res.status(200).json({ ok: true, id: data?.id });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
   }
 }
