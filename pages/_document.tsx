@@ -24,6 +24,8 @@ export default function Document() {
         <meta name="twitter:image"       content="https://camelranchbooking.com/og-image.png" />
       </Head>
       <body>
+        {/* Runs before React hydrates — prevents flash of wrong theme */}
+        <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('theme');document.documentElement.setAttribute('data-theme',t||'dark');}catch(e){}` }} />
         <Main />
         <NextScript />
       </body>

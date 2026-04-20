@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useState, useEffect } from 'react';
 import { UserProfile } from '../../lib/types';
 
 interface Props {
@@ -38,6 +39,19 @@ const portals = [
 export default function Sidebar({ profile, onSignOut }: Props) {
   const router = useRouter();
   const isSuperAdmin = profile?.role === 'superadmin';
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('theme') as 'dark' | 'light' | null;
+    if (saved) setTheme(saved);
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    localStorage.setItem('theme', next);
+    document.documentElement.setAttribute('data-theme', next);
+  };
 
   const nav = isSuperAdmin ? agentNav :
     profile?.role === 'agent'     ? agentNav  :
@@ -119,7 +133,28 @@ export default function Sidebar({ profile, onSignOut }: Props) {
         ))}
       </div>
 
-      <div style={{ padding: '0.75rem 0', borderTop: '1px solid var(--border)', marginTop: 'auto' }}>
+      <div style={{ padding: '0.5rem 0', borderTop: '1px solid var(--border)', marginTop: 'auto' }}>
+        {/* Theme toggle */}
+        <button
+          className="sidebar-link"
+          onClick={toggleTheme}
+          style={{ width: '100%', justifyContent: 'space-between' }}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <span style={{ width: '16px', textAlign: 'center', fontSize: '1rem' }}>
+              {theme === 'dark' ? '☀' : '☽'}
+            </span>
+            {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+          </span>
+          <span style={{
+            fontFamily: 'var(--font-mono)', fontSize: '0.6rem', letterSpacing: '0.1em',
+            color: 'var(--text-muted)', textTransform: 'uppercase',
+          }}>
+            {theme === 'dark' ? 'ON' : 'OFF'}
+          </span>
+        </button>
+
         <button className="sidebar-link" onClick={onSignOut} style={{ width: '100%' }}>
           <span style={{ width: '16px', textAlign: 'center' }}>⏻</span>
           Sign Out

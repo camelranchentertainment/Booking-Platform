@@ -9,6 +9,7 @@ export default function SplineBackground({
 }: Props) {
   return (
     <div
+      className="spline-background"
       style={{
         position: 'fixed',
         inset: 0,
