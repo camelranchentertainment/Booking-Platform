@@ -4,23 +4,48 @@ import { supabase } from '../lib/supabase';
 import { UserProfile } from '../lib/types';
 
 export default function Settings() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [form, setForm]       = useState({ display_name: '', agency_name: '', phone: '', email: '' });
-  const [saving, setSaving]   = useState(false);
-  const [saved, setSaved]     = useState(false);
+  const [profile, setProfile]   = useState<UserProfile | null>(null);
+  const [form, setForm]         = useState({ display_name: '', agency_name: '', phone: '', email: '' });
+  const [saving, setSaving]     = useState(false);
+  const [saved, setSaved]       = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase.from('user_profiles').select('*').eq('id', user.id).maybeSingle();
-      if (data) {
-        setProfile(data);
-        setForm({ display_name: data.display_name || '', agency_name: data.agency_name || '', phone: data.phone || '', email: data.email || '' });
+  // Email integration (superadmin only)
+  const [isSuperAdmin, setIsSuperAdmin]   = useState(false);
+  const [emailForm, setEmailForm]         = useState({ resend_api_key: '', resend_from_email: '' });
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
+  const [emailSaving, setEmailSaving]     = useState(false);
+  const [emailSaved, setEmailSaved]       = useState(false);
+  const [emailError, setEmailError]       = useState('');
+  const [showKey, setShowKey]             = useState(false);
+
+  useEffect(() => { load(); }, []);
+
+  const load = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase.from('user_profiles').select('*').eq('id', user.id).maybeSingle();
+    if (data) {
+      setProfile(data);
+      setForm({ display_name: data.display_name || '', agency_name: data.agency_name || '', phone: data.phone || '', email: data.email || '' });
+      if (data.role === 'superadmin') {
+        setIsSuperAdmin(true);
+        loadEmailSettings(user);
       }
-    };
-    load();
-  }, []);
+    }
+  };
+
+  const loadEmailSettings = async (user: any) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/admin/platform-settings', {
+      headers: { Authorization: `Bearer ${session?.access_token}` },
+    });
+    if (!res.ok) return;
+    const rows: { key: string; configured: boolean; value?: string }[] = await res.json();
+    for (const row of rows) {
+      if (row.key === 'resend_api_key')    setApiKeyConfigured(row.configured);
+      if (row.key === 'resend_from_email') setEmailForm(f => ({ ...f, resend_from_email: row.value || '' }));
+    }
+  };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,8 +61,42 @@ export default function Settings() {
     setTimeout(() => setSaved(false), 3000);
   };
 
+  const saveEmailSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailSaving(true);
+    setEmailError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const saves: Promise<Response>[] = [];
+      if (emailForm.resend_api_key) {
+        saves.push(fetch('/api/admin/platform-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ key: 'resend_api_key', value: emailForm.resend_api_key }),
+        }));
+      }
+      saves.push(fetch('/api/admin/platform-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ key: 'resend_from_email', value: emailForm.resend_from_email }),
+      }));
+      await Promise.all(saves);
+      if (emailForm.resend_api_key) setApiKeyConfigured(true);
+      setEmailForm(f => ({ ...f, resend_api_key: '' }));
+      setEmailSaved(true);
+      setTimeout(() => setEmailSaved(false), 3000);
+    } catch (err: any) {
+      setEmailError(err.message);
+    } finally {
+      setEmailSaving(false);
+    }
+  };
+
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const setEmail = (k: keyof typeof emailForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setEmailForm(f => ({ ...f, [k]: e.target.value }));
 
   return (
     <AppShell requireRole="agent">
@@ -48,8 +107,10 @@ export default function Settings() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 560 }}>
-        <form onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      <div style={{ maxWidth: 560, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+        {/* Profile */}
+        <form onSubmit={save}>
           <div className="card">
             <div className="card-header"><span className="card-title">PROFILE</span></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -71,25 +132,65 @@ export default function Settings() {
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>Email cannot be changed here</span>
               </div>
             </div>
-          </div>
-
-          <div className="card">
-            <div className="card-header"><span className="card-title">EMAIL INTEGRATION</span></div>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              <p>Outbound email is sent via <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>Resend</span> using your custom domain.</p>
-              <p style={{ marginTop: '0.5rem' }}>Configure your Resend API key and custom domain in your <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>.env.local</code> file:</p>
-              <div style={{ background: 'var(--bg-base)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '0.75rem', marginTop: '0.75rem', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-primary)' }}>
-                RESEND_API_KEY=re_...<br />
-                RESEND_FROM_EMAIL=booking@mail.camelranchbooking.com
-              </div>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</button>
+              {saved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>✓ Saved</span>}
             </div>
           </div>
-
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save Settings'}</button>
-            {saved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>✓ Saved</span>}
-          </div>
         </form>
+
+        {/* Email integration — superadmin only */}
+        {isSuperAdmin && (
+          <form onSubmit={saveEmailSettings}>
+            <div className="card">
+              <div className="card-header"><span className="card-title">EMAIL INTEGRATION</span></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div className="field">
+                  <label className="field-label">Resend API Key</label>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <input
+                      className="input"
+                      type={showKey ? 'text' : 'password'}
+                      value={emailForm.resend_api_key}
+                      onChange={setEmail('resend_api_key')}
+                      placeholder={apiKeyConfigured ? '••••••••••••  (leave blank to keep current)' : 're_...'}
+                      autoComplete="off"
+                    />
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowKey(v => !v)} style={{ flexShrink: 0 }}>
+                      {showKey ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  {apiKeyConfigured && (
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#34d399' }}>
+                      ✓ API key configured
+                    </span>
+                  )}
+                </div>
+                <div className="field">
+                  <label className="field-label">From Email Address</label>
+                  <input
+                    className="input"
+                    type="email"
+                    value={emailForm.resend_from_email}
+                    onChange={setEmail('resend_from_email')}
+                    placeholder="booking@yourdomain.com"
+                  />
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                    Must be a domain verified in your Resend account
+                  </span>
+                </div>
+                {emailError && (
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: '#ef4444' }}>{emailError}</div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
+                <button type="submit" className="btn btn-primary" disabled={emailSaving}>{emailSaving ? 'Saving...' : 'Save Email Settings'}</button>
+                {emailSaved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>✓ Saved</span>}
+              </div>
+            </div>
+          </form>
+        )}
+
       </div>
     </AppShell>
   );
