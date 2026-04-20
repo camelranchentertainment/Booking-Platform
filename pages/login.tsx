@@ -28,7 +28,7 @@ export default function Login() {
       .from('user_profiles').select('role').eq('id', user.id).maybeSingle();
 
     const role = profile?.role || 'agent';
-    if (role === 'agent')     router.replace('/dashboard');
+    if (role === 'superadmin' || role === 'agent') router.replace('/dashboard');
     else if (role === 'act_admin') router.replace('/band');
     else router.replace('/member');
   };

@@ -93,8 +93,10 @@ h4 { font-size: 1.1rem; }
 .sidebar {
   width: var(--sidebar-width);
   min-height: 100vh;
-  background: var(--bg-raised);
-  border-right: 1px solid var(--border);
+  background: rgba(10,11,14,0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-right: 1px solid rgba(0,229,255,0.1);
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -108,6 +110,8 @@ h4 { font-size: 1.1rem; }
   flex: 1;
   min-height: 100vh;
   padding: 2rem;
+  position: relative;
+  z-index: 1;
 }
 
 /* ── Sidebar ───────────────────────────────────────────────── */
@@ -165,7 +169,9 @@ h4 { font-size: 1.1rem; }
 
 /* ── Cards ─────────────────────────────────────────────────── */
 .card {
-  background: var(--bg-raised);
+  background: rgba(13,17,23,0.80);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.25rem;
@@ -525,17 +531,22 @@ tr:hover td { background: var(--bg-overlay); color: var(--text-primary); }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-base);
+  background: transparent;
   padding: 2rem;
+  position: relative;
+  z-index: 1;
 }
 
 .auth-card {
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
+  background: rgba(13,17,23,0.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(0,229,255,0.15);
   border-radius: var(--radius);
   padding: 2rem;
   width: 100%;
   max-width: 420px;
+  box-shadow: 0 0 40px rgba(0,0,0,0.6), 0 0 20px rgba(0,229,255,0.05);
 }
 
 .auth-logo {

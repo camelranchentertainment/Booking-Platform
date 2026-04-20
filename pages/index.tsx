@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
-import SplineBackground from '../components/SplineBackground';
 
 export default function Landing() {
   const router = useRouter();
@@ -31,9 +30,6 @@ export default function Landing() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#070809', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
-
-      {/* Spline 3D background — replace scene URL with your own from spline.design */}
-      <SplineBackground opacity={0.22} />
 
       {/* Subtle grid overlay */}
       <div style={{
