@@ -52,7 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } catch {}
 
     await service.from('email_log').insert({
-      agent_id:    agentId,
+      sent_by:     agentId,
       booking_id:  bookingId  || null,
       venue_id:    venueId    || null,
       contact_id:  contactId  || null,
