@@ -19,11 +19,11 @@ export default function SplineBackground({
         overflow: 'hidden',
       }}
     >
-      {/* Shift the ring toward neon blue + boost saturation */}
+      {/* Shift the ring toward warm amber/gold */}
       <div style={{
         position: 'absolute',
         inset: 0,
-        filter: 'hue-rotate(185deg) saturate(2.2) brightness(1.15)',
+        filter: 'hue-rotate(30deg) saturate(1.8) brightness(0.95)',
       }}>
         <iframe
           src={scene}
@@ -35,24 +35,24 @@ export default function SplineBackground({
         />
       </div>
 
-      {/* Neon blue radial accent — concentrated where the ring sits */}
+      {/* Warm gold radial accent */}
       <div style={{
         position: 'absolute',
         inset: 0,
         background: `
           radial-gradient(ellipse 60% 50% at 50% 50%,
-            rgba(0,229,255,0.18) 0%,
-            rgba(0,180,255,0.08) 40%,
+            rgba(196,154,60,0.14) 0%,
+            rgba(150,100,20,0.06) 40%,
             transparent 70%)
         `,
         mixBlendMode: 'screen',
       }} />
 
-      {/* Soft edge vignette to keep it grounded */}
+      {/* Soft edge vignette */}
       <div style={{
         position: 'absolute',
         inset: 0,
-        background: 'radial-gradient(ellipse 100% 100% at 50% 50%, transparent 40%, rgba(7,8,9,0.6) 100%)',
+        background: 'radial-gradient(ellipse 100% 100% at 50% 50%, transparent 40%, rgba(12,10,8,0.65) 100%)',
       }} />
     </div>
   );

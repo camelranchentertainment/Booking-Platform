@@ -66,15 +66,15 @@ export default function Sidebar({ profile, onSignOut }: Props) {
   return (
     <nav className="sidebar">
       <div className="sidebar-logo">
-        <div style={{ fontSize: '1.65rem', letterSpacing: '0.12em', lineHeight: 1, color: 'var(--accent)', textShadow: 'var(--neon-glow-sm)' }}>
-          CAMEL RANCH
+        <div style={{ fontSize: '1.45rem', letterSpacing: '0.06em', lineHeight: 1, color: 'var(--accent)', fontWeight: 700 }}>
+          Camel Ranch
         </div>
         <div style={{
-          fontSize: '0.72rem', letterSpacing: '0.45em', color: 'rgba(0,229,255,0.55)',
+          fontSize: '0.68rem', letterSpacing: '0.35em', color: 'rgba(196,154,60,0.5)',
           textTransform: 'uppercase', marginTop: '0.2rem',
-          borderTop: '1px solid rgba(0,229,255,0.2)', paddingTop: '0.3rem',
+          borderTop: '1px solid rgba(196,154,60,0.18)', paddingTop: '0.3rem',
         }}>
-          BOOKING
+          Booking
         </div>
       </div>
 
