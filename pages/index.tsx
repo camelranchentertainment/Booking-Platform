@@ -53,18 +53,19 @@ export default function Landing() {
           background: 'rgba(7,8,9,0.7)',
           backdropFilter: 'blur(12px)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
             <div style={{
-              fontFamily: 'var(--font-display)', fontSize: '1.5rem',
-              letterSpacing: '0.14em', color: neon,
-              textShadow: neonGlowSm,
+              fontFamily: 'var(--font-display)', fontSize: '2rem',
+              letterSpacing: '0.14em', lineHeight: 1, color: neon,
+              textShadow: neonGlow,
             }}>
               CAMEL RANCH
             </div>
             <div style={{
-              fontFamily: 'var(--font-mono)', fontSize: '0.6rem',
-              letterSpacing: '0.22em', color: 'rgba(0,229,255,0.5)',
-              textTransform: 'uppercase', marginTop: '0.25rem',
+              fontFamily: 'var(--font-mono)', fontSize: '0.68rem',
+              letterSpacing: '0.45em', color: 'rgba(0,229,255,0.55)',
+              textTransform: 'uppercase',
+              borderTop: '1px solid rgba(0,229,255,0.2)', paddingTop: '0.2rem', marginTop: '0.25rem',
             }}>
               BOOKING
             </div>
