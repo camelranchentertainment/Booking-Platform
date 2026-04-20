@@ -99,12 +99,20 @@ ALTER TABLE agent_act_links ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN
   CREATE POLICY "links_agent" ON agent_act_links FOR ALL USING (agent_id = auth.uid());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Break the acts ↔ agent_act_links RLS recursion with a SECURITY DEFINER
+-- function that reads acts without triggering acts' own RLS policies.
+CREATE OR REPLACE FUNCTION get_act_owner_id(act_uuid UUID)
+RETURNS UUID LANGUAGE SQL SECURITY DEFINER STABLE SET search_path = public AS $$
+  SELECT owner_id FROM acts WHERE id = act_uuid
+$$;
+
 DO $$ BEGIN
-  CREATE POLICY "links_act_owner" ON agent_act_links FOR ALL USING (
-    act_id IN (SELECT id FROM acts WHERE owner_id = auth.uid())
-  );
+  CREATE POLICY "links_act_owner" ON agent_act_links
+    FOR ALL USING (get_act_owner_id(act_id) = auth.uid());
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
--- Now safe to add the acts policy that references agent_act_links
+
+-- Now safe: agent_act_links no longer queries acts via RLS
 DO $$ BEGIN
   CREATE POLICY "acts_linked_agent_select" ON acts FOR SELECT USING (
     id IN (SELECT act_id FROM agent_act_links WHERE agent_id = auth.uid() AND status = 'active')
