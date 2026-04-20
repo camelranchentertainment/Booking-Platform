@@ -37,14 +37,13 @@ export default function AppShell({ children, requireRole = null }: Props) {
         }
 
         setProfile(data as UserProfile);
+        setLoading(false);  // only on success — avoids flash when redirecting
       } catch {
         router.replace('/login');
-      } finally {
-        setLoading(false);
       }
     };
     init();
-  }, [requireRole]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();

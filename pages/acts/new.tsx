@@ -16,21 +16,21 @@ export default function NewBand() {
     e.preventDefault();
     setError('');
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setError('Not authenticated'); setSaving(false); return; }
-
-    const { data, error: err } = await supabase.from('acts').insert({
-      agent_id: user.id,
-      act_name: form.act_name,
-      genre:    form.genre || null,
-      bio:      form.bio   || null,
-      website:  form.website  || null,
-      instagram: form.instagram || null,
-      spotify:  form.spotify || null,
-    }).select().single();
-
-    if (err) { setError(err.message); setSaving(false); return; }
-    router.push(`/acts/${data.id}`);
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      const res = await fetch('/api/acts/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'Failed to create band'); return; }
+      router.push(`/acts/${data.act.id}`);
+    } catch {
+      setError('Network error — please try again');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
