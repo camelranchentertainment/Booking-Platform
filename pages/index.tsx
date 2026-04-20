@@ -29,7 +29,7 @@ export default function Landing() {
   const neonGlowSm = '0 0 8px rgba(0,229,255,0.4)';
 
   return (
-    <div style={{ minHeight: '100vh', background: '#070809', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+    <div style={{ minHeight: '100vh', background: 'transparent', display: 'flex', flexDirection: 'column', position: 'relative' }}>
 
       {/* Subtle grid overlay */}
       <div style={{
