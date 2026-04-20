@@ -12,6 +12,9 @@ export type TourStatus = 'planning' | 'active' | 'completed' | 'cancelled';
 
 export type LinkStatus = 'pending' | 'active' | 'revoked' | 'declined';
 
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'cancelled' | 'inactive';
+export type SubscriptionTier   = 'agent' | 'band_admin' | 'member';
+
 export interface UserProfile {
   id: string;
   role: UserRole;
@@ -21,6 +24,11 @@ export interface UserProfile {
   phone?: string | null;
   avatar_url?: string | null;
   act_id?: string | null;
+  stripe_customer_id?:     string | null;
+  stripe_subscription_id?: string | null;
+  subscription_status?:    SubscriptionStatus | null;
+  subscription_tier?:      SubscriptionTier   | null;
+  trial_ends_at?:          string | null;
   created_at: string;
   updated_at: string;
 }

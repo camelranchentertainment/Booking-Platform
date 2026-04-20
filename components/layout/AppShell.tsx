@@ -9,6 +9,19 @@ interface Props {
   requireRole?: 'agent' | 'act_admin' | 'member' | null;
 }
 
+function daysLeft(trialEndsAt: string | null | undefined): number {
+  if (!trialEndsAt) return 0;
+  return Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86400000));
+}
+
+function needsSubscription(profile: UserProfile): boolean {
+  if (profile.role === 'superadmin' || profile.role === 'member') return false;
+  const status = profile.subscription_status;
+  if (status === 'active') return false;
+  if (status === 'trialing' && daysLeft(profile.trial_ends_at) > 0) return false;
+  return true;
+}
+
 export default function AppShell({ children, requireRole = null }: Props) {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -28,7 +41,13 @@ export default function AppShell({ children, requireRole = null }: Props) {
 
         if (!data) { router.replace('/login'); return; }
 
-        // Superadmin bypasses all role gates
+        // Subscription gate — redirect paid tiers with expired/no subscription
+        if (needsSubscription(data as UserProfile) && router.pathname !== '/pricing') {
+          router.replace('/pricing?trial=expired');
+          return;
+        }
+
+        // Role gate — superadmin bypasses
         if (data.role !== 'superadmin' && requireRole && data.role !== requireRole) {
           if (data.role === 'agent') router.replace('/dashboard');
           else if (data.role === 'act_admin') router.replace('/band');
@@ -37,7 +56,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
         }
 
         setProfile(data as UserProfile);
-        setLoading(false);  // only on success — avoids flash when redirecting
+        setLoading(false);
       } catch {
         router.replace('/login');
       }
@@ -60,10 +79,37 @@ export default function AppShell({ children, requireRole = null }: Props) {
     );
   }
 
+  const trialDays = profile?.subscription_status === 'trialing'
+    ? daysLeft(profile?.trial_ends_at)
+    : null;
+
   return (
     <div className="app-shell">
       <Sidebar profile={profile} onSignOut={handleSignOut} />
       <main className="main-content">
+        {/* Trial banner */}
+        {trialDays !== null && trialDays <= 7 && (
+          <div style={{
+            margin: '-1.5rem -1.5rem 1.5rem',
+            padding: '0.6rem 1.5rem',
+            background: trialDays <= 3 ? 'rgba(248,113,113,0.08)' : 'rgba(251,191,36,0.07)',
+            borderBottom: `1px solid ${trialDays <= 3 ? 'rgba(248,113,113,0.2)' : 'rgba(251,191,36,0.2)'}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem',
+          }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: trialDays <= 3 ? '#f87171' : '#fbbf24' }}>
+              {trialDays === 0
+                ? '⚠ Your trial ends today'
+                : `⚠ ${trialDays} day${trialDays === 1 ? '' : 's'} left in your free trial`}
+            </span>
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: '0.72rem', padding: '0.3rem 0.85rem' }}
+              onClick={() => router.push('/pricing')}
+            >
+              Subscribe Now
+            </button>
+          </div>
+        )}
         {children}
       </main>
     </div>

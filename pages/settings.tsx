@@ -1,13 +1,32 @@
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { UserProfile } from '../lib/types';
 
+const TIER_LABELS: Record<string, string> = {
+  agent:      'Booking Agent — $30 / month',
+  band_admin: 'Band Admin — $15 / month',
+  member:     'Band Member — Free',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  active:   'Active',
+  trialing: 'Free Trial',
+  past_due: 'Past Due',
+  cancelled:'Cancelled',
+  inactive: 'Inactive',
+};
+
 export default function Settings() {
+  const router = useRouter();
   const [profile, setProfile]   = useState<UserProfile | null>(null);
   const [form, setForm]         = useState({ display_name: '', agency_name: '', phone: '', email: '' });
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
+
+  // Billing
+  const [portalLoading, setPortalLoading] = useState(false);
 
   // Email integration (superadmin only)
   const [isSuperAdmin, setIsSuperAdmin]   = useState(false);
@@ -44,6 +63,21 @@ export default function Settings() {
     for (const row of rows) {
       if (row.key === 'resend_api_key')    setApiKeyConfigured(row.configured);
       if (row.key === 'resend_from_email') setEmailForm(f => ({ ...f, resend_from_email: row.value || '' }));
+    }
+  };
+
+  const openPortal = async () => {
+    setPortalLoading(true);
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      const res = await fetch('/api/stripe/portal', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } finally {
+      setPortalLoading(false);
     }
   };
 
@@ -189,6 +223,45 @@ export default function Settings() {
               </div>
             </div>
           </form>
+        )}
+
+        {/* Billing — visible to agents and band_admins */}
+        {profile && profile.role !== 'superadmin' && profile.role !== 'member' && (
+          <div className="card">
+            <div className="card-header"><span className="card-title">BILLING</span></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.88rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.4rem' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Plan</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{TIER_LABELS[profile.subscription_tier || 'agent']}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.4rem' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Status</span>
+                <span style={{
+                  color: profile.subscription_status === 'active' ? '#34d399'
+                       : profile.subscription_status === 'trialing' ? '#fbbf24'
+                       : '#f87171',
+                }}>
+                  {STATUS_LABELS[profile.subscription_status || 'inactive']}
+                  {profile.subscription_status === 'trialing' && profile.trial_ends_at && (
+                    <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.68rem' }}>
+                      (expires {new Date(profile.trial_ends_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+              {profile.stripe_customer_id ? (
+                <button className="btn btn-secondary" onClick={openPortal} disabled={portalLoading}>
+                  {portalLoading ? 'Opening...' : 'Manage Billing'}
+                </button>
+              ) : (
+                <button className="btn btn-primary" onClick={() => router.push('/pricing')}>
+                  Subscribe
+                </button>
+              )}
+            </div>
+          </div>
         )}
 
       </div>
