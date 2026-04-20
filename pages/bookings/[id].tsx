@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
-import { BookingStatus, BOOKING_STATUS_LABELS, BOOKING_STATUS_ORDER } from '../../lib/types';
+import { BookingStatus } from '../../lib/types';
+import { useLookup } from '../../lib/hooks/useLookup';
 import Link from 'next/link';
 
 type ActPick   = { id: string; act_name: string };
@@ -12,6 +13,7 @@ type TourPick  = { id: string; name: string; act_id: string };
 export default function BookingDetail() {
   const router = useRouter();
   const { id } = router.query;
+  const { values: statusValues } = useLookup('booking_status');
   const [booking, setBooking] = useState<any>(null);
   const [acts, setActs]     = useState<ActPick[]>([]);
   const [venues, setVenues] = useState<VenuePick[]>([]);
@@ -90,7 +92,9 @@ export default function BookingDetail() {
           {booking.venue?.city && <div className="page-sub">{booking.venue.city}, {booking.venue.state}</div>}
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <span className={`badge badge-${booking.status}`}>{BOOKING_STATUS_LABELS[booking.status as BookingStatus]}</span>
+          <span className={`badge badge-${booking.status}`}>
+            {statusValues.find(lv => lv.value === booking.status)?.label ?? booking.status}
+          </span>
           <button className="btn btn-secondary" onClick={() => setEdit(!edit)}>Edit</button>
           <button className="btn btn-danger btn-sm" onClick={deleteBooking}>Delete</button>
         </div>
@@ -100,16 +104,16 @@ export default function BookingDetail() {
       <div className="card mb-6">
         <div className="card-header"><span className="card-title">STATUS PIPELINE</span></div>
         <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-          {BOOKING_STATUS_ORDER.map(s => (
-            <button key={s} onClick={() => setStatus(s)}
-              className={`btn btn-sm`}
+          {statusValues.map(lv => (
+            <button key={lv.value} onClick={() => setStatus(lv.value as BookingStatus)}
+              className="btn btn-sm"
               style={{
-                background: booking.status === s ? `var(--status-${s})` : 'var(--bg-overlay)',
-                color: booking.status === s ? '#000' : 'var(--text-muted)',
-                borderColor: booking.status === s ? `var(--status-${s})` : 'var(--border)',
+                background: booking.status === lv.value ? `var(--status-${lv.value})` : 'var(--bg-overlay)',
+                color: booking.status === lv.value ? '#000' : 'var(--text-muted)',
+                borderColor: booking.status === lv.value ? `var(--status-${lv.value})` : 'var(--border)',
                 fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.1em',
               }}>
-              {BOOKING_STATUS_LABELS[s]}
+              {lv.label}
             </button>
           ))}
         </div>

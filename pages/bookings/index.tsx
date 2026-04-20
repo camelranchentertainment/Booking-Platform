@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
-import { BookingStatus, BOOKING_STATUS_LABELS, BOOKING_STATUS_ORDER } from '../../lib/types';
+import { BookingStatus } from '../../lib/types';
+import { useLookup } from '../../lib/hooks/useLookup';
 type ActPick = { id: string; act_name: string };
 import Link from 'next/link';
 
 export default function BookingsPage() {
   const router = useRouter();
+  const { values: statusValues } = useLookup('booking_status');
   const actFilter = router.query.act as string | undefined;
   const [bookings, setBookings] = useState<any[]>([]);
   const [acts, setActs]         = useState<ActPick[]>([]);
@@ -46,11 +48,13 @@ export default function BookingsPage() {
     setBookings(bs => bs.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
   };
 
-  const columns = BOOKING_STATUS_ORDER.map(status => ({
-    status,
-    label: BOOKING_STATUS_LABELS[status],
-    bookings: bookings.filter(b => b.status === status),
-  }));
+  const columns = statusValues
+    .filter(lv => lv.value !== 'cancelled')
+    .map(lv => ({
+      status: lv.value as BookingStatus,
+      label: lv.label,
+      bookings: bookings.filter(b => b.status === lv.value),
+    }));
 
   return (
     <AppShell requireRole="agent">

@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { Venue } from '../../lib/types';
+import { useLookup } from '../../lib/hooks/useLookup';
 
 declare global {
   interface Window { google: any; initGooglePlaces: () => void; }
@@ -22,6 +23,7 @@ const BLANK: VenueForm = {
 
 export default function VenuesPage() {
   const router = useRouter();
+  const { values: venueTypes } = useLookup('venue_type');
   const [venues, setVenues]         = useState<Venue[]>([]);
   const [search, setSearch]         = useState('');
   const [filterState, setFilterState] = useState('');
@@ -116,8 +118,6 @@ export default function VenuesPage() {
     const stateMatch = !filterState || v.state === filterState;
     return nameMatch && stateMatch;
   });
-
-  const VENUE_TYPES = ['bar','club','concert_hall','festival','restaurant','winery','outdoor','theater','other'];
 
   return (
     <AppShell requireRole="agent">
@@ -233,7 +233,7 @@ export default function VenuesPage() {
                   <label className="field-label">Venue Type</label>
                   <select className="select" value={form.venue_type} onChange={set('venue_type')}>
                     <option value="">—</option>
-                    {VENUE_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+                    {venueTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
                 <div className="field">

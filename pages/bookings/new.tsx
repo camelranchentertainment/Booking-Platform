@@ -3,12 +3,14 @@ import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BookingStatus } from '../../lib/types';
+import { useLookup } from '../../lib/hooks/useLookup';
 type ActPick   = { id: string; act_name: string };
 type VenuePick = { id: string; name: string; city: string; state: string };
 type TourPick  = { id: string; name: string; act_id: string };
 
 export default function NewBooking() {
   const router = useRouter();
+  const { values: bookingStatuses } = useLookup('booking_status');
   const [acts, setActs]   = useState<ActPick[]>([]);
   const [venues, setVenues] = useState<VenuePick[]>([]);
   const [tours, setTours] = useState<TourPick[]>([]);
@@ -88,13 +90,9 @@ export default function NewBooking() {
                 <div className="field">
                   <label className="field-label">Status</label>
                   <select className="select" value={form.status} onChange={set('status')}>
-                    <option value="pitch">Pitch</option>
-                    <option value="followup">Follow-up</option>
-                    <option value="negotiation">Negotiation</option>
-                    <option value="hold">Hold</option>
-                    <option value="contract">Contract</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="advancing">Advancing</option>
+                    {bookingStatuses.map(s => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>

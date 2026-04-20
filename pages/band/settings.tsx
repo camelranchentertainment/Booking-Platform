@@ -2,16 +2,16 @@ import { useState, useEffect } from 'react';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/router';
+import { useLookup } from '../../lib/hooks/useLookup';
 
 type BandForm = {
   act_name: string; genre: string; bio: string;
   website: string; instagram: string; spotify: string; member_count: string;
 };
 
-const GENRES = ['Rock','Country','Americana','Folk','Blues','Jazz','Pop','Hip-Hop','R&B','Soul','Metal','Punk','Electronic','Singer-Songwriter','Other'];
-
 export default function BandSettings() {
   const router = useRouter();
+  const { values: genres } = useLookup('genre');
   const [act, setAct]       = useState<any>(null);
   const [form, setForm]     = useState<BandForm>({ act_name: '', genre: '', bio: '', website: '', instagram: '', spotify: '', member_count: '1' });
   const [saving, setSaving] = useState(false);
@@ -100,7 +100,7 @@ export default function BandSettings() {
                   <label className="field-label">Genre</label>
                   <select className="select" value={form.genre} onChange={set('genre')}>
                     <option value="">— select —</option>
-                    {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
+                    {genres.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
                   </select>
                 </div>
                 <div className="field">

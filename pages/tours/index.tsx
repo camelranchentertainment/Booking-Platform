@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
+import { useLookup } from '../../lib/hooks/useLookup';
 type ActPick = { id: string; act_name: string };
 import Link from 'next/link';
 
 export default function ToursPage() {
   const router = useRouter();
+  const { values: tourStatuses } = useLookup('tour_status');
   const [tours, setTours]   = useState<any[]>([]);
   const [acts, setActs]     = useState<ActPick[]>([]);
   const [showNew, setShowNew] = useState(false);
@@ -50,9 +52,10 @@ export default function ToursPage() {
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
-  const STATUS_BADGE: Record<string, string> = {
-    planning: '#818cf8', active: '#34d399', completed: '#9ca3af', cancelled: '#6b7280',
-  };
+  const tourStatusColor = (status: string) =>
+    tourStatuses.find(lv => lv.value === status)?.color ?? 'var(--text-muted)';
+  const tourStatusLabel = (status: string) =>
+    tourStatuses.find(lv => lv.value === status)?.label ?? status;
 
   return (
     <AppShell requireRole="agent">
@@ -78,8 +81,8 @@ export default function ToursPage() {
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', letterSpacing: '0.04em', marginBottom: '0.2rem' }}>{t.name}</div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{t.act?.act_name}</div>
                 </div>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: STATUS_BADGE[t.status] || 'var(--text-muted)', padding: '0.2rem 0.5rem', border: `1px solid ${STATUS_BADGE[t.status] || 'var(--border)'}`, borderRadius: 'var(--radius-sm)' }}>
-                  {t.status}
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: tourStatusColor(t.status), padding: '0.2rem 0.5rem', border: `1px solid ${tourStatusColor(t.status)}`, borderRadius: 'var(--radius-sm)' }}>
+                  {tourStatusLabel(t.status)}
                 </span>
               </div>
               {(t.start_date || t.end_date) && (
