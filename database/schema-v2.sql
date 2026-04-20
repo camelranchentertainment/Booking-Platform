@@ -76,11 +76,7 @@ DO $$ BEGIN
     id IN (SELECT act_id FROM user_profiles WHERE id = auth.uid())
   );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN
-  CREATE POLICY "acts_linked_agent_select" ON acts FOR SELECT USING (
-    id IN (SELECT act_id FROM agent_act_links WHERE agent_id = auth.uid() AND status = 'active')
-  );
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- NOTE: acts_linked_agent_select is created after agent_act_links below
 
 -- ============================================================
 -- agent_act_links
@@ -106,6 +102,12 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY "links_act_owner" ON agent_act_links FOR ALL USING (
     act_id IN (SELECT id FROM acts WHERE owner_id = auth.uid())
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Now safe to add the acts policy that references agent_act_links
+DO $$ BEGIN
+  CREATE POLICY "acts_linked_agent_select" ON acts FOR SELECT USING (
+    id IN (SELECT act_id FROM agent_act_links WHERE agent_id = auth.uid() AND status = 'active')
   );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
