@@ -12,7 +12,10 @@ export default function VenueDetail() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [edit, setEdit]       = useState(false);
   const [form, setForm]       = useState<Partial<Venue>>({});
-  const [saving, setSaving]   = useState(false);
+  const [saving, setSaving]     = useState(false);
+  const [scraping, setScraping] = useState(false);
+  const [scrapeResult, setScrapeResult] = useState<any>(null);
+  const [scrapeErr, setScrapeErr]       = useState('');
 
   useEffect(() => { if (id) loadAll(); }, [id]);
 
@@ -49,6 +52,27 @@ export default function VenueDetail() {
   const set = (k: keyof Venue) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
+  const scrapeWebsite = async () => {
+    if (!venue?.website) return;
+    setScraping(true);
+    setScrapeResult(null);
+    setScrapeErr('');
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      const res = await fetch('/api/venues/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url: venue.website, venueId: venue.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setScrapeErr(data.error || 'Scrape failed'); return; }
+      setScrapeResult(data);
+      await loadAll(); // refresh venue data if fields were updated
+    } finally {
+      setScraping(false);
+    }
+  };
+
   if (!venue) return <AppShell requireRole="agent"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>Loading...</div></AppShell>;
 
   return (
@@ -59,10 +83,50 @@ export default function VenueDetail() {
           <div className="page-sub">{venue.city}, {venue.state}{venue.venue_type ? ` · ${venue.venue_type}` : ''}</div>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
+          {venue.website && (
+            <button className="btn btn-secondary" onClick={scrapeWebsite} disabled={scraping}>
+              {scraping ? '⟳ Scanning…' : '⟳ Scan Website'}
+            </button>
+          )}
           <button className="btn btn-secondary" onClick={() => setEdit(!edit)}>Edit</button>
           <Link href={`/bookings/new?venue=${venue.id}`} className="btn btn-primary">+ Book Venue</Link>
         </div>
       </div>
+
+      {/* Firecrawl scan results */}
+      {(scrapeErr || scrapeResult) && (
+        <div style={{ marginBottom: '1.25rem', border: scrapeErr ? '1px solid rgba(248,113,113,0.3)' : '1px solid rgba(0,229,255,0.2)', borderRadius: '4px', padding: '1rem', background: scrapeErr ? 'rgba(248,113,113,0.05)' : 'rgba(0,229,255,0.04)' }}>
+          {scrapeErr ? (
+            <div style={{ color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>{scrapeErr}</div>
+          ) : scrapeResult && (
+            <div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.75rem' }}>
+                ◈ Website Scan Complete{scrapeResult.updated ? ' — venue record updated' : ''}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.5rem' }}>
+                {([
+                  ['Booking Email', scrapeResult.extracted?.booking_email],
+                  ['General Email', scrapeResult.extracted?.general_email],
+                  ['Phone', scrapeResult.extracted?.booking_phone],
+                  ['Contact', scrapeResult.extracted?.booking_contact_name],
+                  ['Title', scrapeResult.extracted?.booking_contact_title],
+                  ['Capacity', scrapeResult.extracted?.capacity],
+                  ['Type', scrapeResult.extracted?.venue_type],
+                  ['Notes', scrapeResult.extracted?.notes],
+                ] as [string, any][]).filter(([, v]) => v).map(([label, value]) => (
+                  <div key={label} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '3px', padding: '0.5rem 0.65rem' }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.2rem' }}>{label}</div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-primary)' }}>{String(value)}</div>
+                  </div>
+                ))}
+              </div>
+              {!Object.values(scrapeResult.extracted || {}).some(Boolean) && (
+                <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>No contact info found on this page.</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid-2">
         <div className="card">
