@@ -31,8 +31,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: `Auth create failed: ${createErr.message}` });
     }
     // User already exists — find them
-    const { data: list } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-    const existing = list?.users?.find(u => u.email === SUPERADMIN_EMAIL);
+    const { data: listData, error: listErr } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+    if (listErr) return res.status(500).json({ error: `Could not list users: ${listErr.message}` });
+    const existing = listData.users.find(u => u.email === SUPERADMIN_EMAIL);
     if (!existing) return res.status(500).json({ error: 'User exists in auth but could not be found' });
     userId = existing.id;
   } else {
