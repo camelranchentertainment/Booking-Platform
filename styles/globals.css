@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Barlow+Condensed:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 
 /* ── Design tokens ─────────────────────────────────────────── */
 :root {
@@ -39,7 +39,7 @@
   /* Fonts */
   --font-display: 'Bebas Neue', 'Arial Narrow', sans-serif;
   --font-mono:    'IBM Plex Mono', 'Courier New', monospace;
-  --font-body:    'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --font-body:    'Space Grotesk', 'Segoe UI', sans-serif;
 
   /* Layout */
   --sidebar-width: 240px;
@@ -54,14 +54,14 @@
 /* ── Reset ─────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { font-size: 16px; }
+html { font-size: 17px; }
 
 body {
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-body);
   font-weight: 400;
-  line-height: 1.5;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -79,10 +79,10 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-primary);
 }
 
-h1 { font-size: 2.8rem; }
-h2 { font-size: 2rem; }
-h3 { font-size: 1.5rem; }
-h4 { font-size: 1.1rem; }
+h1 { font-size: 3rem; }
+h2 { font-size: 2.2rem; }
+h3 { font-size: 1.6rem; }
+h4 { font-size: 1.2rem; }
 
 /* ── Layout shell ──────────────────────────────────────────── */
 .app-shell {
@@ -128,8 +128,8 @@ h4 { font-size: 1.1rem; }
 
 .sidebar-label {
   font-family: var(--font-mono);
-  font-size: 0.62rem;
-  letter-spacing: 0.18em;
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--text-muted);
   padding: 0.75rem 1rem 0.25rem;
@@ -139,12 +139,12 @@ h4 { font-size: 1.1rem; }
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  padding: 0.55rem 1rem;
+  padding: 0.6rem 1rem;
   color: var(--text-secondary);
   font-family: var(--font-body);
-  font-size: 0.92rem;
+  font-size: 1rem;
   font-weight: 500;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.01em;
   transition: color 0.15s, background 0.15s;
   cursor: pointer;
   border: none;
@@ -209,17 +209,17 @@ h4 { font-size: 1.1rem; }
 
 .stat-value {
   font-family: var(--font-mono);
-  font-size: 2rem;
+  font-size: 2.2rem;
   font-weight: 600;
   color: var(--accent);
   text-shadow: var(--neon-glow-sm);
   line-height: 1;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.35rem;
 }
 
 .stat-label {
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -229,11 +229,11 @@ h4 { font-size: 1.1rem; }
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.5rem 1.1rem;
+  padding: 0.55rem 1.2rem;
   font-family: var(--font-body);
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
@@ -288,16 +288,16 @@ h4 { font-size: 1.1rem; }
 
 .btn:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
 
-.btn-sm { padding: 0.3rem 0.7rem; font-size: 0.78rem; }
-.btn-lg { padding: 0.8rem 1.75rem; font-size: 1rem; }
+.btn-sm { padding: 0.35rem 0.8rem; font-size: 0.85rem; }
+.btn-lg { padding: 0.85rem 2rem; font-size: 1.05rem; }
 
 /* ── Form controls ──────────────────────────────────────────── */
 .field { display: flex; flex-direction: column; gap: 0.35rem; }
 
 .field-label {
   font-family: var(--font-mono);
-  font-size: 0.68rem;
-  letter-spacing: 0.14em;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -308,8 +308,8 @@ h4 { font-size: 1.1rem; }
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-family: var(--font-body);
-  font-size: 0.92rem;
-  padding: 0.55rem 0.75rem;
+  font-size: 1rem;
+  padding: 0.6rem 0.85rem;
   transition: border-color 0.15s, box-shadow 0.15s;
   width: 100%;
 }
@@ -335,19 +335,20 @@ table {
 
 th {
   font-family: var(--font-mono);
-  font-size: 0.63rem;
-  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-muted);
-  padding: 0.6rem 0.75rem;
+  padding: 0.7rem 0.85rem;
   text-align: left;
   border-bottom: 1px solid var(--border);
 }
 
 td {
-  padding: 0.65rem 0.75rem;
+  padding: 0.75rem 0.85rem;
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
+  font-size: 0.95rem;
 }
 
 tr:hover td { background: var(--bg-overlay); color: var(--text-primary); }
@@ -356,11 +357,11 @@ tr:hover td { background: var(--bg-overlay); color: var(--text-primary); }
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.2rem 0.5rem;
+  padding: 0.25rem 0.6rem;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: 0.63rem;
-  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   font-weight: 500;
 }
@@ -551,7 +552,7 @@ tr:hover td { background: var(--bg-overlay); color: var(--text-primary); }
 
 .auth-logo {
   font-family: var(--font-display);
-  font-size: 2rem;
+  font-size: 2.4rem;
   letter-spacing: 0.12em;
   color: var(--accent);
   text-shadow: var(--neon-glow-sm);
@@ -561,8 +562,8 @@ tr:hover td { background: var(--bg-overlay); color: var(--text-primary); }
 
 .auth-sub {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.14em;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-muted);
   text-align: center;
@@ -581,17 +582,17 @@ tr:hover td { background: var(--bg-overlay); color: var(--text-primary); }
 
 .page-title {
   font-family: var(--font-display);
-  font-size: 2.4rem;
+  font-size: 2.6rem;
   letter-spacing: 0.06em;
 }
 
 .page-sub {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
   color: var(--text-muted);
   text-transform: uppercase;
-  margin-top: 0.25rem;
+  margin-top: 0.3rem;
 }
 
 /* ── Scrollbar ─────────────────────────────────────────────── */

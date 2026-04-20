@@ -4,8 +4,8 @@ interface Props {
 }
 
 export default function SplineBackground({
-  scene = 'https://my.spline.design/theeternalarc-d7tQhxwSrgAVdk1EbgFVb848-B7G/',
-  opacity = 0.32,
+  scene = 'https://my.spline.design/metallictorus-L5ASmHS8eGBBEfo3MZbj2eqE/',
+  opacity = 0.35,
 }: Props) {
   return (
     <div
