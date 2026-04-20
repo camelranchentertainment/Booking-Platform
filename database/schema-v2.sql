@@ -7,7 +7,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ENUMS
 DO $$ BEGIN
-  CREATE TYPE user_role AS ENUM ('agent', 'act_admin', 'member');
+  CREATE TYPE user_role AS ENUM ('superadmin', 'agent', 'act_admin', 'member');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
@@ -331,6 +331,20 @@ CREATE TABLE IF NOT EXISTS routing_rules (
 );
 ALTER TABLE routing_rules ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "routing_rules_agent" ON routing_rules FOR ALL USING (agent_id = auth.uid());
+
+-- ============================================================
+-- SUPERADMIN SETUP (run once to create scott@camelranchbooking.com)
+-- You can also use the bootstrap API endpoint instead (see README).
+-- ============================================================
+-- Step 1: In Supabase Dashboard → Authentication → Users → Add User
+--         Email: scott@camelranchbooking.com  Password: Password123
+--         Enable "Auto Confirm Email"
+--
+-- Step 2: After creating the auth user, run this to set the superadmin role:
+-- INSERT INTO user_profiles (id, role, email, display_name, agency_name)
+-- SELECT id, 'superadmin', email, 'Scott', 'Camel Ranch Entertainment'
+-- FROM auth.users WHERE email = 'scott@camelranchbooking.com'
+-- ON CONFLICT (id) DO UPDATE SET role = 'superadmin';
 
 -- ============================================================
 -- INDEXES

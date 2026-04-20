@@ -1,4 +1,4 @@
-export type UserRole = 'agent' | 'act_admin' | 'member';
+export type UserRole = 'superadmin' | 'agent' | 'act_admin' | 'member';
 
 export type BookingStatus =
   | 'pitch' | 'followup' | 'negotiation' | 'hold'

@@ -31,7 +31,8 @@ export default function AppShell({ children, requireRole = null }: Props) {
         return;
       }
 
-      if (requireRole && data.role !== requireRole) {
+      // Superadmin bypasses all role gates
+      if (data.role !== 'superadmin' && requireRole && data.role !== requireRole) {
         if (data.role === 'agent') router.replace('/dashboard');
         else if (data.role === 'act_admin') router.replace('/band');
         else router.replace('/member');
