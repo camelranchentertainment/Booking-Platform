@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
+import SplineBackground from '../components/SplineBackground';
 
 export default function Landing() {
   const router = useRouter();
@@ -24,122 +25,233 @@ export default function Landing() {
 
   if (checking) return null;
 
+  const neon = '#00e5ff';
+  const neonGlow = '0 0 12px rgba(0,229,255,0.5), 0 0 30px rgba(0,229,255,0.2)';
+  const neonGlowSm = '0 0 8px rgba(0,229,255,0.4)';
+
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: '#070809', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
 
-      {/* Nav */}
-      <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 2.5rem', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', letterSpacing: '0.1em', color: 'var(--accent)' }}>
-          CAMEL RANCH <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', letterSpacing: '0.15em' }}>BOOKING</span>
-        </div>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <Link href="/login" className="btn btn-secondary">Sign In</Link>
-          <Link href="/register" className="btn btn-primary">Get Started</Link>
-        </div>
-      </nav>
+      {/* Spline 3D background — replace scene URL with your own from spline.design */}
+      <SplineBackground opacity={0.22} />
 
-      {/* Hero */}
-      <section style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '5rem 2rem 3rem' }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '1rem' }}>
-          Professional Booking Management
-        </div>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(3rem, 8vw, 6rem)', letterSpacing: '0.04em', lineHeight: 1, marginBottom: '1.25rem', color: 'var(--text-primary)' }}>
-          BOOK SMARTER.<br />
-          <span style={{ color: 'var(--accent)' }}>TOUR HARDER.</span>
-        </h1>
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: '1.1rem', color: 'var(--text-secondary)', maxWidth: 520, lineHeight: 1.6, marginBottom: '2.5rem' }}>
-          A full-stack booking platform for agents, acts, and band members. Manage your entire pipeline from first pitch to final advance — all in one place.
-        </p>
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <Link href="/register" className="btn btn-primary btn-lg">Create Free Account</Link>
-          <Link href="/login" className="btn btn-secondary btn-lg">Sign In</Link>
-        </div>
-      </section>
+      {/* Subtle grid overlay */}
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 1, pointerEvents: 'none',
+        backgroundImage: `linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px)`,
+        backgroundSize: '80px 80px',
+      }} />
 
-      {/* Tier cards */}
-      <section style={{ padding: '4rem 2rem', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '2.5rem' }}>
-          Three tiers. One platform.
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
+      {/* Content layer */}
+      <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
 
-          {/* Agent */}
-          <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--accent)' }}>Tier 1</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', letterSpacing: '0.04em' }}>BOOKING AGENT</div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6 }}>
-              Manage your full roster of acts. Run the booking pipeline, pitch venues, track tours, manage contacts, and handle the entire business side of touring.
-            </p>
-            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              {['Multi-act dashboard','9-stage booking pipeline','Tour routing & management','Venue + contact database','Email outreach via Resend','Invite your acts & members'].map(f => (
-                <li key={f} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--accent)' }}>◈</span> {f}
-                </li>
-              ))}
-            </ul>
-            <Link href="/register?role=agent" className="btn btn-primary" style={{ marginTop: 'auto', justifyContent: 'center' }}>
-              Register as Agent
-            </Link>
-          </div>
-
-          {/* Act Admin */}
-          <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#a78bfa' }}>Tier 2</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', letterSpacing: '0.04em' }}>ACT ADMIN</div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6 }}>
-              The band leader or manager. See your full show schedule, confirmed bookings, tour details, and advance info. Manage your band roster.
-            </p>
-            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              {['Full show schedule','Booking status & details','Advance sheets','Tour calendar','Band member management','Venue & load-in info'].map(f => (
-                <li key={f} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <span style={{ color: '#a78bfa' }}>◈</span> {f}
-                </li>
-              ))}
-            </ul>
-            <div style={{ marginTop: 'auto', background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.25)', borderRadius: 'var(--radius-sm)', padding: '0.75rem', fontSize: '0.8rem', color: '#a78bfa', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
-              Invited by your booking agent
+        {/* Nav */}
+        <nav style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '1.25rem 3rem',
+          borderBottom: '1px solid rgba(0,229,255,0.12)',
+          background: 'rgba(7,8,9,0.7)',
+          backdropFilter: 'blur(12px)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{
+              fontFamily: 'var(--font-display)', fontSize: '1.5rem',
+              letterSpacing: '0.14em', color: neon,
+              textShadow: neonGlowSm,
+            }}>
+              CAMEL RANCH
             </div>
-            <Link href="/register?role=act_admin" className="btn btn-secondary" style={{ justifyContent: 'center', borderColor: '#a78bfa', color: '#a78bfa' }}>
-              Join with Invite Code
-            </Link>
-          </div>
-
-          {/* Member */}
-          <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#34d399' }}>Tier 3</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', letterSpacing: '0.04em' }}>BAND MEMBER</div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6 }}>
-              Individual band member access. See your confirmed upcoming shows, venue details, set times, load-in info, and advance sheets — nothing more, nothing less.
-            </p>
-            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              {['Upcoming confirmed shows','Set times & load-in','Venue address & phone','Advance notes','Tour calendar','Read-only access'].map(f => (
-                <li key={f} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <span style={{ color: '#34d399' }}>◈</span> {f}
-                </li>
-              ))}
-            </ul>
-            <div style={{ marginTop: 'auto', background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 'var(--radius-sm)', padding: '0.75rem', fontSize: '0.8rem', color: '#34d399', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
-              Invited by your booking agent
+            <div style={{
+              fontFamily: 'var(--font-mono)', fontSize: '0.6rem',
+              letterSpacing: '0.22em', color: 'rgba(0,229,255,0.5)',
+              textTransform: 'uppercase', marginTop: '0.25rem',
+            }}>
+              BOOKING
             </div>
-            <Link href="/register?role=member" className="btn btn-secondary" style={{ justifyContent: 'center', borderColor: '#34d399', color: '#34d399' }}>
-              Join with Invite Code
+          </div>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <Link href="/login" className="btn btn-secondary" style={{ fontSize: '0.82rem' }}>Sign In</Link>
+            <Link href="/register" className="btn btn-primary" style={{ fontSize: '0.82rem' }}>Get Started</Link>
+          </div>
+        </nav>
+
+        {/* Hero */}
+        <section style={{
+          flex: 1, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          textAlign: 'center', padding: '6rem 2rem 4rem',
+        }}>
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: '0.72rem',
+            letterSpacing: '0.28em', textTransform: 'uppercase',
+            color: neon, marginBottom: '1.25rem',
+            opacity: 0.85,
+          }}>
+            ◈ &nbsp; Professional Booking Management &nbsp; ◈
+          </div>
+
+          <h1 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'clamp(4.5rem, 12vw, 9rem)',
+            letterSpacing: '0.06em', lineHeight: 0.9,
+            marginBottom: '0.5rem',
+            color: '#fff',
+          }}>
+            BOOK SMARTER.
+          </h1>
+          <h1 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'clamp(4.5rem, 12vw, 9rem)',
+            letterSpacing: '0.06em', lineHeight: 0.9,
+            marginBottom: '2rem',
+            color: neon,
+            textShadow: neonGlow,
+          }}>
+            TOUR HARDER.
+          </h1>
+
+          <p style={{
+            fontFamily: 'var(--font-body)', fontSize: '1.15rem',
+            color: 'rgba(232,238,248,0.65)', maxWidth: 560,
+            lineHeight: 1.7, marginBottom: '2.75rem',
+          }}>
+            A full-stack booking platform for agents, acts, and band members.
+            Manage your entire pipeline from first pitch to final advance — all in one place.
+          </p>
+
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Link href="/register" className="btn btn-primary btn-lg">
+              Create Free Account
+            </Link>
+            <Link href="/login" className="btn btn-secondary btn-lg">
+              Sign In
             </Link>
           </div>
 
-        </div>
-      </section>
+          {/* Scroll indicator */}
+          <div style={{
+            marginTop: '4rem', fontFamily: 'var(--font-mono)',
+            fontSize: '0.62rem', letterSpacing: '0.2em', textTransform: 'uppercase',
+            color: 'rgba(0,229,255,0.4)',
+          }}>
+            ↓ &nbsp; three tiers. one platform. &nbsp; ↓
+          </div>
+        </section>
 
-      {/* Footer */}
-      <footer style={{ borderTop: '1px solid var(--border)', padding: '1.5rem 2.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-          © {new Date().getFullYear()} Camel Ranch Entertainment
-        </div>
-        <div style={{ display: 'flex', gap: '1.25rem' }}>
-          <Link href="/login" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Sign In</Link>
-          <Link href="/register" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)' }}>Get Started</Link>
-        </div>
-      </footer>
+        {/* Tier cards */}
+        <section style={{ padding: '5rem 3rem', maxWidth: 1200, margin: '0 auto', width: '100%' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
 
+            {/* Agent */}
+            <div style={{
+              background: 'rgba(13,17,23,0.85)', backdropFilter: 'blur(12px)',
+              border: `1px solid ${neon}33`,
+              borderTop: `2px solid ${neon}`,
+              borderRadius: '4px', padding: '2.25rem',
+              display: 'flex', flexDirection: 'column', gap: '1rem',
+              transition: 'box-shadow 0.2s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.boxShadow = `0 0 30px rgba(0,229,255,0.1)`)}
+              onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
+            >
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: neon }}>Tier 1</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', letterSpacing: '0.06em', color: '#fff' }}>BOOKING AGENT</div>
+              <p style={{ color: 'rgba(232,238,248,0.6)', fontSize: '0.92rem', lineHeight: 1.7 }}>
+                Manage your full roster of acts. Run the booking pipeline, pitch venues, track tours, manage contacts, and handle the entire business side of touring.
+              </p>
+              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.85rem', color: 'rgba(232,238,248,0.55)' }}>
+                {['Multi-band dashboard','9-stage booking pipeline','Tour routing & management','Venue + contact database','Email outreach','Invite your bands & members'].map(f => (
+                  <li key={f} style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                    <span style={{ color: neon, textShadow: neonGlowSm }}>◈</span> {f}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/register?role=agent" className="btn btn-primary" style={{ marginTop: 'auto', justifyContent: 'center' }}>
+                Register as Agent
+              </Link>
+            </div>
+
+            {/* Band Admin */}
+            <div style={{
+              background: 'rgba(13,17,23,0.85)', backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(167,139,250,0.2)',
+              borderTop: '2px solid #a78bfa',
+              borderRadius: '4px', padding: '2.25rem',
+              display: 'flex', flexDirection: 'column', gap: '1rem',
+              transition: 'box-shadow 0.2s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 0 30px rgba(167,139,250,0.08)')}
+              onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
+            >
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#a78bfa' }}>Tier 2</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', letterSpacing: '0.06em', color: '#fff' }}>BAND ADMIN</div>
+              <p style={{ color: 'rgba(232,238,248,0.6)', fontSize: '0.92rem', lineHeight: 1.7 }}>
+                The band leader or manager. See your full show schedule, confirmed bookings, tour details, and advance info. Manage your band roster.
+              </p>
+              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.85rem', color: 'rgba(232,238,248,0.55)' }}>
+                {['Full show schedule','Booking status & details','Advance sheets','Tour calendar','Band member management','Venue & load-in info'].map(f => (
+                  <li key={f} style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                    <span style={{ color: '#a78bfa' }}>◈</span> {f}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/register?role=act_admin" className="btn btn-secondary" style={{ marginTop: 'auto', justifyContent: 'center', borderColor: '#a78bfa', color: '#a78bfa' }}>
+                Register Your Band
+              </Link>
+            </div>
+
+            {/* Member */}
+            <div style={{
+              background: 'rgba(13,17,23,0.85)', backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(52,211,153,0.2)',
+              borderTop: '2px solid #34d399',
+              borderRadius: '4px', padding: '2.25rem',
+              display: 'flex', flexDirection: 'column', gap: '1rem',
+              transition: 'box-shadow 0.2s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 0 30px rgba(52,211,153,0.08)')}
+              onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
+            >
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#34d399' }}>Tier 3</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', letterSpacing: '0.06em', color: '#fff' }}>BAND MEMBER</div>
+              <p style={{ color: 'rgba(232,238,248,0.6)', fontSize: '0.92rem', lineHeight: 1.7 }}>
+                Individual band member access. See your confirmed upcoming shows, venue details, set times, load-in info, and advance sheets.
+              </p>
+              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.45rem', fontSize: '0.85rem', color: 'rgba(232,238,248,0.55)' }}>
+                {['Upcoming confirmed shows','Set times & load-in','Venue address & phone','Advance notes','Tour calendar','Read-only access'].map(f => (
+                  <li key={f} style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                    <span style={{ color: '#34d399' }}>◈</span> {f}
+                  </li>
+                ))}
+              </ul>
+              <div style={{ marginTop: 'auto', background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: '2px', padding: '0.75rem', fontSize: '0.78rem', color: '#34d399', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
+                Join via invite from your agent or band admin
+              </div>
+              <Link href="/register?role=member" className="btn btn-secondary" style={{ justifyContent: 'center', borderColor: '#34d399', color: '#34d399' }}>
+                Join with Invite Code
+              </Link>
+            </div>
+
+          </div>
+        </section>
+
+        {/* Footer */}
+        <footer style={{
+          borderTop: '1px solid rgba(0,229,255,0.08)',
+          padding: '1.5rem 3rem',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'rgba(7,8,9,0.6)',
+        }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.14em', color: 'rgba(0,229,255,0.3)', textTransform: 'uppercase' }}>
+            © {new Date().getFullYear()} Camel Ranch Entertainment
+          </div>
+          <div style={{ display: 'flex', gap: '1.5rem' }}>
+            <Link href="/login" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Sign In</Link>
+            <Link href="/register" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: neon, textShadow: neonGlowSm }}>Get Started</Link>
+          </div>
+        </footer>
+
+      </div>
     </div>
   );
 }

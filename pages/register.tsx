@@ -9,11 +9,11 @@ const TIER_CONFIG: Record<Tier, { label: string; color: string; sub: string; sel
   agent: {
     label: 'Booking Agent',
     color: 'var(--accent)',
-    sub:   'Run a roster of acts',
+    sub:   'Run a roster of bands',
     selfSignup: true,
   },
   act_admin: {
-    label: 'Band / Act',
+    label: 'Band Admin',
     color: '#a78bfa',
     sub:   'Self-managed or agent-connected',
     selfSignup: true,
