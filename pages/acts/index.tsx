@@ -11,6 +11,7 @@ export default function BandsPage() {
   const [linkActId, setLinkActId]   = useState('');
   const [linkMessage, setLinkMessage] = useState('');
   const [linkSaving, setLinkSaving] = useState(false);
+  const [linkError, setLinkError]   = useState('');
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => { loadAll(); }, []);
@@ -40,17 +41,28 @@ export default function BandsPage() {
   const sendLinkRequest = async () => {
     if (!linkActId) return;
     setLinkSaving(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    await fetch('/api/agent-link/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ actId: linkActId, message: linkMessage || undefined }),
-    });
-    setShowLinkModal(false);
-    setLinkActId('');
-    setLinkMessage('');
-    await loadAll();
-    setLinkSaving(false);
+    setLinkError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/agent-link/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ actId: linkActId, message: linkMessage || undefined }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setLinkError(d.error || 'Failed to send link request');
+        return;
+      }
+      setShowLinkModal(false);
+      setLinkActId('');
+      setLinkMessage('');
+      await loadAll();
+    } catch {
+      setLinkError('Network error — please try again');
+    } finally {
+      setLinkSaving(false);
+    }
   };
 
   // Merge: bands I manage directly + bands linked to me
@@ -154,8 +166,11 @@ export default function BandsPage() {
                 <label className="field-label">Message (optional)</label>
                 <textarea className="textarea" value={linkMessage} onChange={e => setLinkMessage(e.target.value)} placeholder="Introduce yourself — why you want to work together..." rows={3} />
               </div>
+              {linkError && (
+                <div style={{ color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>{linkError}</div>
+              )}
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                <button className="btn btn-secondary" onClick={() => setShowLinkModal(false)}>Cancel</button>
+                <button className="btn btn-secondary" onClick={() => { setShowLinkModal(false); setLinkError(''); }}>Cancel</button>
                 <button className="btn btn-primary" onClick={sendLinkRequest} disabled={!linkActId || linkSaving}>
                   {linkSaving ? 'Sending...' : 'Send Link Request'}
                 </button>

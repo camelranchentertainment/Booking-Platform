@@ -29,9 +29,9 @@ export default function BookingDetail() {
       supabase.from('bookings').select(`
         *, act:acts(*), venue:venues(*), tour:tours(id, name), contact:contacts(*)
       `).eq('id', id).single(),
-      supabase.from('acts').select('id, act_name').order('act_name'),
+      supabase.from('acts').select('id, act_name').eq('agent_id', user.id).order('act_name'),
       supabase.from('venues').select('id, name, city, state').order('name'),
-      supabase.from('tours').select('id, name, act_id').order('name'),
+      supabase.from('tours').select('id, name, act_id').eq('created_by', user.id).order('name'),
     ]);
     if (bookingRes.data) { setBooking(bookingRes.data); setForm(bookingRes.data); }
     setActs(actsRes.data || []);

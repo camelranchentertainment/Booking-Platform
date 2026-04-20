@@ -27,7 +27,7 @@ export default function BookingsPage() {
       act:acts(id, act_name),
       venue:venues(id, name, city, state),
       tour:tours(id, name)
-    `).eq('agent_id', user.id).order('created_at', { ascending: false });
+    `).eq('created_by', user.id).order('created_at', { ascending: false });
 
     if (filterAct) q = q.eq('act_id', filterAct);
 

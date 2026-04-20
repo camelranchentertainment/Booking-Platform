@@ -10,10 +10,11 @@ interface PipelineSummary {
 }
 
 export default function Dashboard() {
-  const [acts, setActs]         = useState<Act[]>([]);
-  const [pipeline, setPipeline] = useState<PipelineSummary[]>([]);
-  const [recent, setRecent]     = useState<Booking[]>([]);
-  const [loading, setLoading]   = useState(true);
+  const [acts, setActs]             = useState<Act[]>([]);
+  const [pipeline, setPipeline]     = useState<PipelineSummary[]>([]);
+  const [recent, setRecent]         = useState<Booking[]>([]);
+  const [confirmedFees, setConfirmedFees] = useState(0);
+  const [loading, setLoading]       = useState(true);
 
   useEffect(() => {
     const load = async () => {
@@ -21,7 +22,7 @@ export default function Dashboard() {
       if (!user) return;
 
       const [actsRes, bookingsRes] = await Promise.all([
-        supabase.from('acts').select('*').eq('created_by', user.id).eq('is_active', true).order('act_name'),
+        supabase.from('acts').select('*').eq('agent_id', user.id).eq('is_active', true).order('act_name'),
         supabase.from('bookings').select(`
           id, status, show_date, fee, created_at,
           act:acts(act_name),
@@ -39,6 +40,8 @@ export default function Dashboard() {
       }
       setPipeline(Object.entries(counts).map(([status, count]) => ({ status, count })));
       setRecent(bookings.slice(0, 8));
+      const confirmedFees = bookings.filter(b => b.status === 'confirmed').reduce((s: number, b: any) => s + (Number(b.fee) || 0), 0);
+      setConfirmedFees(confirmedFees);
       setLoading(false);
     };
     load();
@@ -72,8 +75,8 @@ export default function Dashboard() {
           <div className="stat-label">Confirmed Shows</div>
         </div>
         <div className="stat-block">
-          <div className="stat-value">{acts.length > 0 ? acts.length : '—'}</div>
-          <div className="stat-label">Bands Managed</div>
+          <div className="stat-value">{confirmedFees > 0 ? `$${confirmedFees.toLocaleString()}` : '—'}</div>
+          <div className="stat-label">Confirmed Value</div>
         </div>
       </div>
 

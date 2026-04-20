@@ -16,6 +16,7 @@ export default function BandDetail() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole]   = useState<'act_admin' | 'member'>('member');
   const [saving, setSaving]   = useState(false);
+  const [inviteError, setInviteError] = useState('');
   const [edit, setEdit]       = useState(false);
   const [form, setForm]       = useState<Partial<Act>>({});
 
@@ -59,16 +60,23 @@ export default function BandDetail() {
   const sendInvite = async () => {
     if (!inviteEmail || !act) return;
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('act_invitations').insert({
-      act_id:     act.id,
-      email:      inviteEmail,
-      role:       inviteRole,
-      invited_by: user!.id,
-    });
-    setInviteEmail('');
-    await loadAll();
-    setSaving(false);
+    setInviteError('');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from('act_invitations').insert({
+        act_id:     act.id,
+        email:      inviteEmail,
+        role:       inviteRole,
+        invited_by: user!.id,
+      });
+      if (error) { setInviteError(error.message); return; }
+      setInviteEmail('');
+      await loadAll();
+    } catch {
+      setInviteError('Network error — please try again');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const revokeInvite = async (inviteId: string) => {
@@ -205,6 +213,7 @@ export default function BandDetail() {
                 <button className="btn btn-primary" onClick={sendInvite} disabled={!inviteEmail || saving}>Send Invite</button>
               </div>
             </div>
+            {inviteError && <div style={{ marginTop: '0.5rem', color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>{inviteError}</div>}
           </div>
 
           {invites.length > 0 && (

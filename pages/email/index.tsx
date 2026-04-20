@@ -39,10 +39,10 @@ export default function EmailPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const [logRes, actsRes, venuesRes, contactsRes, profileRes] = await Promise.all([
-      supabase.from('email_log').select('*, venue:venues(name)').order('sent_at', { ascending: false }).limit(100),
-      supabase.from('acts').select('*').order('act_name'),
+      supabase.from('email_log').select('*, venue:venues(name)').eq('sent_by', user.id).order('sent_at', { ascending: false }).limit(100),
+      supabase.from('acts').select('*').eq('agent_id', user.id).order('act_name'),
       supabase.from('venues').select('*').order('name'),
-      supabase.from('contacts').select('*, venue:venues(name)').order('last_name'),
+      supabase.from('contacts').select('*, venue:venues(name)').eq('agent_id', user.id).order('last_name'),
       supabase.from('user_profiles').select('display_name, agency_name').eq('id', user.id).single(),
     ]);
     setLog(logRes.data || []);

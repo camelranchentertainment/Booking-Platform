@@ -70,9 +70,7 @@ export default function BandPortal() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
-          {!myAct?.agent_id && (
-            <Link href="/band/settings" className="btn btn-secondary">Band Settings</Link>
-          )}
+          <Link href="/band/settings" className="btn btn-secondary">Band Settings</Link>
           <Link href="/bookings/new" className="btn btn-primary">+ New Booking</Link>
         </div>
       </div>

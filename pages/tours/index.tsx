@@ -19,8 +19,8 @@ export default function ToursPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const [toursRes, actsRes] = await Promise.all([
-      supabase.from('tours').select('*, act:acts(act_name)').eq('agent_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('acts').select('id, act_name').order('act_name'),
+      supabase.from('tours').select('*, act:acts(act_name)').eq('created_by', user.id).order('created_at', { ascending: false }),
+      supabase.from('acts').select('id, act_name').eq('agent_id', user.id).order('act_name'),
     ]);
     setTours(toursRes.data || []);
     setActs(actsRes.data || []);

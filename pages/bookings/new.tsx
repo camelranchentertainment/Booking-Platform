@@ -24,7 +24,7 @@ export default function NewBooking() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const [actsRes, venuesRes, toursRes] = await Promise.all([
-        supabase.from('acts').select('id, act_name').eq('is_active', true).order('act_name'),
+        supabase.from('acts').select('id, act_name').eq('is_active', true).eq('agent_id', user.id).order('act_name'),
         supabase.from('venues').select('id, name, city, state').order('name'),
         supabase.from('tours').select('id, name, act_id').eq('status', 'active').order('name'),
       ]);

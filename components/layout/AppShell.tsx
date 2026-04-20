@@ -15,34 +15,36 @@ export default function AppShell({ children, requireRole = null }: Props) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) {
+    const init = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { router.replace('/login'); return; }
+
+        const { data } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (!data) { router.replace('/login'); return; }
+
+        // Superadmin bypasses all role gates
+        if (data.role !== 'superadmin' && requireRole && data.role !== requireRole) {
+          if (data.role === 'agent') router.replace('/dashboard');
+          else if (data.role === 'act_admin') router.replace('/band');
+          else router.replace('/member');
+          return;
+        }
+
+        setProfile(data as UserProfile);
+      } catch {
         router.replace('/login');
-        return;
+      } finally {
+        setLoading(false);
       }
-      const { data } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (!data) {
-        router.replace('/login');
-        return;
-      }
-
-      // Superadmin bypasses all role gates
-      if (data.role !== 'superadmin' && requireRole && data.role !== requireRole) {
-        if (data.role === 'agent') router.replace('/dashboard');
-        else if (data.role === 'act_admin') router.replace('/band');
-        else router.replace('/member');
-        return;
-      }
-
-      setProfile(data as UserProfile);
-      setLoading(false);
-    });
-  }, []);
+    };
+    init();
+  }, [requireRole]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
