@@ -7,10 +7,6 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ENUMS
 DO $$ BEGIN
-  CREATE TYPE user_role AS ENUM ('superadmin', 'agent', 'act_admin', 'member');
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
-DO $$ BEGIN
   CREATE TYPE booking_status AS ENUM (
     'pitch', 'followup', 'negotiation', 'hold',
     'contract', 'confirmed', 'advancing', 'completed', 'cancelled'
@@ -29,7 +25,8 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- ============================================================
 CREATE TABLE IF NOT EXISTS user_profiles (
   id            UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  role          user_role NOT NULL DEFAULT 'agent',
+  role          TEXT NOT NULL DEFAULT 'agent'
+                  CHECK (role IN ('superadmin','agent','act_admin','member')),
   display_name  TEXT NOT NULL DEFAULT '',
   email         TEXT NOT NULL DEFAULT '',
   agency_name   TEXT,
@@ -41,14 +38,14 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "user_profiles_own" ON user_profiles FOR ALL USING (auth.uid() = id);
--- Agents can read profiles of members in acts they manage
-CREATE POLICY "agent_reads_members" ON user_profiles FOR SELECT USING (
-  act_id IN (
-    SELECT id FROM acts
-    WHERE agent_id = auth.uid() OR owner_id = auth.uid()
-  )
-);
+DO $$ BEGIN
+  CREATE POLICY "user_profiles_own" ON user_profiles FOR ALL USING (auth.uid() = id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY "agent_reads_members" ON user_profiles FOR SELECT USING (
+    act_id IN (SELECT id FROM acts WHERE agent_id = auth.uid() OR owner_id = auth.uid())
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ============================================================
 -- acts
