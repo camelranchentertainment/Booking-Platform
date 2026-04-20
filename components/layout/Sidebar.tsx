@@ -11,10 +11,8 @@ interface Props {
 const agentNav = [
   { label: 'Dashboard', href: '/dashboard', icon: '◈' },
   { label: 'Bands',     href: '/acts',      icon: '♪' },
-  { label: 'Bookings',  href: '/bookings',  icon: '◉' },
   { label: 'Tours',     href: '/tours',     icon: '⟴' },
   { label: 'Venues',    href: '/venues',    icon: '⌂' },
-  { label: 'Contacts',  href: '/contacts',  icon: '◷' },
   { label: 'Email',     href: '/email',     icon: '✉' },
   { label: 'Settings',  href: '/settings',  icon: '⚙' },
 ];
