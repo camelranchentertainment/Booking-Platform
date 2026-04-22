@@ -7,15 +7,13 @@ import { supabase } from '../lib/supabase';
 const BG      = '#080201';
 const SURFACE = '#160705';
 const CARD    = '#1E0B07';
-const GOLD    = '#E2B84A';
-const GOLD2   = '#F5C850';
+const GOLD    = '#C8921A';
+const GOLD2   = '#D4A030';
 const CREAM   = '#F5EDDF';
 const CREAM2  = 'rgba(245,237,223,0.72)';
 const MUTED   = '#9A7A5C';
-const BORDER  = 'rgba(226,184,74,0.16)';
-const BORDERL = 'rgba(226,184,74,0.30)';
-const GLOW    = `0 0 20px rgba(226,184,74,0.45), 0 0 50px rgba(226,184,74,0.16)`;
-const GLOWSM  = `0 0 12px rgba(226,184,74,0.38)`;
+const BORDER  = 'rgba(200,146,26,0.16)';
+const BORDERL = 'rgba(200,146,26,0.30)';
 
 const TICKER_ITEMS = [
   'BOOK SMARTER','TOUR HARDER','MANAGE YOUR PIPELINE',
@@ -49,7 +47,6 @@ const TIERS = [
     num: '01',
     title: 'BOOKING AGENT',
     color: GOLD,
-    glow: `0 0 20px rgba(226,184,74,0.30)`,
     desc: 'The full toolset. Manage your entire roster, run the booking pipeline, and oversee every tour.',
     perks: ['Multi-band roster & dashboard','9-stage booking pipeline','Tour routing & venue database'],
     cta: 'Register as Agent',
@@ -60,7 +57,6 @@ const TIERS = [
     num: '02',
     title: 'BAND ADMIN',
     color: '#C4B5FD',
-    glow: `0 0 20px rgba(196,181,253,0.25)`,
     desc: 'Full visibility into your band\'s schedule, bookings, and tour details.',
     perks: ['Complete show schedule','Advance sheets & venue info','Band member management'],
     cta: 'Register Your Band',
@@ -71,7 +67,6 @@ const TIERS = [
     num: '03',
     title: 'BAND MEMBER',
     color: '#34D399',
-    glow: `0 0 20px rgba(52,211,153,0.22)`,
     desc: 'Simple, read-only access to your upcoming shows. Free forever via invite.',
     perks: ['Confirmed shows & set times','Load-in & venue details','Tour calendar'],
     cta: 'Join with Invite',
@@ -111,21 +106,21 @@ export default function Landing() {
 
         /* NAV */
         .lp-nav { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; border-bottom: 1px solid ${BORDER}; background: rgba(6,1,0,0.94); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); position: sticky; top: 0; z-index: 50; }
-        .lp-nav-logo-title { font-family: var(--font-display); font-size: 1.6rem; letter-spacing: 0.14em; line-height: 1; color: ${GOLD}; text-shadow: ${GLOW}; }
+        .lp-nav-logo-title { font-family: var(--font-display); font-size: 1.6rem; letter-spacing: 0.14em; line-height: 1; color: ${GOLD}; }
         .lp-nav-logo-sub { font-family: var(--font-body); font-size: 0.6rem; font-weight: 700; letter-spacing: 0.5em; color: rgba(226,184,74,0.55); text-transform: uppercase; margin-top: 0.1rem; }
         .lp-nav-actions { display: flex; align-items: center; gap: 0.6rem; }
         .lp-nav-signin { font-size: 0.88rem; font-weight: 600; color: ${CREAM2}; text-decoration: none; padding: 0.5rem 0.75rem; }
-        .lp-nav-cta { font-size: 0.88rem; font-weight: 700; color: #180700; background: ${GOLD}; padding: 0.55rem 1.15rem; border-radius: 3px; text-decoration: none; letter-spacing: 0.04em; box-shadow: ${GLOWSM}; white-space: nowrap; }
+        .lp-nav-cta { font-size: 0.88rem; font-weight: 700; color: #180700; background: ${GOLD}; padding: 0.55rem 1.15rem; border-radius: 0; text-decoration: none; letter-spacing: 0.04em; white-space: nowrap; }
 
         /* HERO */
         .lp-hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 3.5rem 1.5rem 3rem; position: relative; overflow: hidden; }
         .lp-hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse 130% 80% at 50% -10%, rgba(100,38,8,0.50) 0%, transparent 60%); pointer-events: none; }
-        .lp-eyebrow { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase; color: ${GOLD}; border: 1px solid ${BORDER}; padding: 0.32rem 0.85rem; border-radius: 2px; margin-bottom: 1.75rem; position: relative; }
+        .lp-eyebrow { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase; color: ${GOLD}; border: 1px solid ${BORDER}; padding: 0.32rem 0.85rem; border-radius: 0; margin-bottom: 1.75rem; position: relative; }
         .lp-headline { font-family: var(--font-display); font-size: clamp(4rem, 18vw, 9rem); letter-spacing: 0.04em; line-height: 0.88; color: ${CREAM}; margin: 0; position: relative; }
-        .lp-headline-gold { font-family: var(--font-display); font-size: clamp(4rem, 18vw, 9rem); letter-spacing: 0.04em; line-height: 0.88; color: ${GOLD}; text-shadow: ${GLOW}; margin: 0 0 1.75rem; position: relative; }
+        .lp-headline-gold { font-family: var(--font-display); font-size: clamp(4rem, 18vw, 9rem); letter-spacing: 0.04em; line-height: 0.88; color: ${GOLD}; margin: 0 0 1.75rem; position: relative; }
         .lp-subtext { font-size: 1rem; color: ${CREAM2}; max-width: 380px; line-height: 1.65; margin-bottom: 2rem; position: relative; }
-        .lp-cta-primary { display: block; width: 100%; max-width: 380px; text-align: center; font-weight: 700; font-size: 1rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 1rem 2rem; background: ${GOLD}; color: #180700; border-radius: 4px; text-decoration: none; box-shadow: ${GLOW}; margin-bottom: 0.85rem; position: relative; transition: background 0.15s, box-shadow 0.15s; }
-        .lp-cta-primary:hover { background: ${GOLD2}; box-shadow: 0 0 28px rgba(226,184,74,0.60), 0 0 60px rgba(226,184,74,0.22); }
+        .lp-cta-primary { display: block; width: 100%; max-width: 380px; text-align: center; font-weight: 700; font-size: 1rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 1rem 2rem; background: ${GOLD}; color: #180700; border-radius: 0; text-decoration: none; margin-bottom: 0.85rem; position: relative; transition: background 0.15s; }
+        .lp-cta-primary:hover { background: ${GOLD2}; }
         .lp-cta-secondary-link { font-size: 0.88rem; color: ${MUTED}; text-decoration: none; position: relative; }
         .lp-cta-secondary-link span { color: ${CREAM2}; }
         .lp-trust { display: flex; align-items: center; justify-content: center; gap: 0; margin-top: 2.25rem; position: relative; }
@@ -149,28 +144,28 @@ export default function Landing() {
         /* FEATURE CARDS — horizontal scroll on mobile */
         .lp-features { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; gap: 1rem; padding: 1.75rem 1.5rem 1.5rem; margin: 0 -1.5rem; scrollbar-width: none; }
         .lp-features::-webkit-scrollbar { display: none; }
-        .lp-feature-card { flex: 0 0 82%; scroll-snap-align: start; background: ${CARD}; border: 1px solid ${BORDER}; border-top: 2px solid ${GOLD}; border-radius: 6px; padding: 1.5rem; }
-        .lp-feature-icon { font-size: 1.75rem; color: ${GOLD}; text-shadow: ${GLOWSM}; margin-bottom: 1rem; }
+        .lp-feature-card { flex: 0 0 82%; scroll-snap-align: start; background: ${CARD}; border: 1px solid ${BORDER}; border-top: 2px solid ${GOLD}; border-radius: 0; padding: 1.5rem; }
+        .lp-feature-icon { font-size: 1.75rem; color: ${GOLD}; margin-bottom: 1rem; }
         .lp-feature-title { font-family: var(--font-display); font-size: 1.5rem; letter-spacing: 0.05em; color: ${CREAM}; line-height: 1; margin-bottom: 0.2rem; }
         .lp-feature-sub { font-size: 0.76rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: ${GOLD}; margin-bottom: 0.75rem; }
         .lp-feature-desc { font-size: 0.92rem; color: ${CREAM2}; line-height: 1.6; }
 
         /* TIER CARDS */
         .lp-tiers { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.75rem; }
-        .lp-tier-card { background: ${CARD}; border: 1px solid ${BORDER}; border-radius: 6px; padding: 1.5rem; }
+        .lp-tier-card { background: ${CARD}; border: 1px solid ${BORDER}; border-radius: 0; padding: 1.5rem; }
         .lp-tier-num { font-family: var(--font-display); font-size: 0.9rem; letter-spacing: 0.18em; margin-bottom: 0.35rem; }
         .lp-tier-title { font-family: var(--font-display); font-size: 2rem; letter-spacing: 0.05em; color: ${CREAM}; line-height: 1; margin-bottom: 0.75rem; }
         .lp-tier-desc { font-size: 0.9rem; color: ${CREAM2}; line-height: 1.6; margin-bottom: 1rem; }
         .lp-tier-perks { list-style: none; margin: 0 0 1.25rem; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
         .lp-tier-perk { display: flex; align-items: center; gap: 0.6rem; font-size: 0.88rem; color: rgba(245,237,223,0.65); }
-        .lp-tier-perk-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-        .lp-tier-cta { display: block; text-align: center; font-weight: 700; font-size: 0.9rem; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.8rem 1.5rem; border-radius: 4px; text-decoration: none; transition: all 0.15s; }
-        .lp-tier-cta-primary { background: ${GOLD}; color: #180700; box-shadow: ${GLOWSM}; }
+        .lp-tier-perk-dot { width: 6px; height: 6px; border-radius: 0; flex-shrink: 0; }
+        .lp-tier-cta { display: block; text-align: center; font-weight: 700; font-size: 0.9rem; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.8rem 1.5rem; border-radius: 0; text-decoration: none; transition: background 0.15s; }
+        .lp-tier-cta-primary { background: ${GOLD}; color: #180700; }
         .lp-tier-cta-primary:hover { background: ${GOLD2}; }
         .lp-tier-cta-outline { background: transparent; border: 1px solid; }
 
         /* BOTTOM CTA */
-        .lp-bottom-cta { margin: 0 1.5rem 4rem; padding: 2.5rem 1.5rem; background: ${SURFACE}; border: 1px solid ${BORDERL}; border-radius: 8px; text-align: center; }
+        .lp-bottom-cta { margin: 0 1.5rem 4rem; padding: 2.5rem 1.5rem; background: ${SURFACE}; border: 1px solid ${BORDERL}; border-radius: 0; text-align: center; }
         .lp-bottom-cta-title { font-family: var(--font-display); font-size: clamp(1.8rem, 6vw, 3rem); letter-spacing: 0.06em; color: ${CREAM}; margin-bottom: 0.5rem; }
         .lp-bottom-cta-sub { font-size: 0.92rem; color: ${CREAM2}; margin-bottom: 1.75rem; }
 

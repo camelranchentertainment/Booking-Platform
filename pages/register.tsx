@@ -135,7 +135,6 @@ export default function Register() {
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem',
-                    boxShadow: selected ? `0 0 16px ${c.color}30` : 'none',
                   }}
                 >
                   <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>{c.icon}</span>
