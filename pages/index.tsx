@@ -570,21 +570,24 @@ export default function Home() {
         <Nav />
         <Hero />
 
-        {/* Artists */}
+        {/* Artist success stories */}
         <section id="artists" style={{ borderTop: BORDER }}>
           <div className="cr-hero-content" style={{ background: BG, paddingBottom: '2.5rem', paddingTop: '5rem' }}>
             <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
                 <div style={{ height: 1, width: 48, background: GOLD }} />
-                <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>Roster</span>
+                <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>Real Results</span>
               </div>
               <h2 style={{
                 fontFamily: 'var(--font-display)', fontWeight: 900,
-                lineHeight: 1, textTransform: 'uppercase', margin: 0,
+                lineHeight: 1, textTransform: 'uppercase', margin: '0 0 0.75rem',
                 fontSize: 'clamp(2rem,5vw,4rem)', letterSpacing: '-0.01em', color: CREAM,
               }}>
-                Our Artists
+                Artists Growing<br />With This Platform
               </h2>
+              <p style={{ color: 'rgba(240,216,162,0.38)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '32rem', margin: 0 }}>
+                These acts use Camel Ranch Booking to track every show, keep their band informed, and build their careers — one confirmed date at a time.
+              </p>
             </div>
           </div>
           <ArtistSpotlight />

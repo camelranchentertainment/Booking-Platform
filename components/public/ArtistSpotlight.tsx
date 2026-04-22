@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import type { PublicAct } from '../../pages/api/public/acts';
 
 const GOLD   = '#C8921A';
@@ -59,7 +60,7 @@ function FeaturedCard({ act }: { act: PublicAct }) {
             padding: '0.2rem 0.75rem', background: GOLD, color: BG,
             fontWeight: 700, letterSpacing: '0.35em', fontSize: '0.56rem', textTransform: 'uppercase',
           }}>
-            Featured Act
+            Top Performer
           </span>
           {act.logo_url
             ? <img src={act.logo_url} alt={act.act_name} style={{ width: 80, height: 80, objectFit: 'contain' }} />
@@ -79,7 +80,7 @@ function FeaturedCard({ act }: { act: PublicAct }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
             <div style={{ height: 1, width: 32, background: GOLD }} />
             <span style={{ color: GOLD, letterSpacing: '0.38em', fontSize: '0.62rem', textTransform: 'uppercase' }}>
-              Top Act · Our Roster
+              Most Active · This Platform
             </span>
           </div>
           <h3 style={{
@@ -99,13 +100,13 @@ function FeaturedCard({ act }: { act: PublicAct }) {
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <div style={{ color: CREAM, letterSpacing: '0.3em', fontSize: '0.56rem', textTransform: 'uppercase', opacity: 0.22, marginBottom: '0.25rem' }}>
-              Confirmed Dates
+              Confirmed Bookings
             </div>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, color: GOLD, fontSize: '2rem', lineHeight: 1 }}>
               {act.confirmed_count || '—'}
             </div>
           </div>
-          <a href="#booking" style={{
+          <Link href="/register" style={{
             display: 'inline-flex', alignItems: 'center', gap: '1rem',
             color: GOLD, letterSpacing: '0.25em', fontSize: '0.72rem',
             textTransform: 'uppercase', textDecoration: 'none', transition: 'color 0.2s',
@@ -113,9 +114,9 @@ function FeaturedCard({ act }: { act: PublicAct }) {
             onMouseEnter={e => (e.currentTarget.style.color = CREAM)}
             onMouseLeave={e => (e.currentTarget.style.color = GOLD)}
           >
-            <span>Book This Act</span>
+            <span>Join Them</span>
             <div style={{ height: 1, width: 32, background: 'currentColor' }} />
-          </a>
+          </Link>
         </div>
       </div>
     </div>
@@ -163,13 +164,13 @@ function SupportingCard({ act, index, last }: { act: PublicAct; index: number; l
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: '2rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
             <div style={{ color: CREAM, letterSpacing: '0.3em', fontSize: '0.56rem', textTransform: 'uppercase', opacity: 0.2, marginBottom: '0.25rem' }}>
-              Confirmed Dates
+              Confirmed Bookings
             </div>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: accent, fontSize: '1.5rem', lineHeight: 1 }}>
               {act.confirmed_count || '—'}
             </div>
           </div>
-          <a href="#booking" style={{
+          <Link href="/register" style={{
             display: 'inline-flex', alignItems: 'center', gap: '0.75rem',
             color: accent, letterSpacing: '0.25em', fontSize: '0.68rem',
             textTransform: 'uppercase', textDecoration: 'none', transition: 'color 0.2s',
@@ -177,9 +178,9 @@ function SupportingCard({ act, index, last }: { act: PublicAct; index: number; l
             onMouseEnter={e => (e.currentTarget.style.color = CREAM)}
             onMouseLeave={e => (e.currentTarget.style.color = accent)}
           >
-            <span>Inquire</span>
+            <span>Get Started</span>
             <div style={{ height: 1, width: 20, background: 'currentColor' }} />
-          </a>
+          </Link>
         </div>
       </div>
     </div>
@@ -194,15 +195,15 @@ function SpotlightPlaceholder() {
       <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '3rem 2rem' }}>
         <div style={{ height: 1, width: 48, background: GOLD, margin: '0 auto 1.5rem' }} />
         <p style={{ color: 'rgba(240,216,162,0.3)', fontSize: '0.78rem', letterSpacing: '0.25em', textTransform: 'uppercase' }}>
-          Roster coming soon — check back for featured artists
+          Be the first success story on this platform
         </p>
-        <a href="#booking" style={{
+        <Link href="/register" style={{
           display: 'inline-block', marginTop: '1.5rem',
           color: GOLD, fontSize: '0.72rem', letterSpacing: '0.25em',
           textTransform: 'uppercase', textDecoration: 'none',
         }}>
-          Submit a Booking Inquiry →
-        </a>
+          Create Your Free Account →
+        </Link>
       </div>
     </div>
   );
@@ -210,7 +211,7 @@ function SpotlightPlaceholder() {
 
 /* ── ArtistSpotlight ──────────────────────────────────────── */
 export default function ArtistSpotlight() {
-  const [acts, setActs]   = useState<PublicAct[]>([]);
+  const [acts, setActs]       = useState<PublicAct[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -257,24 +258,23 @@ export default function ArtistSpotlight() {
         </div>
       )}
 
-      {/* Roster footer note */}
       <div style={{
         padding: '2rem 2.5rem', display: 'flex',
         alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem',
         borderBottom: `1px solid ${BORDER}`,
       }}>
         <p style={{ color: CREAM, fontSize: '0.78rem', letterSpacing: '0.05em', opacity: 0.28, margin: 0 }}>
-          Showing top acts by booking activity. Full roster available on inquiry.
+          Artists ranked by confirmed bookings tracked on the platform.
         </p>
-        <a href="#booking" style={{
+        <Link href="/register" style={{
           color: GOLD, letterSpacing: '0.25em', fontSize: '0.72rem',
           textTransform: 'uppercase', textDecoration: 'none', transition: 'color 0.2s',
         }}
           onMouseEnter={e => (e.currentTarget.style.color = CREAM)}
           onMouseLeave={e => (e.currentTarget.style.color = GOLD)}
         >
-          View All →
-        </a>
+          Join Them →
+        </Link>
       </div>
     </>
   );
