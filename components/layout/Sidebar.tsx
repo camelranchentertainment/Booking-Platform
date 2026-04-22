@@ -13,6 +13,7 @@ const agentNav = [
   { label: 'Bands',     href: '/acts',      icon: '♪' },
   { label: 'Tours',     href: '/tours',     icon: '⟴' },
   { label: 'Venues',    href: '/venues',    icon: '⌂' },
+  { label: 'Calendar',  href: '/calendar',  icon: '◷' },
   { label: 'Email',     href: '/email',     icon: '✉' },
   { label: 'Social',    href: '/social',    icon: '✦' },
   { label: 'Settings',  href: '/settings',  icon: '⚙' },

@@ -19,11 +19,21 @@ export default function BandCalendar() {
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data: acts } = await supabase.from('acts').select('id').eq('owner_id', user.id).eq('is_active', true).limit(1);
-    if (!acts?.length) { setLoading(false); return; }
+
+    // Try owner_id first, fall back to act_members table for invited admins
+    const { data: ownedActs } = await supabase.from('acts').select('id').eq('owner_id', user.id).eq('is_active', true);
+    let actId: string | null = ownedActs?.[0]?.id || null;
+
+    if (!actId) {
+      const { data: profile } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
+      actId = profile?.act_id || null;
+    }
+
+    if (!actId) { setLoading(false); return; }
+
     const { data } = await supabase.from('bookings')
       .select('id, status, show_date, set_time, load_in_time, fee, venue:venues(name, city, state)')
-      .eq('act_id', acts[0].id)
+      .eq('act_id', actId)
       .neq('status', 'cancelled')
       .not('show_date', 'is', null)
       .order('show_date');
