@@ -18,6 +18,112 @@ const STATUS_LABELS: Record<string, string> = {
   inactive: 'Inactive',
 };
 
+function GoogleMapsGuide() {
+  const [open, setOpen] = useState(false);
+
+  const STEPS = [
+    {
+      num: '1', title: 'Create or open a Google Cloud project',
+      body: 'Go to console.cloud.google.com → select or create a project for Camel Ranch Booking.',
+      link: { label: 'console.cloud.google.com →', href: 'https://console.cloud.google.com' },
+    },
+    {
+      num: '2', title: 'Enable the required APIs',
+      body: 'In the left menu go to APIs & Services → Library and enable all three of these:',
+      bullets: ['Maps JavaScript API', 'Places API', 'Places API (New)'],
+    },
+    {
+      num: '3', title: 'Create an API key',
+      body: 'Go to APIs & Services → Credentials → Create Credentials → API Key. Copy the key.',
+      note: 'Recommended: restrict the key to your domain (HTTP referrers: camelranchbooking.com/*) so it cannot be abused if exposed.',
+    },
+    {
+      num: '4', title: 'Add the key to your environment',
+      body: 'In Vercel: Project → Settings → Environment Variables → add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY = your key. Also add it to .env.local for local development. Redeploy after saving.',
+    },
+  ];
+
+  const row = (label: string, val: string) => (
+    <div style={{ display: 'flex', gap: '0.75rem', padding: '0.35rem 0', borderBottom: '1px solid var(--border)' }}>
+      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', minWidth: 100 }}>{label}</span>
+      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)', wordBreak: 'break-all' }}>{val}</span>
+    </div>
+  );
+
+  return (
+    <div className="card">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <span style={{ fontSize: '1rem' }}>🗺</span>
+          <span className="card-title">GOOGLE MAPS SETUP</span>
+          <span style={{
+            fontFamily: 'var(--font-body)', fontSize: '0.72rem', padding: '0.15rem 0.5rem',
+            borderRadius: '3px', background: 'rgba(96,165,250,0.12)', color: '#60a5fa', letterSpacing: '0.06em',
+          }}>
+            {process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY && process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY !== 'YOUR_GOOGLE_MAPS_API_KEY'
+              ? '✓ Configured' : 'Not configured'}
+          </span>
+        </div>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+            Google Maps enables two features: <strong>venue address autocomplete</strong> (when adding a venue) and
+            <strong> venue prospecting</strong> (searching Google Places for live music venues in any city).
+          </p>
+
+          <div style={{ background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', padding: '0.75rem 1rem' }}>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              Env var name
+            </div>
+            {row('Variable', 'NEXT_PUBLIC_GOOGLE_MAPS_API_KEY')}
+            {row('Set in', 'Vercel dashboard → Project → Settings → Env Vars')}
+            {row('Also', '.env.local for local dev (never commit this file)')}
+          </div>
+
+          {STEPS.map(s => (
+            <div key={s.num} style={{ display: 'flex', gap: '0.75rem' }}>
+              <div style={{
+                flexShrink: 0, width: 24, height: 24, borderRadius: '50%',
+                background: '#60a5fa22', border: '1px solid rgba(96,165,250,0.35)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, color: '#60a5fa',
+              }}>{s.num}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.2rem' }}>{s.title}</div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>{s.body}</div>
+                {s.bullets && (
+                  <ul style={{ margin: '0.35rem 0 0 1rem', padding: 0 }}>
+                    {s.bullets.map(b => (
+                      <li key={b} style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.15rem' }}>{b}</li>
+                    ))}
+                  </ul>
+                )}
+                {s.note && (
+                  <div style={{ marginTop: '0.35rem', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#fbbf24', background: 'rgba(251,191,36,0.07)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem' }}>
+                    ⚠ {s.note}
+                  </div>
+                )}
+                {s.link && (
+                  <a href={s.link.href} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: '0.3rem', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#60a5fa' }}>
+                    {s.link.label}
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Settings() {
   const router = useRouter();
   const [profile, setProfile]   = useState<UserProfile | null>(null);
@@ -224,6 +330,9 @@ export default function Settings() {
             </div>
           </form>
         )}
+
+        {/* Google Maps setup — superadmin only */}
+        {isSuperAdmin && <GoogleMapsGuide />}
 
         {/* Billing — visible to agents and band_admins */}
         {profile && profile.role !== 'superadmin' && profile.role !== 'member' && (
