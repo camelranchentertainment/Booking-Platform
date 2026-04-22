@@ -263,6 +263,98 @@ function Hero() {
   );
 }
 
+/* ── Features ─────────────────────────────────────────────── */
+const FEATURES = [
+  {
+    icon: '◈',
+    title: 'Track Every Booking',
+    sub: '9 pipeline stages',
+    desc: 'From first pitch to final advance — every booking moves through a clear pipeline so nothing falls through the cracks.',
+  },
+  {
+    icon: '♪',
+    title: 'Keep Your Band in Sync',
+    sub: 'Role-based portals',
+    desc: 'Every member sees their load-in time, set time, and venue details. No more group texts, no more "what time are we there?"',
+  },
+  {
+    icon: '⟴',
+    title: 'Build Your Tours',
+    sub: 'Multi-city routing',
+    desc: 'Plan entire tour runs, route dates across cities, and see your full schedule in one place — confirmed and in progress.',
+  },
+  {
+    icon: '✉',
+    title: 'Advance Like a Pro',
+    sub: 'Show-day ready',
+    desc: 'Venue contacts, deal notes, hospitality, and stage details all stored and ready when show day arrives.',
+  },
+];
+
+function Features() {
+  return (
+    <section id="features" style={{ borderTop: BORDER, background: DARK }}>
+      <div className="cr-hero-content" style={{ paddingBottom: '1rem', paddingTop: '5rem' }}>
+        <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+            <div style={{ height: 1, width: 48, background: GOLD }} />
+            <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>
+              The Platform
+            </span>
+          </div>
+          <h2 style={{
+            fontFamily: 'var(--font-display)', fontWeight: 900,
+            lineHeight: 1, textTransform: 'uppercase', margin: '0 0 0.75rem',
+            fontSize: 'clamp(2rem,5vw,4rem)', letterSpacing: '-0.01em', color: CREAM,
+          }}>
+            Everything You Need<br />To Run Your Career.
+          </h2>
+          <p style={{ color: 'rgba(240,216,162,0.38)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '32rem', margin: 0 }}>
+            Built for working musicians — not spreadsheets, not email chains, not sticky notes.
+          </p>
+        </div>
+      </div>
+
+      <div className="cr-hero-content" style={{ paddingTop: '2.5rem', paddingBottom: '5rem' }}>
+        <div className="cr-features-grid" style={{ maxWidth: '68rem', margin: '0 auto' }}>
+          {FEATURES.map(f => (
+            <div key={f.title} style={{
+              borderTop: `2px solid ${GOLD}`,
+              border: `1px solid rgba(200,146,26,0.15)`,
+              borderTopWidth: 2,
+              borderTopColor: GOLD,
+              padding: '2rem',
+              background: BG,
+            }}>
+              <div style={{
+                fontFamily: 'var(--font-display)', fontSize: '1.75rem',
+                color: GOLD, marginBottom: '1rem', lineHeight: 1,
+              }}>
+                {f.icon}
+              </div>
+              <div style={{
+                fontFamily: 'var(--font-display)', fontSize: '1.4rem',
+                letterSpacing: '0.03em', color: CREAM, lineHeight: 1, marginBottom: '0.3rem',
+              }}>
+                {f.title}
+              </div>
+              <div style={{
+                fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.14em',
+                textTransform: 'uppercase', color: GOLD, marginBottom: '0.85rem',
+              }}>
+                {f.sub}
+              </div>
+              <p style={{ fontSize: '0.88rem', color: 'rgba(240,216,162,0.55)', lineHeight: 1.65, margin: 0 }}>
+                {f.desc}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ── Booking Form ─────────────────────────────────────────── */
 type FormState = { name: string; email: string; venue: string; date: string; artist: string; notes: string };
 
@@ -535,6 +627,11 @@ export default function Home() {
           flex-direction: column;
           gap: 2rem;
         }
+        .cr-features-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1rem;
+        }
         .cr-booking-grid {
           display: grid;
           gap: 4rem;
@@ -556,6 +653,7 @@ export default function Home() {
           .cr-hero-content { padding: 2rem 4rem 5rem; padding-top: 7rem; }
           .cr-hero-bottom  { flex-direction: row; align-items: flex-end; justify-content: space-between; }
 
+          .cr-features-grid { grid-template-columns: repeat(2, 1fr); }
           .cr-booking-grid { grid-template-columns: 1fr 1fr; gap: 5rem; }
           .cr-footer-grid  { grid-template-columns: repeat(3, 1fr); }
           .cr-footer-bottom { flex-direction: row; justify-content: space-between; align-items: center; }
@@ -563,12 +661,14 @@ export default function Home() {
 
         @media (min-width: 1024px) {
           .cr-hero-content { padding: 2rem 6rem 5rem; padding-top: 7rem; }
+          .cr-features-grid { grid-template-columns: repeat(4, 1fr); }
         }
       `}</style>
 
       <div style={{ minHeight: '100vh', background: BG, color: CREAM, fontFamily: 'var(--font-body)' }}>
         <Nav />
         <Hero />
+        <Features />
 
         {/* Artist success stories */}
         <section id="artists" style={{ borderTop: BORDER }}>
