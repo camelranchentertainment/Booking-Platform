@@ -12,7 +12,8 @@ export default function BandsPage() {
   const [linkMessage, setLinkMessage] = useState('');
   const [linkSaving, setLinkSaving] = useState(false);
   const [linkError, setLinkError]   = useState('');
-  const [loading, setLoading]   = useState(true);
+  const [loading, setLoading]       = useState(true);
+  const [bookingCounts, setBookingCounts] = useState<Record<string, number>>({});
 
   useEffect(() => { loadAll(); }, []);
 
@@ -32,9 +33,30 @@ export default function BandsPage() {
       supabase.from('acts').select('id, act_name').is('agent_id', null).not('owner_id', 'is', null).order('act_name'),
     ]);
 
-    setBands(myBandsRes.data || []);
-    setLinks(linkedRes.data || []);
-    setAllBands(allBandsRes.data || []);
+    const myBands   = myBandsRes.data  || [];
+    const myLinks   = linkedRes.data   || [];
+    const available = allBandsRes.data || [];
+
+    setBands(myBands);
+    setLinks(myLinks);
+    setAllBands(available);
+
+    // Fetch active booking counts for all managed acts
+    const allIds = [
+      ...myBands.map((b: any) => b.id),
+      ...myLinks.filter((l: any) => l.status === 'active').map((l: any) => l.act?.id).filter(Boolean),
+    ];
+    if (allIds.length > 0) {
+      const { data: counts } = await supabase
+        .from('bookings')
+        .select('act_id')
+        .in('act_id', allIds)
+        .in('status', ['pitch', 'followup', 'negotiation', 'hold', 'contract', 'confirmed', 'advancing']);
+      const map: Record<string, number> = {};
+      for (const row of counts || []) map[row.act_id] = (map[row.act_id] || 0) + 1;
+      setBookingCounts(map);
+    }
+
     setLoading(false);
   };
 
@@ -81,7 +103,7 @@ export default function BandsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Bands</h1>
-          <div className="page-sub">Your roster · {allMyBands.length} bands</div>
+          <div className="page-sub">Your roster · {allMyBands.length} {allMyBands.length === 1 ? 'band' : 'bands'}</div>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
           <button className="btn btn-secondary" onClick={() => setShowLinkModal(true)}>Link Existing Band</button>
@@ -114,23 +136,42 @@ export default function BandsPage() {
         <div className="grid-3">
           {allMyBands.map(band => (
             <Link key={band.id} href={`/acts/${band.id}`} style={{ textDecoration: 'none' }}>
-              <div className="card" style={{ cursor: 'pointer', transition: 'border-color 0.15s', position: 'relative' }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
-                {band._linked && (
-                  <div style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', fontFamily: 'var(--font-body)', fontSize: '0.76rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.15rem 0.4rem' }}>
-                    Linked
+              <div className="card" style={{ cursor: 'pointer', transition: 'border-color 0.15s, box-shadow 0.15s', position: 'relative', borderLeft: '3px solid var(--accent)' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.boxShadow = '0 0 0 1px rgba(200,146,26,0.15)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.borderLeftColor = 'var(--accent)'; e.currentTarget.style.boxShadow = 'none'; }}>
+
+                {/* Top row: name + linked badge */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', letterSpacing: '0.04em', color: 'var(--text-primary)', lineHeight: 1.1 }}>
+                    {band.act_name}
+                  </div>
+                  {band._linked && (
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.35)', padding: '0.1rem 0.4rem', flexShrink: 0, marginLeft: '0.5rem' }}>
+                      Linked
+                    </span>
+                  )}
+                </div>
+
+                {/* Genre */}
+                {band.genre && (
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.85rem' }}>
+                    {band.genre.replace(/[\s/]+$/, '')}
                   </div>
                 )}
-                <div style={{ marginBottom: '0.75rem', paddingRight: band._linked ? '4rem' : '0' }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', letterSpacing: '0.04em', color: 'var(--text-primary)' }}>{band.act_name}</div>
-                  {band.genre && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '0.2rem' }}>{band.genre}</div>}
-                </div>
-                <div style={{ display: 'flex', gap: '0.75rem', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  {band.member_count > 0 && <span>{band.member_count} member{band.member_count !== 1 ? 's' : ''}</span>}
+
+                {/* Stats row */}
+                <div style={{ display: 'flex', gap: '1.25rem', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: '0.65rem', marginTop: band.genre ? 0 : '0.85rem' }}>
                   <span style={{ color: band.is_active ? '#10b981' : 'var(--text-muted)' }}>
                     {band.is_active ? '● Active' : '○ Inactive'}
                   </span>
+                  {band.member_count > 0 && (
+                    <span>{band.member_count} {band.member_count === 1 ? 'member' : 'members'}</span>
+                  )}
+                  {bookingCounts[band.id] > 0 && (
+                    <span style={{ color: 'var(--accent)' }}>
+                      {bookingCounts[band.id]} {bookingCounts[band.id] === 1 ? 'booking' : 'bookings'}
+                    </span>
+                  )}
                 </div>
               </div>
             </Link>

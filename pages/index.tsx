@@ -10,7 +10,7 @@ const BG     = '#0E0603';
 const DARK   = '#0A0502';
 const BORDER = 'rgba(200,146,26,0.13)';
 
-const NAV_LINKS = ['Artists', 'Booking', 'Contact'];
+const NAV_LINKS = ['Features', 'How It Works', 'Contact'];
 
 /* ── Hatch SVG ────────────────────────────────────────────── */
 function HatchBg({ id, rotate = 45, opacity = 0.04 }: { id: string; rotate?: number; opacity?: number }) {
@@ -75,7 +75,7 @@ function Nav() {
             {l}
           </a>
         ))}
-        <a href="#booking" style={{
+        <Link href="/register" style={{
           color: GOLD, fontSize: '0.72rem', letterSpacing: '0.22em',
           textTransform: 'uppercase', textDecoration: 'none',
           padding: '0.45rem 1rem', border: `1px solid ${GOLD}`,
@@ -84,8 +84,8 @@ function Nav() {
           onMouseEnter={e => { e.currentTarget.style.background = GOLD; e.currentTarget.style.color = BG; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = GOLD; }}
         >
-          Book Now
-        </a>
+          Get Started
+        </Link>
         <Link href="/login" style={{
           color: 'rgba(240,216,162,0.35)', fontSize: '0.68rem',
           letterSpacing: '0.2em', textTransform: 'uppercase', textDecoration: 'none',
@@ -177,7 +177,7 @@ function Hero() {
             <span style={{
               color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase',
             }}>
-              Red Dirt · Honky Tonk · Americana
+              Built for Working Musicians
             </span>
           </div>
 
@@ -186,7 +186,7 @@ function Hero() {
             color: CREAM, textTransform: 'uppercase', margin: '0 0 0.25rem',
             fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
           }}>
-            Where Music
+            Your Shows.
           </h1>
           <h1 style={{
             fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.88,
@@ -194,22 +194,22 @@ function Hero() {
             textTransform: 'uppercase', margin: '0 0 0.25rem',
             fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
           }}>
-            Meets The
+            Your Band.
           </h1>
           <h1 style={{
             fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.88,
             color: CREAM, textTransform: 'uppercase', margin: '0 0 2.5rem',
             fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
           }}>
-            Stage
+            Organized.
           </h1>
 
           <div className="cr-hero-bottom">
-            <p style={{ maxWidth: '24rem', color: 'rgba(240,216,162,0.42)', fontSize: '0.88rem', lineHeight: 1.65 }}>
-              Independent booking representation for roots music artists. Honest advocacy, direct relationships, and a deep commitment to the music.
+            <p style={{ maxWidth: '26rem', color: 'rgba(240,216,162,0.42)', fontSize: '0.88rem', lineHeight: 1.65 }}>
+              Stop losing gigs to missed follow-ups and disorganized schedules. One platform to track every booking, keep your whole band in the loop, and take your career further.
             </p>
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-              <a href="#artists" style={{
+              <Link href="/register" style={{
                 padding: '0.75rem 2rem', background: GOLD, color: BG,
                 fontWeight: 700, letterSpacing: '0.22em', fontSize: '0.72rem',
                 textTransform: 'uppercase', textDecoration: 'none',
@@ -218,9 +218,9 @@ function Hero() {
                 onMouseEnter={e => (e.currentTarget.style.background = CREAM)}
                 onMouseLeave={e => (e.currentTarget.style.background = GOLD)}
               >
-                Our Artists
-              </a>
-              <a href="#booking" style={{
+                Get Started Free
+              </Link>
+              <Link href="/login" style={{
                 padding: '0.75rem 2rem', color: CREAM,
                 letterSpacing: '0.22em', fontSize: '0.72rem',
                 textTransform: 'uppercase', textDecoration: 'none',
@@ -230,8 +230,8 @@ function Hero() {
                 onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; e.currentTarget.style.color = GOLD; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(240,216,162,0.22)'; e.currentTarget.style.color = CREAM; }}
               >
-                Book a Show
-              </a>
+                Sign In
+              </Link>
             </div>
           </div>
         </div>
@@ -258,6 +258,172 @@ function Hero() {
         }}>
           Scroll
         </span>
+      </div>
+    </section>
+  );
+}
+
+/* ── Features ─────────────────────────────────────────────── */
+const FEATURES = [
+  {
+    icon: '◈',
+    title: 'Track Every Booking',
+    sub: '9 pipeline stages',
+    desc: 'From first pitch to final advance — every booking moves through a clear pipeline so nothing falls through the cracks.',
+  },
+  {
+    icon: '♪',
+    title: 'Keep Your Band in Sync',
+    sub: 'Role-based portals',
+    desc: 'Every member sees their load-in time, set time, and venue details. No more group texts, no more "what time are we there?"',
+  },
+  {
+    icon: '⟴',
+    title: 'Build Your Tours',
+    sub: 'Multi-city routing',
+    desc: 'Plan entire tour runs, route dates across cities, and see your full schedule in one place — confirmed and in progress.',
+  },
+  {
+    icon: '✉',
+    title: 'Advance Like a Pro',
+    sub: 'Show-day ready',
+    desc: 'Venue contacts, deal notes, hospitality, and stage details all stored and ready when show day arrives.',
+  },
+];
+
+function Features() {
+  return (
+    <section id="features" style={{ borderTop: BORDER, background: DARK }}>
+      <div className="cr-hero-content" style={{ paddingBottom: '1rem', paddingTop: '5rem' }}>
+        <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+            <div style={{ height: 1, width: 48, background: GOLD }} />
+            <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>
+              The Platform
+            </span>
+          </div>
+          <h2 style={{
+            fontFamily: 'var(--font-display)', fontWeight: 900,
+            lineHeight: 1, textTransform: 'uppercase', margin: '0 0 0.75rem',
+            fontSize: 'clamp(2rem,5vw,4rem)', letterSpacing: '-0.01em', color: CREAM,
+          }}>
+            Everything You Need<br />To Run Your Career.
+          </h2>
+          <p style={{ color: 'rgba(240,216,162,0.38)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '32rem', margin: 0 }}>
+            Built for working musicians — not spreadsheets, not email chains, not sticky notes.
+          </p>
+        </div>
+      </div>
+
+      <div className="cr-hero-content" style={{ paddingTop: '2.5rem', paddingBottom: '5rem' }}>
+        <div className="cr-features-grid" style={{ maxWidth: '68rem', margin: '0 auto' }}>
+          {FEATURES.map(f => (
+            <div key={f.title} style={{
+              borderTop: `2px solid ${GOLD}`,
+              border: `1px solid rgba(200,146,26,0.15)`,
+              borderTopWidth: 2,
+              borderTopColor: GOLD,
+              padding: '2rem',
+              background: BG,
+            }}>
+              <div style={{
+                fontFamily: 'var(--font-display)', fontSize: '1.75rem',
+                color: GOLD, marginBottom: '1rem', lineHeight: 1,
+              }}>
+                {f.icon}
+              </div>
+              <div style={{
+                fontFamily: 'var(--font-display)', fontSize: '1.4rem',
+                letterSpacing: '0.03em', color: CREAM, lineHeight: 1, marginBottom: '0.3rem',
+              }}>
+                {f.title}
+              </div>
+              <div style={{
+                fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.14em',
+                textTransform: 'uppercase', color: GOLD, marginBottom: '0.85rem',
+              }}>
+                {f.sub}
+              </div>
+              <p style={{ fontSize: '0.88rem', color: 'rgba(240,216,162,0.55)', lineHeight: 1.65, margin: 0 }}>
+                {f.desc}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ── Sign-Up CTA ──────────────────────────────────────────── */
+function SignUpCTA() {
+  return (
+    <section style={{
+      position: 'relative', background: DARK,
+      borderTop: BORDER, overflow: 'hidden',
+    }}>
+      <HatchBg id="cta-hatch" rotate={32} opacity={0.035} />
+
+      <div className="cr-hero-content" style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
+        <div style={{ maxWidth: '52rem', margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1 }}>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '2rem' }}>
+            <div style={{ height: 1, width: 48, background: GOLD }} />
+            <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>
+              Get Started
+            </span>
+            <div style={{ height: 1, width: 48, background: GOLD }} />
+          </div>
+
+          <h2 style={{
+            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.9,
+            textTransform: 'uppercase', margin: '0 0 1.5rem',
+            fontSize: 'clamp(2.5rem,7vw,5.5rem)', letterSpacing: '-0.02em',
+          }}>
+            <span style={{ color: CREAM }}>Stop Losing Gigs<br />To </span>
+            <span style={{ color: 'transparent', WebkitTextStroke: `1px ${GOLD}` }}>Disorganization.</span>
+          </h2>
+
+          <p style={{
+            color: 'rgba(240,216,162,0.45)', fontSize: '1rem',
+            lineHeight: 1.7, maxWidth: '34rem', margin: '0 auto 2.5rem',
+          }}>
+            Free to start. Sign up as a band admin to manage your bookings, or join your band with an invite from your admin.
+          </p>
+
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link href="/register" style={{
+              display: 'inline-block', padding: '0.9rem 2.5rem',
+              background: GOLD, color: BG, fontWeight: 700,
+              letterSpacing: '0.22em', fontSize: '0.78rem', textTransform: 'uppercase',
+              textDecoration: 'none', transition: 'background 0.2s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.background = CREAM)}
+              onMouseLeave={e => (e.currentTarget.style.background = GOLD)}
+            >
+              Create Free Account
+            </Link>
+            <Link href="/login" style={{
+              display: 'inline-block', padding: '0.9rem 2.5rem',
+              color: CREAM, letterSpacing: '0.22em', fontSize: '0.78rem',
+              textTransform: 'uppercase', textDecoration: 'none',
+              border: `1px solid rgba(240,216,162,0.22)`, transition: 'border-color 0.2s, color 0.2s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; e.currentTarget.style.color = GOLD; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(240,216,162,0.22)'; e.currentTarget.style.color = CREAM; }}
+            >
+              Already Have an Account
+            </Link>
+          </div>
+
+          <p style={{
+            marginTop: '2rem', color: 'rgba(240,216,162,0.22)',
+            fontSize: '0.72rem', letterSpacing: '0.1em',
+          }}>
+            No credit card required · Free forever for band members
+          </p>
+
+        </div>
       </div>
     </section>
   );
@@ -470,15 +636,25 @@ function Footer() {
             </a>
           </div>
           <div>
-            <div style={{ color: 'rgba(240,216,162,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Booking</div>
-            <a href="#booking" style={{
-              color: GOLD, fontSize: '0.88rem', textDecoration: 'none', transition: 'color 0.2s',
+            <div style={{ color: 'rgba(240,216,162,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Platform</div>
+            <Link href="/register" style={{
+              color: GOLD, fontSize: '0.88rem', textDecoration: 'none',
+              display: 'block', marginBottom: '0.5rem', transition: 'color 0.2s',
             }}
               onMouseEnter={e => (e.currentTarget.style.color = CREAM)}
               onMouseLeave={e => (e.currentTarget.style.color = GOLD)}
             >
-              Submit an Inquiry →
-            </a>
+              Create Free Account →
+            </Link>
+            <Link href="/login" style={{
+              color: 'rgba(240,216,162,0.35)', fontSize: '0.82rem',
+              textDecoration: 'none', transition: 'color 0.2s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.color = CREAM)}
+              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(240,216,162,0.35)')}
+            >
+              Sign In
+            </Link>
           </div>
         </div>
 
@@ -535,6 +711,11 @@ export default function Home() {
           flex-direction: column;
           gap: 2rem;
         }
+        .cr-features-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1rem;
+        }
         .cr-booking-grid {
           display: grid;
           gap: 4rem;
@@ -556,6 +737,7 @@ export default function Home() {
           .cr-hero-content { padding: 2rem 4rem 5rem; padding-top: 7rem; }
           .cr-hero-bottom  { flex-direction: row; align-items: flex-end; justify-content: space-between; }
 
+          .cr-features-grid { grid-template-columns: repeat(2, 1fr); }
           .cr-booking-grid { grid-template-columns: 1fr 1fr; gap: 5rem; }
           .cr-footer-grid  { grid-template-columns: repeat(3, 1fr); }
           .cr-footer-bottom { flex-direction: row; justify-content: space-between; align-items: center; }
@@ -563,34 +745,39 @@ export default function Home() {
 
         @media (min-width: 1024px) {
           .cr-hero-content { padding: 2rem 6rem 5rem; padding-top: 7rem; }
+          .cr-features-grid { grid-template-columns: repeat(4, 1fr); }
         }
       `}</style>
 
       <div style={{ minHeight: '100vh', background: BG, color: CREAM, fontFamily: 'var(--font-body)' }}>
         <Nav />
         <Hero />
+        <Features />
 
-        {/* Artists */}
+        {/* Artist success stories */}
         <section id="artists" style={{ borderTop: BORDER }}>
           <div className="cr-hero-content" style={{ background: BG, paddingBottom: '2.5rem', paddingTop: '5rem' }}>
             <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
                 <div style={{ height: 1, width: 48, background: GOLD }} />
-                <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>Roster</span>
+                <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>Real Results</span>
               </div>
               <h2 style={{
                 fontFamily: 'var(--font-display)', fontWeight: 900,
-                lineHeight: 1, textTransform: 'uppercase', margin: 0,
+                lineHeight: 1, textTransform: 'uppercase', margin: '0 0 0.75rem',
                 fontSize: 'clamp(2rem,5vw,4rem)', letterSpacing: '-0.01em', color: CREAM,
               }}>
-                Our Artists
+                Artists Growing<br />With This Platform
               </h2>
+              <p style={{ color: 'rgba(240,216,162,0.38)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '32rem', margin: 0 }}>
+                These acts use Camel Ranch Booking to track every show, keep their band informed, and build their careers — one confirmed date at a time.
+              </p>
             </div>
           </div>
           <ArtistSpotlight />
         </section>
 
-        <BookingForm />
+        <SignUpCTA />
         <Footer />
       </div>
     </>
