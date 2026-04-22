@@ -23,11 +23,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .from('platform_settings')
       .select('key, value');
 
-    // Mask secret keys — never return actual value to browser
+    // Non-secret keys returned as-is; all others returned as configured: bool only
+    const PUBLIC_KEYS = new Set(['resend_from_email', 'stripe_agent_price_id', 'stripe_band_price_id', 'google_maps_api_key']);
     const masked = (data || []).map((row: any) => ({
       key: row.key,
-      configured: Boolean(row.value && row.value.length > 4),
-      value: row.key === 'resend_from_email' ? row.value : undefined,
+      configured: Boolean(row.value && row.value.length > 2),
+      value: PUBLIC_KEYS.has(row.key) ? row.value : undefined,
     }));
 
     return res.json(masked);

@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
+import { getSetting } from '../../../lib/platformSettings';
 
 // Google Places Text Search — finds real venues in a city/state
 // Returns results annotated with whether they're already in the agent's database
@@ -17,9 +18,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { city, state } = req.query;
   if (!city || !state) return res.status(400).json({ error: 'city and state required' });
 
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const apiKey = await getSetting('google_maps_api_key');
   if (!apiKey || apiKey === 'YOUR_GOOGLE_MAPS_API_KEY') {
-    return res.status(501).json({ error: 'Google Maps API key not configured. Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to your environment variables.' });
+    return res.status(501).json({ error: 'Google Maps not configured. Add your API key in Settings → Google Maps.' });
   }
 
   try {

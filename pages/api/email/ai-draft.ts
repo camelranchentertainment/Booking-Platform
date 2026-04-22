@@ -1,8 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase } from '../../../lib/supabase';
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import { getSetting } from '../../../lib/platformSettings';
 
 // Stable system prompt — cached across all requests
 const SYSTEM_PROMPT = `You are an expert music booking agent assistant for Camel Ranch Entertainment.
@@ -41,6 +40,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const contact = contactRes.data;
 
   const prompt = buildPrompt({ type, act, venue, contact, previousEmail, agentName, agencyName });
+
+  const anthropicKey = await getSetting('anthropic_api_key');
+  if (!anthropicKey) return res.status(500).json({ error: 'AI not configured. Add your Anthropic API key in Settings.' });
+  const client = new Anthropic({ apiKey: anthropicKey });
 
   try {
     const message = await client.messages.create({

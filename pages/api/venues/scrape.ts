@@ -2,9 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import FirecrawlApp from '@mendable/firecrawl-js';
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase } from '../../../lib/supabase';
-
-const firecrawl = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY! });
-const claude    = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+import { getSetting } from '../../../lib/platformSettings';
 
 // Cached extraction prompt
 const EXTRACT_PROMPT = `You are extracting booking/contact information from a venue website.
@@ -37,6 +35,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!['http:', 'https:'].includes(parsed.protocol)) {
     return res.status(400).json({ error: 'Only http/https URLs allowed' });
   }
+
+  const [firecrawlKey, anthropicKey] = await Promise.all([
+    getSetting('firecrawl_api_key'),
+    getSetting('anthropic_api_key'),
+  ]);
+  if (!firecrawlKey) return res.status(500).json({ error: 'Venue scraping not configured. Add your Firecrawl API key in Settings.' });
+  if (!anthropicKey) return res.status(500).json({ error: 'AI not configured. Add your Anthropic API key in Settings.' });
+  const firecrawl = new FirecrawlApp({ apiKey: firecrawlKey });
+  const claude    = new Anthropic({ apiKey: anthropicKey });
 
   try {
     // Scrape the venue website

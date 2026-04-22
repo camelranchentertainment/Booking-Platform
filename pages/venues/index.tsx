@@ -57,15 +57,19 @@ export default function VenuesPage() {
 
   useEffect(() => { loadVenues(); loadGoogleMaps(); }, []);
 
-  const loadGoogleMaps = () => {
-    const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!key) return;
+  const loadGoogleMaps = async () => {
     if (window.google?.maps?.places) { setMapsReady(true); return; }
-    window.initGooglePlaces = () => setMapsReady(true);
-    const s = document.createElement('script');
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&callback=initGooglePlaces`;
-    s.async = true; s.defer = true;
-    document.head.appendChild(s);
+    try {
+      const res = await fetch('/api/admin/public-config');
+      if (!res.ok) return;
+      const { googleMapsApiKey } = await res.json();
+      if (!googleMapsApiKey) return;
+      window.initGooglePlaces = () => setMapsReady(true);
+      const s = document.createElement('script');
+      s.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places&callback=initGooglePlaces`;
+      s.async = true; s.defer = true;
+      document.head.appendChild(s);
+    } catch { /* Maps unavailable */ }
   };
 
   // Bind autocomplete once modal opens and Maps is ready

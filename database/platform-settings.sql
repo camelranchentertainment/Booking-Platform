@@ -22,8 +22,16 @@ CREATE POLICY "platform_settings_superadmin" ON platform_settings
     SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'superadmin'
   ));
 
--- Seed defaults (empty values — user fills them in via Settings UI)
+-- Seed defaults (empty — filled via Settings → Platform Setup)
 INSERT INTO platform_settings (key, value) VALUES
-  ('resend_api_key',   ''),
-  ('resend_from_email', 'booking@mail.camelranchbooking.com')
+  ('resend_api_key',        ''),
+  ('resend_from_email',     ''),
+  ('resend_webhook_secret', ''),
+  ('anthropic_api_key',     ''),
+  ('firecrawl_api_key',     ''),
+  ('stripe_secret_key',     ''),
+  ('stripe_webhook_secret', ''),
+  ('stripe_agent_price_id', ''),
+  ('stripe_band_price_id',  ''),
+  ('google_maps_api_key',   '')
 ON CONFLICT (key) DO NOTHING;
