@@ -12,6 +12,13 @@ const USERS = [
     tier:        'band_admin',
   },
   {
+    email:       'scott@camelranchbooking.com',
+    password:    'Password123!',
+    role:        'superadmin',
+    displayName: 'Scott',
+    tier:        'agent',
+  },
+  {
     email:       'scott82070@hotmail.com',
     password:    'Password123!',
     role:        'member',
@@ -51,16 +58,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       userId = created.user.id;
     }
 
-    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    const farFuture = new Date('2099-12-31').toISOString();
 
     const { error: profileErr } = await admin.from('user_profiles').upsert({
       id:                  userId,
       role:                u.role,
       email:               u.email,
       display_name:        u.displayName,
-      subscription_status: u.role === 'member' ? 'active'  : 'trialing',
-      subscription_tier:   u.role === 'member' ? 'member'  : u.tier,
-      trial_ends_at:       u.role === 'member' ? new Date().toISOString() : trialEndsAt,
+      subscription_status: 'active',
+      subscription_tier:   u.tier,
+      trial_ends_at:       farFuture,
     }, { onConflict: 'id' });
 
     results.push({ email: u.email, role: u.role, userId, error: profileErr?.message ?? null });
