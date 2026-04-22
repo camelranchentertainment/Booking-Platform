@@ -3,6 +3,8 @@ import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/router';
 
+type PwForm = { newPassword: string; confirmPassword: string };
+
 type BandForm = {
   act_name: string; genre: string; bio: string;
   website: string; instagram: string; spotify: string; member_count: string;
@@ -17,6 +19,11 @@ export default function BandSettings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const [pwForm, setPwForm]   = useState<PwForm>({ newPassword: '', confirmPassword: '' });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwSaved, setPwSaved]   = useState(false);
+  const [pwError, setPwError]   = useState('');
 
   useEffect(() => { load(); }, []);
 
@@ -62,6 +69,20 @@ export default function BandSettings() {
 
   const set = (k: keyof BandForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const changePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pwForm.newPassword !== pwForm.confirmPassword) { setPwError('Passwords do not match'); return; }
+    if (pwForm.newPassword.length < 8) { setPwError('Password must be at least 8 characters'); return; }
+    setPwError('');
+    setPwSaving(true);
+    const { error: err } = await supabase.auth.updateUser({ password: pwForm.newPassword });
+    setPwSaving(false);
+    if (err) { setPwError(err.message); return; }
+    setPwForm({ newPassword: '', confirmPassword: '' });
+    setPwSaved(true);
+    setTimeout(() => setPwSaved(false), 3000);
+  };
 
   if (loading) return <AppShell requireRole="act_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading…</div></AppShell>;
 
@@ -152,6 +173,41 @@ export default function BandSettings() {
             )}
           </div>
         </form>
+
+        {/* Change Password */}
+        <form onSubmit={changePassword} style={{ marginTop: '1.25rem' }}>
+          <div className="card">
+            <div className="card-header"><span className="card-title">CHANGE PASSWORD</span></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div className="field">
+                <label className="field-label">New Password</label>
+                <input
+                  className="input" type="password"
+                  value={pwForm.newPassword}
+                  onChange={e => setPwForm(f => ({ ...f, newPassword: e.target.value }))}
+                  placeholder="Min. 8 characters"
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="field">
+                <label className="field-label">Confirm New Password</label>
+                <input
+                  className="input" type="password"
+                  value={pwForm.confirmPassword}
+                  onChange={e => setPwForm(f => ({ ...f, confirmPassword: e.target.value }))}
+                  placeholder="Repeat password"
+                  autoComplete="new-password"
+                />
+              </div>
+              {pwError && <div style={{ color: '#f87171', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{pwError}</div>}
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
+              <button type="submit" className="btn btn-primary" disabled={pwSaving}>{pwSaving ? 'Saving...' : 'Update Password'}</button>
+              {pwSaved && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#34d399' }}>✓ Password Updated</span>}
+            </div>
+          </div>
+        </form>
+
       </div>
     </AppShell>
   );

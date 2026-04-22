@@ -32,6 +32,7 @@ const bandNav = [
 const memberNav = [
   { label: 'Dashboard', href: '/member',          icon: '◈' },
   { label: 'Calendar',  href: '/member/calendar', icon: '◷' },
+  { label: 'Account',   href: '/settings',        icon: '⚙' },
 ];
 
 const portals = [
