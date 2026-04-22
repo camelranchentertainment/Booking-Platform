@@ -7,7 +7,7 @@ const BG    = '#0A0502';
 const GOLD  = '#C8921A';
 const GOLD2 = '#D4A030';
 const MUTED = 'rgba(200,146,26,0.55)';
-const GLOW  = '0 0 18px rgba(200,146,26,0.42), 0 0 48px rgba(200,146,26,0.14)';
+
 
 const TIERS = [
   { role: 'agent',     label: 'Booking Agent', icon: '◈', color: '#C8921A', desc: '$30/mo · 14-day trial' },
@@ -81,7 +81,7 @@ export default function Login() {
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <div style={{
           fontFamily: 'var(--font-display)', fontSize: '2.6rem', letterSpacing: '0.14em',
-          color: GOLD, textShadow: GLOW, lineHeight: 1,
+          color: GOLD, lineHeight: 1,
         }}>
           CAMEL RANCH
         </div>
@@ -97,8 +97,8 @@ export default function Login() {
       <div style={{
         width: '100%', maxWidth: 400,
         background: 'rgba(14,6,3,0.82)', backdropFilter: 'blur(20px)',
-        border: `1px solid rgba(200,146,26,0.22)`, borderRadius: '6px',
-        padding: '2rem', boxShadow: `0 0 60px rgba(0,0,0,0.8), ${GLOW}`,
+        border: `1px solid rgba(200,146,26,0.22)`,
+        padding: '2rem',
       }}>
 
         {/* ── Forgot password view ── */}
@@ -130,12 +130,12 @@ export default function Login() {
                 <label style={{ display: 'block', fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: MUTED, marginBottom: '0.4rem' }}>Email</label>
                 <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
                   placeholder="you@example.com" required autoFocus
-                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(200,146,26,0.2)', borderRadius: '3px', padding: '0.65rem 0.85rem', color: '#F0D8A2', fontFamily: 'var(--font-body)', fontSize: '0.9rem', outline: 'none' }}
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(200,146,26,0.2)', borderRadius: 0, padding: '0.65rem 0.85rem', color: '#F0D8A2', fontFamily: 'var(--font-body)', fontSize: '0.9rem', outline: 'none' }}
                 />
               </div>
-              {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: '3px', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
+              {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 0, padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
               <button type="submit" disabled={forgotLoading}
-                style={{ padding: '0.8rem', background: forgotLoading ? 'rgba(200,146,26,0.5)' : GOLD, color: '#1A0800', border: 'none', borderRadius: '3px', fontFamily: 'var(--font-body)', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: forgotLoading ? 'not-allowed' : 'pointer' }}>
+                style={{ padding: '0.8rem', background: forgotLoading ? 'rgba(200,146,26,0.5)' : GOLD, color: '#1A0800', border: 'none', borderRadius: 0, fontFamily: 'var(--font-body)', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: forgotLoading ? 'not-allowed' : 'pointer' }}>
                 {forgotLoading ? 'Sending...' : 'Send Reset Link'}
               </button>
               <button type="button" onClick={() => { setShowForgot(false); setError(''); }}
@@ -160,7 +160,7 @@ export default function Login() {
               style={{
                 width: '100%', boxSizing: 'border-box',
                 background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(200,146,26,0.2)',
-                borderRadius: '3px', padding: '0.65rem 0.85rem',
+                borderRadius: 0, padding: '0.65rem 0.85rem',
                 color: '#F0D8A2', fontFamily: 'var(--font-body)', fontSize: '0.9rem',
                 outline: 'none',
               }}
@@ -184,7 +184,7 @@ export default function Login() {
               style={{
                 width: '100%', boxSizing: 'border-box',
                 background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(200,146,26,0.2)',
-                borderRadius: '3px', padding: '0.65rem 0.85rem',
+                borderRadius: 0, padding: '0.65rem 0.85rem',
                 color: '#F0D8A2', fontFamily: 'var(--font-body)', fontSize: '0.9rem',
                 outline: 'none',
               }}
@@ -194,7 +194,7 @@ export default function Login() {
           {error && (
             <div style={{
               background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)',
-              borderRadius: '3px', padding: '0.6rem 0.75rem', color: '#f87171', fontSize: '0.85rem',
+              borderRadius: 0, padding: '0.6rem 0.75rem', color: '#f87171', fontSize: '0.85rem',
             }}>
               {error}
             </div>
@@ -205,11 +205,10 @@ export default function Login() {
             style={{
               marginTop: '0.25rem', padding: '0.8rem',
               background: loading ? 'rgba(200,146,26,0.5)' : GOLD,
-              color: '#1A0800', border: 'none', borderRadius: '3px',
+              color: '#1A0800', border: 'none', borderRadius: 0,
               fontFamily: 'var(--font-body)', fontSize: '0.9rem', fontWeight: 700,
               letterSpacing: '0.1em', textTransform: 'uppercase',
               cursor: loading ? 'not-allowed' : 'pointer',
-              boxShadow: loading ? 'none' : GLOW, transition: 'all 0.15s',
             }}
           >
             {loading ? 'Signing in...' : 'Sign In'}
@@ -234,7 +233,7 @@ export default function Login() {
               padding: '0.9rem 0.5rem',
               background: 'rgba(14,6,3,0.75)',
               border: `1px solid rgba(200,146,26,0.15)`,
-              borderRadius: '4px', textDecoration: 'none',
+              borderRadius: 0, textDecoration: 'none',
               transition: 'border-color 0.15s, background 0.15s',
             }}
               onMouseEnter={e => {
