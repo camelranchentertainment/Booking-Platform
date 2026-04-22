@@ -25,7 +25,7 @@ export default function Document() {
       </Head>
       <body>
         {/* Runs before React hydrates — prevents flash of wrong theme */}
-        <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('theme');document.documentElement.setAttribute('data-theme',t||'dark');}catch(e){}` }} />
+        <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('theme');document.documentElement.setAttribute('data-theme',t||'light');}catch(e){}` }} />
         <Main />
         <NextScript />
       </body>

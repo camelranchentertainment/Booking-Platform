@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,400;0,500&family=Inter:wght@300;400;500;600;700&display=swap');
 
 /* ── Design tokens ─────────────────────────────────────────── */
 :root {
@@ -15,7 +15,7 @@
   /* Text — warm cream */
   --text-primary:   #F2E8D9;
   --text-secondary: #C4A882;
-  --text-muted:     #7A5A42;
+  --text-muted:     #8A6A52;
 
   /* Accent — warm gold / amber */
   --accent:       #D4A843;
@@ -36,10 +36,10 @@
   --status-completed:   #6b7280;
   --status-cancelled:   #374151;
 
-  /* Fonts */
+  /* Fonts — Inter for body, DM Mono for code/labels, Bebas Neue for display */
   --font-display: 'Bebas Neue', 'Arial Narrow', sans-serif;
-  --font-mono:    'IBM Plex Mono', 'Courier New', monospace;
-  --font-body:    'Space Grotesk', 'Segoe UI', sans-serif;
+  --font-mono:    'DM Mono', 'Courier New', monospace;
+  --font-body:    'Inter', 'Segoe UI', sans-serif;
 
   /* Layout */
   --sidebar-width: 240px;
@@ -54,7 +54,7 @@
 /* ── Reset ─────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { font-size: 17px; }
+html { font-size: 16px; }
 
 body {
   background: var(--bg-base);
@@ -127,9 +127,10 @@ h4 { font-size: 1.2rem; }
 }
 
 .sidebar-label {
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 0.7rem;
-  letter-spacing: 0.15em;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-muted);
   padding: 0.75rem 1rem 0.25rem;
@@ -295,9 +296,10 @@ h4 { font-size: 1.2rem; }
 .field { display: flex; flex-direction: column; gap: 0.35rem; }
 
 .field-label {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  letter-spacing: 0.1em;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
@@ -339,9 +341,10 @@ table {
 }
 
 th {
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 0.72rem;
-  letter-spacing: 0.1em;
+  font-weight: 600;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text-muted);
   padding: 0.7rem 0.85rem;
@@ -350,10 +353,10 @@ th {
 }
 
 td {
-  padding: 0.75rem 0.85rem;
+  padding: 0.8rem 0.85rem;
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 tr:hover td { background: rgba(212,168,67,0.05); color: var(--text-primary); }
@@ -362,13 +365,13 @@ tr:hover td { background: rgba(212,168,67,0.05); color: var(--text-primary); }
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.25rem 0.6rem;
+  padding: 0.22rem 0.6rem;
   border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 0.7rem;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  font-weight: 500;
 }
 
 .badge-pitch       { background: rgba(99,102,241,0.2);  color: #818cf8; border: 1px solid rgba(99,102,241,0.4); }
@@ -459,10 +462,10 @@ tr:hover td { background: rgba(212,168,67,0.05); color: var(--text-primary); }
 }
 
 .kanban-card-meta {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
   color: var(--text-muted);
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 /* ── Modal ──────────────────────────────────────────────────── */
@@ -597,12 +600,14 @@ tr:hover td { background: rgba(212,168,67,0.05); color: var(--text-primary); }
   font-size: 2.6rem;
   letter-spacing: 0.06em;
   color: var(--text-primary);
+  text-shadow: 0 1px 8px rgba(0,0,0,0.35);
 }
 
 .page-sub {
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 0.8rem;
-  letter-spacing: 0.08em;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   color: var(--text-muted);
   text-transform: uppercase;
   margin-top: 0.3rem;
@@ -648,7 +653,7 @@ tr:hover td { background: rgba(212,168,67,0.05); color: var(--text-primary); }
 
 [data-theme="light"] body { background: var(--bg-base); }
 
-[data-theme="light"] .bar-background { opacity: 0.15 !important; }
+[data-theme="light"] .bar-background { opacity: 0.45 !important; }
 
 [data-theme="light"] .sidebar {
   background: rgba(255,248,240,0.96);
@@ -742,27 +747,27 @@ tr:hover td { background: rgba(212,168,67,0.05); color: var(--text-primary); }
 
 .spot-amber {
   left: 8%;
-  background: linear-gradient(180deg, rgba(255,160,40,0.38) 0%, rgba(220,120,20,0.12) 55%, transparent 100%);
+  background: linear-gradient(180deg, rgba(255,170,40,0.52) 0%, rgba(220,120,20,0.20) 55%, transparent 100%);
   animation: spotSway 8s ease-in-out infinite, spotFlicker 11s ease-in-out infinite;
 }
 .spot-purple {
   left: 25%;
-  background: linear-gradient(180deg, rgba(180,60,255,0.30) 0%, rgba(140,40,220,0.10) 55%, transparent 100%);
+  background: linear-gradient(180deg, rgba(255,235,170,0.34) 0%, rgba(220,190,100,0.12) 55%, transparent 100%);
   animation: spotSway 10s ease-in-out infinite 1s, spotFlicker 9s ease-in-out infinite 2s;
 }
 .spot-blue {
   left: 48%;
-  background: linear-gradient(180deg, rgba(40,140,255,0.28) 0%, rgba(20,100,220,0.09) 55%, transparent 100%);
+  background: linear-gradient(180deg, rgba(255,160,30,0.38) 0%, rgba(200,110,10,0.14) 55%, transparent 100%);
   animation: spotSway 9s ease-in-out infinite 0.5s, spotFlicker 13s ease-in-out infinite 1s;
 }
 .spot-pink {
   left: 68%;
-  background: linear-gradient(180deg, rgba(255,60,140,0.26) 0%, rgba(220,40,100,0.08) 55%, transparent 100%);
+  background: linear-gradient(180deg, rgba(255,100,60,0.28) 0%, rgba(220,70,30,0.10) 55%, transparent 100%);
   animation: spotSway 11s ease-in-out infinite 2s, spotFlicker 8s ease-in-out infinite 3s;
 }
 .spot-gold {
   right: 5%;
-  background: linear-gradient(180deg, rgba(255,200,50,0.32) 0%, rgba(200,150,20,0.10) 55%, transparent 100%);
+  background: linear-gradient(180deg, rgba(255,210,60,0.44) 0%, rgba(200,155,20,0.16) 55%, transparent 100%);
   animation: spotSway 7s ease-in-out infinite 1.5s, spotFlicker 10s ease-in-out infinite 0.5s;
 }
 
@@ -805,37 +810,37 @@ tr:hover td { background: rgba(212,168,67,0.05); color: var(--text-primary); }
 .bar-blob-amber {
   width: 560px; height: 440px;
   top: -60px; left: -80px;
-  background: radial-gradient(ellipse, rgba(220,130,20,0.55) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(230,145,25,0.65) 0%, transparent 70%);
   animation: blobDrift1 18s ease-in-out infinite, blobPulse 6s ease-in-out infinite;
 }
 .bar-blob-purple {
   width: 500px; height: 400px;
   top: 5%; right: -60px;
-  background: radial-gradient(ellipse, rgba(150,40,220,0.42) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(200,110,20,0.50) 0%, transparent 70%);
   animation: blobDrift2 22s ease-in-out infinite, blobFlicker 8s ease-in-out infinite;
 }
 .bar-blob-pink {
   width: 420px; height: 320px;
   top: 28%; left: 22%;
-  background: radial-gradient(ellipse, rgba(220,50,110,0.34) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(200,80,30,0.38) 0%, transparent 70%);
   animation: blobDrift3 26s ease-in-out infinite, blobPulse 10s ease-in-out infinite;
 }
 .bar-blob-orange {
   width: 380px; height: 300px;
   bottom: 12%; right: 8%;
-  background: radial-gradient(ellipse, rgba(240,95,15,0.38) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(245,120,15,0.48) 0%, transparent 70%);
   animation: blobDrift1 20s ease-in-out infinite reverse, blobFlicker 12s ease-in-out infinite;
 }
 .bar-blob-gold {
   width: 460px; height: 360px;
   bottom: -40px; left: 28%;
-  background: radial-gradient(ellipse, rgba(200,155,25,0.44) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(210,165,30,0.55) 0%, transparent 70%);
   animation: blobDrift2 24s ease-in-out infinite reverse, blobPulse 7s ease-in-out infinite;
 }
 .bar-blob-indigo {
   width: 340px; height: 280px;
   top: 38%; left: -30px;
-  background: radial-gradient(ellipse, rgba(80,50,200,0.30) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(180,100,20,0.38) 0%, transparent 70%);
   animation: blobDrift3 28s ease-in-out infinite, blobPulse 9s ease-in-out infinite;
 }
 
