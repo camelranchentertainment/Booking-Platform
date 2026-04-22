@@ -65,20 +65,11 @@ export default function Register() {
 
     setLoading(true);
 
-    const { data, error: err } = await supabase.auth.signUp({ email: form.email, password: form.password });
-    if (err) { setError(err.message); setLoading(false); return; }
-    if (!data.user) { setError('Registration failed'); setLoading(false); return; }
-
-    const token = data.session?.access_token;
-    if (!token) {
-      setError('Could not obtain session after signup. Please check your email to confirm your account, then sign in.');
-      setLoading(false);
-      return;
-    }
-
+    // Create account server-side (skips Supabase confirmation email, sets trial subscription)
     const body: Record<string, string> = {
-      role: tier,
       email: form.email,
+      password: form.password,
+      role: tier,
       displayName: form.displayName,
     };
     if (tier === 'agent' && form.agencyName) body.agencyName = form.agencyName;
@@ -86,11 +77,15 @@ export default function Register() {
 
     const apiRes = await fetch('/api/auth/register', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     const apiData = await apiRes.json();
     if (!apiRes.ok) { setError(apiData.error || 'Registration failed'); setLoading(false); return; }
+
+    // Sign in immediately — user is already confirmed server-side
+    const { error: signInErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
+    if (signInErr) { setError(signInErr.message); setLoading(false); return; }
 
     router.replace(tier === 'agent' ? '/dashboard' : '/band');
   };

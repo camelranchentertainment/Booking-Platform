@@ -4,39 +4,59 @@ import { getServiceClient } from '../../../lib/supabase';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
+  const { email, password, role, displayName, agencyName, actName } = req.body;
 
-  const token = authHeader.slice(7);
+  if (!email || !password || !role || !displayName) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  if (!['agent', 'act_admin'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+
   const admin = getServiceClient();
 
-  // Verify the JWT belongs to a real Supabase auth user
-  const { data: { user }, error: authErr } = await admin.auth.getUser(token);
-  if (authErr || !user) return res.status(401).json({ error: 'Invalid token' });
+  // Create auth user server-side — email_confirm skips the confirmation email entirely,
+  // avoiding Supabase's email rate limit on the free tier.
+  const { data: authData, error: authErr } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+  if (authErr) return res.status(400).json({ error: authErr.message });
 
-  const { role, email, displayName, agencyName, actName } = req.body;
+  const userId = authData.user.id;
 
-  if (!role || !email || !displayName) return res.status(400).json({ error: 'Missing required fields' });
-  if (!['agent', 'act_admin'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+  // Set a 14-day trial for paid tiers so new users can access the app immediately.
+  const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
   const profileData: Record<string, unknown> = {
-    id: user.id,
+    id: userId,
     role,
     email,
     display_name: displayName,
+    subscription_status: 'trialing',
+    subscription_tier: role === 'agent' ? 'agent' : 'band_admin',
+    trial_ends_at: trialEndsAt,
   };
   if (role === 'agent' && agencyName) profileData.agency_name = agencyName;
 
   const { error: profileErr } = await admin.from('user_profiles').insert(profileData);
-  if (profileErr) return res.status(500).json({ error: profileErr.message });
+  if (profileErr) {
+    // Clean up the auth user if profile creation fails
+    await admin.auth.admin.deleteUser(userId);
+    return res.status(500).json({ error: profileErr.message });
+  }
 
   if (role === 'act_admin' && actName) {
     const { error: actErr } = await admin.from('acts').insert({
-      owner_id: user.id,
+      owner_id: userId,
       agent_id: null,
       act_name: actName,
     });
-    if (actErr) return res.status(500).json({ error: actErr.message });
+    if (actErr) {
+      await admin.auth.admin.deleteUser(userId);
+      return res.status(500).json({ error: actErr.message });
+    }
   }
 
   return res.status(200).json({ ok: true });
