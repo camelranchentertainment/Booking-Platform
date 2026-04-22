@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
@@ -126,10 +126,14 @@ function GoogleMapsGuide() {
 
 export default function Settings() {
   const router = useRouter();
-  const [profile, setProfile]   = useState<UserProfile | null>(null);
-  const [form, setForm]         = useState({ display_name: '', agency_name: '', phone: '', email: '' });
-  const [saving, setSaving]     = useState(false);
-  const [saved, setSaved]       = useState(false);
+  const [profile, setProfile]       = useState<UserProfile | null>(null);
+  const [form, setForm]             = useState({ display_name: '', agency_name: '', phone: '', email: '' });
+  const [saving, setSaving]         = useState(false);
+  const [saved, setSaved]           = useState(false);
+  const [avatarUrl, setAvatarUrl]   = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError]         = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Billing
   const [portalLoading, setPortalLoading] = useState(false);
@@ -151,6 +155,7 @@ export default function Settings() {
     const { data } = await supabase.from('user_profiles').select('*').eq('id', user.id).maybeSingle();
     if (data) {
       setProfile(data);
+      setAvatarUrl(data.avatar_url || null);
       setForm({ display_name: data.display_name || '', agency_name: data.agency_name || '', phone: data.phone || '', email: data.email || '' });
       if (data.role === 'superadmin') {
         setIsSuperAdmin(true);
@@ -185,6 +190,25 @@ export default function Settings() {
     } finally {
       setPortalLoading(false);
     }
+  };
+
+  const uploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profile) return;
+    if (!file.type.startsWith('image/')) { setAvatarError('Please choose an image file'); return; }
+    if (file.size > 5 * 1024 * 1024) { setAvatarError('Image must be under 5 MB'); return; }
+    setAvatarError('');
+    setAvatarUploading(true);
+    const ext  = file.name.split('.').pop() || 'jpg';
+    const path = `${profile.id}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
+    if (upErr) { setAvatarError(upErr.message); setAvatarUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+    // Bust cache with timestamp
+    const url = `${publicUrl}?t=${Date.now()}`;
+    await supabase.from('user_profiles').update({ avatar_url: url }).eq('id', profile.id);
+    setAvatarUrl(url);
+    setAvatarUploading(false);
   };
 
   const save = async (e: React.FormEvent) => {
@@ -254,6 +278,47 @@ export default function Settings() {
           <div className="card">
             <div className="card-header"><span className="card-title">PROFILE</span></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+
+              {/* Avatar */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border)' }}>
+                <div
+                  onClick={() => !avatarUploading && fileInputRef.current?.click()}
+                  style={{
+                    width: 80, height: 80, borderRadius: '50%', flexShrink: 0,
+                    background: avatarUrl ? 'transparent' : 'var(--bg-overlay)',
+                    border: '2px solid var(--border)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: avatarUploading ? 'wait' : 'pointer',
+                    overflow: 'hidden', position: 'relative',
+                    transition: 'border-color 0.15s',
+                  }}
+                  title="Click to upload avatar"
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                >
+                  {avatarUrl
+                    ? <img src={avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', color: 'var(--accent)', lineHeight: 1 }}>
+                        {(form.display_name || profile?.email || '?')[0].toUpperCase()}
+                      </span>
+                  }
+                  {avatarUploading && (
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ color: '#fff', fontSize: '0.7rem', fontFamily: 'var(--font-body)' }}>Uploading…</span>
+                    </div>
+                  )}
+                </div>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={uploadAvatar} style={{ display: 'none' }} />
+                <div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.2rem' }}>Profile Photo</div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    Click your avatar to upload.<br />
+                    PNG or JPG · max 5 MB · ideal 200×200 px
+                  </div>
+                  {avatarError && <div style={{ color: '#f87171', fontSize: '0.75rem', fontFamily: 'var(--font-body)', marginTop: '0.25rem' }}>{avatarError}</div>}
+                </div>
+              </div>
+
               <div className="field">
                 <label className="field-label">Your Name</label>
                 <input className="input" value={form.display_name} onChange={set('display_name')} placeholder="Your full name" />

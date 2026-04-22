@@ -83,27 +83,44 @@ export default function Sidebar({ profile, onSignOut }: Props) {
       </div>
 
       {profile && (
-        <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ fontSize: '0.83rem', color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.15rem' }}>
-            {profile.display_name || profile.email}
+        <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          {/* Avatar */}
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+            border: '1px solid var(--border)', overflow: 'hidden',
+            background: 'var(--bg-overlay)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {profile.avatar_url
+              ? <img src={profile.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', color: 'var(--accent)', lineHeight: 1 }}>
+                  {(profile.display_name || profile.email || '?')[0].toUpperCase()}
+                </span>
+            }
           </div>
-          {isSuperAdmin ? (
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-              fontFamily: 'var(--font-body)', fontSize: '0.76rem',
-              letterSpacing: '0.12em', textTransform: 'uppercase',
-              color: '#000', background: 'var(--accent)',
-              padding: '0.15rem 0.45rem', borderRadius: '2px',
-              boxShadow: 'var(--neon-glow-sm)', marginTop: '0.2rem',
-            }}>
-              ◈ SUPERADMIN
+          {/* Name + role */}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: '0.83rem', color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {profile.display_name || profile.email}
             </div>
-          ) : (
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              {profile.role === 'agent' ? (profile.agency_name || 'Agent') :
-               profile.role === 'act_admin' ? 'Band Admin' : 'Member'}
-            </div>
-          )}
+            {isSuperAdmin ? (
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                fontFamily: 'var(--font-body)', fontSize: '0.68rem',
+                letterSpacing: '0.1em', textTransform: 'uppercase',
+                color: '#000', background: 'var(--accent)',
+                padding: '0.1rem 0.35rem', borderRadius: '2px',
+                boxShadow: 'var(--neon-glow-sm)',
+              }}>
+                ◈ SUPERADMIN
+              </div>
+            ) : (
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                {profile.role === 'agent' ? (profile.agency_name || 'Agent') :
+                 profile.role === 'act_admin' ? 'Band Admin' : 'Member'}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
