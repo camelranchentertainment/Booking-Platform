@@ -5,13 +5,12 @@ import { supabase } from '../lib/supabase';
 const BG   = '#0A0502';
 const GOLD = '#C8921A';
 const MUTED = 'rgba(200,146,26,0.55)';
-const GLOW  = '0 0 18px rgba(200,146,26,0.42), 0 0 48px rgba(200,146,26,0.14)';
 
 const INPUT: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box',
-  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(200,146,26,0.2)',
-  borderRadius: '3px', padding: '0.65rem 0.85rem',
-  color: '#F0D8A2', fontFamily: 'var(--font-body)', fontSize: '0.9rem', outline: 'none',
+  background: '#0A0502', border: '1px solid rgba(200,146,26,0.15)',
+  borderRadius: 0, padding: '0.65rem 0.85rem',
+  color: '#F0D8A2', fontFamily: 'var(--font-body)', fontSize: '0.875rem', outline: 'none',
 };
 
 export default function ResetPassword() {
@@ -24,10 +23,26 @@ export default function ResetPassword() {
   const [done, setDone]         = useState(false);
 
   useEffect(() => {
-    // Supabase fires PASSWORD_RECOVERY when user lands here from the reset email
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') setReady(true);
+    // Check URL immediately — both hash-based (#type=recovery) and PKCE (?code=)
+    const hashParams  = new URLSearchParams(window.location.hash.slice(1));
+    const queryParams = new URLSearchParams(window.location.search);
+    const isRecoveryUrl = hashParams.get('type') === 'recovery' || queryParams.has('code');
+
+    // Also check if a recovery session is already established before mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session && isRecoveryUrl) setReady(true);
     });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // PASSWORD_RECOVERY = hash-based flow
+      // SIGNED_IN on this page with a code param = PKCE recovery flow
+      if (event === 'PASSWORD_RECOVERY') {
+        setReady(true);
+      } else if (event === 'SIGNED_IN' && isRecoveryUrl) {
+        setReady(true);
+      }
+    });
+
     return () => subscription.unsubscribe();
   }, []);
 
@@ -40,6 +55,8 @@ export default function ResetPassword() {
     const { error: err } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (err) { setError(err.message); return; }
+    // Sign out after reset so they log in fresh with the new password
+    await supabase.auth.signOut();
     setDone(true);
     setTimeout(() => router.replace('/login'), 2500);
   };
@@ -49,55 +66,71 @@ export default function ResetPassword() {
       minHeight: '100vh', background: BG, display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', padding: '2rem 1.25rem',
       backgroundImage: `
-        radial-gradient(ellipse 120% 60% at 10% 0%, rgba(90,35,10,0.65) 0%, transparent 55%),
-        radial-gradient(ellipse 80% 50% at 90% 100%, rgba(60,20,5,0.50) 0%, transparent 50%)
+        radial-gradient(ellipse 120% 60% at 10% 0%, rgba(80,30,8,0.45) 0%, transparent 55%),
+        radial-gradient(ellipse 80% 50% at 90% 100%, rgba(50,15,3,0.35) 0%, transparent 50%)
       `,
     }}>
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.6rem', letterSpacing: '0.14em', color: GOLD, textShadow: GLOW, lineHeight: 1 }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.6rem', fontWeight: 900, letterSpacing: '-0.02em', textTransform: 'uppercase', color: GOLD, lineHeight: 1 }}>
           CAMEL RANCH
         </div>
-        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', letterSpacing: '0.45em', textTransform: 'uppercase', color: MUTED, marginTop: '0.35rem' }}>
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.35em', textTransform: 'uppercase', color: MUTED, marginTop: '0.35rem' }}>
           BOOKING PLATFORM
         </div>
       </div>
 
       <div style={{
         width: '100%', maxWidth: 400,
-        background: 'rgba(14,6,3,0.82)', backdropFilter: 'blur(20px)',
-        border: `1px solid rgba(200,146,26,0.22)`, borderRadius: '6px',
-        padding: '2rem', boxShadow: `0 0 60px rgba(0,0,0,0.8), ${GLOW}`,
+        background: '#120703',
+        backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'6\' height=\'6\'%3E%3Cpath d=\'M-1,1 l2,-2 M0,6 l6,-6 M5,7 l2,-2\' stroke=\'%23F0D8A2\' stroke-width=\'0.4\'/%3E%3C/svg%3E")',
+        backgroundSize: '6px 6px',
+        border: '1px solid rgba(200,146,26,0.15)',
+        padding: '2rem',
       }}>
         {done ? (
           <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ fontSize: '2rem' }}>✓</div>
-            <div style={{ color: '#34d399', fontFamily: 'var(--font-body)', fontSize: '0.95rem', fontWeight: 700 }}>Password updated!</div>
-            <div style={{ color: MUTED, fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>Redirecting you to sign in...</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#34d399', fontWeight: 900 }}>✓</div>
+            <div style={{ color: '#34d399', fontFamily: 'var(--font-body)', fontSize: '0.875rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Password Updated</div>
+            <div style={{ color: MUTED, fontFamily: 'var(--font-body)', fontSize: '0.82rem', lineHeight: 1.6 }}>Signing you out — redirecting to login…</div>
           </div>
+
         ) : !ready ? (
-          <div style={{ textAlign: 'center', color: MUTED, fontFamily: 'var(--font-body)', fontSize: '0.88rem', lineHeight: 1.7 }}>
-            <div style={{ marginBottom: '0.5rem', fontSize: '1.5rem' }}>🔗</div>
-            Waiting for reset link verification…
-            <br />
-            <span style={{ fontSize: '0.78rem' }}>Make sure you opened this page from the email link.</span>
+          <div style={{ textAlign: 'center', color: MUTED, fontFamily: 'var(--font-body)', fontSize: '0.875rem', lineHeight: 1.7 }}>
+            <div style={{ marginBottom: '0.75rem', fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 900, letterSpacing: '-0.02em', textTransform: 'uppercase', color: '#F0D8A2' }}>
+              Verifying Link
+            </div>
+            <div style={{ fontSize: '0.78rem' }}>
+              If this page stays here, your reset link may have expired.<br />
+              <button
+                onClick={() => router.replace('/login')}
+                style={{ background: 'none', border: 'none', color: GOLD, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.78rem', marginTop: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                ← Back to Login
+              </button>
+            </div>
           </div>
+
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ color: '#F0D8A2', fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.06em', marginBottom: '0.25rem' }}>
-              Set New Password
+            <div style={{ marginBottom: '0.5rem' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 900, letterSpacing: '-0.02em', textTransform: 'uppercase', color: '#F0D8A2', lineHeight: 1 }}>
+                Set New Password
+              </div>
+              <div style={{ color: MUTED, fontFamily: 'var(--font-body)', fontSize: '0.78rem', marginTop: '0.35rem' }}>
+                Choose a new password for your account.
+              </div>
             </div>
             <div>
-              <label style={{ display: 'block', fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: MUTED, marginBottom: '0.4rem' }}>New Password</label>
+              <label style={{ display: 'block', fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.3em', textTransform: 'uppercase', color: MUTED, marginBottom: '0.4rem' }}>New Password</label>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Min. 8 characters" required autoFocus style={INPUT} />
             </div>
             <div>
-              <label style={{ display: 'block', fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: MUTED, marginBottom: '0.4rem' }}>Confirm Password</label>
+              <label style={{ display: 'block', fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.3em', textTransform: 'uppercase', color: MUTED, marginBottom: '0.4rem' }}>Confirm Password</label>
               <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Repeat password" required style={INPUT} />
             </div>
-            {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: '3px', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
+            {error && <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', padding: '0.6rem', color: '#f87171', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{error}</div>}
             <button type="submit" disabled={loading}
-              style={{ padding: '0.8rem', background: loading ? 'rgba(200,146,26,0.5)' : GOLD, color: '#1A0800', border: 'none', borderRadius: '3px', fontFamily: 'var(--font-body)', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: loading ? 'not-allowed' : 'pointer', boxShadow: loading ? 'none' : GLOW }}>
-              {loading ? 'Saving...' : 'Update Password'}
+              style={{ padding: '0.8rem', background: loading ? 'rgba(200,146,26,0.4)' : GOLD, color: '#0E0603', border: 'none', borderRadius: 0, fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 900, letterSpacing: '0.18em', textTransform: 'uppercase', cursor: loading ? 'not-allowed' : 'pointer' }}>
+              {loading ? 'Saving…' : 'Update Password'}
             </button>
           </form>
         )}

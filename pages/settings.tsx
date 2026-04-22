@@ -135,6 +135,12 @@ export default function Settings() {
   const [avatarError, setAvatarError]         = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Password change
+  const [pwForm, setPwForm]       = useState({ newPassword: '', confirmPassword: '' });
+  const [pwSaving, setPwSaving]   = useState(false);
+  const [pwSaved, setPwSaved]     = useState(false);
+  const [pwError, setPwError]     = useState('');
+
   // Billing
   const [portalLoading, setPortalLoading] = useState(false);
 
@@ -175,6 +181,20 @@ export default function Settings() {
       if (row.key === 'resend_api_key')    setApiKeyConfigured(row.configured);
       if (row.key === 'resend_from_email') setEmailForm(f => ({ ...f, resend_from_email: row.value || '' }));
     }
+  };
+
+  const changePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pwForm.newPassword !== pwForm.confirmPassword) { setPwError('Passwords do not match'); return; }
+    if (pwForm.newPassword.length < 8) { setPwError('Password must be at least 8 characters'); return; }
+    setPwError('');
+    setPwSaving(true);
+    const { error: err } = await supabase.auth.updateUser({ password: pwForm.newPassword });
+    setPwSaving(false);
+    if (err) { setPwError(err.message); return; }
+    setPwForm({ newPassword: '', confirmPassword: '' });
+    setPwSaved(true);
+    setTimeout(() => setPwSaved(false), 3000);
   };
 
   const openPortal = async () => {
@@ -340,6 +360,40 @@ export default function Settings() {
             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
               <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</button>
               {saved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>✓ Saved</span>}
+            </div>
+          </div>
+        </form>
+
+        {/* Change Password */}
+        <form onSubmit={changePassword}>
+          <div className="card">
+            <div className="card-header"><span className="card-title">CHANGE PASSWORD</span></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div className="field">
+                <label className="field-label">New Password</label>
+                <input
+                  className="input" type="password"
+                  value={pwForm.newPassword}
+                  onChange={e => setPwForm(f => ({ ...f, newPassword: e.target.value }))}
+                  placeholder="Min. 8 characters"
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="field">
+                <label className="field-label">Confirm New Password</label>
+                <input
+                  className="input" type="password"
+                  value={pwForm.confirmPassword}
+                  onChange={e => setPwForm(f => ({ ...f, confirmPassword: e.target.value }))}
+                  placeholder="Repeat password"
+                  autoComplete="new-password"
+                />
+              </div>
+              {pwError && <div style={{ color: '#f87171', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{pwError}</div>}
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
+              <button type="submit" className="btn btn-primary" disabled={pwSaving}>{pwSaving ? 'Saving...' : 'Update Password'}</button>
+              {pwSaved && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#34d399' }}>✓ Password Updated</span>}
             </div>
           </div>
         </form>
