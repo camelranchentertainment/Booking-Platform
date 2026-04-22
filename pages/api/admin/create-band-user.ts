@@ -60,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       display_name:        u.displayName,
       subscription_status: u.role === 'member' ? 'active'  : 'trialing',
       subscription_tier:   u.role === 'member' ? 'member'  : u.tier,
-      trial_ends_at:       u.role === 'member' ? null      : trialEndsAt,
+      trial_ends_at:       u.role === 'member' ? new Date().toISOString() : trialEndsAt,
     }, { onConflict: 'id' });
 
     results.push({ email: u.email, role: u.role, userId, error: profileErr?.message ?? null });
