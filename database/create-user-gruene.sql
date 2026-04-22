@@ -24,14 +24,15 @@ BEGIN
     '{}', false
   );
 
-  -- 2. Identity record (required for email/password login)
+  -- 2. Identity record (provider_id required in newer Supabase — use email for email provider)
   INSERT INTO auth.identities (
-    id, user_id, identity_data, provider, created_at, updated_at
+    id, user_id, identity_data, provider, provider_id, created_at, updated_at
   ) VALUES (
     gen_random_uuid(),
     new_user_id,
     json_build_object('sub', new_user_id, 'email', 'grueneroadcases@gmail.com'),
     'email',
+    'grueneroadcases@gmail.com',
     NOW(), NOW()
   );
 
