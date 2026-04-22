@@ -12,19 +12,7 @@ const BORDER = 'rgba(200,146,26,0.13)';
 
 const NAV_LINKS = ['Features', 'How It Works', 'Contact'];
 
-/* ── Hatch SVG ────────────────────────────────────────────── */
-function HatchBg({ id, rotate = 45, opacity = 0.04 }: { id: string; rotate?: number; opacity?: number }) {
-  return (
-    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', opacity }}>
-      <defs>
-        <pattern id={id} width="8" height="8" patternUnits="userSpaceOnUse" patternTransform={`rotate(${rotate})`}>
-          <line x1="0" y1="0" x2="0" y2="8" stroke={CREAM} strokeWidth="0.8" />
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill={`url(#${id})`} />
-    </svg>
-  );
-}
+
 
 /* ── Wordmark ─────────────────────────────────────────────── */
 function Wordmark() {
@@ -140,20 +128,7 @@ function Nav() {
 /* ── Hero ─────────────────────────────────────────────────── */
 function Hero() {
   return (
-    <section style={{
-      position: 'relative', minHeight: '100vh',
-      display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-      background: BG, overflow: 'hidden',
-    }}>
-      <HatchBg id="hero-hatch" rotate={45} opacity={0.04} />
-
-      {/* Gold rule under nav */}
-      <div style={{
-        position: 'absolute', left: 0, right: 0, height: 1,
-        background: `linear-gradient(90deg, transparent, ${GOLD}, transparent)`,
-        opacity: 0.3, top: '5.5rem',
-      }} />
-
+    <section style={{ position: 'relative', background: BG, overflow: 'hidden' }}>
       {/* Ghost "CR" */}
       <div style={{
         position: 'absolute', inset: 0, display: 'flex',
@@ -169,96 +144,63 @@ function Hero() {
         </span>
       </div>
 
-      {/* Content */}
       <div className="cr-hero-content" style={{ position: 'relative', zIndex: 10 }}>
         <div style={{ maxWidth: '68rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-            <div style={{ height: 1, width: 48, background: GOLD }} />
-            <span style={{
-              color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase',
-            }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+            <div style={{ height: 1, width: 32, background: GOLD }} />
+            <span style={{ color: GOLD, letterSpacing: '0.35em', fontSize: '0.65rem', textTransform: 'uppercase' }}>
               Built for Working Musicians
             </span>
           </div>
 
           <h1 style={{
-            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.88,
-            color: CREAM, textTransform: 'uppercase', margin: '0 0 0.25rem',
-            fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
-          }}>
-            Your Shows.
-          </h1>
+            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.92,
+            color: CREAM, textTransform: 'uppercase', margin: '0 0 0.1rem',
+            fontSize: 'clamp(1.8rem,5vw,3.5rem)', letterSpacing: '-0.02em',
+          }}>Your Shows.</h1>
           <h1 style={{
-            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.88,
+            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.92,
             color: 'transparent', WebkitTextStroke: `1px ${GOLD}`,
-            textTransform: 'uppercase', margin: '0 0 0.25rem',
-            fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
-          }}>
-            Your Band.
-          </h1>
+            textTransform: 'uppercase', margin: '0 0 0.1rem',
+            fontSize: 'clamp(1.8rem,5vw,3.5rem)', letterSpacing: '-0.02em',
+          }}>Your Band.</h1>
           <h1 style={{
-            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.88,
-            color: CREAM, textTransform: 'uppercase', margin: '0 0 2.5rem',
-            fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
-          }}>
-            Organized.
-          </h1>
+            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.92,
+            color: CREAM, textTransform: 'uppercase', margin: '0 0 1.5rem',
+            fontSize: 'clamp(1.8rem,5vw,3.5rem)', letterSpacing: '-0.02em',
+          }}>Organized.</h1>
 
           <div className="cr-hero-bottom">
-            <p style={{ maxWidth: '26rem', color: 'rgba(240,216,162,0.42)', fontSize: '0.88rem', lineHeight: 1.65 }}>
-              Stop losing gigs to missed follow-ups and disorganized schedules. One platform to track every booking, keep your whole band in the loop, and take your career further.
+            <p style={{ maxWidth: '24rem', color: 'rgba(240,216,162,0.42)', fontSize: '0.82rem', lineHeight: 1.6, margin: 0 }}>
+              Stop losing gigs to missed follow-ups. Track every booking, keep your band in the loop, and build your career.
             </p>
-            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
               <Link href="/register" style={{
-                padding: '0.75rem 2rem', background: GOLD, color: BG,
-                fontWeight: 700, letterSpacing: '0.22em', fontSize: '0.72rem',
-                textTransform: 'uppercase', textDecoration: 'none',
-                transition: 'background 0.2s',
+                padding: '0.6rem 1.5rem', background: GOLD, color: BG,
+                fontWeight: 700, letterSpacing: '0.2em', fontSize: '0.68rem',
+                textTransform: 'uppercase', textDecoration: 'none', transition: 'background 0.2s',
               }}
                 onMouseEnter={e => (e.currentTarget.style.background = CREAM)}
                 onMouseLeave={e => (e.currentTarget.style.background = GOLD)}
-              >
-                Get Started Free
-              </Link>
+              >Get Started Free</Link>
               <Link href="/login" style={{
-                padding: '0.75rem 2rem', color: CREAM,
-                letterSpacing: '0.22em', fontSize: '0.72rem',
+                padding: '0.6rem 1.5rem', color: CREAM,
+                letterSpacing: '0.2em', fontSize: '0.68rem',
                 textTransform: 'uppercase', textDecoration: 'none',
-                border: `1px solid rgba(240,216,162,0.22)`,
-                transition: 'border-color 0.2s, color 0.2s',
+                border: `1px solid rgba(240,216,162,0.22)`, transition: 'border-color 0.2s, color 0.2s',
               }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; e.currentTarget.style.color = GOLD; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(240,216,162,0.22)'; e.currentTarget.style.color = CREAM; }}
-              >
-                Sign In
-              </Link>
+              >Sign In</Link>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Bottom gold rule */}
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0, height: 1,
         background: `linear-gradient(90deg, transparent, ${GOLD}, transparent)`, opacity: 0.22,
       }} />
-
-      {/* Scroll indicator */}
-      <div style={{
-        position: 'absolute', bottom: '2rem', right: '2rem',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem',
-      }}>
-        <div style={{
-          height: 48, width: 1,
-          background: `linear-gradient(to bottom, ${GOLD}, transparent)`, opacity: 0.45,
-        }} />
-        <span style={{
-          color: CREAM, letterSpacing: '0.3em', fontSize: '0.56rem', textTransform: 'uppercase',
-          writingMode: 'vertical-rl', opacity: 0.28,
-        }}>
-          Scroll
-        </span>
-      </div>
     </section>
   );
 }
@@ -294,57 +236,54 @@ const FEATURES = [
 function Features() {
   return (
     <section id="features" style={{ borderTop: BORDER, background: DARK }}>
-      <div className="cr-hero-content" style={{ paddingBottom: '1rem', paddingTop: '5rem' }}>
+      <div className="cr-hero-content" style={{ paddingBottom: '0', paddingTop: '3.5rem' }}>
         <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-            <div style={{ height: 1, width: 48, background: GOLD }} />
-            <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+            <div style={{ height: 1, width: 32, background: GOLD }} />
+            <span style={{ color: GOLD, letterSpacing: '0.35em', fontSize: '0.65rem', textTransform: 'uppercase' }}>
               The Platform
             </span>
           </div>
           <h2 style={{
             fontFamily: 'var(--font-display)', fontWeight: 900,
-            lineHeight: 1, textTransform: 'uppercase', margin: '0 0 0.75rem',
-            fontSize: 'clamp(2rem,5vw,4rem)', letterSpacing: '-0.01em', color: CREAM,
+            lineHeight: 1, textTransform: 'uppercase', margin: '0 0 0.5rem',
+            fontSize: 'clamp(1.5rem,3vw,2.5rem)', letterSpacing: '-0.01em', color: CREAM,
           }}>
-            Everything You Need<br />To Run Your Career.
+            Everything You Need To Run Your Career.
           </h2>
-          <p style={{ color: 'rgba(240,216,162,0.38)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '32rem', margin: 0 }}>
+          <p style={{ color: 'rgba(240,216,162,0.38)', fontSize: '0.8rem', lineHeight: 1.55, maxWidth: '32rem', margin: 0 }}>
             Built for working musicians — not spreadsheets, not email chains, not sticky notes.
           </p>
         </div>
       </div>
 
-      <div className="cr-hero-content" style={{ paddingTop: '2.5rem', paddingBottom: '5rem' }}>
+      <div className="cr-hero-content" style={{ paddingTop: '1.75rem', paddingBottom: '3.5rem' }}>
         <div className="cr-features-grid" style={{ maxWidth: '68rem', margin: '0 auto' }}>
           {FEATURES.map(f => (
             <div key={f.title} style={{
-              borderTop: `2px solid ${GOLD}`,
               border: `1px solid rgba(200,146,26,0.15)`,
-              borderTopWidth: 2,
-              borderTopColor: GOLD,
-              padding: '2rem',
-              background: BG,
+              borderTopWidth: 2, borderTopColor: GOLD,
+              padding: '1.25rem', background: BG,
             }}>
               <div style={{
-                fontFamily: 'var(--font-display)', fontSize: '1.75rem',
-                color: GOLD, marginBottom: '1rem', lineHeight: 1,
+                fontFamily: 'var(--font-display)', fontSize: '1.4rem',
+                color: GOLD, marginBottom: '0.6rem', lineHeight: 1,
               }}>
                 {f.icon}
               </div>
               <div style={{
-                fontFamily: 'var(--font-display)', fontSize: '1.4rem',
-                letterSpacing: '0.03em', color: CREAM, lineHeight: 1, marginBottom: '0.3rem',
+                fontFamily: 'var(--font-display)', fontSize: '1.1rem',
+                letterSpacing: '0.03em', color: CREAM, lineHeight: 1, marginBottom: '0.2rem',
               }}>
                 {f.title}
               </div>
               <div style={{
-                fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.14em',
-                textTransform: 'uppercase', color: GOLD, marginBottom: '0.85rem',
+                fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.14em',
+                textTransform: 'uppercase', color: GOLD, marginBottom: '0.6rem',
               }}>
                 {f.sub}
               </div>
-              <p style={{ fontSize: '0.88rem', color: 'rgba(240,216,162,0.55)', lineHeight: 1.65, margin: 0 }}>
+              <p style={{ fontSize: '0.8rem', color: 'rgba(240,216,162,0.55)', lineHeight: 1.55, margin: 0 }}>
                 {f.desc}
               </p>
             </div>
@@ -362,67 +301,59 @@ function SignUpCTA() {
       position: 'relative', background: DARK,
       borderTop: BORDER, overflow: 'hidden',
     }}>
-      <HatchBg id="cta-hatch" rotate={32} opacity={0.035} />
 
-      <div className="cr-hero-content" style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
-        <div style={{ maxWidth: '52rem', margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1 }}>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '2rem' }}>
-            <div style={{ height: 1, width: 48, background: GOLD }} />
-            <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>
+      <div className="cr-hero-content" style={{ paddingTop: '3.5rem', paddingBottom: '3.5rem' }}>
+        <div style={{ maxWidth: '44rem', margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1 }}>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+            <div style={{ height: 1, width: 32, background: GOLD }} />
+            <span style={{ color: GOLD, letterSpacing: '0.35em', fontSize: '0.65rem', textTransform: 'uppercase' }}>
               Get Started
             </span>
-            <div style={{ height: 1, width: 48, background: GOLD }} />
+            <div style={{ height: 1, width: 32, background: GOLD }} />
           </div>
 
           <h2 style={{
-            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.9,
-            textTransform: 'uppercase', margin: '0 0 1.5rem',
-            fontSize: 'clamp(2.5rem,7vw,5.5rem)', letterSpacing: '-0.02em',
+            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.92,
+            textTransform: 'uppercase', margin: '0 0 1rem',
+            fontSize: 'clamp(1.75rem,4vw,3rem)', letterSpacing: '-0.02em',
           }}>
-            <span style={{ color: CREAM }}>Stop Losing Gigs<br />To </span>
+            <span style={{ color: CREAM }}>Stop Losing Gigs To </span>
             <span style={{ color: 'transparent', WebkitTextStroke: `1px ${GOLD}` }}>Disorganization.</span>
           </h2>
 
           <p style={{
-            color: 'rgba(240,216,162,0.45)', fontSize: '1rem',
-            lineHeight: 1.7, maxWidth: '34rem', margin: '0 auto 2.5rem',
+            color: 'rgba(240,216,162,0.45)', fontSize: '0.82rem',
+            lineHeight: 1.6, maxWidth: '30rem', margin: '0 auto 1.75rem',
           }}>
             Free to start. Sign up as a band admin to manage your bookings, or join your band with an invite from your admin.
           </p>
 
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link href="/register" style={{
-              display: 'inline-block', padding: '0.9rem 2.5rem',
+              display: 'inline-block', padding: '0.65rem 1.75rem',
               background: GOLD, color: BG, fontWeight: 700,
-              letterSpacing: '0.22em', fontSize: '0.78rem', textTransform: 'uppercase',
+              letterSpacing: '0.2em', fontSize: '0.68rem', textTransform: 'uppercase',
               textDecoration: 'none', transition: 'background 0.2s',
             }}
               onMouseEnter={e => (e.currentTarget.style.background = CREAM)}
               onMouseLeave={e => (e.currentTarget.style.background = GOLD)}
-            >
-              Create Free Account
-            </Link>
+            >Create Free Account</Link>
             <Link href="/login" style={{
-              display: 'inline-block', padding: '0.9rem 2.5rem',
-              color: CREAM, letterSpacing: '0.22em', fontSize: '0.78rem',
+              display: 'inline-block', padding: '0.65rem 1.75rem',
+              color: CREAM, letterSpacing: '0.2em', fontSize: '0.68rem',
               textTransform: 'uppercase', textDecoration: 'none',
               border: `1px solid rgba(240,216,162,0.22)`, transition: 'border-color 0.2s, color 0.2s',
             }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; e.currentTarget.style.color = GOLD; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(240,216,162,0.22)'; e.currentTarget.style.color = CREAM; }}
-            >
-              Already Have an Account
-            </Link>
+            >Already Have an Account</Link>
           </div>
 
-          <p style={{
-            marginTop: '2rem', color: 'rgba(240,216,162,0.22)',
-            fontSize: '0.72rem', letterSpacing: '0.1em',
-          }}>
+          <p style={{ marginTop: '1.25rem', color: 'rgba(240,216,162,0.22)', fontSize: '0.68rem', letterSpacing: '0.1em' }}>
             No credit card required · Free forever for band members
           </p>
-
         </div>
       </div>
     </section>
@@ -486,7 +417,7 @@ function BookingForm() {
 
   return (
     <section id="booking" style={{
-      background: DARK, padding: '7rem 2rem',
+      background: DARK, padding: '3.5rem 2rem',
       borderTop: BORDER,
     }}>
       <div style={{ maxWidth: '72rem', margin: '0 auto' }}>
@@ -503,10 +434,10 @@ function BookingForm() {
 
             <h2 style={{
               fontFamily: 'var(--font-display)', fontWeight: 900,
-              lineHeight: 0.9, textTransform: 'uppercase', margin: '0 0 2rem',
-              fontSize: 'clamp(2.5rem,6vw,5rem)', letterSpacing: '-0.01em',
+              lineHeight: 0.92, textTransform: 'uppercase', margin: '0 0 1.25rem',
+              fontSize: 'clamp(1.75rem,4vw,3rem)', letterSpacing: '-0.01em',
             }}>
-              <span style={{ color: CREAM }}>Let&rsquo;s Talk<br /></span>
+              <span style={{ color: CREAM }}>Let&rsquo;s Talk </span>
               <span style={{ color: 'transparent', WebkitTextStroke: `1px ${GOLD}` }}>Business</span>
             </h2>
 
@@ -613,11 +544,11 @@ function BookingForm() {
 function Footer() {
   return (
     <footer id="contact" style={{
-      background: '#080401', padding: '4rem 2rem',
+      background: '#080401', padding: '2.5rem 2rem',
       borderTop: BORDER,
     }}>
       <div style={{ maxWidth: '72rem', margin: '0 auto' }}>
-        <div className="cr-footer-grid" style={{ marginBottom: '4rem' }}>
+        <div className="cr-footer-grid" style={{ marginBottom: '2rem' }}>
           <div>
             <div style={{ color: 'rgba(240,216,162,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Agency</div>
             <Wordmark />
@@ -703,8 +634,7 @@ export default function Home() {
         .cr-hamburger   { display: flex !important; }
 
         .cr-hero-content {
-          padding: 2rem 1.5rem 5rem;
-          padding-top: 7rem;
+          padding: 5rem 1.5rem 3rem;
         }
         .cr-hero-bottom {
           display: flex;
@@ -734,7 +664,7 @@ export default function Home() {
           .cr-nav-desktop { display: flex !important; }
           .cr-hamburger   { display: none !important; }
 
-          .cr-hero-content { padding: 2rem 4rem 5rem; padding-top: 7rem; }
+          .cr-hero-content { padding: 5.5rem 4rem 3rem; }
           .cr-hero-bottom  { flex-direction: row; align-items: flex-end; justify-content: space-between; }
 
           .cr-features-grid { grid-template-columns: repeat(2, 1fr); }
@@ -744,7 +674,7 @@ export default function Home() {
         }
 
         @media (min-width: 1024px) {
-          .cr-hero-content { padding: 2rem 6rem 5rem; padding-top: 7rem; }
+          .cr-hero-content { padding: 5.5rem 6rem 3rem; }
           .cr-features-grid { grid-template-columns: repeat(4, 1fr); }
         }
       `}</style>
@@ -756,21 +686,21 @@ export default function Home() {
 
         {/* Artist success stories */}
         <section id="artists" style={{ borderTop: BORDER }}>
-          <div className="cr-hero-content" style={{ background: BG, paddingBottom: '2.5rem', paddingTop: '5rem' }}>
+          <div className="cr-hero-content" style={{ background: BG, paddingBottom: '1.5rem', paddingTop: '3.5rem' }}>
             <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                <div style={{ height: 1, width: 48, background: GOLD }} />
-                <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>Real Results</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                <div style={{ height: 1, width: 32, background: GOLD }} />
+                <span style={{ color: GOLD, letterSpacing: '0.35em', fontSize: '0.65rem', textTransform: 'uppercase' }}>Real Results</span>
               </div>
               <h2 style={{
                 fontFamily: 'var(--font-display)', fontWeight: 900,
-                lineHeight: 1, textTransform: 'uppercase', margin: '0 0 0.75rem',
-                fontSize: 'clamp(2rem,5vw,4rem)', letterSpacing: '-0.01em', color: CREAM,
+                lineHeight: 1, textTransform: 'uppercase', margin: '0 0 0.5rem',
+                fontSize: 'clamp(1.5rem,3vw,2.5rem)', letterSpacing: '-0.01em', color: CREAM,
               }}>
-                Artists Growing<br />With This Platform
+                Artists Growing With This Platform
               </h2>
-              <p style={{ color: 'rgba(240,216,162,0.38)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '32rem', margin: 0 }}>
-                These acts use Camel Ranch Booking to track every show, keep their band informed, and build their careers — one confirmed date at a time.
+              <p style={{ color: 'rgba(240,216,162,0.38)', fontSize: '0.8rem', lineHeight: 1.55, maxWidth: '32rem', margin: 0 }}>
+                These acts use Camel Ranch Booking to track every show, keep their band informed, and build their careers.
               </p>
             </div>
           </div>

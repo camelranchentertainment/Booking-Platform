@@ -10,19 +10,7 @@ const BORDER = 'rgba(200,146,26,0.10)';
 
 const ACCENTS = ['#9B6230', '#7A5C2E'];
 
-/* ── Hatch SVG ────────────────────────────────────────────── */
-function HatchBg({ id, rotate = 38 }: { id: string; rotate?: number }) {
-  return (
-    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', opacity: 0.07 }}>
-      <defs>
-        <pattern id={id} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform={`rotate(${rotate})`}>
-          <line x1="0" y1="0" x2="0" y2="6" stroke={CREAM} strokeWidth="1" />
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill={`url(#${id})`} />
-    </svg>
-  );
-}
+
 
 /* ── Ghost number ─────────────────────────────────────────── */
 function GhostNum({ n, color = CREAM }: { n: string; color?: string }) {
@@ -53,7 +41,7 @@ function FeaturedCard({ act }: { act: PublicAct }) {
         overflow: 'hidden', borderRight: `1px solid ${BORDER}`,
         flexShrink: 0,
       }}>
-        <HatchBg id="feat-hatch" rotate={38} />
+
         <GhostNum n="01" color={GOLD} />
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '2.5rem', textAlign: 'center' }}>
           <span style={{
@@ -134,7 +122,7 @@ function SupportingCard({ act, index, last }: { act: PublicAct; index: number; l
       minHeight: 280, background: BG, overflow: 'hidden',
       borderRight: last ? 'none' : `1px solid ${BORDER}`,
     }}>
-      <HatchBg id={`supp-${index}`} rotate={50} />
+
       <GhostNum n={num} />
 
       <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', padding: '2.5rem' }}>
@@ -191,7 +179,7 @@ function SupportingCard({ act, index, last }: { act: PublicAct; index: number; l
 function SpotlightPlaceholder() {
   return (
     <div style={{ position: 'relative', minHeight: 320, background: SURF, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-      <HatchBg id="spot-placeholder" rotate={32} />
+
       <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '3rem 2rem' }}>
         <div style={{ height: 1, width: 48, background: GOLD, margin: '0 auto 1.5rem' }} />
         <p style={{ color: 'rgba(240,216,162,0.3)', fontSize: '0.78rem', letterSpacing: '0.25em', textTransform: 'uppercase' }}>
