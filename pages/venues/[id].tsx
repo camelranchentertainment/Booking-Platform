@@ -134,7 +134,7 @@ export default function VenueDetail() {
   const bookingLabel = (status: string) =>
     statusValues.find(lv => lv.value === status)?.label ?? BOOKING_STATUS_LABELS[status as keyof typeof BOOKING_STATUS_LABELS] ?? status;
 
-  if (!venue) return <AppShell requireRole="agent"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>Loading...</div></AppShell>;
+  if (!venue) return <AppShell requireRole="agent"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
 
   return (
     <AppShell requireRole="agent">
@@ -158,10 +158,10 @@ export default function VenueDetail() {
       {(scrapeErr || scrapeResult) && (
         <div style={{ marginBottom: '1.25rem', border: scrapeErr ? '1px solid rgba(248,113,113,0.3)' : '1px solid var(--neon-border)', borderRadius: '4px', padding: '1rem', background: scrapeErr ? 'rgba(248,113,113,0.05)' : 'var(--accent-glow)' }}>
           {scrapeErr ? (
-            <div style={{ color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>{scrapeErr}</div>
+            <div style={{ color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>{scrapeErr}</div>
           ) : scrapeResult && (
             <div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.75rem' }}>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.75rem' }}>
                 ◈ Website Scan Complete{scrapeResult.updated ? ' — venue record updated' : ''}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.5rem' }}>
@@ -176,13 +176,13 @@ export default function VenueDetail() {
                   ['Notes',         scrapeResult.extracted?.notes],
                 ] as [string, any][]).filter(([, v]) => v).map(([label, value]) => (
                   <div key={label} style={{ background: 'var(--bg-overlay)', borderRadius: '3px', padding: '0.5rem 0.65rem' }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.2rem' }}>{label}</div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.2rem' }}>{label}</div>
                     <div style={{ fontSize: '0.82rem', color: 'var(--text-primary)' }}>{String(value)}</div>
                   </div>
                 ))}
               </div>
               {!Object.values(scrapeResult.extracted || {}).some(Boolean) && (
-                <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>No contact info found on this page.</div>
+                <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>No contact info found on this page.</div>
               )}
             </div>
           )}
@@ -235,7 +235,7 @@ export default function VenueDetail() {
                 ['Notes',    venue.notes],
               ] as [string, any][]).filter(([, v]) => v).map(([label, value]) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.4rem' }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
                   <span style={{ color: 'var(--text-secondary)', textAlign: 'right', maxWidth: '65%' }}>
                     {label === 'Website' || label === 'Email'
                       ? <a href={label === 'Email' ? `mailto:${value}` : String(value)} target="_blank" style={{ color: 'var(--accent)' }}>{value}</a>
@@ -255,7 +255,7 @@ export default function VenueDetail() {
               <button className="btn btn-secondary btn-sm" onClick={() => setShowNewContact(true)}>+ Add</button>
             </div>
             {contacts.length === 0 ? (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>
                 No contacts yet. <button className="btn btn-ghost btn-sm" style={{ padding: '0', color: 'var(--accent)' }} onClick={() => setShowNewContact(true)}>Add one →</button>
               </div>
             ) : (
@@ -265,14 +265,14 @@ export default function VenueDetail() {
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem' }}>
                       <div>
                         <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)' }}>{c.first_name} {c.last_name}</div>
-                        {c.title && <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{c.title}</div>}
+                        {c.title && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{c.title}</div>}
                         <div style={{ marginTop: '0.2rem', fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                           {c.email && <a href={`mailto:${c.email}`} style={{ color: 'var(--accent)' }}>{c.email}</a>}
                           {c.phone && <span>{c.phone}</span>}
                         </div>
                       </div>
                       <select
-                        style={{ background: 'transparent', border: 'none', color: STATUS_COLORS[c.status] || 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.06em', cursor: 'pointer', flexShrink: 0 }}
+                        style={{ background: 'transparent', border: 'none', color: STATUS_COLORS[c.status] || 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.8rem', letterSpacing: '0.06em', cursor: 'pointer', flexShrink: 0 }}
                         value={c.status}
                         onChange={e => updateContactStatus(c.id, e.target.value)}>
                         {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -289,14 +289,14 @@ export default function VenueDetail() {
           <div className="card">
             <div className="card-header"><span className="card-title">BOOKING HISTORY</span></div>
             {bookings.length === 0 ? (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>No bookings at this venue</div>
+              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>No bookings at this venue</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 {bookings.map((b: any) => (
                   <Link key={b.id} href={`/bookings/${b.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.6rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', textDecoration: 'none' }}>
                     <div>
                       <div style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 500 }}>{b.act?.act_name || '—'}</div>
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>
                         {b.show_date ? new Date(b.show_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                         {b.fee ? ` · $${Number(b.fee).toLocaleString()}` : ''}
                       </div>
@@ -319,7 +319,7 @@ export default function VenueDetail() {
               <button className="btn btn-ghost btn-sm" onClick={() => setShowNewContact(false)}>✕</button>
             </div>
             <form onSubmit={saveContact} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--accent)', letterSpacing: '0.08em' }}>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--accent)', letterSpacing: '0.08em' }}>
                 {venue.name}
               </div>
               <div className="grid-2">

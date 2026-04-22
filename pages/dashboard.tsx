@@ -88,7 +88,7 @@ export default function Dashboard() {
             <Link href="/acts" className="btn btn-ghost btn-sm">View All</Link>
           </div>
           {acts.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>
               No bands yet.<br />
               <Link href="/acts/new" style={{ color: 'var(--accent)' }}>Add your first band →</Link>
             </div>
@@ -98,7 +98,7 @@ export default function Dashboard() {
                 <Link key={act.id} href={`/acts/${act.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', textDecoration: 'none' }}>
                   <div>
                     <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.9rem' }}>{act.act_name}</div>
-                    {act.genre && <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>{act.genre}</div>}
+                    {act.genre && <div style={{ color: 'var(--text-muted)', fontSize: '0.84rem', fontFamily: 'var(--font-body)', letterSpacing: '0.06em' }}>{act.genre}</div>}
                   </div>
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>→</span>
                 </Link>
@@ -114,7 +114,7 @@ export default function Dashboard() {
             <Link href="/bookings" className="btn btn-ghost btn-sm">View All</Link>
           </div>
           {pipeline.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>
               No bookings yet.<br />
               <Link href="/bookings/new" style={{ color: 'var(--accent)' }}>Start pitching →</Link>
             </div>
@@ -123,7 +123,7 @@ export default function Dashboard() {
               {pipeline.map(({ status, count }) => (
                 <div key={status} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)' }}>
                   <span className={`badge badge-${status}`}>{BOOKING_STATUS_LABELS[status as keyof typeof BOOKING_STATUS_LABELS] || status}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 600 }}>{count}</span>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--accent)', fontWeight: 600 }}>{count}</span>
                 </div>
               ))}
             </div>
@@ -151,16 +151,16 @@ export default function Dashboard() {
               <tbody>
                 {recent.map((b: any) => (
                   <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => window.location.href = `/bookings/${b.id}`}>
-                    <td style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>{b.act?.act_name || '—'}</td>
+                    <td style={{ color: 'var(--accent)', fontFamily: 'var(--font-body)', fontSize: '0.8rem' }}>{b.act?.act_name || '—'}</td>
                     <td>
                       <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{b.venue?.name || '—'}</div>
-                      {b.venue?.city && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{b.venue.city}, {b.venue.state}</div>}
+                      {b.venue?.city && <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)' }}>{b.venue.city}, {b.venue.state}</div>}
                     </td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                    <td style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem' }}>
                       {b.show_date ? new Date(b.show_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                     </td>
                     <td><span className={`badge badge-${b.status}`}>{BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS] || b.status}</span></td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--accent)' }}>
+                    <td style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--accent)' }}>
                       {b.fee ? `$${Number(b.fee).toLocaleString()}` : '—'}
                     </td>
                   </tr>

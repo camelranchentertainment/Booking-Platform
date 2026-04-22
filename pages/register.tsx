@@ -118,8 +118,8 @@ export default function Register() {
                 borderRadius: 'var(--radius-sm)',
                 background: tier === t ? `rgba(255,255,255,0.06)` : 'var(--bg-raised)',
                 color: tier === t ? c.color : 'var(--text-muted)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '0.62rem',
+                fontFamily: 'var(--font-body)',
+                fontSize: '0.76rem',
                 letterSpacing: '0.1em',
                 textTransform: 'uppercase',
                 cursor: 'pointer',
@@ -128,7 +128,7 @@ export default function Register() {
               }}>
               <span style={{ fontSize: '1.1rem' }}>{t === 'agent' ? '◈' : t === 'act_admin' ? '♪' : '◉'}</span>
               {c.label}
-              <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'none', fontFamily: 'var(--font-body)' }}>{c.sub}</span>
+              <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'none', fontFamily: 'var(--font-body)' }}>{c.sub}</span>
             </button>
           ))}
         </div>
@@ -150,7 +150,7 @@ export default function Register() {
               </div>
               {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
               <button className="btn btn-lg" type="submit" style={{ width: '100%', justifyContent: 'center', background: '#34d399', color: '#000', border: '1px solid #34d399' }}>Continue with Invite</button>
-              <div style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)' }}>No invite? Ask your booking agent or band admin.</div>
+              <div style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>No invite? Ask your booking agent or band admin.</div>
             </form>
           )}
 
@@ -219,16 +219,16 @@ export default function Register() {
                 style={{ width: '100%', justifyContent: 'center', background: '#a78bfa', color: '#000', border: '1px solid #a78bfa' }}>
                 {loading ? 'Creating account...' : 'Create Band Account'}
               </button>
-              <div style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+              <div style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                 Invited by an agent?{' '}
-                <button type="button" onClick={() => setTier('member')} style={{ background: 'none', border: 'none', color: '#a78bfa', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '0.68rem' }}>
+                <button type="button" onClick={() => setTier('member')} style={{ background: 'none', border: 'none', color: '#a78bfa', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.8rem' }}>
                   Use invite code instead
                 </button>
               </div>
             </form>
           )}
 
-          <div style={{ textAlign: 'center', marginTop: '1.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+          <div style={{ textAlign: 'center', marginTop: '1.25rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
             Already have an account? <Link href="/login" style={{ color: 'var(--accent)' }}>Sign in</Link>
           </div>
         </div>

@@ -94,7 +94,7 @@ export default function BandsPage() {
         <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           {pendingLinks.map((l: any) => (
             <div key={l.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: 'rgba(245,166,35,0.06)', border: '1px solid rgba(245,166,35,0.25)', borderRadius: 'var(--radius-sm)' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--accent)' }}>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--accent)' }}>
                 ⟳ Pending: {(l.act as any)?.act_name} — waiting for band to accept your link request
               </div>
             </div>
@@ -118,15 +118,15 @@ export default function BandsPage() {
                 onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
                 onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
                 {band._linked && (
-                  <div style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', fontFamily: 'var(--font-mono)', fontSize: '0.6rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.15rem 0.4rem' }}>
+                  <div style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', fontFamily: 'var(--font-body)', fontSize: '0.76rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.15rem 0.4rem' }}>
                     Linked
                   </div>
                 )}
                 <div style={{ marginBottom: '0.75rem', paddingRight: band._linked ? '4rem' : '0' }}>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', letterSpacing: '0.04em', color: 'var(--text-primary)' }}>{band.act_name}</div>
-                  {band.genre && <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '0.2rem' }}>{band.genre}</div>}
+                  {band.genre && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '0.2rem' }}>{band.genre}</div>}
                 </div>
-                <div style={{ display: 'flex', gap: '0.75rem', fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', gap: '0.75rem', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                   {band.member_count > 0 && <span>{band.member_count} member{band.member_count !== 1 ? 's' : ''}</span>}
                   <span style={{ color: band.is_active ? '#10b981' : 'var(--text-muted)' }}>
                     {band.is_active ? '● Active' : '○ Inactive'}
@@ -157,7 +157,7 @@ export default function BandsPage() {
                   {allBands.map(b => <option key={b.id} value={b.id}>{b.act_name}</option>)}
                 </select>
                 {allBands.length === 0 && (
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                     No unlinked bands found. Bands must register first.
                   </span>
                 )}
@@ -167,7 +167,7 @@ export default function BandsPage() {
                 <textarea className="textarea" value={linkMessage} onChange={e => setLinkMessage(e.target.value)} placeholder="Introduce yourself — why you want to work together..." rows={3} />
               </div>
               {linkError && (
-                <div style={{ color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>{linkError}</div>
+                <div style={{ color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>{linkError}</div>
               )}
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
                 <button className="btn btn-secondary" onClick={() => { setShowLinkModal(false); setLinkError(''); }}>Cancel</button>

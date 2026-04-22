@@ -63,7 +63,7 @@ export default function BandSettings() {
   const set = (k: keyof BandForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
-  if (loading) return <AppShell requireRole="act_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>Loading…</div></AppShell>;
+  if (loading) return <AppShell requireRole="act_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading…</div></AppShell>;
 
   if (!act) return (
     <AppShell requireRole="act_admin">
@@ -146,7 +146,7 @@ export default function BandSettings() {
               {saving ? 'Saving…' : 'Save Changes'}
             </button>
             {saved && (
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399', letterSpacing: '0.06em' }}>
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#34d399', letterSpacing: '0.06em' }}>
                 ✓ Saved
               </span>
             )}

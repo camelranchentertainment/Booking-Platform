@@ -81,7 +81,7 @@ export default function BandPortal() {
           {pendingLinks.map((link: any) => (
             <div key={link.id} style={{ background: 'rgba(245,166,35,0.06)', border: '1px solid rgba(245,166,35,0.35)', borderRadius: 'var(--radius)', padding: '1rem 1.25rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem' }}>
               <div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.3rem' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.3rem' }}>
                   Agent Link Request
                 </div>
                 <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.95rem' }}>
@@ -136,7 +136,7 @@ export default function BandPortal() {
                       <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--accent)', lineHeight: 1 }}>
                         {b.show_date ? new Date(b.show_date + 'T00:00:00').getDate() : '?'}
                       </div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                         {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' }) : ''}
                       </div>
                     </div>
@@ -182,7 +182,7 @@ export default function BandPortal() {
                 </tbody>
               </table>
               {shows.length === 0 && !loading && (
-                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>
                   No bookings yet. <Link href="/bookings/new" style={{ color: 'var(--accent)' }}>Add your first booking →</Link>
                 </div>
               )}

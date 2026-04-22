@@ -74,7 +74,7 @@ export default function Sidebar({ profile, onSignOut }: Props) {
           CAMEL RANCH
         </div>
         <div style={{
-          fontSize: '0.72rem', letterSpacing: '0.45em', color: 'rgba(212,168,67,0.55)',
+          fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.68rem', letterSpacing: '0.45em', color: 'rgba(212,168,67,0.70)',
           textTransform: 'uppercase', marginTop: '0.2rem',
           borderTop: '1px solid rgba(212,168,67,0.2)', paddingTop: '0.3rem',
         }}>
@@ -90,7 +90,7 @@ export default function Sidebar({ profile, onSignOut }: Props) {
           {isSuperAdmin ? (
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-              fontFamily: 'var(--font-mono)', fontSize: '0.6rem',
+              fontFamily: 'var(--font-body)', fontSize: '0.76rem',
               letterSpacing: '0.12em', textTransform: 'uppercase',
               color: '#000', background: 'var(--accent)',
               padding: '0.15rem 0.45rem', borderRadius: '2px',
@@ -99,7 +99,7 @@ export default function Sidebar({ profile, onSignOut }: Props) {
               ◈ SUPERADMIN
             </div>
           ) : (
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
               {profile.role === 'agent' ? (profile.agency_name || 'Agent') :
                profile.role === 'act_admin' ? 'Band Admin' : 'Member'}
             </div>
@@ -152,7 +152,7 @@ export default function Sidebar({ profile, onSignOut }: Props) {
             {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
           </span>
           <span style={{
-            fontFamily: 'var(--font-mono)', fontSize: '0.6rem', letterSpacing: '0.1em',
+            fontFamily: 'var(--font-body)', fontSize: '0.76rem', letterSpacing: '0.1em',
             color: 'var(--text-muted)', textTransform: 'uppercase',
           }}>
             {theme === 'dark' ? 'ON' : 'OFF'}

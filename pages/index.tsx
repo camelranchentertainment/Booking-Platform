@@ -90,7 +90,7 @@ export default function Landing() {
           <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', letterSpacing: '0.14em', lineHeight: 1, color: GOLD, textShadow: glow }}>
             CAMEL RANCH
           </div>
-          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.42em', color: `rgba(212,168,67,0.55)`, textTransform: 'uppercase', marginTop: '0.15rem' }}>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', fontWeight: 600, letterSpacing: '0.42em', color: `rgba(212,168,67,0.55)`, textTransform: 'uppercase', marginTop: '0.15rem' }}>
             BOOKING
           </div>
         </div>
@@ -121,7 +121,7 @@ export default function Landing() {
         {/* Eyebrow */}
         <div style={{
           display: 'inline-flex', alignItems: 'center', gap: '0.6rem',
-          fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 600,
+          fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: 600,
           letterSpacing: '0.22em', textTransform: 'uppercase',
           color: GOLD, border: `1px solid ${BORDER}`,
           padding: '0.35rem 1rem', borderRadius: '2px', marginBottom: '2rem',
@@ -189,7 +189,7 @@ export default function Landing() {
         <div style={{
           marginTop: '3.5rem',
           fontFamily: 'var(--font-body)', fontWeight: 600,
-          fontSize: '0.68rem', letterSpacing: '0.2em', textTransform: 'uppercase',
+          fontSize: '0.8rem', letterSpacing: '0.2em', textTransform: 'uppercase',
           color: 'rgba(212,168,67,0.45)',
         }}>
           ↓ &nbsp; Three tiers. One platform. &nbsp; ↓
@@ -218,7 +218,7 @@ export default function Landing() {
               borderRadius: '5px', padding: '2rem',
               display: 'flex', flexDirection: 'column', gap: '0.9rem',
             }}>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.color }}>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.color }}>
                 {t.tier}
               </div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.9rem', letterSpacing: '0.05em', color: CREAM, lineHeight: 1 }}>
@@ -230,7 +230,7 @@ export default function Landing() {
               <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.4rem', margin: 0, padding: 0 }}>
                 {t.perks.map(p => (
                   <li key={p} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.83rem', color: 'rgba(242,232,217,0.60)', fontFamily: 'var(--font-body)' }}>
-                    <span style={{ color: t.color, fontSize: '0.7rem', flexShrink: 0 }}>◈</span> {p}
+                    <span style={{ color: t.color, fontSize: '0.8rem', flexShrink: 0 }}>◈</span> {p}
                   </li>
                 ))}
               </ul>
@@ -259,12 +259,12 @@ export default function Landing() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: 'rgba(8,2,1,0.80)', flexWrap: 'wrap', gap: '0.5rem',
       }}>
-        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'rgba(212,168,67,0.40)', letterSpacing: '0.08em' }}>
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'rgba(212,168,67,0.40)', letterSpacing: '0.08em' }}>
           © {new Date().getFullYear()} Camel Ranch Entertainment
         </div>
         <div style={{ display: 'flex', gap: '1.5rem' }}>
-          <Link href="/login" style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: MUTED, textDecoration: 'none' }}>Sign In</Link>
-          <Link href="/register" style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: GOLD, textDecoration: 'none' }}>Get Started</Link>
+          <Link href="/login" style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: MUTED, textDecoration: 'none' }}>Sign In</Link>
+          <Link href="/register" style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: GOLD, textDecoration: 'none' }}>Get Started</Link>
         </div>
       </footer>
 

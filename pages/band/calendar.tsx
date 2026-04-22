@@ -86,7 +86,7 @@ export default function BandCalendar() {
           {/* Day headers */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)' }}>
             {DAYS.map(d => (
-              <div key={d} style={{ padding: '0.5rem', textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{d}</div>
+              <div key={d} style={{ padding: '0.5rem', textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.76rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{d}</div>
             ))}
           </div>
 
@@ -113,7 +113,7 @@ export default function BandCalendar() {
                   }}
                 >
                   <div style={{
-                    fontFamily: 'var(--font-mono)', fontSize: '0.78rem', fontWeight: isToday ? 700 : 400,
+                    fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: isToday ? 700 : 400,
                     color: isToday ? 'var(--accent)' : 'var(--text-secondary)',
                     width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     borderRadius: '50%', background: isToday ? 'rgba(0,229,255,0.15)' : 'transparent',
@@ -123,15 +123,15 @@ export default function BandCalendar() {
                   <div style={{ marginTop: '0.25rem', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
                     {dayShows.slice(0, 2).map((s: any) => (
                       <div key={s.id} style={{
-                        fontSize: '0.65rem', padding: '0.1rem 0.3rem', borderRadius: '2px',
+                        fontSize: '0.78rem', padding: '0.1rem 0.3rem', borderRadius: '2px',
                         background: `${STATUS_DOT[s.status] || '#64748b'}22`,
                         color: STATUS_DOT[s.status] || '#64748b',
-                        fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       }}>
                         {s.venue?.name || 'TBD'}
                       </div>
                     ))}
-                    {dayShows.length > 2 && <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>+{dayShows.length - 2} more</div>}
+                    {dayShows.length > 2 && <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>+{dayShows.length - 2} more</div>}
                   </div>
                 </div>
               );
@@ -153,7 +153,7 @@ export default function BandCalendar() {
                     <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{s.venue?.name || 'TBD'}</div>
                     <span className={`badge badge-${s.status}`}>{BOOKING_STATUS_LABELS[s.status as keyof typeof BOOKING_STATUS_LABELS]}</span>
                   </div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontFamily: 'var(--font-mono)', marginTop: '0.25rem' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.84rem', fontFamily: 'var(--font-body)', marginTop: '0.25rem' }}>
                     {s.venue?.city ? `${s.venue.city}, ${s.venue.state}` : ''}
                     {s.set_time ? ` · ${s.set_time}` : ''}
                     {s.fee ? ` · $${Number(s.fee).toLocaleString()}` : ''}
@@ -172,19 +172,19 @@ export default function BandCalendar() {
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--accent)', lineHeight: 1 }}>
                     {new Date(s.show_date + 'T12:00:00').getDate()}
                   </div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                     {new Date(s.show_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })}
                   </div>
                 </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                   <div style={{ color: 'var(--text-primary)', fontSize: '0.82rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.venue?.name || 'TBD'}</div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', fontFamily: 'var(--font-mono)' }}>{s.venue?.city || ''}</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'var(--font-body)' }}>{s.venue?.city || ''}</div>
                 </div>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_DOT[s.status] || '#64748b', flexShrink: 0 }} />
               </Link>
             ))}
             {shows.filter(s => s.show_date >= todayStr).length === 0 && !loading && (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>No upcoming shows.</div>
+              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>No upcoming shows.</div>
             )}
           </div>
         </div>

@@ -245,20 +245,20 @@ export default function VenuesPage() {
               Clear
             </button>
           )}
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)', flexShrink: 0 }}>
             Find venues not yet in your database
           </span>
         </div>
 
         {prospectErr && (
-          <div style={{ marginTop: '0.6rem', padding: '0.6rem 0.75rem', background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-sm)', color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+          <div style={{ marginTop: '0.6rem', padding: '0.6rem 0.75rem', background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-sm)', color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>
             {prospectErr}
           </div>
         )}
 
         {prospects.length > 0 && (
           <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
               {prospects.length} results — {prospects.filter(p => p.already_added).length} already in your database
             </div>
             {prospects.map(p => (
@@ -271,17 +271,17 @@ export default function VenuesPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     {p.name}
-                    {p.already_added && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.58rem', color: '#34d399', letterSpacing: '0.1em', textTransform: 'uppercase' }}>✓ In DB</span>}
-                    {p.rating && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: '#fbbf24' }}>★ {p.rating}</span>}
+                    {p.already_added && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#34d399', letterSpacing: '0.1em', textTransform: 'uppercase' }}>✓ In DB</span>}
+                    {p.rating && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#fbbf24' }}>★ {p.rating}</span>}
                   </div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {p.formatted_address}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
-                  <a href={p.google_maps_url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem' }}>Maps ↗</a>
+                  <a href={p.google_maps_url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>Maps ↗</a>
                   {!p.already_added && (
-                    <button className="btn btn-primary btn-sm" onClick={() => addProspect(p)} disabled={addingId === p.place_id} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem' }}>
+                    <button className="btn btn-primary btn-sm" onClick={() => addProspect(p)} disabled={addingId === p.place_id} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>
                       {addingId === p.place_id ? 'Adding…' : '+ Add'}
                     </button>
                   )}
@@ -322,7 +322,7 @@ export default function VenuesPage() {
                   <td>
                     <button
                       className="btn btn-ghost btn-sm"
-                      style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.06em', color: 'var(--accent)', whiteSpace: 'nowrap' }}
+                      style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', letterSpacing: '0.06em', color: 'var(--accent)', whiteSpace: 'nowrap' }}
                       onClick={e => { e.stopPropagation(); openAddToTour(v); }}
                     >
                       + Tour
@@ -364,7 +364,7 @@ export default function VenuesPage() {
                 autoFocus={mapsReady}
               />
               {mapsReady && (
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
                   Select a result to auto-fill the fields below
                 </div>
               )}
@@ -422,7 +422,7 @@ export default function VenuesPage() {
                 <input className="input" value={form.website} onChange={set('website')} placeholder="https://..." />
               </div>
               {form.google_maps_url && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent)', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent)', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                   ✓ Google Maps linked
                   <a href={form.google_maps_url} target="_blank" style={{ color: 'var(--text-muted)' }}>view →</a>
                 </div>
@@ -444,13 +444,13 @@ export default function VenuesPage() {
               <h3 className="modal-title">Add to Tour</h3>
               <button className="btn btn-ghost btn-sm" onClick={() => setTourTarget(null)}>✕</button>
             </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
               {tourTarget.name} · {tourTarget.city}, {tourTarget.state}
             </div>
             {!toursLoaded ? (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>Loading tours...</div>
+              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>Loading tours...</div>
             ) : tours.length === 0 ? (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>
+              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>
                 No active tours found.{' '}
                 <a href="/tours" style={{ color: 'var(--accent)' }}>Create a tour first →</a>
               </div>
@@ -460,18 +460,18 @@ export default function VenuesPage() {
                   <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
                     <div>
                       <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{t.name}</div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
                         {t.act?.act_name} · {t.status}
                       </div>
                     </div>
                     {addTourDone === t.id ? (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#34d399' }}>✓ Added</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#34d399' }}>✓ Added</span>
                     ) : (
                       <button
                         className="btn btn-primary btn-sm"
                         disabled={addingTour === t.id}
                         onClick={() => addVenueToTour(t.id)}
-                        style={{ fontSize: '0.7rem' }}
+                        style={{ fontSize: '0.8rem' }}
                       >
                         {addingTour === t.id ? 'Adding…' : 'Add to Pool'}
                       </button>

@@ -36,15 +36,15 @@ export default function BandMembers() {
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)' }}>
               <div>
                 <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{m.display_name || m.email}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>{m.email}</div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>{m.email}</div>
               </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: m.role === 'act_admin' ? 'var(--accent)' : 'var(--text-muted)' }}>
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: m.role === 'act_admin' ? 'var(--accent)' : 'var(--text-muted)' }}>
                 {m.role === 'act_admin' ? 'Admin' : 'Member'}
               </span>
             </div>
           ))}
           {members.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>No members found.</div>
+            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>No members found.</div>
           )}
         </div>
       </div>

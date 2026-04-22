@@ -163,12 +163,12 @@ export default function Settings() {
               <div className="field">
                 <label className="field-label">Email</label>
                 <input className="input" type="email" value={form.email} disabled style={{ opacity: 0.5 }} />
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>Email cannot be changed here</span>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Email cannot be changed here</span>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
               <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</button>
-              {saved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>✓ Saved</span>}
+              {saved && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#34d399' }}>✓ Saved</span>}
             </div>
           </div>
         </form>
@@ -195,7 +195,7 @@ export default function Settings() {
                     </button>
                   </div>
                   {apiKeyConfigured && (
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#34d399' }}>
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#34d399' }}>
                       ✓ API key configured
                     </span>
                   )}
@@ -209,17 +209,17 @@ export default function Settings() {
                     onChange={setEmail('resend_from_email')}
                     placeholder="booking@yourdomain.com"
                   />
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                     Must be a domain verified in your Resend account
                   </span>
                 </div>
                 {emailError && (
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: '#ef4444' }}>{emailError}</div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: '#ef4444' }}>{emailError}</div>
                 )}
               </div>
               <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
                 <button type="submit" className="btn btn-primary" disabled={emailSaving}>{emailSaving ? 'Saving...' : 'Save Email Settings'}</button>
-                {emailSaved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>✓ Saved</span>}
+                {emailSaved && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#34d399' }}>✓ Saved</span>}
               </div>
             </div>
           </form>
@@ -231,11 +231,11 @@ export default function Settings() {
             <div className="card-header"><span className="card-title">BILLING</span></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.88rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.4rem' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Plan</span>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Plan</span>
                 <span style={{ color: 'var(--text-secondary)' }}>{TIER_LABELS[profile.subscription_tier || 'agent']}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.4rem' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Status</span>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Status</span>
                 <span style={{
                   color: profile.subscription_status === 'active' ? '#34d399'
                        : profile.subscription_status === 'trialing' ? '#fbbf24'
@@ -243,7 +243,7 @@ export default function Settings() {
                 }}>
                   {STATUS_LABELS[profile.subscription_status || 'inactive']}
                   {profile.subscription_status === 'trialing' && profile.trial_ends_at && (
-                    <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.68rem' }}>
+                    <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontFamily: 'var(--font-body)', fontSize: '0.8rem' }}>
                       (expires {new Date(profile.trial_ends_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})
                     </span>
                   )}

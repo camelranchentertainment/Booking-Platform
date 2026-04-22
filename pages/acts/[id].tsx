@@ -84,7 +84,7 @@ export default function BandDetail() {
     await loadAll();
   };
 
-  if (!act) return <AppShell requireRole="agent"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>Loading...</div></AppShell>;
+  if (!act) return <AppShell requireRole="agent"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
 
   return (
     <AppShell requireRole="agent">
@@ -105,7 +105,7 @@ export default function BandDetail() {
           <button key={t} onClick={() => setTab(t)}
             style={{
               padding: '0.6rem 1.25rem',
-              fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase',
+              fontFamily: 'var(--font-body)', fontSize: '0.82rem', letterSpacing: '0.1em', textTransform: 'uppercase',
               border: 'none', borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
               background: 'none', color: tab === t ? 'var(--accent)' : 'var(--text-muted)',
               cursor: 'pointer', marginBottom: '-1px',
@@ -152,14 +152,14 @@ export default function BandDetail() {
               <Link href={`/bookings?act=${act.id}`} className="btn btn-ghost btn-sm">View All</Link>
             </div>
             {bookings.length === 0 ? (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', padding: '1rem 0' }}>No bookings yet</div>
+              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem', padding: '1rem 0' }}>No bookings yet</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 {bookings.map((b: any) => (
                   <Link key={b.id} href={`/bookings/${b.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.6rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', textDecoration: 'none' }}>
                     <div>
                       <div style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 500 }}>{b.venue?.name || 'TBD'}</div>
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>
                         {b.show_date ? new Date(b.show_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                       </div>
                     </div>
@@ -176,16 +176,16 @@ export default function BandDetail() {
         <div className="card" style={{ maxWidth: 600 }}>
           <div className="card-header"><span className="card-title">MEMBERS ({members.length})</span></div>
           {members.length === 0 ? (
-            <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', padding: '1rem 0' }}>No members yet. Use the Invites tab to add members.</div>
+            <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem', padding: '1rem 0' }}>No members yet. Use the Invites tab to add members.</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {members.map(m => (
                 <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)' }}>
                   <div>
                     <div style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '0.9rem' }}>{m.display_name || m.email}</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>{m.email}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{m.email}</div>
                   </div>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: m.role === 'act_admin' ? 'var(--accent)' : 'var(--text-muted)' }}>{m.role}</span>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: m.role === 'act_admin' ? 'var(--accent)' : 'var(--text-muted)' }}>{m.role}</span>
                 </div>
               ))}
             </div>
@@ -213,7 +213,7 @@ export default function BandDetail() {
                 <button className="btn btn-primary" onClick={sendInvite} disabled={!inviteEmail || saving}>Send Invite</button>
               </div>
             </div>
-            {inviteError && <div style={{ marginTop: '0.5rem', color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>{inviteError}</div>}
+            {inviteError && <div style={{ marginTop: '0.5rem', color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>{inviteError}</div>}
           </div>
 
           {invites.length > 0 && (
@@ -224,7 +224,7 @@ export default function BandDetail() {
                   <div key={inv.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)' }}>
                     <div>
                       <div style={{ color: 'var(--text-primary)', fontSize: '0.88rem' }}>{inv.email}</div>
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>
                         {inv.role} · expires {new Date(inv.expires_at).toLocaleDateString()}
                       </div>
                     </div>

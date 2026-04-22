@@ -96,7 +96,7 @@ export default function PricingPage() {
 
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.3em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.75rem' }}>
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', letterSpacing: '0.3em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.75rem' }}>
           Camel Ranch Booking
         </div>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.4rem', color: 'var(--text-primary)', margin: '0 0 0.75rem' }}>
@@ -106,7 +106,7 @@ export default function PricingPage() {
           14-day free trial on paid plans. No credit card required to start.
         </p>
         {trialMessage && (
-          <div style={{ marginTop: '1rem', padding: '0.65rem 1.25rem', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', borderRadius: '4px', color: '#fbbf24', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
+          <div style={{ marginTop: '1rem', padding: '0.65rem 1.25rem', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', borderRadius: '4px', color: '#fbbf24', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>
             ⚠ {trialMessage}
           </div>
         )}
@@ -132,7 +132,7 @@ export default function PricingPage() {
               <div style={{
                 position: 'absolute', top: '-1px', left: '50%', transform: 'translateX(-50%)',
                 background: 'var(--accent)', color: '#000',
-                fontFamily: 'var(--font-mono)', fontSize: '0.6rem', letterSpacing: '0.2em',
+                fontFamily: 'var(--font-body)', fontSize: '0.76rem', letterSpacing: '0.2em',
                 textTransform: 'uppercase', padding: '0.2rem 0.85rem', borderRadius: '0 0 4px 4px',
               }}>
                 Most Popular
@@ -140,7 +140,7 @@ export default function PricingPage() {
             )}
 
             {/* Plan name */}
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: plan.color, marginBottom: '0.5rem' }}>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: plan.color, marginBottom: '0.5rem' }}>
               {plan.name}
             </div>
 
@@ -150,7 +150,7 @@ export default function PricingPage() {
                 {plan.price}
               </span>
               {plan.period && (
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--text-muted)' }}>
                   {plan.period}
                 </span>
               )}
@@ -168,7 +168,7 @@ export default function PricingPage() {
 
             {/* CTA */}
             {plan.noBtn ? (
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center', padding: '0.75rem', border: '1px solid var(--border)', borderRadius: '3px' }}>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'center', padding: '0.75rem', border: '1px solid var(--border)', borderRadius: '3px' }}>
                 Invite-only — free forever
               </div>
             ) : (
@@ -186,7 +186,7 @@ export default function PricingPage() {
       </div>
 
       {/* Footer note */}
-      <p style={{ marginTop: '2.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textAlign: 'center', maxWidth: 480 }}>
+      <p style={{ marginTop: '2.5rem', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', maxWidth: 480 }}>
         Subscriptions managed securely via Stripe. Cancel anytime from your billing settings.
       </p>
     </div>

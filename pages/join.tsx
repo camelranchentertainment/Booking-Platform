@@ -61,7 +61,7 @@ export default function Join() {
 
   if (loading) return (
     <div className="auth-wrap">
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', letterSpacing: '0.15em' }}>Loading invite...</div>
+      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--text-muted)', letterSpacing: '0.15em' }}>Loading invite...</div>
     </div>
   );
 
@@ -83,7 +83,7 @@ export default function Join() {
         {invite && (
           <div style={{ background: 'var(--accent-glow)', border: '1px solid var(--accent-dim)', borderRadius: 'var(--radius-sm)', padding: '0.75rem 1rem', marginBottom: '1.5rem', textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--accent)' }}>{invite.actName}</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: '0.2rem' }}>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: '0.2rem' }}>
               Role: {invite.role}
             </div>
           </div>
@@ -92,7 +92,7 @@ export default function Join() {
         <div style={{ display: 'flex', gap: '0', marginBottom: '1.25rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
           {(['register', 'login'] as const).map(m => (
             <button key={m} onClick={() => setMode(m)} style={{
-              flex: 1, padding: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase',
+              flex: 1, padding: '0.5rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', letterSpacing: '0.08em', textTransform: 'uppercase',
               background: mode === m ? 'var(--accent)' : 'transparent', color: mode === m ? '#000' : 'var(--text-muted)', border: 'none', cursor: 'pointer',
             }}>
               {m === 'register' ? 'New Account' : 'Sign In'}

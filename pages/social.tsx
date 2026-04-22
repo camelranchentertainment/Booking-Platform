@@ -90,7 +90,7 @@ export default function SocialQueue() {
             key={tab.key}
             onClick={() => setView(tab.key)}
             style={{
-              fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.08em',
+              fontFamily: 'var(--font-body)', fontSize: '0.82rem', letterSpacing: '0.08em',
               textTransform: 'uppercase', padding: '0.6rem 1rem',
               border: 'none', background: 'none', cursor: 'pointer',
               color: view === tab.key ? 'var(--accent)' : 'var(--text-muted)',
@@ -100,7 +100,7 @@ export default function SocialQueue() {
           >
             {tab.label}
             {tab.key === 'pending' && pendingCount > 0 && view !== 'pending' && (
-              <span style={{ marginLeft: '0.35rem', background: '#f87171', color: '#fff', borderRadius: '8px', padding: '0.05rem 0.4rem', fontSize: '0.62rem' }}>
+              <span style={{ marginLeft: '0.35rem', background: '#f87171', color: '#fff', borderRadius: '8px', padding: '0.05rem 0.4rem', fontSize: '0.76rem' }}>
                 {pendingCount}
               </span>
             )}
@@ -109,10 +109,10 @@ export default function SocialQueue() {
       </div>
 
       {loading ? (
-        <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>Loading...</div>
+        <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div>
       ) : posts.length === 0 ? (
         <div className="card">
-          <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', textAlign: 'center', padding: '2rem 0' }}>
+          <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem', textAlign: 'center', padding: '2rem 0' }}>
             {view === 'pending'
               ? 'No posts waiting for approval. Confirm a show from a tour to generate social posts.'
               : 'No posts in this category.'}
@@ -128,7 +128,7 @@ export default function SocialQueue() {
                   <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--text-primary)', marginBottom: '0.15rem' }}>
                     {post.act?.act_name}
                   </div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                     {post.venue?.name} · {post.venue?.city}, {post.venue?.state}
                     {post.show_date && ` · ${new Date(post.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
                   </div>
@@ -138,7 +138,7 @@ export default function SocialQueue() {
                     const meta = PLATFORM_META[post.platform];
                     return meta ? (
                       <span title={meta.tip} style={{
-                        fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.06em',
+                        fontFamily: 'var(--font-body)', fontSize: '0.76rem', letterSpacing: '0.06em',
                         textTransform: 'uppercase', padding: '0.2rem 0.6rem',
                         border: `1px solid ${meta.color}44`,
                         borderRadius: '3px', color: meta.color,
@@ -147,7 +147,7 @@ export default function SocialQueue() {
                         {meta.icon} {meta.label}
                       </span>
                     ) : (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', padding: '0.2rem 0.55rem', border: '1px solid var(--border)', borderRadius: '3px' }}>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', padding: '0.2rem 0.55rem', border: '1px solid var(--border)', borderRadius: '3px' }}>
                         {post.platform}
                       </span>
                     );
@@ -192,11 +192,11 @@ export default function SocialQueue() {
 
               {post.status === 'pending' && editing !== post.id && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: '0.6rem' }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
                     Click post text to edit before approving
                   </div>
                   {PLATFORM_META[post.platform] && (
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: PLATFORM_META[post.platform].color, opacity: 0.8 }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: PLATFORM_META[post.platform].color, opacity: 0.8 }}>
                       ⚡ {PLATFORM_META[post.platform].tip}
                     </div>
                   )}
@@ -257,7 +257,7 @@ export default function SocialQueue() {
               </div>
 
               {/* Timestamp */}
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
                 Generated {new Date(post.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               </div>
             </div>

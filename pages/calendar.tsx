@@ -100,7 +100,7 @@ export default function AgentCalendar() {
           <button
             onClick={() => setFilterAct('all')}
             style={{
-              fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.04em',
+              fontFamily: 'var(--font-body)', fontSize: '0.84rem', fontWeight: 600, letterSpacing: '0.04em',
               textTransform: 'uppercase', padding: '0.3rem 0.75rem',
               border: `1px solid ${filterAct === 'all' ? 'var(--accent)' : 'var(--border)'}`,
               borderRadius: 'var(--radius-sm)', cursor: 'pointer',
@@ -113,7 +113,7 @@ export default function AgentCalendar() {
               key={a.id}
               onClick={() => setFilterAct(a.id)}
               style={{
-                fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.04em',
+                fontFamily: 'var(--font-body)', fontSize: '0.84rem', fontWeight: 600, letterSpacing: '0.04em',
                 textTransform: 'uppercase', padding: '0.3rem 0.75rem',
                 border: `1px solid ${filterAct === a.id ? actColorMap[a.id] : 'var(--border)'}`,
                 borderRadius: 'var(--radius-sm)', cursor: 'pointer',
@@ -138,7 +138,7 @@ export default function AgentCalendar() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)' }}>
             {DAYS.map(d => (
-              <div key={d} style={{ padding: '0.5rem', textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{d}</div>
+              <div key={d} style={{ padding: '0.5rem', textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{d}</div>
             ))}
           </div>
 
@@ -165,7 +165,7 @@ export default function AgentCalendar() {
                   }}
                 >
                   <div style={{
-                    fontFamily: 'var(--font-mono)', fontSize: '0.75rem', fontWeight: isToday ? 700 : 400,
+                    fontFamily: 'var(--font-body)', fontSize: '0.84rem', fontWeight: isToday ? 700 : 400,
                     color: isToday ? 'var(--accent)' : 'var(--text-secondary)',
                     width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     borderRadius: '50%', background: isToday ? 'var(--accent-glow)' : 'transparent',
@@ -173,7 +173,7 @@ export default function AgentCalendar() {
                   }}>{day}</div>
                   {dayShows.slice(0, 3).map((s: any) => (
                     <div key={s.id} style={{
-                      fontSize: '0.72rem', padding: '0.1rem 0.25rem', borderRadius: '2px',
+                      fontSize: '0.82rem', padding: '0.1rem 0.25rem', borderRadius: '2px',
                       background: `${actColorMap[s.act_id] || 'var(--accent)'}25`,
                       color: actColorMap[s.act_id] || 'var(--accent)',
                       fontFamily: 'var(--font-body)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden',
@@ -184,7 +184,7 @@ export default function AgentCalendar() {
                     </div>
                   ))}
                   {dayShows.length > 3 && (
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>+{dayShows.length - 3}</div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>+{dayShows.length - 3}</div>
                   )}
                 </div>
               );
@@ -204,7 +204,7 @@ export default function AgentCalendar() {
               </div>
               {selectedShows.map((s: any) => (
                 <Link key={s.id} href={`/bookings/${s.id}`} style={{ display: 'block', textDecoration: 'none', padding: '0.65rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', marginBottom: '0.5rem', borderLeft: `3px solid ${actColorMap[s.act_id] || 'var(--accent)'}` }}>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 600, color: actColorMap[s.act_id] || 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: 600, color: actColorMap[s.act_id] || 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>
                     {actName(s.act_id)}
                   </div>
                   <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{s.venue?.name || 'TBD'}</div>
@@ -224,9 +224,9 @@ export default function AgentCalendar() {
           {/* Upcoming */}
           <div className="card">
             <div className="card-header"><span className="card-title">UPCOMING</span></div>
-            {loading && <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>Loading...</div>}
+            {loading && <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>Loading...</div>}
             {!loading && upcoming.length === 0 && (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>No upcoming shows.</div>
+              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>No upcoming shows.</div>
             )}
             {upcoming.map((s: any) => (
               <Link key={s.id} href={`/bookings/${s.id}`} style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', padding: '0.45rem 0', borderBottom: '1px solid var(--border)', textDecoration: 'none' }}>
@@ -234,14 +234,14 @@ export default function AgentCalendar() {
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', color: actColorMap[s.act_id] || 'var(--accent)', lineHeight: 1 }}>
                     {new Date(s.show_date + 'T12:00:00').getDate()}
                   </div>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                     {new Date(s.show_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })}
                   </div>
                 </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', fontWeight: 600, color: actColorMap[s.act_id] || 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{actName(s.act_id)}</div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 600, color: actColorMap[s.act_id] || 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{actName(s.act_id)}</div>
                   <div style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.venue?.name || 'TBD'}</div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontFamily: 'var(--font-body)' }}>{s.venue?.city || ''}</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.84rem', fontFamily: 'var(--font-body)' }}>{s.venue?.city || ''}</div>
                 </div>
                 <div style={{ width: 7, height: 7, borderRadius: '50%', background: STATUS_DOT[s.status] || '#64748b', flexShrink: 0 }} />
               </Link>

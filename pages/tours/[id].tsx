@@ -283,7 +283,7 @@ export default function TourDetail() {
 
   if (!tour) return (
     <AppShell requireRole="agent">
-      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>Loading...</div>
+      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div>
     </AppShell>
   );
 
@@ -291,7 +291,7 @@ export default function TourDetail() {
     <AppShell requireRole="agent">
       <div className="page-header">
         <div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.2rem' }}>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.2rem' }}>
             {tour.act?.act_name}
           </div>
           <h1 className="page-title">{tour.name}</h1>
@@ -342,7 +342,7 @@ export default function TourDetail() {
                 {tour.description && <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '0.5rem' }}>{tour.description}</p>}
                 {tour.routing_notes && (
                   <div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem' }}>Routing Notes</div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem' }}>Routing Notes</div>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{tour.routing_notes}</p>
                   </div>
                 )}
@@ -357,7 +357,7 @@ export default function TourDetail() {
             <span className="card-title">CONFIRMED SHOWS ({bookings.length})</span>
           </div>
           {bookings.length === 0 ? (
-            <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+            <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>
               No shows yet. Use the outreach pool below to target venues, then confirm a show.
             </div>
           ) : (
@@ -366,14 +366,14 @@ export default function TourDetail() {
                 <Link key={b.id} href={`/bookings/${b.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.6rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', textDecoration: 'none' }}>
                   <div>
                     <div style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 500 }}>{b.venue?.name || 'TBD'}</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>
                       {b.show_date ? new Date(b.show_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                       {b.venue?.city ? ` · ${b.venue.city}, ${b.venue.state}` : ''}
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
                     <span className={`badge badge-${b.status}`}>{BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}</span>
-                    {b.fee && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--accent)' }}>${Number(b.fee).toLocaleString()}</span>}
+                    {b.fee && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--accent)' }}>${Number(b.fee).toLocaleString()}</span>}
                   </div>
                 </Link>
               ))}
@@ -400,7 +400,7 @@ export default function TourDetail() {
                 key={tab}
                 onClick={() => setPoolFilter(tab)}
                 style={{
-                  fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.08em',
+                  fontFamily: 'var(--font-body)', fontSize: '0.78rem', letterSpacing: '0.08em',
                   textTransform: 'uppercase', padding: '0.3rem 0.65rem',
                   border: `1px solid ${poolFilter === tab ? 'var(--accent)' : 'var(--border)'}`,
                   borderRadius: 'var(--radius-sm)',
@@ -416,7 +416,7 @@ export default function TourDetail() {
         </div>
 
         {filteredPool.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', padding: '1rem 0' }}>
+          <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem', padding: '1rem 0' }}>
             {pool.length === 0
               ? 'No venues in the outreach pool yet. Click "+ Add Venue" to start targeting venues for this tour.'
               : 'No venues matching this filter.'}
@@ -441,12 +441,12 @@ export default function TourDetail() {
                       {tv.venue?.name}
                     </Link>
                     {tv.venue?.capacity && (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', background: 'var(--bg-surface)', padding: '0.1rem 0.35rem', borderRadius: '2px' }}>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', background: 'var(--bg-surface)', padding: '0.1rem 0.35rem', borderRadius: '2px' }}>
                         cap {tv.venue.capacity.toLocaleString()}
                       </span>
                     )}
                   </div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
                     {tv.venue?.city}, {tv.venue?.state}
                     {tv.venue?.email && <span> · {tv.venue.email}</span>}
                   </div>
@@ -478,7 +478,7 @@ export default function TourDetail() {
                 {/* Status selector */}
                 <select
                   className="select"
-                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', color: STATUS_COLOR[tv.status as OutreachStatus] }}
+                  style={{ fontSize: '0.84rem', padding: '0.3rem 0.5rem', color: STATUS_COLOR[tv.status as OutreachStatus] }}
                   value={tv.status}
                   onChange={e => updateStatus(tv.id, e.target.value as OutreachStatus)}
                 >
@@ -533,7 +533,7 @@ export default function TourDetail() {
                   key={tab}
                   onClick={() => setSearchTab(tab)}
                   style={{
-                    fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.08em',
+                    fontFamily: 'var(--font-body)', fontSize: '0.8rem', letterSpacing: '0.08em',
                     textTransform: 'uppercase', padding: '0.35rem 0.8rem',
                     border: `1px solid ${searchTab === tab ? 'var(--accent)' : 'var(--border)'}`,
                     borderRadius: 'var(--radius-sm)', cursor: 'pointer',
@@ -558,12 +558,12 @@ export default function TourDetail() {
                   style={{ marginBottom: '0.75rem' }}
                 />
                 <div style={{ overflowY: 'auto', flex: 1 }}>
-                  {searching && <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem' }}>Searching...</div>}
+                  {searching && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', padding: '0.5rem' }}>Searching...</div>}
                   {!searching && searchQuery.length >= 2 && searchResults.length === 0 && (
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
                       No venues found in your database.{' '}
                       <button
-                        style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', padding: 0 }}
+                        style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.82rem', padding: 0 }}
                         onClick={() => setSearchTab('discover')}
                       >
                         Try Discover tab →
@@ -571,7 +571,7 @@ export default function TourDetail() {
                     </div>
                   )}
                   {searchQuery.length < 2 && (
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
                       Type at least 2 characters to search your venue database.
                     </div>
                   )}
@@ -581,12 +581,12 @@ export default function TourDetail() {
                       <div key={v.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.55rem 0.6rem', borderRadius: 'var(--radius-sm)', borderBottom: '1px solid var(--border)' }}>
                         <div>
                           <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>{v.name}</div>
-                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                             {v.city}, {v.state}{v.capacity ? ` · cap ${v.capacity.toLocaleString()}` : ''}{v.venue_type ? ` · ${v.venue_type}` : ''}
                           </div>
                         </div>
                         {inPool ? (
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#34d399' }}>✓ In Pool</span>
+                          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#34d399' }}>✓ In Pool</span>
                         ) : (
                           <button className="btn btn-secondary btn-sm" disabled={adding === v.id} onClick={() => addVenue(v.id)}>
                             {adding === v.id ? 'Adding...' : 'Add'}
@@ -636,20 +636,20 @@ export default function TourDetail() {
                 </div>
 
                 {discoverErr && (
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#f87171', marginBottom: '0.5rem', padding: '0.5rem', background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-sm)' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#f87171', marginBottom: '0.5rem', padding: '0.5rem', background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-sm)' }}>
                     {discoverErr}
                   </div>
                 )}
 
                 <div style={{ overflowY: 'auto', flex: 1 }}>
                   {!discovering && discoverResults.length === 0 && !discoverErr && (
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
                       Enter a city and state to search Google for live music venues, bars, and clubs.
                       Selecting one saves it to your database and adds it to this tour's outreach pool.
                     </div>
                   )}
                   {discoverResults.length > 0 && (
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
                       {discoverResults.length} results from Google
                     </div>
                   )}
@@ -660,22 +660,22 @@ export default function TourDetail() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                             {p.name}
-                            {p.already_added && !inPool && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.58rem', color: 'var(--text-muted)' }}>in DB</span>}
+                            {p.already_added && !inPool && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)' }}>in DB</span>}
                           </div>
-                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {p.formatted_address}
                             {p.rating ? ` · ★ ${p.rating}` : ''}
                           </div>
                         </div>
                         <div style={{ flexShrink: 0 }}>
                           {inPool ? (
-                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#34d399' }}>✓ In Pool</span>
+                            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#34d399' }}>✓ In Pool</span>
                           ) : (
                             <button
                               className="btn btn-primary btn-sm"
                               disabled={discoverAdding === p.place_id}
                               onClick={() => addDiscoveredVenue(p)}
-                              style={{ fontSize: '0.68rem' }}
+                              style={{ fontSize: '0.8rem' }}
                             >
                               {discoverAdding === p.place_id ? 'Adding…' : '+ Add to Pool'}
                             </button>
@@ -701,7 +701,7 @@ export default function TourDetail() {
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirmTarget(null)}>✕</button>
               </div>
 
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
                 {confirmTarget.venue?.name} · {confirmTarget.venue?.city}, {confirmTarget.venue?.state}
               </div>
 
@@ -747,14 +747,14 @@ export default function TourDetail() {
                       </label>
                     ))}
                   </div>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '0.35rem', display: 'block' }}>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.35rem', display: 'block' }}>
                     AI drafts one algorithm-optimized post per platform for your approval
                   </span>
                 </div>
               </div>
 
               {confirmError && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: '#f87171', marginTop: '0.75rem' }}>{confirmError}</div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: '#f87171', marginTop: '0.75rem' }}>{confirmError}</div>
               )}
 
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>

@@ -46,7 +46,7 @@ export default function MemberView() {
 
       {upcoming.length > 0 && (
         <div style={{ marginBottom: '2rem' }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Upcoming</div>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Upcoming</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {upcoming.map((b: any) => <ShowCard key={b.id} booking={b} />)}
           </div>
@@ -61,13 +61,13 @@ export default function MemberView() {
 
       {past.length > 0 && (
         <div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Past Shows</div>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Past Shows</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {past.map((b: any) => (
               <div key={b.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.75rem', background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', opacity: 0.7 }}>
                 <div>
                   <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{b.venue?.name || 'TBD'}</span>
-                  <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', marginLeft: '0.75rem' }}>
+                  <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem', marginLeft: '0.75rem' }}>
                     {b.show_date ? new Date(b.show_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                   </span>
                 </div>
@@ -90,7 +90,7 @@ function ShowCard({ booking: b }: { booking: any }) {
             <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', color: 'var(--accent)', lineHeight: 1 }}>
               {b.show_date ? new Date(b.show_date + 'T00:00:00').getDate() : '?'}
             </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
               {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : ''}
             </div>
           </div>
@@ -104,7 +104,7 @@ function ShowCard({ booking: b }: { booking: any }) {
 
       {/* Times */}
       {(b.load_in_time || b.set_time || b.door_time) && (
-        <div style={{ display: 'flex', gap: '1.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.6rem', padding: '0.5rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)' }}>
+        <div style={{ display: 'flex', gap: '1.5rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.6rem', padding: '0.5rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)' }}>
           {b.door_time    && <span>DOORS: <span style={{ color: 'var(--text-primary)' }}>{b.door_time}</span></span>}
           {b.load_in_time && <span>LOAD-IN: <span style={{ color: 'var(--text-primary)' }}>{b.load_in_time}</span></span>}
           {b.set_time     && <span>SET: <span style={{ color: 'var(--accent)' }}>{b.set_time}</span>{b.set_length_min ? ` (${b.set_length_min}min)` : ''}</span>}
@@ -117,7 +117,7 @@ function ShowCard({ booking: b }: { booking: any }) {
         </div>
       )}
       {b.venue?.phone && (
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
           📞 {b.venue.phone}
         </div>
       )}

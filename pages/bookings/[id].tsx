@@ -77,13 +77,13 @@ export default function BookingDetail() {
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f: any) => ({ ...f, [k]: e.target.value }));
 
-  if (!booking) return <AppShell requireRole="agent"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>Loading...</div></AppShell>;
+  if (!booking) return <AppShell requireRole="agent"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
 
   return (
     <AppShell requireRole="agent">
       <div className="page-header">
         <div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
             {booking.act?.act_name || '—'}
           </div>
           <h1 className="page-title">{booking.venue?.name || 'No Venue'}</h1>
@@ -107,7 +107,7 @@ export default function BookingDetail() {
                 background: booking.status === s ? `var(--status-${s})` : 'var(--bg-overlay)',
                 color: booking.status === s ? '#000' : 'var(--text-muted)',
                 borderColor: booking.status === s ? `var(--status-${s})` : 'var(--border)',
-                fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.1em',
+                fontFamily: 'var(--font-body)', fontSize: '0.78rem', letterSpacing: '0.1em',
               }}>
               {BOOKING_STATUS_LABELS[s]}
             </button>
@@ -209,7 +209,7 @@ export default function BookingDetail() {
                 ['Deposit', booking.deposit_amount ? `$${Number(booking.deposit_amount).toLocaleString()} ${booking.deposit_paid ? '(PAID)' : '(UNPAID)'}` : null],
               ].filter(([_, v]) => v).map(([label, value]) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
                   <span style={{ color: 'var(--text-primary)', textAlign: 'right' }}>{value}</span>
                 </div>
               ))}
@@ -233,7 +233,7 @@ export default function BookingDetail() {
               <div className="card">
                 <div className="card-header">
                   <span className="card-title">INTERNAL NOTES</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)' }}>Agent only</span>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)' }}>Agent only</span>
                 </div>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.6 }}>{booking.internal_notes}</p>
               </div>

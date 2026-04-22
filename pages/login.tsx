@@ -76,7 +76,7 @@ export default function Login() {
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', marginTop: '1.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+        <div style={{ textAlign: 'center', marginTop: '1.25rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
           New agent?{' '}
           <Link href="/register" style={{ color: 'var(--accent)' }}>Create account</Link>
         </div>

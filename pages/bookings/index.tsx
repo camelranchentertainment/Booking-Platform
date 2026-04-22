@@ -88,7 +88,7 @@ export default function BookingsPage() {
                 </div>
               ))}
               {col.bookings.length === 0 && (
-                <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.65rem' }}>—</div>
+                <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>—</div>
               )}
             </div>
           </div>

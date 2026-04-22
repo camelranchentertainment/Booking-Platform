@@ -205,7 +205,7 @@ export default function EmailPage() {
             onClick={() => setView(v)}
             style={{
               padding: '0.55rem 1.25rem',
-              fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.12em', textTransform: 'uppercase',
+              fontFamily: 'var(--font-mono)', fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase',
               background: 'transparent', border: 'none', cursor: 'pointer',
               color: view === v ? 'var(--accent)' : 'var(--text-muted)',
               borderBottom: view === v ? '2px solid var(--accent)' : '2px solid transparent',
@@ -223,20 +223,20 @@ export default function EmailPage() {
           {/* Non-responder alerts */}
           {nonResponders.length > 0 && (
             <div style={{ marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fbbf24', marginBottom: '0.25rem' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fbbf24', marginBottom: '0.25rem' }}>
                 ⚠ {nonResponders.length} venue{nonResponders.length > 1 ? 's' : ''} haven't responded in 7+ days
               </div>
               {nonResponders.slice(0, 3).map(e => (
                 <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: '3px', padding: '0.6rem 0.85rem' }}>
                   <span style={{ flex: 1, fontSize: '0.82rem', color: 'var(--text-primary)' }}>
                     {e.venue?.name || e.recipient}
-                    <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>
+                    <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>
                       pitched {new Date(e.sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                   </span>
                   <button
                     className="btn btn-secondary btn-sm"
-                    style={{ fontSize: '0.72rem' }}
+                    style={{ fontSize: '0.82rem' }}
                     onClick={() => {
                       setEmailType('followup');
                       if (e.venue_id) setSelVenue(e.venue_id);
@@ -257,13 +257,13 @@ export default function EmailPage() {
               <span style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>◈</span>
               <span style={{ flex: 1, fontSize: '0.82rem', color: 'var(--text-primary)' }}>
                 Venue replied: <strong>{e.recipient}</strong>
-                <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>
+                <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>
                   {new Date(e.sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </span>
               </span>
               <button
                 className="btn btn-secondary btn-sm"
-                style={{ fontSize: '0.72rem', borderColor: 'var(--accent)', color: 'var(--accent)' }}
+                style={{ fontSize: '0.82rem', borderColor: 'var(--accent)', color: 'var(--accent)' }}
                 onClick={() => {
                   setEmailType('reply_suggestion');
                   if (e.venue_id) setSelVenue(e.venue_id);
@@ -288,15 +288,15 @@ export default function EmailPage() {
                     <tr key={e.id}>
                       <td style={{ color: 'var(--accent)', fontSize: '0.82rem' }}>{e.recipient || '—'}</td>
                       <td style={{ color: 'var(--text-primary)', fontSize: '0.85rem', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.subject || '—'}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                         {TYPE_LABELS[e.template_id as EmailType] || e.template_id || '—'}
                       </td>
                       <td>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: EMAIL_STATUS_COLOR[e.status] || 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: EMAIL_STATUS_COLOR[e.status] || 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                           {e.status}
                         </span>
                       </td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                         {new Date(e.sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                       </td>
                     </tr>
@@ -304,7 +304,7 @@ export default function EmailPage() {
                 </tbody>
               </table>
               {log.length === 0 && !loading && (
-                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>
                   No emails yet. Hit "AI Compose" to draft your first pitch.
                 </div>
               )}
@@ -335,7 +335,7 @@ export default function EmailPage() {
                   </div>
                 ))}
                 {col.bookings.length === 0 && (
-                  <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.65rem' }}>—</div>
+                  <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>—</div>
                 )}
               </div>
             </div>
@@ -406,7 +406,7 @@ export default function EmailPage() {
 
               {emailType !== 'cold_pitch' && (
                 <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border)', borderRadius: '3px', padding: '0.75rem' }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
                     {emailType === 'followup' ? 'Original pitch (optional context)' : "Venue's reply (paste their message)"}
                   </div>
                   <input
@@ -437,12 +437,12 @@ export default function EmailPage() {
               </button>
 
               {draftErr && (
-                <div style={{ color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>{draftErr}</div>
+                <div style={{ color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>{draftErr}</div>
               )}
 
               {draft && (
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)' }}>
                     AI Draft — edit freely before sending
                   </div>
                   <div className="field">

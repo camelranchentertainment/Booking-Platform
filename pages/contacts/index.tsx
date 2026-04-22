@@ -110,20 +110,20 @@ export default function ContactsPage() {
                 <tr key={c.id}>
                   <td>
                     <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{c.first_name} {c.last_name}</div>
-                    {c.title && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{c.title}</div>}
+                    {c.title && <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>{c.title}</div>}
                   </td>
                   <td>{c.venue ? `${c.venue.name}, ${c.venue.city}` : '—'}</td>
                   <td style={{ color: 'var(--accent)', fontSize: '0.82rem' }}>{c.email || '—'}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{c.phone || '—'}</td>
+                  <td style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>{c.phone || '—'}</td>
                   <td>
                     <select
-                      style={{ background: 'transparent', border: 'none', color: STATUS_COLORS[c.status as ContactStatus] || 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.06em', cursor: 'pointer', padding: 0 }}
+                      style={{ background: 'transparent', border: 'none', color: STATUS_COLORS[c.status as ContactStatus] || 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem', letterSpacing: '0.06em', cursor: 'pointer', padding: 0 }}
                       value={c.status}
                       onChange={e => updateStatus(c.id, e.target.value as ContactStatus)}>
                       {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
                   </td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  <td style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                     {c.last_contact ? new Date(c.last_contact).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
                   </td>
                 </tr>
@@ -131,7 +131,7 @@ export default function ContactsPage() {
             </tbody>
           </table>
           {filtered.length === 0 && (
-            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>No contacts found.</div>
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>No contacts found.</div>
           )}
         </div>
       </div>

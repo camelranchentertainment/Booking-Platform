@@ -43,7 +43,7 @@ export default function BandTours() {
         </div>
       </div>
 
-      {loading && <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>Loading...</div>}
+      {loading && <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.8rem' }}>Loading...</div>}
 
       {!loading && !actId && (
         <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
@@ -71,7 +71,7 @@ export default function BandTours() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <span style={{
-                  fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em',
+                  fontSize: '0.82rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em',
                   color: statusColor[t.status] || 'var(--text-muted)',
                   background: `${statusColor[t.status] || '#6b7280'}18`,
                   border: `1px solid ${statusColor[t.status] || '#6b7280'}40`,

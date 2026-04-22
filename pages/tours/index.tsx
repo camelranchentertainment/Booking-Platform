@@ -76,14 +76,14 @@ export default function ToursPage() {
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', letterSpacing: '0.04em', marginBottom: '0.2rem' }}>{t.name}</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{t.act?.act_name}</div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{t.act?.act_name}</div>
                 </div>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: STATUS_BADGE[t.status] || 'var(--text-muted)', padding: '0.2rem 0.5rem', border: `1px solid ${STATUS_BADGE[t.status] || 'var(--border)'}`, borderRadius: 'var(--radius-sm)' }}>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: STATUS_BADGE[t.status] || 'var(--text-muted)', padding: '0.2rem 0.5rem', border: `1px solid ${STATUS_BADGE[t.status] || 'var(--border)'}`, borderRadius: 'var(--radius-sm)' }}>
                   {t.status}
                 </span>
               </div>
               {(t.start_date || t.end_date) && (
-                <div style={{ marginTop: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                <div style={{ marginTop: '0.5rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                   {t.start_date ? new Date(t.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '?'}
                   {' → '}
                   {t.end_date ? new Date(t.end_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD'}
