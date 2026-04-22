@@ -49,10 +49,19 @@ export default function TourDetail() {
 
   // Venue search modal
   const [showSearch, setShowSearch]       = useState(false);
+  const [searchTab, setSearchTab]         = useState<'db' | 'discover'>('db');
   const [searchQuery, setSearchQuery]     = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching]         = useState(false);
   const [adding, setAdding]               = useState<string | null>(null);
+
+  // Discover (Google Places) tab
+  const [discoverCity, setDiscoverCity]       = useState('');
+  const [discoverState, setDiscoverState]     = useState('');
+  const [discovering, setDiscovering]         = useState(false);
+  const [discoverResults, setDiscoverResults] = useState<any[]>([]);
+  const [discoverErr, setDiscoverErr]         = useState('');
+  const [discoverAdding, setDiscoverAdding]   = useState<string | null>(null);
 
   // Confirm show modal
   const [confirmTarget, setConfirmTarget]     = useState<any>(null);
@@ -139,6 +148,60 @@ export default function TourDetail() {
       setPool(p => [...p, item]);
     }
     setAdding(null);
+  };
+
+  const discoverVenues = async () => {
+    if (!discoverCity.trim() || !discoverState.trim()) return;
+    setDiscovering(true);
+    setDiscoverErr('');
+    setDiscoverResults([]);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(
+      `/api/venues/prospect?city=${encodeURIComponent(discoverCity.trim())}&state=${encodeURIComponent(discoverState.trim())}`,
+      { headers: { Authorization: `Bearer ${session!.access_token}` } },
+    );
+    const json = await res.json();
+    if (!res.ok) setDiscoverErr(json.error || 'Search failed');
+    else setDiscoverResults(json);
+    setDiscovering(false);
+  };
+
+  const addDiscoveredVenue = async (p: any) => {
+    setDiscoverAdding(p.place_id);
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+
+    let venueId: string | null = null;
+
+    if (p.already_added) {
+      // Look up existing venue by place_id, fall back to name+city match
+      const { data: byPlaceId } = await supabase.from('venues').select('id').eq('place_id', p.place_id).maybeSingle();
+      venueId = byPlaceId?.id ?? null;
+      if (!venueId) {
+        const { data: byName } = await supabase.from('venues').select('id').ilike('name', p.name).ilike('city', p.city).maybeSingle();
+        venueId = byName?.id ?? null;
+      }
+    } else {
+      const { data: inserted } = await supabase.from('venues').insert({
+        agent_id: user!.id, name: p.name, city: p.city, state: p.state,
+        address: p.address || null, place_id: p.place_id, google_maps_url: p.google_maps_url,
+      }).select('id').single();
+      venueId = inserted?.id ?? null;
+    }
+
+    if (venueId) {
+      const res = await fetch('/api/tours/venues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session!.access_token}` },
+        body: JSON.stringify({ tour_id: id, venue_id: venueId }),
+      });
+      if (res.ok) {
+        const item = await res.json();
+        setPool(prev => [...prev, item]);
+        setDiscoverResults(prev => prev.map(r => r.place_id === p.place_id ? { ...r, in_pool: true } : r));
+      }
+    }
+    setDiscoverAdding(null);
   };
 
   const updateStatus = async (tvId: string, status: OutreachStatus) => {
@@ -323,7 +386,7 @@ export default function TourDetail() {
       <div className="card" style={{ marginTop: '1.25rem' }}>
         <div className="card-header">
           <span className="card-title">OUTREACH POOL ({pool.length}){pendingCount > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {pendingCount} active</span>}</span>
-          <button className="btn btn-primary btn-sm" onClick={() => { setShowSearch(true); setSearchQuery(''); setSearchResults([]); }}>
+          <button className="btn btn-primary btn-sm" onClick={() => { setShowSearch(true); setSearchTab('db'); setSearchQuery(''); setSearchResults([]); setDiscoverResults([]); setDiscoverErr(''); }}>
             + Add Venue
           </button>
         </div>
@@ -457,51 +520,173 @@ export default function TourDetail() {
       {/* Add Venue Modal */}
       {showSearch && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-          <div className="card" style={{ width: '100%', maxWidth: 520, maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: 0 }}>
+          <div className="card" style={{ width: '100%', maxWidth: 560, maxHeight: '85vh', display: 'flex', flexDirection: 'column', gap: 0 }}>
             <div className="card-header" style={{ marginBottom: '0.75rem' }}>
               <span className="card-title">ADD VENUE TO POOL</span>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowSearch(false)}>✕</button>
             </div>
-            <input
-              className="input"
-              placeholder="Search by name, city, or state..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              autoFocus
-              style={{ marginBottom: '0.75rem' }}
-            />
-            <div style={{ overflowY: 'auto', flex: 1 }}>
-              {searching && <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem' }}>Searching...</div>}
-              {!searching && searchQuery.length >= 2 && searchResults.length === 0 && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
-                  No venues found. <Link href="/venues" style={{ color: 'var(--accent)' }}>Add a new venue →</Link>
-                </div>
-              )}
-              {searchResults.map(v => {
-                const inPool = alreadyInPool.has(v.id);
-                return (
-                  <div key={v.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.55rem 0.6rem', borderRadius: 'var(--radius-sm)', borderBottom: '1px solid var(--border)' }}>
-                    <div>
-                      <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>{v.name}</div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-                        {v.city}, {v.state}{v.capacity ? ` · cap ${v.capacity.toLocaleString()}` : ''}{v.venue_type ? ` · ${v.venue_type}` : ''}
-                      </div>
-                    </div>
-                    {inPool ? (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#34d399' }}>✓ In Pool</span>
-                    ) : (
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        disabled={adding === v.id}
-                        onClick={() => addVenue(v.id)}
-                      >
-                        {adding === v.id ? 'Adding...' : 'Add'}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.85rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.6rem' }}>
+              {(['db', 'discover'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setSearchTab(tab)}
+                  style={{
+                    fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.08em',
+                    textTransform: 'uppercase', padding: '0.35rem 0.8rem',
+                    border: `1px solid ${searchTab === tab ? 'var(--accent)' : 'var(--border)'}`,
+                    borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                    background: searchTab === tab ? 'var(--accent-glow)' : 'transparent',
+                    color: searchTab === tab ? 'var(--accent)' : 'var(--text-muted)',
+                  }}
+                >
+                  {tab === 'db' ? 'My Database' : 'Discover (Google)'}
+                </button>
+              ))}
             </div>
+
+            {/* DB tab */}
+            {searchTab === 'db' && (
+              <>
+                <input
+                  className="input"
+                  placeholder="Search by name, city, or state..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  autoFocus
+                  style={{ marginBottom: '0.75rem' }}
+                />
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  {searching && <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem' }}>Searching...</div>}
+                  {!searching && searchQuery.length >= 2 && searchResults.length === 0 && (
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
+                      No venues found in your database.{' '}
+                      <button
+                        style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', padding: 0 }}
+                        onClick={() => setSearchTab('discover')}
+                      >
+                        Try Discover tab →
+                      </button>
+                    </div>
+                  )}
+                  {searchQuery.length < 2 && (
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
+                      Type at least 2 characters to search your venue database.
+                    </div>
+                  )}
+                  {searchResults.map(v => {
+                    const inPool = alreadyInPool.has(v.id);
+                    return (
+                      <div key={v.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.55rem 0.6rem', borderRadius: 'var(--radius-sm)', borderBottom: '1px solid var(--border)' }}>
+                        <div>
+                          <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>{v.name}</div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                            {v.city}, {v.state}{v.capacity ? ` · cap ${v.capacity.toLocaleString()}` : ''}{v.venue_type ? ` · ${v.venue_type}` : ''}
+                          </div>
+                        </div>
+                        {inPool ? (
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#34d399' }}>✓ In Pool</span>
+                        ) : (
+                          <button className="btn btn-secondary btn-sm" disabled={adding === v.id} onClick={() => addVenue(v.id)}>
+                            {adding === v.id ? 'Adding...' : 'Add'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* Discover tab */}
+            {searchTab === 'discover' && (
+              <>
+                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
+                  <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                    <label className="field-label">City</label>
+                    <input
+                      className="input"
+                      placeholder="Austin"
+                      value={discoverCity}
+                      onChange={e => setDiscoverCity(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && discoverVenues()}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="field" style={{ width: 80, marginBottom: 0 }}>
+                    <label className="field-label">State</label>
+                    <input
+                      className="input"
+                      placeholder="TX"
+                      maxLength={2}
+                      value={discoverState}
+                      onChange={e => setDiscoverState(e.target.value.toUpperCase())}
+                      onKeyDown={e => e.key === 'Enter' && discoverVenues()}
+                    />
+                  </div>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={discoverVenues}
+                    disabled={discovering || !discoverCity.trim() || !discoverState.trim()}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {discovering ? 'Searching…' : 'Search'}
+                  </button>
+                </div>
+
+                {discoverErr && (
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#f87171', marginBottom: '0.5rem', padding: '0.5rem', background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-sm)' }}>
+                    {discoverErr}
+                  </div>
+                )}
+
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  {!discovering && discoverResults.length === 0 && !discoverErr && (
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
+                      Enter a city and state to search Google for live music venues, bars, and clubs.
+                      Selecting one saves it to your database and adds it to this tour's outreach pool.
+                    </div>
+                  )}
+                  {discoverResults.length > 0 && (
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+                      {discoverResults.length} results from Google
+                    </div>
+                  )}
+                  {discoverResults.map(p => {
+                    const inPool = p.in_pool || [...pool].some(tv => tv.venue?.name?.toLowerCase() === p.name.toLowerCase());
+                    return (
+                      <div key={p.place_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', padding: '0.55rem 0.6rem', borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            {p.name}
+                            {p.already_added && !inPool && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.58rem', color: 'var(--text-muted)' }}>in DB</span>}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {p.formatted_address}
+                            {p.rating ? ` · ★ ${p.rating}` : ''}
+                          </div>
+                        </div>
+                        <div style={{ flexShrink: 0 }}>
+                          {inPool ? (
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#34d399' }}>✓ In Pool</span>
+                          ) : (
+                            <button
+                              className="btn btn-primary btn-sm"
+                              disabled={discoverAdding === p.place_id}
+                              onClick={() => addDiscoveredVenue(p)}
+                              style={{ fontSize: '0.68rem' }}
+                            >
+                              {discoverAdding === p.place_id ? 'Adding…' : '+ Add to Pool'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

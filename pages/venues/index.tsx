@@ -48,6 +48,13 @@ export default function VenuesPage() {
   const [prospectErr, setProspectErr]     = useState('');
   const [addingId, setAddingId]           = useState<string | null>(null);
 
+  // Add to tour state
+  const [tourTarget, setTourTarget]   = useState<Venue | null>(null);
+  const [tours, setTours]             = useState<any[]>([]);
+  const [toursLoaded, setToursLoaded] = useState(false);
+  const [addingTour, setAddingTour]   = useState<string | null>(null);
+  const [addTourDone, setAddTourDone] = useState<string | null>(null);
+
   useEffect(() => { loadVenues(); loadGoogleMaps(); }, []);
 
   const loadGoogleMaps = () => {
@@ -125,6 +132,35 @@ export default function VenuesPage() {
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm(f => ({ ...f, [k]: e.target.value }));
 
+  const openAddToTour = async (venue: Venue) => {
+    setTourTarget(venue);
+    setAddTourDone(null);
+    if (!toursLoaded) {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data } = await supabase
+        .from('tours')
+        .select('id, name, act:acts(act_name), status')
+        .eq('created_by', user!.id)
+        .neq('status', 'cancelled')
+        .order('created_at', { ascending: false });
+      setTours(data || []);
+      setToursLoaded(true);
+    }
+  };
+
+  const addVenueToTour = async (tourId: string) => {
+    if (!tourTarget) return;
+    setAddingTour(tourId);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/tours/venues', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session!.access_token}` },
+      body: JSON.stringify({ tour_id: tourId, venue_id: tourTarget.id }),
+    });
+    if (res.ok) setAddTourDone(tourId);
+    setAddingTour(null);
+  };
+
   const searchProspects = async () => {
     if (!prospectCity.trim() || !prospectState.trim()) return;
     setProspecting(true);
@@ -191,18 +227,27 @@ export default function VenuesPage() {
             <thead>
               <tr>
                 <th>Venue</th><th>Location</th><th>Type</th>
-                <th>Capacity</th><th>Email</th><th>Phone</th>
+                <th>Capacity</th><th>Email</th><th>Phone</th><th></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(v => (
-                <tr key={v.id} style={{ cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>
-                  <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{v.name}</td>
-                  <td>{v.city}, {v.state}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{v.venue_type || '—'}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{v.capacity ? v.capacity.toLocaleString() : '—'}</td>
-                  <td style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>{v.email || '—'}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{v.phone || '—'}</td>
+                <tr key={v.id}>
+                  <td style={{ color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.name}</td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.city}, {v.state}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.venue_type || '—'}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.capacity ? v.capacity.toLocaleString() : '—'}</td>
+                  <td style={{ color: 'var(--accent)', fontSize: '0.85rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.email || '—'}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.phone || '—'}</td>
+                  <td>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.06em', color: 'var(--accent)', whiteSpace: 'nowrap' }}
+                      onClick={e => { e.stopPropagation(); openAddToTour(v); }}
+                    >
+                      + Tour
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -432,6 +477,57 @@ export default function VenuesPage() {
                 <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Add Venue'}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add to Tour Modal */}
+      {tourTarget && (
+        <div className="modal-backdrop">
+          <div className="modal" style={{ maxWidth: 460 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Add to Tour</h3>
+              <button className="btn btn-ghost btn-sm" onClick={() => setTourTarget(null)}>✕</button>
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+              {tourTarget.name} · {tourTarget.city}, {tourTarget.state}
+            </div>
+            {!toursLoaded ? (
+              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>Loading tours...</div>
+            ) : tours.length === 0 ? (
+              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>
+                No active tours found.{' '}
+                <a href="/tours" style={{ color: 'var(--accent)' }}>Create a tour first →</a>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {tours.map((t: any) => (
+                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{t.name}</div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                        {t.act?.act_name} · {t.status}
+                      </div>
+                    </div>
+                    {addTourDone === t.id ? (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#34d399' }}>✓ Added</span>
+                    ) : (
+                      <button
+                        className="btn btn-primary btn-sm"
+                        disabled={addingTour === t.id}
+                        onClick={() => addVenueToTour(t.id)}
+                        style={{ fontSize: '0.7rem' }}
+                      >
+                        {addingTour === t.id ? 'Adding…' : 'Add to Pool'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setTourTarget(null)}>Done</button>
+            </div>
           </div>
         </div>
       )}
