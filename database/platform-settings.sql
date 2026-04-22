@@ -13,17 +13,15 @@ ALTER TABLE platform_settings ENABLE ROW LEVEL SECURITY;
 
 -- Superadmin can read their own platform settings via the API route
 -- (API routes use service client, so this policy is a safety belt for direct queries)
-DO $$ BEGIN
-  CREATE POLICY "platform_settings_superadmin" ON platform_settings
-    FOR ALL TO authenticated
-    USING (EXISTS (
-      SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'superadmin'
-    ))
-    WITH CHECK (EXISTS (
-      SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'superadmin'
-    ));
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+DROP POLICY IF EXISTS "platform_settings_superadmin" ON platform_settings;
+CREATE POLICY "platform_settings_superadmin" ON platform_settings
+  FOR ALL TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'superadmin'
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM user_profiles WHERE id = auth.uid() AND role = 'superadmin'
+  ));
 
 -- Seed defaults (empty — filled via Settings → Platform Setup)
 INSERT INTO platform_settings (key, value) VALUES
