@@ -6,6 +6,15 @@ import { BOOKING_STATUS_LABELS } from '../../lib/types';
 import Link from 'next/link';
 
 type OutreachStatus = 'target' | 'pitched' | 'followup' | 'negotiating' | 'confirmed' | 'declined';
+type Platform = 'instagram' | 'facebook' | 'youtube' | 'tiktok' | 'discord';
+
+const PLATFORM_INFO: Record<Platform, { label: string; color: string; icon: string }> = {
+  instagram: { label: 'Instagram', color: '#e1306c', icon: '📸' },
+  facebook:  { label: 'Facebook',  color: '#1877f2', icon: '👥' },
+  youtube:   { label: 'YouTube',   color: '#ff0000', icon: '▶' },
+  tiktok:    { label: 'TikTok',   color: '#69c9d0', icon: '♪' },
+  discord:   { label: 'Discord',   color: '#5865f2', icon: '◈' },
+};
 
 const STATUS_LABELS: Record<OutreachStatus, string> = {
   target:      'Target',
@@ -46,10 +55,11 @@ export default function TourDetail() {
   const [adding, setAdding]               = useState<string | null>(null);
 
   // Confirm show modal
-  const [confirmTarget, setConfirmTarget] = useState<any>(null);
-  const [confirmForm, setConfirmForm]     = useState({ show_date: '', fee: '', platform: 'instagram' });
-  const [confirming, setConfirming]       = useState(false);
-  const [confirmError, setConfirmError]   = useState('');
+  const [confirmTarget, setConfirmTarget]     = useState<any>(null);
+  const [confirmForm, setConfirmForm]         = useState({ show_date: '', fee: '' });
+  const [confirmPlatforms, setConfirmPlatforms] = useState<Platform[]>(['instagram', 'facebook']);
+  const [confirming, setConfirming]           = useState(false);
+  const [confirmError, setConfirmError]       = useState('');
 
   // Pool filter
   const [poolFilter, setPoolFilter] = useState<OutreachStatus | 'all'>('all');
@@ -184,14 +194,15 @@ export default function TourDetail() {
           tour_venue_id: confirmTarget.id,
           show_date:     confirmForm.show_date,
           fee:           confirmForm.fee || null,
-          platform:      confirmForm.platform,
+          platforms:     confirmPlatforms,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to confirm show');
       setPool(p => p.map(v => v.id === confirmTarget.id ? { ...v, status: 'confirmed' } : v));
       setConfirmTarget(null);
-      setConfirmForm({ show_date: '', fee: '', platform: 'instagram' });
+      setConfirmForm({ show_date: '', fee: '' });
+      setConfirmPlatforms(['instagram', 'facebook']);
       loadAll();
     } catch (err: any) {
       setConfirmError(err.message);
@@ -419,7 +430,8 @@ export default function TourDetail() {
                     className="btn btn-primary btn-sm"
                     onClick={() => {
                       setConfirmTarget(tv);
-                      setConfirmForm({ show_date: '', fee: '', platform: 'instagram' });
+                      setConfirmForm({ show_date: '', fee: '' });
+                      setConfirmPlatforms(['instagram', 'facebook']);
                       setConfirmError('');
                     }}
                   >
@@ -532,18 +544,26 @@ export default function TourDetail() {
                   />
                 </div>
                 <div className="field">
-                  <label className="field-label">Social Platform</label>
-                  <select
-                    className="select"
-                    value={confirmForm.platform}
-                    onChange={e => setConfirmForm(f => ({ ...f, platform: e.target.value }))}
-                  >
-                    <option value="instagram">Instagram</option>
-                    <option value="facebook">Facebook</option>
-                    <option value="both">Both</option>
-                  </select>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                    AI will draft a social post for your approval
+                  <label className="field-label">Draft Social Posts For</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
+                    {(Object.entries(PLATFORM_INFO) as [Platform, typeof PLATFORM_INFO[Platform]][]).map(([p, info]) => (
+                      <label key={p} style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={confirmPlatforms.includes(p)}
+                          onChange={e => setConfirmPlatforms(prev =>
+                            e.target.checked ? [...prev, p] : prev.filter(x => x !== p)
+                          )}
+                          style={{ accentColor: info.color, width: '14px', height: '14px' }}
+                        />
+                        <span style={{ color: confirmPlatforms.includes(p) ? info.color : 'var(--text-secondary)', fontWeight: confirmPlatforms.includes(p) ? 600 : 400 }}>
+                          {info.icon} {info.label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '0.35rem', display: 'block' }}>
+                    AI drafts one algorithm-optimized post per platform for your approval
                   </span>
                 </div>
               </div>

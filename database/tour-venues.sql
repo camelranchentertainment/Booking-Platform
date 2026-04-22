@@ -31,13 +31,15 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Social post queue: AI-written posts pending approval
+-- Platforms: instagram, facebook, youtube, tiktok, discord
+-- One row per platform per show confirmation
 CREATE TABLE IF NOT EXISTS social_queue (
   id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_id UUID NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
   act_id     UUID NOT NULL REFERENCES acts(id) ON DELETE CASCADE,
   venue_id   UUID REFERENCES venues(id) ON DELETE SET NULL,
   platform   TEXT NOT NULL DEFAULT 'instagram'
-               CHECK (platform IN ('instagram','facebook','both')),
+               CHECK (platform IN ('instagram','facebook','youtube','tiktok','discord')),
   content    TEXT NOT NULL,
   status     TEXT NOT NULL DEFAULT 'pending'
                CHECK (status IN ('pending','approved','posted','dismissed')),
@@ -53,10 +55,18 @@ DO $$ BEGIN
     USING (act_id IN (SELECT id FROM acts WHERE agent_id = auth.uid() OR owner_id = auth.uid()));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE INDEX IF NOT EXISTS idx_social_queue_booking ON social_queue(booking_id);
-CREATE INDEX IF NOT EXISTS idx_social_queue_status  ON social_queue(status);
+CREATE INDEX IF NOT EXISTS idx_social_queue_booking  ON social_queue(booking_id);
+CREATE INDEX IF NOT EXISTS idx_social_queue_status   ON social_queue(status);
+CREATE INDEX IF NOT EXISTS idx_social_queue_platform ON social_queue(platform);
 
 DO $$ BEGIN
   CREATE TRIGGER trg_social_queue_updated
     BEFORE UPDATE ON social_queue FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- If social_queue already exists with old 'both' constraint, patch the check:
+DO $$ BEGIN
+  ALTER TABLE social_queue DROP CONSTRAINT IF EXISTS social_queue_platform_check;
+  ALTER TABLE social_queue ADD CONSTRAINT social_queue_platform_check
+    CHECK (platform IN ('instagram','facebook','youtube','tiktok','discord'));
+EXCEPTION WHEN OTHERS THEN NULL; END $$;

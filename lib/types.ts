@@ -195,7 +195,7 @@ export interface RoutingRule {
 }
 
 export type OutreachStatus = 'target' | 'pitched' | 'followup' | 'negotiating' | 'confirmed' | 'declined';
-export type SocialPlatform = 'instagram' | 'facebook' | 'both';
+export type SocialPlatform = 'instagram' | 'facebook' | 'youtube' | 'tiktok' | 'discord';
 export type SocialStatus   = 'pending' | 'approved' | 'posted' | 'dismissed';
 
 export interface TourVenue {

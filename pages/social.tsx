@@ -11,10 +11,12 @@ const STATUS_TABS: { key: SocialStatus | 'all'; label: string }[] = [
   { key: 'dismissed', label: 'Dismissed' },
 ];
 
-const PLATFORM_LABELS: Record<string, string> = {
-  instagram: 'Instagram',
-  facebook:  'Facebook',
-  both:      'Instagram + Facebook',
+const PLATFORM_META: Record<string, { label: string; color: string; icon: string; tip: string }> = {
+  instagram: { label: 'Instagram', color: '#e1306c', icon: '📸', tip: 'Best time: weekday 9–11am or 7–9pm local · First line = hook · Saves > likes for reach' },
+  facebook:  { label: 'Facebook',  color: '#1877f2', icon: '👥', tip: 'Best time: Tue–Thu 9am–3pm · Comments drive reach · Avoid "like/share this post"' },
+  youtube:   { label: 'YouTube',   color: '#ff0000', icon: '▶',  tip: 'Community posts reach subscribers first · Questions drive comments = more impressions' },
+  tiktok:    { label: 'TikTok',    color: '#69c9d0', icon: '♪',  tip: 'Completion rate is king · Post when your analytics show peak audience time · Niche tags > mega tags' },
+  discord:   { label: 'Discord',   color: '#5865f2', icon: '◈',  tip: 'Pin the announcement · Reply to reactions quickly · Chronological — post at active hours' },
 };
 
 export default function SocialQueue() {
@@ -132,14 +134,24 @@ export default function SocialQueue() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-                  <span style={{
-                    fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.08em',
-                    textTransform: 'uppercase', padding: '0.2rem 0.55rem',
-                    border: '1px solid var(--border)', borderRadius: '3px',
-                    color: 'var(--text-muted)',
-                  }}>
-                    {PLATFORM_LABELS[post.platform] || post.platform}
-                  </span>
+                  {(() => {
+                    const meta = PLATFORM_META[post.platform];
+                    return meta ? (
+                      <span title={meta.tip} style={{
+                        fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.06em',
+                        textTransform: 'uppercase', padding: '0.2rem 0.6rem',
+                        border: `1px solid ${meta.color}44`,
+                        borderRadius: '3px', color: meta.color,
+                        cursor: 'help',
+                      }}>
+                        {meta.icon} {meta.label}
+                      </span>
+                    ) : (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', padding: '0.2rem 0.55rem', border: '1px solid var(--border)', borderRadius: '3px' }}>
+                        {post.platform}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -179,8 +191,15 @@ export default function SocialQueue() {
               )}
 
               {post.status === 'pending' && editing !== post.id && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
-                  Click post text to edit before approving
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: '0.6rem' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)' }}>
+                    Click post text to edit before approving
+                  </div>
+                  {PLATFORM_META[post.platform] && (
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: PLATFORM_META[post.platform].color, opacity: 0.8 }}>
+                      ⚡ {PLATFORM_META[post.platform].tip}
+                    </div>
+                  )}
                 </div>
               )}
 
