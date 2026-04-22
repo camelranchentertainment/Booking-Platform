@@ -20,13 +20,17 @@ const agentNav = [
 ];
 
 const bandNav = [
-  { label: 'Shows',    href: '/band',          icon: '◉' },
-  { label: 'Calendar', href: '/band/calendar',  icon: '◷' },
-  { label: 'Members',  href: '/band/members',   icon: '◈' },
+  { label: 'Dashboard', href: '/band',          icon: '◈' },
+  { label: 'Tours',     href: '/band/tours',    icon: '⟴' },
+  { label: 'Venues',    href: '/venues',        icon: '⌂' },
+  { label: 'Calendar',  href: '/band/calendar', icon: '◷' },
+  { label: 'Email',     href: '/band/email',    icon: '✉' },
+  { label: 'Social',    href: '/band/social',   icon: '✦' },
+  { label: 'Settings',  href: '/band/settings', icon: '⚙' },
 ];
 
 const memberNav = [
-  { label: 'My Shows',  href: '/member',         icon: '◉' },
+  { label: 'Dashboard', href: '/member',          icon: '◈' },
   { label: 'Calendar',  href: '/member/calendar', icon: '◷' },
 ];
 

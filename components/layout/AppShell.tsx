@@ -6,7 +6,7 @@ import Sidebar from './Sidebar';
 
 interface Props {
   children: React.ReactNode;
-  requireRole?: 'agent' | 'act_admin' | 'member' | null;
+  requireRole?: 'agent' | 'act_admin' | 'member' | ('agent' | 'act_admin' | 'member')[] | null;
 }
 
 function daysLeft(trialEndsAt: string | null | undefined): number {
@@ -48,7 +48,8 @@ export default function AppShell({ children, requireRole = null }: Props) {
         }
 
         // Role gate — superadmin bypasses
-        if (data.role !== 'superadmin' && requireRole && data.role !== requireRole) {
+        const allowedRoles = Array.isArray(requireRole) ? requireRole : requireRole ? [requireRole] : null;
+        if (data.role !== 'superadmin' && allowedRoles && !allowedRoles.includes(data.role as any)) {
           if (data.role === 'agent') router.replace('/dashboard');
           else if (data.role === 'act_admin') router.replace('/band');
           else router.replace('/member');

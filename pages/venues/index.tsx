@@ -203,7 +203,7 @@ export default function VenuesPage() {
   });
 
   return (
-    <AppShell requireRole="agent">
+    <AppShell requireRole={['agent', 'act_admin']}>
       <div className="page-header">
         <div>
           <h1 className="page-title">Venues</h1>
