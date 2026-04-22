@@ -20,14 +20,14 @@ function Wordmark() {
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       <div style={{
         fontFamily: 'var(--font-display)', fontWeight: 900,
-        color: CREAM, letterSpacing: '0.28em', textTransform: 'uppercase',
-        lineHeight: 1, fontSize: '0.88rem',
+        color: CREAM, letterSpacing: '0.2em', textTransform: 'uppercase',
+        lineHeight: 1, fontSize: '1.35rem',
       }}>
         Camel Ranch
       </div>
       <div style={{
-        color: GOLD, letterSpacing: '0.5em', textTransform: 'uppercase',
-        fontSize: '0.56rem', marginTop: '0.1rem',
+        color: GOLD, letterSpacing: '0.55em', textTransform: 'uppercase',
+        fontSize: '0.6rem', marginTop: '0.2rem', fontWeight: 700,
       }}>
         Booking
       </div>
@@ -129,11 +129,23 @@ function Nav() {
 function Hero() {
   return (
     <section style={{ position: 'relative', background: BG, overflow: 'hidden' }}>
+      {/* Background concert photo — faded to match color palette */}
+      <img
+        src="https://images.unsplash.com/photo-1501386761578-eee87e8fc6b7?w=1920&q=80"
+        alt=""
+        aria-hidden
+        style={{
+          position: 'absolute', inset: 0, width: '100%', height: '100%',
+          objectFit: 'cover', objectPosition: 'center',
+          opacity: 0.12, pointerEvents: 'none',
+          filter: 'sepia(60%) saturate(60%)',
+        }}
+      />
       {/* Ghost "CR" */}
       <div style={{
         position: 'absolute', inset: 0, display: 'flex',
         alignItems: 'center', justifyContent: 'flex-end',
-        paddingRight: '4rem', pointerEvents: 'none', overflow: 'hidden', opacity: 0.025,
+        paddingRight: '4rem', pointerEvents: 'none', overflow: 'hidden', opacity: 0.07,
       }}>
         <span style={{
           fontFamily: 'var(--font-display)', fontWeight: 900, color: CREAM,

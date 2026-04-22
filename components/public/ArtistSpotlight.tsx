@@ -4,9 +4,9 @@ import type { PublicAct } from '../../pages/api/public/acts';
 
 const GOLD   = '#C8921A';
 const CREAM  = '#F0D8A2';
-const BG     = '#0E0603';
-const SURF   = '#120703';
-const BORDER = 'rgba(200,146,26,0.10)';
+const BG     = '#1C0C05';
+const SURF   = '#221008';
+const BORDER = 'rgba(200,146,26,0.18)';
 
 const ACCENTS = ['#9B6230', '#7A5C2E'];
 
@@ -36,30 +36,48 @@ function FeaturedCard({ act }: { act: PublicAct }) {
       className="cr-spot-featured">
       {/* Visual panel */}
       <div style={{
-        position: 'relative', minHeight: 260, background: SURF,
+        position: 'relative', minHeight: 300, background: SURF,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         overflow: 'hidden', borderRight: `1px solid ${BORDER}`,
         flexShrink: 0,
       }}>
-
+        {act.logo_url && (
+          <img src={act.logo_url} alt={act.act_name} style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', objectPosition: 'center top', opacity: 0.85,
+          }} />
+        )}
+        {/* Dark gradient overlay for text legibility */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(to top, rgba(10,4,2,0.85) 0%, rgba(10,4,2,0.2) 60%, transparent 100%)',
+        }} />
         <GhostNum n="01" color={GOLD} />
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '2.5rem', textAlign: 'center' }}>
+        <div style={{ position: 'absolute', top: '1.25rem', left: '1.25rem', zIndex: 2 }}>
           <span style={{
             padding: '0.2rem 0.75rem', background: GOLD, color: BG,
             fontWeight: 700, letterSpacing: '0.35em', fontSize: '0.56rem', textTransform: 'uppercase',
           }}>
             Top Performer
           </span>
-          {act.logo_url
-            ? <img src={act.logo_url} alt={act.act_name} style={{ width: 80, height: 80, objectFit: 'contain' }} />
-            : <div style={{ height: 1, width: 48, background: GOLD }} />
-          }
-          {act.genre && (
-            <p style={{ color: CREAM, letterSpacing: '0.3em', fontSize: '0.62rem', textTransform: 'uppercase', opacity: 0.4 }}>
+        </div>
+        {act.genre && (
+          <div style={{ position: 'absolute', bottom: '1.25rem', left: '1.25rem', zIndex: 2 }}>
+            <p style={{ color: CREAM, letterSpacing: '0.3em', fontSize: '0.62rem', textTransform: 'uppercase', opacity: 0.75, margin: 0 }}>
               {act.genre}
             </p>
-          )}
-        </div>
+          </div>
+        )}
+        {!act.logo_url && (
+          <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ height: 1, width: 48, background: GOLD }} />
+            {act.genre && (
+              <p style={{ color: CREAM, letterSpacing: '0.3em', fontSize: '0.62rem', textTransform: 'uppercase', opacity: 0.55, margin: 0 }}>
+                {act.genre}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Content panel */}
@@ -79,7 +97,7 @@ function FeaturedCard({ act }: { act: PublicAct }) {
             {act.act_name}
           </h3>
           {act.bio && (
-            <p style={{ color: CREAM, fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '28rem', marginBottom: '2rem', opacity: 0.5 }}>
+            <p style={{ color: CREAM, fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '28rem', marginBottom: '2rem', opacity: 0.72 }}>
               {act.bio}
             </p>
           )}
@@ -87,7 +105,7 @@ function FeaturedCard({ act }: { act: PublicAct }) {
 
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <div style={{ color: CREAM, letterSpacing: '0.3em', fontSize: '0.56rem', textTransform: 'uppercase', opacity: 0.22, marginBottom: '0.25rem' }}>
+            <div style={{ color: CREAM, letterSpacing: '0.3em', fontSize: '0.56rem', textTransform: 'uppercase', opacity: 0.55, marginBottom: '0.25rem' }}>
               Confirmed Bookings
             </div>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, color: GOLD, fontSize: '2rem', lineHeight: 1 }}>
@@ -143,7 +161,7 @@ function SupportingCard({ act, index, last }: { act: PublicAct; index: number; l
             {act.act_name}
           </h4>
           {act.bio && (
-            <p style={{ color: CREAM, fontSize: '0.78rem', lineHeight: 1.6, maxWidth: '20rem', opacity: 0.35 }}>
+            <p style={{ color: CREAM, fontSize: '0.78rem', lineHeight: 1.6, maxWidth: '20rem', opacity: 0.7 }}>
               {act.bio.length > 120 ? act.bio.slice(0, 120) + '…' : act.bio}
             </p>
           )}
@@ -151,7 +169,7 @@ function SupportingCard({ act, index, last }: { act: PublicAct; index: number; l
 
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: '2rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
-            <div style={{ color: CREAM, letterSpacing: '0.3em', fontSize: '0.56rem', textTransform: 'uppercase', opacity: 0.2, marginBottom: '0.25rem' }}>
+            <div style={{ color: CREAM, letterSpacing: '0.3em', fontSize: '0.56rem', textTransform: 'uppercase', opacity: 0.55, marginBottom: '0.25rem' }}>
               Confirmed Bookings
             </div>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: accent, fontSize: '1.5rem', lineHeight: 1 }}>
@@ -251,7 +269,7 @@ export default function ArtistSpotlight() {
         alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem',
         borderBottom: `1px solid ${BORDER}`,
       }}>
-        <p style={{ color: CREAM, fontSize: '0.78rem', letterSpacing: '0.05em', opacity: 0.28, margin: 0 }}>
+        <p style={{ color: CREAM, fontSize: '0.78rem', letterSpacing: '0.05em', opacity: 0.55, margin: 0 }}>
           Artists ranked by confirmed bookings tracked on the platform.
         </p>
         <Link href="/register" style={{

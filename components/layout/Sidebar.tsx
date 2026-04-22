@@ -71,13 +71,13 @@ export default function Sidebar({ profile, onSignOut }: Props) {
   return (
     <nav className="sidebar">
       <div className="sidebar-logo">
-        <div style={{ fontSize: '1.65rem', letterSpacing: '0.12em', lineHeight: 1, color: 'var(--accent)', textShadow: 'var(--neon-glow-sm)' }}>
+        <div style={{ fontSize: '2rem', letterSpacing: '0.1em', lineHeight: 1, color: 'var(--accent)', textShadow: 'var(--neon-glow-sm)' }}>
           CAMEL RANCH
         </div>
         <div style={{
-          fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.68rem', letterSpacing: '0.45em', color: 'rgba(200,146,26,0.70)',
-          textTransform: 'uppercase', marginTop: '0.2rem',
-          borderTop: '1px solid rgba(200,146,26,0.15)', paddingTop: '0.3rem',
+          fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.72rem', letterSpacing: '0.5em', color: 'rgba(200,146,26,0.85)',
+          textTransform: 'uppercase', marginTop: '0.25rem',
+          borderTop: '1px solid rgba(200,146,26,0.20)', paddingTop: '0.3rem',
         }}>
           BOOKING
         </div>
