@@ -58,9 +58,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       role:                u.role,
       email:               u.email,
       display_name:        u.displayName,
-      subscription_status: u.role === 'member' ? null : 'trialing',
-      subscription_tier:   u.role === 'member' ? null : u.tier,
-      trial_ends_at:       u.role === 'member' ? null : trialEndsAt,
+      subscription_status: u.role === 'member' ? 'active'  : 'trialing',
+      subscription_tier:   u.role === 'member' ? 'member'  : u.tier,
+      trial_ends_at:       u.role === 'member' ? null      : trialEndsAt,
     }, { onConflict: 'id' });
 
     results.push({ email: u.email, role: u.role, userId, error: profileErr?.message ?? null });
