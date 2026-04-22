@@ -1,11 +1,11 @@
 import type { AppProps } from 'next/app';
 import '../styles/globals.css';
-import SplineBackground from '../components/SplineBackground';
+import BarBackground from '../components/BarBackground';
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
     <>
-      <SplineBackground />
+      <BarBackground />
       <Component {...pageProps} />
     </>
   );
