@@ -117,11 +117,16 @@ export default function Settings() {
     setForm(f => ({ ...f, [k]: e.target.value }));
 
   return (
-    <AppShell requireRole="agent">
+    <AppShell requireRole={['agent', 'act_admin', 'member']}>
       <div className="page-header">
         <div>
           <h1 className="page-title">Settings</h1>
-          <div className="page-sub">{isSuperAdmin ? 'Platform configuration & profile' : 'Agent profile & preferences'}</div>
+          <div className="page-sub">
+            {isSuperAdmin ? 'Platform configuration & profile'
+              : profile?.role === 'member' ? 'Account & password'
+              : profile?.role === 'act_admin' ? 'Band profile & account'
+              : 'Agent profile & preferences'}
+          </div>
         </div>
       </div>
 
@@ -180,10 +185,12 @@ export default function Settings() {
                 <label className="field-label">Your Name</label>
                 <input className="input" value={form.display_name} onChange={set('display_name')} placeholder="Your full name" />
               </div>
-              <div className="field">
-                <label className="field-label">Agency Name</label>
-                <input className="input" value={form.agency_name} onChange={set('agency_name')} placeholder="Your agency / booking company" />
-              </div>
+              {profile?.role !== 'member' && (
+                <div className="field">
+                  <label className="field-label">Agency Name</label>
+                  <input className="input" value={form.agency_name} onChange={set('agency_name')} placeholder="Your agency / booking company" />
+                </div>
+              )}
               <div className="field">
                 <label className="field-label">Phone</label>
                 <input className="input" type="tel" value={form.phone} onChange={set('phone')} />

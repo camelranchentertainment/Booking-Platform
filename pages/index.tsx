@@ -1,82 +1,505 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
+import ArtistSpotlight from '../components/public/ArtistSpotlight';
 
-/* ── Design tokens ──────────────────────────────────────── */
-const BG      = '#080201';
-const SURFACE = '#160705';
-const CARD    = '#1E0B07';
-const GOLD    = '#C8921A';
-const GOLD2   = '#D4A030';
-const CREAM   = '#F5EDDF';
-const CREAM2  = 'rgba(245,237,223,0.72)';
-const MUTED   = '#9A7A5C';
-const BORDER  = 'rgba(200,146,26,0.16)';
-const BORDERL = 'rgba(200,146,26,0.30)';
+const GOLD   = '#C8921A';
+const CREAM  = '#F0D8A2';
+const BG     = '#0E0603';
+const DARK   = '#0A0502';
+const BORDER = 'rgba(200,146,26,0.13)';
 
-const TICKER_ITEMS = [
-  'BOOK SMARTER','TOUR HARDER','MANAGE YOUR PIPELINE',
-  'TRACK EVERY SHOW','BUILD YOUR ROSTER','GROW YOUR CAREER',
-  'PITCH VENUES','ADVANCE YOUR SHOWS','MANAGE YOUR BANDS',
-];
+const NAV_LINKS = ['Artists', 'Booking', 'Contact'];
 
-const FEATURES = [
-  {
-    icon: '◈',
-    title: 'Full Pipeline',
-    sub: '9 booking stages',
-    desc: 'Every step from first pitch to final advance, tracked and organized in one place.',
-  },
-  {
-    icon: '⟴',
-    title: 'Tour Routing',
-    sub: 'Plan entire tours',
-    desc: 'Build tour pools, route multi-city runs, and track bookings across every date.',
-  },
-  {
-    icon: '♪',
-    title: 'Team Portals',
-    sub: '3 role tiers',
-    desc: 'Separate dashboards for agents, band admins, and individual members.',
-  },
-];
+/* ── Hatch SVG ────────────────────────────────────────────── */
+function HatchBg({ id, rotate = 45, opacity = 0.04 }: { id: string; rotate?: number; opacity?: number }) {
+  return (
+    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', opacity }}>
+      <defs>
+        <pattern id={id} width="8" height="8" patternUnits="userSpaceOnUse" patternTransform={`rotate(${rotate})`}>
+          <line x1="0" y1="0" x2="0" y2="8" stroke={CREAM} strokeWidth="0.8" />
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill={`url(#${id})`} />
+    </svg>
+  );
+}
 
-const TIERS = [
-  {
-    num: '01',
-    title: 'BOOKING AGENT',
-    color: GOLD,
-    desc: 'The full toolset. Manage your entire roster, run the booking pipeline, and oversee every tour.',
-    perks: ['Multi-band roster & dashboard','9-stage booking pipeline','Tour routing & venue database'],
-    cta: 'Register as Agent',
-    href: '/register?role=agent',
-    primary: true,
-  },
-  {
-    num: '02',
-    title: 'BAND ADMIN',
-    color: '#C4B5FD',
-    desc: 'Full visibility into your band\'s schedule, bookings, and tour details.',
-    perks: ['Complete show schedule','Advance sheets & venue info','Band member management'],
-    cta: 'Register Your Band',
-    href: '/register?role=act_admin',
-    primary: false,
-  },
-  {
-    num: '03',
-    title: 'BAND MEMBER',
-    color: '#34D399',
-    desc: 'Simple, read-only access to your upcoming shows. Free forever via invite.',
-    perks: ['Confirmed shows & set times','Load-in & venue details','Tour calendar'],
-    cta: 'Join with Invite',
-    href: '/register?role=member',
-    primary: false,
-  },
-];
+/* ── Wordmark ─────────────────────────────────────────────── */
+function Wordmark() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{
+        fontFamily: 'var(--font-display)', fontWeight: 900,
+        color: CREAM, letterSpacing: '0.28em', textTransform: 'uppercase',
+        lineHeight: 1, fontSize: '0.88rem',
+      }}>
+        Camel Ranch
+      </div>
+      <div style={{
+        color: GOLD, letterSpacing: '0.5em', textTransform: 'uppercase',
+        fontSize: '0.56rem', marginTop: '0.1rem',
+      }}>
+        Booking
+      </div>
+    </div>
+  );
+}
 
-export default function Landing() {
-  const router = useRouter();
+/* ── Nav ──────────────────────────────────────────────────── */
+function Nav() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <nav style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '1.25rem 2rem',
+      background: 'rgba(14,6,3,0.95)', backdropFilter: 'blur(8px)',
+      borderBottom: `1px solid rgba(200,146,26,0.18)`,
+    }}>
+      <a href="#" style={{ textDecoration: 'none' }}><Wordmark /></a>
+
+      {/* Desktop links */}
+      <div className="cr-nav-desktop" style={{ display: 'flex', alignItems: 'center', gap: '2.5rem' }}>
+        {NAV_LINKS.map(l => (
+          <a key={l} href={`#${l.toLowerCase()}`} style={{
+            color: 'rgba(240,216,162,0.55)', fontSize: '0.72rem',
+            letterSpacing: '0.22em', textTransform: 'uppercase',
+            textDecoration: 'none', transition: 'color 0.2s',
+          }}
+            onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(240,216,162,0.55)')}
+          >
+            {l}
+          </a>
+        ))}
+        <a href="#booking" style={{
+          color: GOLD, fontSize: '0.72rem', letterSpacing: '0.22em',
+          textTransform: 'uppercase', textDecoration: 'none',
+          padding: '0.45rem 1rem', border: `1px solid ${GOLD}`,
+          transition: 'background 0.2s, color 0.2s',
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = GOLD; e.currentTarget.style.color = BG; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = GOLD; }}
+        >
+          Book Now
+        </a>
+        <Link href="/login" style={{
+          color: 'rgba(240,216,162,0.35)', fontSize: '0.68rem',
+          letterSpacing: '0.2em', textTransform: 'uppercase', textDecoration: 'none',
+        }}>
+          Login
+        </Link>
+      </div>
+
+      {/* Hamburger */}
+      <button
+        className="cr-hamburger"
+        onClick={() => setOpen(v => !v)}
+        style={{ display: 'none', background: 'none', border: 'none', color: CREAM, cursor: 'pointer', padding: 0 }}
+        aria-label="Toggle menu"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          {open
+            ? <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>
+            : <><line x1="3" y1="7" x2="21" y2="7" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="17" x2="21" y2="17" /></>
+          }
+        </svg>
+      </button>
+
+      {/* Mobile dropdown */}
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0,
+          background: BG, padding: '1.5rem 2rem',
+          display: 'flex', flexDirection: 'column', gap: '1.5rem',
+          borderTop: `1px solid rgba(200,146,26,0.15)`,
+        }}>
+          {NAV_LINKS.map(l => (
+            <a key={l} href={`#${l.toLowerCase()}`} onClick={() => setOpen(false)} style={{
+              color: 'rgba(240,216,162,0.55)', fontSize: '0.72rem',
+              letterSpacing: '0.22em', textTransform: 'uppercase', textDecoration: 'none',
+            }}>
+              {l}
+            </a>
+          ))}
+          <Link href="/login" onClick={() => setOpen(false)} style={{
+            color: 'rgba(240,216,162,0.35)', fontSize: '0.68rem',
+            letterSpacing: '0.2em', textTransform: 'uppercase', textDecoration: 'none',
+          }}>
+            Platform Login
+          </Link>
+        </div>
+      )}
+    </nav>
+  );
+}
+
+/* ── Hero ─────────────────────────────────────────────────── */
+function Hero() {
+  return (
+    <section style={{
+      position: 'relative', minHeight: '100vh',
+      display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+      background: BG, overflow: 'hidden',
+    }}>
+      <HatchBg id="hero-hatch" rotate={45} opacity={0.04} />
+
+      {/* Gold rule under nav */}
+      <div style={{
+        position: 'absolute', left: 0, right: 0, height: 1,
+        background: `linear-gradient(90deg, transparent, ${GOLD}, transparent)`,
+        opacity: 0.3, top: '5.5rem',
+      }} />
+
+      {/* Ghost "CR" */}
+      <div style={{
+        position: 'absolute', inset: 0, display: 'flex',
+        alignItems: 'center', justifyContent: 'flex-end',
+        paddingRight: '4rem', pointerEvents: 'none', overflow: 'hidden', opacity: 0.025,
+      }}>
+        <span style={{
+          fontFamily: 'var(--font-display)', fontWeight: 900, color: CREAM,
+          textTransform: 'uppercase', fontSize: '22vw', lineHeight: 0.85,
+          letterSpacing: '-0.04em', whiteSpace: 'nowrap', userSelect: 'none',
+        }}>
+          CR
+        </span>
+      </div>
+
+      {/* Content */}
+      <div className="cr-hero-content" style={{ position: 'relative', zIndex: 10 }}>
+        <div style={{ maxWidth: '68rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+            <div style={{ height: 1, width: 48, background: GOLD }} />
+            <span style={{
+              color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase',
+            }}>
+              Red Dirt · Honky Tonk · Americana
+            </span>
+          </div>
+
+          <h1 style={{
+            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.88,
+            color: CREAM, textTransform: 'uppercase', margin: '0 0 0.25rem',
+            fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
+          }}>
+            Where Music
+          </h1>
+          <h1 style={{
+            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.88,
+            color: 'transparent', WebkitTextStroke: `1px ${GOLD}`,
+            textTransform: 'uppercase', margin: '0 0 0.25rem',
+            fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
+          }}>
+            Meets The
+          </h1>
+          <h1 style={{
+            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.88,
+            color: CREAM, textTransform: 'uppercase', margin: '0 0 2.5rem',
+            fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
+          }}>
+            Stage
+          </h1>
+
+          <div className="cr-hero-bottom">
+            <p style={{ maxWidth: '24rem', color: 'rgba(240,216,162,0.42)', fontSize: '0.88rem', lineHeight: 1.65 }}>
+              Independent booking representation for roots music artists. Honest advocacy, direct relationships, and a deep commitment to the music.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+              <a href="#artists" style={{
+                padding: '0.75rem 2rem', background: GOLD, color: BG,
+                fontWeight: 700, letterSpacing: '0.22em', fontSize: '0.72rem',
+                textTransform: 'uppercase', textDecoration: 'none',
+                transition: 'background 0.2s',
+              }}
+                onMouseEnter={e => (e.currentTarget.style.background = CREAM)}
+                onMouseLeave={e => (e.currentTarget.style.background = GOLD)}
+              >
+                Our Artists
+              </a>
+              <a href="#booking" style={{
+                padding: '0.75rem 2rem', color: CREAM,
+                letterSpacing: '0.22em', fontSize: '0.72rem',
+                textTransform: 'uppercase', textDecoration: 'none',
+                border: `1px solid rgba(240,216,162,0.22)`,
+                transition: 'border-color 0.2s, color 0.2s',
+              }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; e.currentTarget.style.color = GOLD; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(240,216,162,0.22)'; e.currentTarget.style.color = CREAM; }}
+              >
+                Book a Show
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom gold rule */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, height: 1,
+        background: `linear-gradient(90deg, transparent, ${GOLD}, transparent)`, opacity: 0.22,
+      }} />
+
+      {/* Scroll indicator */}
+      <div style={{
+        position: 'absolute', bottom: '2rem', right: '2rem',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem',
+      }}>
+        <div style={{
+          height: 48, width: 1,
+          background: `linear-gradient(to bottom, ${GOLD}, transparent)`, opacity: 0.45,
+        }} />
+        <span style={{
+          color: CREAM, letterSpacing: '0.3em', fontSize: '0.56rem', textTransform: 'uppercase',
+          writingMode: 'vertical-rl', opacity: 0.28,
+        }}>
+          Scroll
+        </span>
+      </div>
+    </section>
+  );
+}
+
+/* ── Booking Form ─────────────────────────────────────────── */
+type FormState = { name: string; email: string; venue: string; date: string; artist: string; notes: string };
+
+function BookingForm() {
+  const [form, setForm]     = useState<FormState>({ name: '', email: '', venue: '', date: '', artist: '', notes: '' });
+  const [sent, setSent]     = useState(false);
+  const [sending, setSending] = useState(false);
+  const [err, setErr]       = useState('');
+
+  const handle = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr('');
+    setSending(true);
+    try {
+      const res = await fetch('/api/public/booking-inquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'Failed to send. Please try again.'); return; }
+      setSent(true);
+    } catch {
+      setErr('Network error. Please try again.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', background: 'transparent', color: CREAM,
+    fontSize: '0.88rem', padding: '0.75rem 0',
+    border: 'none', borderBottom: `1px solid rgba(240,216,162,0.14)`,
+    outline: 'none', fontFamily: 'var(--font-body)',
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: 'block', color: 'rgba(240,216,162,0.28)',
+    fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '0.5rem',
+  };
+
+  const focusGold  = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    (e.currentTarget.style.borderBottomColor = GOLD);
+  const blurNormal = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    (e.currentTarget.style.borderBottomColor = 'rgba(240,216,162,0.14)');
+
+  const INFO_ROWS = [
+    ['Response',    'Within 48 hours'],
+    ['Availability','Year-round booking'],
+    ['Formats',     'Full band · Duo/Trio · Acoustic'],
+  ];
+
+  return (
+    <section id="booking" style={{
+      background: DARK, padding: '7rem 2rem',
+      borderTop: BORDER,
+    }}>
+      <div style={{ maxWidth: '72rem', margin: '0 auto' }}>
+        <div className="cr-booking-grid">
+
+          {/* Left — copy */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+              <div style={{ height: 1, width: 48, background: GOLD }} />
+              <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>
+                Book an Act
+              </span>
+            </div>
+
+            <h2 style={{
+              fontFamily: 'var(--font-display)', fontWeight: 900,
+              lineHeight: 0.9, textTransform: 'uppercase', margin: '0 0 2rem',
+              fontSize: 'clamp(2.5rem,6vw,5rem)', letterSpacing: '-0.01em',
+            }}>
+              <span style={{ color: CREAM }}>Let&rsquo;s Talk<br /></span>
+              <span style={{ color: 'transparent', WebkitTextStroke: `1px ${GOLD}` }}>Business</span>
+            </h2>
+
+            <p style={{ color: 'rgba(240,216,162,0.4)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '20rem', marginBottom: '2.5rem' }}>
+              All inquiries are reviewed within 48 hours. We work to find the right fit for both artist and venue.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {INFO_ROWS.map(([k, v]) => (
+                <div key={k} style={{
+                  display: 'flex', gap: '1.5rem', alignItems: 'baseline',
+                  paddingBottom: '1rem', borderBottom: `1px solid rgba(240,216,162,0.07)`,
+                }}>
+                  <span style={{ color: 'rgba(240,216,162,0.25)', letterSpacing: '0.3em', fontSize: '0.68rem', textTransform: 'uppercase', width: '6rem', flexShrink: 0 }}>{k}</span>
+                  <span style={{ color: 'rgba(240,216,162,0.55)', fontSize: '0.88rem' }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right — form */}
+          <div>
+            {sent ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingTop: '1rem' }}>
+                <div style={{ width: 48, height: 1, background: GOLD }} />
+                <h3 style={{
+                  fontFamily: 'var(--font-display)', fontWeight: 900,
+                  color: CREAM, fontSize: '2rem', textTransform: 'uppercase', letterSpacing: '-0.01em',
+                }}>
+                  Inquiry Received
+                </h3>
+                <p style={{ color: 'rgba(240,216,162,0.42)', fontSize: '0.88rem', lineHeight: 1.65 }}>
+                  We&rsquo;ll be in touch within 48 hours. Thanks for reaching out to Camel Ranch Booking.
+                </p>
+                <button onClick={() => setSent(false)} style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: GOLD, letterSpacing: '0.25em', fontSize: '0.72rem',
+                  textTransform: 'uppercase', padding: 0, textAlign: 'left',
+                }}>
+                  Submit Another →
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={submit}>
+                {([
+                  { name: 'name',  label: 'Your Name',      type: 'text',  ph: 'Full Name' },
+                  { name: 'email', label: 'Email Address',  type: 'email', ph: 'email@venue.com' },
+                  { name: 'venue', label: 'Venue / Event',  type: 'text',  ph: 'Venue name & location' },
+                  { name: 'date',  label: 'Proposed Date',  type: 'text',  ph: 'MM/DD/YYYY or flexible' },
+                ] as const).map(f => (
+                  <div key={f.name} style={{ marginBottom: '1.75rem' }}>
+                    <label style={labelStyle}>{f.label}</label>
+                    <input
+                      name={f.name} type={f.type} placeholder={f.ph}
+                      value={form[f.name]} onChange={handle} required
+                      style={{ ...inputStyle }}
+                      onFocus={focusGold} onBlur={blurNormal}
+                    />
+                  </div>
+                ))}
+
+                <div style={{ marginBottom: '1.75rem' }}>
+                  <label style={labelStyle}>Artist</label>
+                  <select name="artist" value={form.artist} onChange={handle} required
+                    style={{ ...inputStyle, background: BG, cursor: 'pointer' } as React.CSSProperties}
+                    onFocus={focusGold} onBlur={blurNormal}
+                  >
+                    <option value="" disabled>Select an artist…</option>
+                    <option value="open">Open to Discussion</option>
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: '1.75rem' }}>
+                  <label style={labelStyle}>Additional Notes</label>
+                  <textarea name="notes" value={form.notes} onChange={handle} rows={3}
+                    placeholder="Capacity, event type, any other details…"
+                    style={{ ...inputStyle } as React.CSSProperties}
+                    onFocus={focusGold} onBlur={blurNormal}
+                  />
+                </div>
+
+                {err && <div style={{ color: '#f87171', fontSize: '0.82rem', marginBottom: '1rem' }}>{err}</div>}
+
+                <button type="submit" disabled={sending} style={{
+                  width: '100%', padding: '1rem', background: sending ? 'rgba(200,146,26,0.5)' : GOLD,
+                  color: BG, fontSize: '0.72rem', fontWeight: 700,
+                  letterSpacing: '0.3em', textTransform: 'uppercase',
+                  border: 'none', cursor: sending ? 'wait' : 'pointer',
+                  fontFamily: 'var(--font-body)', transition: 'background 0.2s',
+                }}>
+                  {sending ? 'Sending…' : 'Submit Inquiry'}
+                </button>
+              </form>
+            )}
+          </div>
+
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ── Footer ───────────────────────────────────────────────── */
+function Footer() {
+  return (
+    <footer id="contact" style={{
+      background: '#080401', padding: '4rem 2rem',
+      borderTop: BORDER,
+    }}>
+      <div style={{ maxWidth: '72rem', margin: '0 auto' }}>
+        <div className="cr-footer-grid" style={{ marginBottom: '4rem' }}>
+          <div>
+            <div style={{ color: 'rgba(240,216,162,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Agency</div>
+            <Wordmark />
+          </div>
+          <div>
+            <div style={{ color: 'rgba(240,216,162,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Contact</div>
+            <a href="mailto:booking@camelranchbooking.com" style={{
+              color: 'rgba(240,216,162,0.52)', fontSize: '0.88rem',
+              textDecoration: 'none', display: 'block', marginBottom: '0.5rem',
+              transition: 'color 0.2s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
+              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(240,216,162,0.52)')}
+            >
+              booking@camelranchbooking.com
+            </a>
+          </div>
+          <div>
+            <div style={{ color: 'rgba(240,216,162,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Booking</div>
+            <a href="#booking" style={{
+              color: GOLD, fontSize: '0.88rem', textDecoration: 'none', transition: 'color 0.2s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.color = CREAM)}
+              onMouseLeave={e => (e.currentTarget.style.color = GOLD)}
+            >
+              Submit an Inquiry →
+            </a>
+          </div>
+        </div>
+
+        <div style={{ height: 1, background: 'rgba(240,216,162,0.06)', marginBottom: '2rem' }} />
+
+        <div className="cr-footer-bottom">
+          <div style={{ color: 'rgba(240,216,162,0.18)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase' }}>
+            © {new Date().getFullYear()} Camel Ranch Entertainment · All Rights Reserved
+          </div>
+          <div style={{ color: 'rgba(240,216,162,0.18)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase' }}>
+            camelranchbooking.com
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+/* ── Page ─────────────────────────────────────────────────── */
+export default function Home() {
+  const router  = useRouter();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -98,225 +521,77 @@ export default function Landing() {
 
   return (
     <>
-      {/* ── Responsive CSS ────────────────────────────────── */}
       <style>{`
-        * { box-sizing: border-box; }
+        /* Responsive helpers */
+        .cr-nav-desktop { display: none !important; }
+        .cr-hamburger   { display: flex !important; }
 
-        .lp { min-height: 100vh; background: ${BG}; color: ${CREAM}; display: flex; flex-direction: column; font-family: var(--font-body); }
-
-        /* NAV */
-        .lp-nav { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; border-bottom: 1px solid ${BORDER}; background: rgba(6,1,0,0.94); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); position: sticky; top: 0; z-index: 50; }
-        .lp-nav-logo-title { font-family: var(--font-display); font-size: 1.6rem; letter-spacing: 0.14em; line-height: 1; color: ${GOLD}; }
-        .lp-nav-logo-sub { font-family: var(--font-body); font-size: 0.6rem; font-weight: 700; letter-spacing: 0.5em; color: rgba(226,184,74,0.55); text-transform: uppercase; margin-top: 0.1rem; }
-        .lp-nav-actions { display: flex; align-items: center; gap: 0.6rem; }
-        .lp-nav-signin { font-size: 0.88rem; font-weight: 600; color: ${CREAM2}; text-decoration: none; padding: 0.5rem 0.75rem; }
-        .lp-nav-cta { font-size: 0.88rem; font-weight: 700; color: #180700; background: ${GOLD}; padding: 0.55rem 1.15rem; border-radius: 0; text-decoration: none; letter-spacing: 0.04em; white-space: nowrap; }
-
-        /* HERO */
-        .lp-hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 3.5rem 1.5rem 3rem; position: relative; overflow: hidden; }
-        .lp-hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse 130% 80% at 50% -10%, rgba(100,38,8,0.50) 0%, transparent 60%); pointer-events: none; }
-        .lp-eyebrow { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase; color: ${GOLD}; border: 1px solid ${BORDER}; padding: 0.32rem 0.85rem; border-radius: 0; margin-bottom: 1.75rem; position: relative; }
-        .lp-headline { font-family: var(--font-display); font-size: clamp(4rem, 18vw, 9rem); letter-spacing: 0.04em; line-height: 0.88; color: ${CREAM}; margin: 0; position: relative; }
-        .lp-headline-gold { font-family: var(--font-display); font-size: clamp(4rem, 18vw, 9rem); letter-spacing: 0.04em; line-height: 0.88; color: ${GOLD}; margin: 0 0 1.75rem; position: relative; }
-        .lp-subtext { font-size: 1rem; color: ${CREAM2}; max-width: 380px; line-height: 1.65; margin-bottom: 2rem; position: relative; }
-        .lp-cta-primary { display: block; width: 100%; max-width: 380px; text-align: center; font-weight: 700; font-size: 1rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 1rem 2rem; background: ${GOLD}; color: #180700; border-radius: 0; text-decoration: none; margin-bottom: 0.85rem; position: relative; transition: background 0.15s; }
-        .lp-cta-primary:hover { background: ${GOLD2}; }
-        .lp-cta-secondary-link { font-size: 0.88rem; color: ${MUTED}; text-decoration: none; position: relative; }
-        .lp-cta-secondary-link span { color: ${CREAM2}; }
-        .lp-trust { display: flex; align-items: center; justify-content: center; gap: 0; margin-top: 2.25rem; position: relative; }
-        .lp-trust-item { font-size: 0.76rem; font-weight: 600; color: ${MUTED}; letter-spacing: 0.06em; padding: 0 1rem; text-align: center; }
-        .lp-trust-item strong { display: block; font-family: var(--font-display); font-size: 1.6rem; letter-spacing: 0.06em; color: ${GOLD}; line-height: 1; margin-bottom: 0.1rem; }
-        .lp-trust-div { width: 1px; height: 2rem; background: ${BORDER}; }
-
-        /* TICKER */
-        .lp-ticker-wrap { overflow: hidden; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; background: ${SURFACE}; padding: 0.65rem 0; }
-        .lp-ticker { display: flex; gap: 0; animation: lpTicker 30s linear infinite; width: max-content; }
-        .lp-ticker-item { font-family: var(--font-display); font-size: 0.9rem; letter-spacing: 0.2em; color: ${MUTED}; white-space: nowrap; padding: 0 2.5rem; }
-        .lp-ticker-item::after { content: '◈'; color: ${GOLD}; margin-left: 2.5rem; }
-        @keyframes lpTicker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-
-        /* SECTION HEADER */
-        .lp-section { padding: 4rem 1.5rem; }
-        .lp-section-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase; color: ${GOLD}; margin-bottom: 0.5rem; }
-        .lp-section-title { font-family: var(--font-display); font-size: clamp(2rem, 7vw, 3.5rem); letter-spacing: 0.05em; color: ${CREAM}; margin: 0 0 0.5rem; line-height: 1; }
-        .lp-section-sub { font-size: 0.95rem; color: ${CREAM2}; max-width: 480px; line-height: 1.6; }
-
-        /* FEATURE CARDS — horizontal scroll on mobile */
-        .lp-features { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; gap: 1rem; padding: 1.75rem 1.5rem 1.5rem; margin: 0 -1.5rem; scrollbar-width: none; }
-        .lp-features::-webkit-scrollbar { display: none; }
-        .lp-feature-card { flex: 0 0 82%; scroll-snap-align: start; background: ${CARD}; border: 1px solid ${BORDER}; border-top: 2px solid ${GOLD}; border-radius: 0; padding: 1.5rem; }
-        .lp-feature-icon { font-size: 1.75rem; color: ${GOLD}; margin-bottom: 1rem; }
-        .lp-feature-title { font-family: var(--font-display); font-size: 1.5rem; letter-spacing: 0.05em; color: ${CREAM}; line-height: 1; margin-bottom: 0.2rem; }
-        .lp-feature-sub { font-size: 0.76rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: ${GOLD}; margin-bottom: 0.75rem; }
-        .lp-feature-desc { font-size: 0.92rem; color: ${CREAM2}; line-height: 1.6; }
-
-        /* TIER CARDS */
-        .lp-tiers { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.75rem; }
-        .lp-tier-card { background: ${CARD}; border: 1px solid ${BORDER}; border-radius: 0; padding: 1.5rem; }
-        .lp-tier-num { font-family: var(--font-display); font-size: 0.9rem; letter-spacing: 0.18em; margin-bottom: 0.35rem; }
-        .lp-tier-title { font-family: var(--font-display); font-size: 2rem; letter-spacing: 0.05em; color: ${CREAM}; line-height: 1; margin-bottom: 0.75rem; }
-        .lp-tier-desc { font-size: 0.9rem; color: ${CREAM2}; line-height: 1.6; margin-bottom: 1rem; }
-        .lp-tier-perks { list-style: none; margin: 0 0 1.25rem; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
-        .lp-tier-perk { display: flex; align-items: center; gap: 0.6rem; font-size: 0.88rem; color: rgba(245,237,223,0.65); }
-        .lp-tier-perk-dot { width: 6px; height: 6px; border-radius: 0; flex-shrink: 0; }
-        .lp-tier-cta { display: block; text-align: center; font-weight: 700; font-size: 0.9rem; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.8rem 1.5rem; border-radius: 0; text-decoration: none; transition: background 0.15s; }
-        .lp-tier-cta-primary { background: ${GOLD}; color: #180700; }
-        .lp-tier-cta-primary:hover { background: ${GOLD2}; }
-        .lp-tier-cta-outline { background: transparent; border: 1px solid; }
-
-        /* BOTTOM CTA */
-        .lp-bottom-cta { margin: 0 1.5rem 4rem; padding: 2.5rem 1.5rem; background: ${SURFACE}; border: 1px solid ${BORDERL}; border-radius: 0; text-align: center; }
-        .lp-bottom-cta-title { font-family: var(--font-display); font-size: clamp(1.8rem, 6vw, 3rem); letter-spacing: 0.06em; color: ${CREAM}; margin-bottom: 0.5rem; }
-        .lp-bottom-cta-sub { font-size: 0.92rem; color: ${CREAM2}; margin-bottom: 1.75rem; }
-
-        /* FOOTER */
-        .lp-footer { border-top: 1px solid ${BORDER}; padding: 1.25rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; background: rgba(4,1,0,0.80); }
-        .lp-footer-copy { font-size: 0.8rem; color: rgba(226,184,74,0.35); }
-        .lp-footer-links { display: flex; gap: 1.25rem; }
-        .lp-footer-link { font-size: 0.82rem; font-weight: 600; text-decoration: none; }
-
-        /* DIVIDER */
-        .lp-divider { height: 1px; background: linear-gradient(90deg, transparent, ${BORDER}, transparent); margin: 0; }
-
-        /* DESKTOP overrides */
-        @media (min-width: 768px) {
-          .lp-nav { padding: 1rem 3rem; }
-          .lp-nav-logo-title { font-size: 2rem; }
-          .lp-hero { padding: 6rem 2rem 5rem; }
-          .lp-cta-primary { max-width: 320px; }
-          .lp-features { display: grid; grid-template-columns: repeat(3, 1fr); overflow-x: visible; padding: 1.75rem 0 0; margin: 0; }
-          .lp-feature-card { flex: unset; }
-          .lp-tiers { display: grid; grid-template-columns: repeat(3, 1fr); }
-          .lp-section { padding: 5rem 3rem; max-width: 1160px; margin: 0 auto; width: 100%; }
-          .lp-bottom-cta { max-width: 800px; margin: 0 auto 5rem; padding: 3.5rem; }
-          .lp-footer { padding: 1.5rem 3rem; }
+        .cr-hero-content {
+          padding: 2rem 1.5rem 5rem;
+          padding-top: 7rem;
+        }
+        .cr-hero-bottom {
+          display: flex;
+          flex-direction: column;
+          gap: 2rem;
+        }
+        .cr-booking-grid {
+          display: grid;
+          gap: 4rem;
+        }
+        .cr-footer-grid {
+          display: grid;
+          gap: 2.5rem;
+        }
+        .cr-footer-bottom {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
         }
 
-        @media (min-width: 1160px) {
-          .lp-hero { padding: 8rem 2rem 6rem; }
+        @media (min-width: 768px) {
+          .cr-nav-desktop { display: flex !important; }
+          .cr-hamburger   { display: none !important; }
+
+          .cr-hero-content { padding: 2rem 4rem 5rem; padding-top: 7rem; }
+          .cr-hero-bottom  { flex-direction: row; align-items: flex-end; justify-content: space-between; }
+
+          .cr-booking-grid { grid-template-columns: 1fr 1fr; gap: 5rem; }
+          .cr-footer-grid  { grid-template-columns: repeat(3, 1fr); }
+          .cr-footer-bottom { flex-direction: row; justify-content: space-between; align-items: center; }
+        }
+
+        @media (min-width: 1024px) {
+          .cr-hero-content { padding: 2rem 6rem 5rem; padding-top: 7rem; }
         }
       `}</style>
 
-      <div className="lp">
+      <div style={{ minHeight: '100vh', background: BG, color: CREAM, fontFamily: 'var(--font-body)' }}>
+        <Nav />
+        <Hero />
 
-        {/* ── Nav ─────────────────────────────────────────────── */}
-        <nav className="lp-nav">
-          <div>
-            <div className="lp-nav-logo-title">CAMEL RANCH</div>
-            <div className="lp-nav-logo-sub">Booking</div>
-          </div>
-          <div className="lp-nav-actions">
-            <Link href="/login" className="lp-nav-signin">Sign In</Link>
-            <Link href="/register" className="lp-nav-cta">Get Started</Link>
-          </div>
-        </nav>
-
-        {/* ── Hero ─────────────────────────────────────────────── */}
-        <section className="lp-hero">
-          <div className="lp-eyebrow">◈ Professional Booking Management ◈</div>
-          <h1 className="lp-headline">BOOK<br />SMARTER.</h1>
-          <h1 className="lp-headline-gold">TOUR<br />HARDER.</h1>
-          <p className="lp-subtext">
-            The complete booking platform for agents, acts, and touring musicians. From first pitch to final advance.
-          </p>
-          <Link href="/register" className="lp-cta-primary">
-            Create Free Account →
-          </Link>
-          <Link href="/login" className="lp-cta-secondary-link">
-            Already have an account? <span>Sign in</span>
-          </Link>
-
-          {/* Trust stats */}
-          <div className="lp-trust">
-            <div className="lp-trust-item"><strong>9</strong>Booking Stages</div>
-            <div className="lp-trust-div" />
-            <div className="lp-trust-item"><strong>3</strong>Role Portals</div>
-            <div className="lp-trust-div" />
-            <div className="lp-trust-item"><strong>∞</strong>Bookings</div>
-          </div>
-        </section>
-
-        {/* ── Ticker ───────────────────────────────────────────── */}
-        <div className="lp-ticker-wrap">
-          <div className="lp-ticker" aria-hidden="true">
-            {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
-              <span key={i} className="lp-ticker-item">{item}</span>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Features ─────────────────────────────────────────── */}
-        <section className="lp-section">
-          <div className="lp-section-label">The Platform</div>
-          <div className="lp-section-title">Everything you need.</div>
-          <p className="lp-section-sub">Built specifically for country, Americana, and touring artists.</p>
-
-          <div className="lp-features">
-            {FEATURES.map(f => (
-              <div key={f.title} className="lp-feature-card">
-                <div className="lp-feature-icon">{f.icon}</div>
-                <div className="lp-feature-title">{f.title}</div>
-                <div className="lp-feature-sub">{f.sub}</div>
-                <p className="lp-feature-desc">{f.desc}</p>
+        {/* Artists */}
+        <section id="artists" style={{ borderTop: BORDER }}>
+          <div className="cr-hero-content" style={{ background: BG, paddingBottom: '2.5rem', paddingTop: '5rem' }}>
+            <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{ height: 1, width: 48, background: GOLD }} />
+                <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>Roster</span>
               </div>
-            ))}
+              <h2 style={{
+                fontFamily: 'var(--font-display)', fontWeight: 900,
+                lineHeight: 1, textTransform: 'uppercase', margin: 0,
+                fontSize: 'clamp(2rem,5vw,4rem)', letterSpacing: '-0.01em', color: CREAM,
+              }}>
+                Our Artists
+              </h2>
+            </div>
           </div>
+          <ArtistSpotlight />
         </section>
 
-        <div className="lp-divider" />
-
-        {/* ── Tiers ────────────────────────────────────────────── */}
-        <section className="lp-section">
-          <div className="lp-section-label">Choose Your Role</div>
-          <div className="lp-section-title">One platform,<br />three portals.</div>
-          <p className="lp-section-sub">Each role gets a purpose-built view — no clutter, no confusion.</p>
-
-          <div className="lp-tiers">
-            {TIERS.map(t => (
-              <div key={t.title} className="lp-tier-card" style={{ borderTop: `3px solid ${t.color}` }}>
-                <div className="lp-tier-num" style={{ color: t.color }}>{t.num}</div>
-                <div className="lp-tier-title">{t.title}</div>
-                <p className="lp-tier-desc">{t.desc}</p>
-                <ul className="lp-tier-perks">
-                  {t.perks.map(p => (
-                    <li key={p} className="lp-tier-perk">
-                      <span className="lp-tier-perk-dot" style={{ background: t.color }} />
-                      {p}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href={t.href}
-                  className={`lp-tier-cta ${t.primary ? 'lp-tier-cta-primary' : 'lp-tier-cta-outline'}`}
-                  style={!t.primary ? { borderColor: t.color, color: t.color } : undefined}
-                >
-                  {t.cta}
-                </Link>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <div className="lp-divider" />
-
-        {/* ── Bottom CTA ───────────────────────────────────────── */}
-        <div className="lp-bottom-cta">
-          <div className="lp-bottom-cta-title">Ready to book<br />smarter?</div>
-          <p className="lp-bottom-cta-sub">Free to start. No credit card required.</p>
-          <Link href="/register" className="lp-cta-primary" style={{ maxWidth: 280, margin: '0 auto' }}>
-            Create Free Account →
-          </Link>
-        </div>
-
-        {/* ── Footer ───────────────────────────────────────────── */}
-        <footer className="lp-footer">
-          <div className="lp-footer-copy">© {new Date().getFullYear()} Camel Ranch Entertainment</div>
-          <div className="lp-footer-links">
-            <Link href="/login" className="lp-footer-link" style={{ color: MUTED }}>Sign In</Link>
-            <Link href="/register" className="lp-footer-link" style={{ color: GOLD }}>Get Started</Link>
-          </div>
-        </footer>
-
+        <BookingForm />
+        <Footer />
       </div>
     </>
   );
