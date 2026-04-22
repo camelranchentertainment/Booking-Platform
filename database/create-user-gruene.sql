@@ -2,13 +2,19 @@
 -- Display name: Gruene  |  Act: John D Hale Band
 -- Run in Supabase SQL Editor
 
+-- Step 1: Clean up any orphaned records from previous attempts
+DELETE FROM auth.identities WHERE user_id IN (
+  SELECT id FROM auth.users WHERE email = 'grueneroadcases@gmail.com'
+);
+DELETE FROM auth.users WHERE email = 'grueneroadcases@gmail.com';
+
+-- Step 2: Create the account
 DO $$
 DECLARE
   new_user_id  uuid        := gen_random_uuid();
   trial_end    timestamptz := NOW() + INTERVAL '14 days';
 BEGIN
 
-  -- 1. Auth user (email confirmed, password set)
   INSERT INTO auth.users (
     instance_id, id, aud, role,
     email, encrypted_password,
@@ -24,29 +30,33 @@ BEGIN
     '{}', false
   );
 
-  -- 2. Identity record (provider_id required in newer Supabase — use email for email provider)
   INSERT INTO auth.identities (
     id, user_id, identity_data, provider, provider_id, created_at, updated_at
   ) VALUES (
-    gen_random_uuid(),
-    new_user_id,
+    gen_random_uuid(), new_user_id,
     json_build_object('sub', new_user_id, 'email', 'grueneroadcases@gmail.com'),
-    'email',
-    'grueneroadcases@gmail.com',
+    'email', 'grueneroadcases@gmail.com',
     NOW(), NOW()
   );
 
-  -- 3. User profile
+  -- Upsert in case a trigger already created the row
   INSERT INTO user_profiles (
     id, role, email, display_name,
     subscription_status, subscription_tier, trial_ends_at
   ) VALUES (
     new_user_id, 'act_admin', 'grueneroadcases@gmail.com', 'Gruene',
     'trialing', 'band_admin', trial_end
-  );
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    role              = 'act_admin',
+    email             = 'grueneroadcases@gmail.com',
+    display_name      = 'Gruene',
+    subscription_status = 'trialing',
+    subscription_tier = 'band_admin',
+    trial_ends_at     = trial_end;
 
-  -- 4. Act / band
   INSERT INTO acts (owner_id, agent_id, act_name)
-  VALUES (new_user_id, NULL, 'John D Hale Band');
+  VALUES (new_user_id, NULL, 'John D Hale Band')
+  ON CONFLICT DO NOTHING;
 
 END $$;
