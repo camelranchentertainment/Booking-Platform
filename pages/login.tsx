@@ -17,10 +17,14 @@ const TIERS = [
 
 export default function Login() {
   const router = useRouter();
-  const [email, setEmail]     = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError]     = useState('');
-  const [loading, setLoading] = useState(false);
+  const [email, setEmail]         = useState('');
+  const [password, setPassword]   = useState('');
+  const [error, setError]         = useState('');
+  const [loading, setLoading]     = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSent, setForgotSent]   = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +43,17 @@ export default function Login() {
     if (role === 'superadmin' || role === 'agent') router.replace('/dashboard');
     else if (role === 'act_admin') router.replace('/band');
     else router.replace('/member');
+  };
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    const { error: err } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setForgotLoading(false);
+    if (err) { setError(err.message); return; }
+    setForgotSent(true);
   };
 
   return (
@@ -78,13 +93,60 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Login card */}
+      {/* Login / Forgot password card */}
       <div style={{
         width: '100%', maxWidth: 400,
         background: 'rgba(22,8,3,0.82)', backdropFilter: 'blur(20px)',
         border: `1px solid rgba(226,184,74,0.22)`, borderRadius: '6px',
         padding: '2rem', boxShadow: `0 0 60px rgba(0,0,0,0.8), ${GLOW}`,
       }}>
+
+        {/* ── Forgot password view ── */}
+        {showForgot ? (
+          forgotSent ? (
+            <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ fontSize: '2rem' }}>✉️</div>
+              <div style={{ color: '#F5EDDF', fontFamily: 'var(--font-body)', fontSize: '0.95rem' }}>
+                Check your email
+              </div>
+              <div style={{ color: MUTED, fontFamily: 'var(--font-body)', fontSize: '0.82rem', lineHeight: 1.6 }}>
+                A password reset link was sent to <strong style={{ color: '#F5EDDF' }}>{forgotEmail}</strong>.
+                Click the link in the email to set a new password.
+              </div>
+              <button onClick={() => { setShowForgot(false); setForgotSent(false); setError(''); }}
+                style={{ background: 'none', border: 'none', color: GOLD, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>
+                ← Back to sign in
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleForgot} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ color: '#F5EDDF', fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.06em', marginBottom: '0.25rem' }}>
+                Reset Password
+              </div>
+              <div style={{ color: MUTED, fontFamily: 'var(--font-body)', fontSize: '0.82rem', lineHeight: 1.5 }}>
+                Enter your email and we'll send a reset link.
+              </div>
+              <div>
+                <label style={{ display: 'block', fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: MUTED, marginBottom: '0.4rem' }}>Email</label>
+                <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
+                  placeholder="you@example.com" required autoFocus
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(226,184,74,0.2)', borderRadius: '3px', padding: '0.65rem 0.85rem', color: '#F5EDDF', fontFamily: 'var(--font-body)', fontSize: '0.9rem', outline: 'none' }}
+                />
+              </div>
+              {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: '3px', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
+              <button type="submit" disabled={forgotLoading}
+                style={{ padding: '0.8rem', background: forgotLoading ? 'rgba(226,184,74,0.5)' : GOLD, color: '#1A0800', border: 'none', borderRadius: '3px', fontFamily: 'var(--font-body)', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: forgotLoading ? 'not-allowed' : 'pointer' }}>
+                {forgotLoading ? 'Sending...' : 'Send Reset Link'}
+              </button>
+              <button type="button" onClick={() => { setShowForgot(false); setError(''); }}
+                style={{ background: 'none', border: 'none', color: MUTED, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>
+                ← Back to sign in
+              </button>
+            </form>
+          )
+        ) : (
+
+        /* ── Sign in view ── */
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
             <label style={{
@@ -106,11 +168,16 @@ export default function Login() {
           </div>
 
           <div>
-            <label style={{
-              display: 'block', fontFamily: 'var(--font-body)', fontSize: '0.72rem',
-              fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
-              color: MUTED, marginBottom: '0.4rem',
-            }}>Password</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.4rem' }}>
+              <label style={{
+                fontFamily: 'var(--font-body)', fontSize: '0.72rem',
+                fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: MUTED,
+              }}>Password</label>
+              <button type="button" onClick={() => { setShowForgot(true); setForgotEmail(email); setError(''); }}
+                style={{ background: 'none', border: 'none', color: MUTED, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.72rem', padding: 0 }}>
+                Forgot password?
+              </button>
+            </div>
             <input
               type="password" value={password} onChange={e => setPassword(e.target.value)}
               placeholder="••••••••" required
@@ -148,6 +215,7 @@ export default function Login() {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+        )}
       </div>
 
       {/* Account type tiles */}
