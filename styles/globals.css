@@ -183,8 +183,7 @@ h4 { font-size: 1.2rem; }
 /* ── Cards ─────────────────────────────────────────────────── */
 .card {
   background: #120703;
-  background-image: var(--hatch);
-  background-size: 6px 6px;
+  background-image: linear-gradient(135deg, rgba(200,146,26,0.04) 0%, transparent 55%);
   border: 1px solid var(--border);
   padding: 1.25rem;
 }
@@ -678,6 +677,7 @@ tr:hover td { background: rgba(200,146,26,0.05); color: var(--text-primary); }
 
 [data-theme="light"] .card {
   background: rgba(255,248,240,0.96);
+  background-image: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
