@@ -12,19 +12,7 @@ const BORDER = 'rgba(200,146,26,0.13)';
 
 const NAV_LINKS = ['Features', 'How It Works', 'Contact'];
 
-/* ── Hatch SVG ────────────────────────────────────────────── */
-function HatchBg({ id, rotate = 45, opacity = 0.04 }: { id: string; rotate?: number; opacity?: number }) {
-  return (
-    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', opacity }}>
-      <defs>
-        <pattern id={id} width="8" height="8" patternUnits="userSpaceOnUse" patternTransform={`rotate(${rotate})`}>
-          <line x1="0" y1="0" x2="0" y2="8" stroke={CREAM} strokeWidth="0.8" />
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill={`url(#${id})`} />
-    </svg>
-  );
-}
+
 
 /* ── Wordmark ─────────────────────────────────────────────── */
 function Wordmark() {
@@ -145,7 +133,7 @@ function Hero() {
       display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
       background: BG, overflow: 'hidden',
     }}>
-      <HatchBg id="hero-hatch" rotate={45} opacity={0.04} />
+
 
       {/* Gold rule under nav */}
       <div style={{
@@ -362,7 +350,7 @@ function SignUpCTA() {
       position: 'relative', background: DARK,
       borderTop: BORDER, overflow: 'hidden',
     }}>
-      <HatchBg id="cta-hatch" rotate={32} opacity={0.035} />
+
 
       <div className="cr-hero-content" style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
         <div style={{ maxWidth: '52rem', margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1 }}>
