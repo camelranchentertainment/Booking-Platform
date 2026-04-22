@@ -3,6 +3,12 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 
+const REGISTER_TIERS = [
+  { role: 'agent',     label: 'Booking Agent', icon: '◈', color: 'var(--accent)' },
+  { role: 'act_admin', label: 'Band Admin',    icon: '♪', color: '#a78bfa' },
+  { role: 'member',    label: 'Band Member',   icon: '◉', color: '#34d399' },
+];
+
 export default function Login() {
   const router = useRouter();
   const [email, setEmail]       = useState('');
@@ -34,7 +40,7 @@ export default function Login() {
   };
 
   return (
-    <div className="auth-wrap">
+    <div className="auth-wrap" style={{ flexDirection: 'column', gap: '1.5rem' }}>
       <div className="auth-card">
         <div className="auth-logo">CAMEL RANCH</div>
         <div className="auth-sub">Booking Platform</div>
@@ -75,10 +81,47 @@ export default function Login() {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+      </div>
 
-        <div style={{ textAlign: 'center', marginTop: '1.25rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-          New agent?{' '}
-          <Link href="/register" style={{ color: 'var(--accent)' }}>Create account</Link>
+      {/* Account type selector — shown outside the sign-in card */}
+      <div style={{ width: '100%', maxWidth: 400 }}>
+        <div style={{
+          fontFamily: 'var(--font-body)', fontSize: '0.72rem', letterSpacing: '0.18em',
+          textTransform: 'uppercase', color: 'var(--text-muted)', textAlign: 'center',
+          marginBottom: '0.75rem',
+        }}>
+          New here? Choose your account type
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+          {REGISTER_TIERS.map(t => (
+            <Link
+              key={t.role}
+              href={`/register?role=${t.role}`}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.35rem',
+                padding: '0.85rem 0.5rem',
+                background: 'var(--bg-card)',
+                border: `1px solid var(--border)`,
+                borderRadius: 'var(--radius-sm)',
+                textDecoration: 'none',
+                transition: 'border-color 0.15s, background 0.15s',
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLAnchorElement).style.borderColor = t.color;
+                (e.currentTarget as HTMLAnchorElement).style.background = `${t.color}12`;
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--border)';
+                (e.currentTarget as HTMLAnchorElement).style.background = 'var(--bg-card)';
+              }}
+            >
+              <span style={{ fontSize: '1.25rem', color: t.color }}>{t.icon}</span>
+              <span style={{
+                fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 600,
+                letterSpacing: '0.08em', textTransform: 'uppercase', color: t.color,
+              }}>{t.label}</span>
+            </Link>
+          ))}
         </div>
       </div>
     </div>

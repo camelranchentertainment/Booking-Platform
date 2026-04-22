@@ -5,35 +5,45 @@ import { supabase } from '../lib/supabase';
 
 type Tier = 'agent' | 'act_admin' | 'member';
 
-const TIER_CONFIG: Record<Tier, { label: string; color: string; sub: string; selfSignup: boolean }> = {
+const TIER_CONFIG: Record<Tier, {
+  label: string; icon: string; color: string;
+  price: string; desc: string; selfSignup: boolean;
+}> = {
   agent: {
     label: 'Booking Agent',
-    color: 'var(--accent)',
-    sub:   'Run a roster of bands',
+    icon:  '◈',
+    color: '#D4A843',
+    price: '$30/mo · 14-day trial',
+    desc:  'Manage a full roster of bands, venues, tours & bookings.',
     selfSignup: true,
   },
   act_admin: {
     label: 'Band Admin',
+    icon:  '♪',
     color: '#a78bfa',
-    sub:   'Self-managed or agent-connected',
+    price: '$15/mo · 14-day trial',
+    desc:  'Manage your act, connect with booking agents, share calendars.',
     selfSignup: true,
   },
   member: {
     label: 'Band Member',
+    icon:  '◉',
     color: '#34d399',
-    sub:   'Individual member access',
+    price: 'Free forever',
+    desc:  'View your band\'s upcoming shows and calendar. Join via invite.',
     selfSignup: false,
   },
 };
 
 export default function Register() {
   const router = useRouter();
-  const [tier, setTier]       = useState<Tier>('agent');
+  // No default — user must explicitly choose their tier
+  const [tier, setTier]       = useState<Tier | null>(null);
   const [form, setForm]       = useState({
     email: '', password: '', confirmPassword: '',
     displayName: '', agencyName: '',
-    actName: '',   // for act_admin self-signup
-    inviteCode: '', // for member invite
+    actName: '',
+    inviteCode: '',
   });
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
@@ -48,9 +58,9 @@ export default function Register() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!tier) return;
     setError('');
 
-    // Members use invite flow
     if (tier === 'member') {
       const code = form.inviteCode.trim();
       if (!code) { setError('Invite code is required'); return; }
@@ -65,173 +75,206 @@ export default function Register() {
 
     setLoading(true);
 
-    const { data, error: err } = await supabase.auth.signUp({ email: form.email, password: form.password });
-    if (err) { setError(err.message); setLoading(false); return; }
-    if (!data.user) { setError('Registration failed'); setLoading(false); return; }
+    const body: Record<string, string> = {
+      email: form.email,
+      password: form.password,
+      role: tier,
+      displayName: form.displayName,
+    };
+    if (tier === 'agent' && form.agencyName) body.agencyName = form.agencyName;
+    if (tier === 'act_admin') body.actName = form.actName;
 
-    const userId = data.user.id;
+    const apiRes = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const apiData = await apiRes.json();
+    if (!apiRes.ok) { setError(apiData.error || 'Registration failed'); setLoading(false); return; }
 
-    if (tier === 'agent') {
-      const { error: pe } = await supabase.from('user_profiles').insert({
-        id: userId, role: 'agent', email: form.email,
-        display_name: form.displayName, agency_name: form.agencyName || null,
-      });
-      if (pe) { setError(pe.message); setLoading(false); return; }
-      router.replace('/dashboard');
+    const { error: signInErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
+    if (signInErr) { setError(signInErr.message); setLoading(false); return; }
 
-    } else {
-      // act_admin: create profile + create their act
-      const { error: pe } = await supabase.from('user_profiles').insert({
-        id: userId, role: 'act_admin', email: form.email,
-        display_name: form.displayName,
-      });
-      if (pe) { setError(pe.message); setLoading(false); return; }
-
-      const { error: ae } = await supabase.from('acts').insert({
-        owner_id: userId,
-        agent_id: null,      // no agent yet — self-managed
-        act_name: form.actName,
-      });
-      if (ae) { setError(ae.message); setLoading(false); return; }
-
-      router.replace('/band');
-    }
+    router.replace(tier === 'agent' ? '/dashboard' : '/band');
   };
 
-  const cfg = TIER_CONFIG[tier];
+  const cfg = tier ? TIER_CONFIG[tier] : null;
 
   return (
-    <div className="auth-wrap" style={{ alignItems: 'flex-start', paddingTop: '3rem' }}>
-      <div style={{ width: '100%', maxWidth: 540 }}>
-        <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
+    <div className="auth-wrap" style={{ alignItems: 'flex-start', paddingTop: '2.5rem' }}>
+      <div style={{ width: '100%', maxWidth: 560 }}>
+
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <div className="auth-logo">CAMEL RANCH</div>
           <div className="auth-sub">Create Account</div>
         </div>
 
-        {/* Tier selector */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '1.5rem' }}>
-          {(Object.entries(TIER_CONFIG) as [Tier, typeof TIER_CONFIG[Tier]][]).map(([t, c]) => (
-            <button key={t} onClick={() => { setTier(t); setError(''); }}
-              style={{
-                padding: '0.75rem 0.5rem',
-                border: `1px solid ${tier === t ? c.color : 'var(--border)'}`,
-                borderRadius: 'var(--radius-sm)',
-                background: tier === t ? `rgba(255,255,255,0.06)` : 'var(--bg-raised)',
-                color: tier === t ? c.color : 'var(--text-muted)',
-                fontFamily: 'var(--font-body)',
-                fontSize: '0.76rem',
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem',
-              }}>
-              <span style={{ fontSize: '1.1rem' }}>{t === 'agent' ? '◈' : t === 'act_admin' ? '♪' : '◉'}</span>
-              {c.label}
-              <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'none', fontFamily: 'var(--font-body)' }}>{c.sub}</span>
-            </button>
-          ))}
+        {/* Step 1 — Tier selection (always visible, required) */}
+        <div style={{ marginBottom: '1.75rem' }}>
+          <div style={{
+            fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700,
+            letterSpacing: '0.2em', textTransform: 'uppercase',
+            color: 'var(--text-muted)', marginBottom: '0.75rem', textAlign: 'center',
+          }}>
+            Step 1 — I am a...
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem' }}>
+            {(Object.entries(TIER_CONFIG) as [Tier, typeof TIER_CONFIG[Tier]][]).map(([t, c]) => {
+              const selected = tier === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => { setTier(t); setError(''); }}
+                  style={{
+                    padding: '1.1rem 0.75rem',
+                    border: `2px solid ${selected ? c.color : 'var(--border)'}`,
+                    borderRadius: 'var(--radius-sm)',
+                    background: selected ? `${c.color}18` : 'var(--bg-card)',
+                    color: selected ? c.color : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem',
+                    boxShadow: selected ? `0 0 16px ${c.color}30` : 'none',
+                  }}
+                >
+                  <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>{c.icon}</span>
+                  <span style={{
+                    fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700,
+                    letterSpacing: '0.08em', textTransform: 'uppercase',
+                  }}>{c.label}</span>
+                  <span style={{
+                    fontFamily: 'var(--font-body)', fontSize: '0.7rem', fontWeight: 400,
+                    color: selected ? `${c.color}cc` : 'var(--text-muted)',
+                    letterSpacing: '0.03em',
+                  }}>{c.price}</span>
+                </button>
+              );
+            })}
+          </div>
+          {!tier && (
+            <div style={{
+              marginTop: '0.65rem', textAlign: 'center',
+              fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)',
+            }}>
+              Select your account type above to continue
+            </div>
+          )}
         </div>
 
-        <div className="auth-card">
-          <div style={{ marginBottom: '1.25rem' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', letterSpacing: '0.04em', color: cfg.color }}>{cfg.label}</div>
-          </div>
+        {/* Step 2 — Form (only shown after tier is chosen) */}
+        {tier && cfg && (
+          <div className="auth-card">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '1.4rem', color: cfg.color }}>{cfg.icon}</span>
+              <div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', letterSpacing: '0.04em', color: cfg.color }}>{cfg.label}</div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>{cfg.desc}</div>
+              </div>
+            </div>
 
-          {/* Member invite flow */}
-          {tier === 'member' && (
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ background: 'var(--bg-overlay)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 'var(--radius-sm)', padding: '0.9rem 1rem', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Individual band members join via invite from their booking agent or band admin.
-              </div>
-              <div className="field">
-                <label className="field-label">Invite Code / Token</label>
-                <input className="input" value={form.inviteCode} onChange={set('inviteCode')} placeholder="Paste invite token from your email..." autoFocus required />
-              </div>
-              {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
-              <button className="btn btn-lg" type="submit" style={{ width: '100%', justifyContent: 'center', background: '#34d399', color: '#000', border: '1px solid #34d399' }}>Continue with Invite</button>
-              <div style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>No invite? Ask your booking agent or band admin.</div>
-            </form>
-          )}
-
-          {/* Agent registration */}
-          {tier === 'agent' && (
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div className="grid-2">
-                <div className="field">
-                  <label className="field-label">Your Name *</label>
-                  <input className="input" value={form.displayName} onChange={set('displayName')} placeholder="Scott" required autoFocus />
+            {/* Member — invite only */}
+            {tier === 'member' && (
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ background: 'var(--bg-overlay)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 'var(--radius-sm)', padding: '0.9rem 1rem', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                  Band members join via invite link sent by their booking agent or band admin. Paste your invite token below.
                 </div>
                 <div className="field">
-                  <label className="field-label">Agency Name</label>
-                  <input className="input" value={form.agencyName} onChange={set('agencyName')} placeholder="Camel Ranch Entertainment" />
+                  <label className="field-label">Invite Code / Token</label>
+                  <input className="input" value={form.inviteCode} onChange={set('inviteCode')} placeholder="Paste invite token from your email..." autoFocus required />
                 </div>
-              </div>
-              <div className="field">
-                <label className="field-label">Email *</label>
-                <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="you@youragency.com" required />
-              </div>
-              <div className="field">
-                <label className="field-label">Password *</label>
-                <input className="input" type="password" value={form.password} onChange={set('password')} placeholder="Min. 8 characters" required />
-              </div>
-              <div className="field">
-                <label className="field-label">Confirm Password *</label>
-                <input className="input" type="password" value={form.confirmPassword} onChange={set('confirmPassword')} placeholder="Repeat password" required />
-              </div>
-              {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
-              <button className="btn btn-primary btn-lg" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center' }}>
-                {loading ? 'Creating account...' : 'Create Agent Account'}
-              </button>
-            </form>
-          )}
-
-          {/* Act Admin / Band registration */}
-          {tier === 'act_admin' && (
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ background: 'var(--bg-overlay)', border: '1px solid rgba(167,139,250,0.25)', borderRadius: 'var(--radius-sm)', padding: '0.75rem 1rem', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Register your act independently. You can connect with a booking agent later — they&apos;ll send you a link request and you choose whether to accept.
-              </div>
-              <div className="grid-2">
-                <div className="field">
-                  <label className="field-label">Your Name *</label>
-                  <input className="input" value={form.displayName} onChange={set('displayName')} placeholder="Your name" required autoFocus />
-                </div>
-                <div className="field">
-                  <label className="field-label">Act / Band Name *</label>
-                  <input className="input" value={form.actName} onChange={set('actName')} placeholder="The Band Name" required />
-                </div>
-              </div>
-              <div className="field">
-                <label className="field-label">Email *</label>
-                <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="you@yourband.com" required />
-              </div>
-              <div className="field">
-                <label className="field-label">Password *</label>
-                <input className="input" type="password" value={form.password} onChange={set('password')} placeholder="Min. 8 characters" required />
-              </div>
-              <div className="field">
-                <label className="field-label">Confirm Password *</label>
-                <input className="input" type="password" value={form.confirmPassword} onChange={set('confirmPassword')} placeholder="Repeat password" required />
-              </div>
-              {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
-              <button className="btn btn-lg" type="submit" disabled={loading}
-                style={{ width: '100%', justifyContent: 'center', background: '#a78bfa', color: '#000', border: '1px solid #a78bfa' }}>
-                {loading ? 'Creating account...' : 'Create Band Account'}
-              </button>
-              <div style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Invited by an agent?{' '}
-                <button type="button" onClick={() => setTier('member')} style={{ background: 'none', border: 'none', color: '#a78bfa', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.8rem' }}>
-                  Use invite code instead
+                {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
+                <button className="btn btn-lg" type="submit" style={{ width: '100%', justifyContent: 'center', background: '#34d399', color: '#000', border: '1px solid #34d399' }}>
+                  Continue with Invite
                 </button>
-              </div>
-            </form>
-          )}
+                <div style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  No invite? Ask your booking agent or band admin.
+                </div>
+              </form>
+            )}
 
-          <div style={{ textAlign: 'center', marginTop: '1.25rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+            {/* Booking Agent */}
+            {tier === 'agent' && (
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="grid-2">
+                  <div className="field">
+                    <label className="field-label">Your Name *</label>
+                    <input className="input" value={form.displayName} onChange={set('displayName')} placeholder="Scott" required autoFocus />
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Agency Name</label>
+                    <input className="input" value={form.agencyName} onChange={set('agencyName')} placeholder="Camel Ranch Entertainment" />
+                  </div>
+                </div>
+                <div className="field">
+                  <label className="field-label">Email *</label>
+                  <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="you@youragency.com" required />
+                </div>
+                <div className="field">
+                  <label className="field-label">Password *</label>
+                  <input className="input" type="password" value={form.password} onChange={set('password')} placeholder="Min. 8 characters" required />
+                </div>
+                <div className="field">
+                  <label className="field-label">Confirm Password *</label>
+                  <input className="input" type="password" value={form.confirmPassword} onChange={set('confirmPassword')} placeholder="Repeat password" required />
+                </div>
+                {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
+                <button className="btn btn-primary btn-lg" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center' }}>
+                  {loading ? 'Creating account...' : 'Create Agent Account'}
+                </button>
+              </form>
+            )}
+
+            {/* Band Admin */}
+            {tier === 'act_admin' && (
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="grid-2">
+                  <div className="field">
+                    <label className="field-label">Your Name *</label>
+                    <input className="input" value={form.displayName} onChange={set('displayName')} placeholder="Your name" required autoFocus />
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Act / Band Name *</label>
+                    <input className="input" value={form.actName} onChange={set('actName')} placeholder="The Band Name" required />
+                  </div>
+                </div>
+                <div className="field">
+                  <label className="field-label">Email *</label>
+                  <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="you@yourband.com" required />
+                </div>
+                <div className="field">
+                  <label className="field-label">Password *</label>
+                  <input className="input" type="password" value={form.password} onChange={set('password')} placeholder="Min. 8 characters" required />
+                </div>
+                <div className="field">
+                  <label className="field-label">Confirm Password *</label>
+                  <input className="input" type="password" value={form.confirmPassword} onChange={set('confirmPassword')} placeholder="Repeat password" required />
+                </div>
+                {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
+                <button className="btn btn-lg" type="submit" disabled={loading}
+                  style={{ width: '100%', justifyContent: 'center', background: '#a78bfa', color: '#000', border: '1px solid #a78bfa' }}>
+                  {loading ? 'Creating account...' : 'Create Band Account'}
+                </button>
+                <div style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Invited by an agent?{' '}
+                  <button type="button" onClick={() => setTier('member')} style={{ background: 'none', border: 'none', color: '#a78bfa', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>
+                    Use invite code instead
+                  </button>
+                </div>
+              </form>
+            )}
+
+            <div style={{ textAlign: 'center', marginTop: '1.25rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+              Already have an account? <Link href="/login" style={{ color: 'var(--accent)' }}>Sign in</Link>
+            </div>
+          </div>
+        )}
+
+        {!tier && (
+          <div style={{ textAlign: 'center', marginTop: '1rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
             Already have an account? <Link href="/login" style={{ color: 'var(--accent)' }}>Sign in</Link>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

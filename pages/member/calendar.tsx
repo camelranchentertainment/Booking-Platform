@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
+import { buildIcal, downloadIcal } from '../../lib/ical';
 import Link from 'next/link';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -57,6 +58,13 @@ export default function MemberCalendar() {
           <h1 className="page-title">Calendar</h1>
           <div className="page-sub">Confirmed shows only</div>
         </div>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => downloadIcal(buildIcal(shows, 'My Shows'), 'my-shows.ics')}
+          title="Export shows to Google Calendar / Apple Calendar / Outlook"
+        >
+          ↓ Export Calendar
+        </button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '1.25rem', alignItems: 'start' }}>
@@ -71,7 +79,7 @@ export default function MemberCalendar() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)' }}>
             {DAYS.map(d => (
-              <div key={d} style={{ padding: '0.5rem', textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.76rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{d}</div>
+              <div key={d} style={{ padding: '0.5rem', textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{d}</div>
             ))}
           </div>
 
@@ -96,7 +104,7 @@ export default function MemberCalendar() {
                   }}
                 >
                   <div style={{
-                    fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: isToday ? 700 : 400,
+                    fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: isToday ? 700 : 400,
                     color: isToday ? 'var(--accent)' : 'var(--text-secondary)',
                     width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     borderRadius: '50%', background: isToday ? 'rgba(0,229,255,0.15)' : 'transparent',
@@ -105,10 +113,10 @@ export default function MemberCalendar() {
                   </div>
                   {dayShows.slice(0, 2).map((s: any) => (
                     <div key={s.id} style={{
-                      marginTop: '0.2rem', fontSize: '0.78rem', padding: '0.1rem 0.3rem', borderRadius: '2px',
+                      marginTop: '0.2rem', fontSize: '0.72rem', padding: '0.1rem 0.3rem', borderRadius: '2px',
                       background: `${STATUS_DOT[s.status] || '#64748b'}22`,
                       color: STATUS_DOT[s.status] || '#64748b',
-                      fontFamily: 'var(--font-body)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      fontFamily: 'var(--font-body)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     }}>
                       {s.venue?.name || 'TBD'}
                     </div>
@@ -128,17 +136,17 @@ export default function MemberCalendar() {
               {selectedShows.map((s: any) => (
                 <div key={s.id} style={{ padding: '0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', marginBottom: '0.5rem' }}>
                   <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{s.venue?.name || 'TBD'}</div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-body)', marginTop: '0.2rem' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontFamily: 'var(--font-mono)', marginTop: '0.2rem' }}>
                     {s.venue?.city ? `${s.venue.city}, ${s.venue.state}` : ''}
                   </div>
                   {s.venue?.address && <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', marginTop: '0.3rem' }}>{s.venue.address}</div>}
                   <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                    {s.load_in_time && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Load-in: <strong style={{ color: 'var(--text-primary)' }}>{s.load_in_time}</strong></span>}
-                    {s.set_time && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Set: <strong style={{ color: 'var(--accent)' }}>{s.set_time}</strong></span>}
-                    {s.door_time && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Doors: <strong style={{ color: 'var(--text-primary)' }}>{s.door_time}</strong></span>}
-                    {s.set_length_min && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{s.set_length_min} min set</span>}
+                    {s.load_in_time && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>Load-in: <strong style={{ color: 'var(--text-primary)' }}>{s.load_in_time}</strong></span>}
+                    {s.set_time && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Set: <strong style={{ color: 'var(--accent)' }}>{s.set_time}</strong></span>}
+                    {s.door_time && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Doors: <strong style={{ color: 'var(--text-primary)' }}>{s.door_time}</strong></span>}
+                    {s.set_length_min && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>{s.set_length_min} min set</span>}
                   </div>
-                  {s.venue?.phone && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>📞 {s.venue.phone}</div>}
+                  {s.venue?.phone && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>📞 {s.venue.phone}</div>}
                   {s.advance_notes && <div style={{ marginTop: '0.5rem', fontSize: '0.78rem', color: 'var(--text-secondary)', borderTop: '1px solid var(--border)', paddingTop: '0.4rem' }}>{s.advance_notes}</div>}
                 </div>
               ))}
@@ -153,13 +161,13 @@ export default function MemberCalendar() {
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--accent)', lineHeight: 1 }}>
                     {new Date(s.show_date + 'T12:00:00').getDate()}
                   </div>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                     {new Date(s.show_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })}
                   </div>
                 </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                   <div style={{ color: 'var(--text-primary)', fontSize: '0.82rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.venue?.name || 'TBD'}</div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'var(--font-body)' }}>{s.set_time || s.venue?.city || ''}</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-body)' }}>{s.set_time || s.venue?.city || ''}</div>
                 </div>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_DOT[s.status] || '#64748b', flexShrink: 0 }} />
               </div>

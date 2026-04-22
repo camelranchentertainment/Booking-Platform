@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { BOOKING_STATUS_LABELS } from '../lib/types';
+import { buildIcal, downloadIcal } from '../lib/ical';
 import Link from 'next/link';
 
 const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -91,7 +92,16 @@ export default function AgentCalendar() {
           <h1 className="page-title">Calendar</h1>
           <div className="page-sub">{filtered.length} shows scheduled</div>
         </div>
-        <Link href="/bookings/new" className="btn btn-primary">+ Add Show</Link>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => downloadIcal(buildIcal(filtered, 'Camel Ranch Shows', actName), 'camel-ranch-shows.ics')}
+            title="Export all shows to Google Calendar / Apple Calendar / Outlook"
+          >
+            ↓ Export Calendar
+          </button>
+          <Link href="/bookings/new" className="btn btn-primary">+ Add Show</Link>
+        </div>
       </div>
 
       {/* Act filter */}
