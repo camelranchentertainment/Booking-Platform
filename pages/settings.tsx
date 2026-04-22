@@ -18,6 +18,152 @@ const STATUS_LABELS: Record<string, string> = {
   inactive: 'Inactive',
 };
 
+const STEPS = [
+  {
+    num: '1',
+    title: 'Create a free Resend account',
+    body: 'Go to resend.com and sign up for a free account. The free tier allows up to 3,000 emails/month which is plenty to start.',
+    link: { label: 'resend.com →', href: 'https://resend.com/signup' },
+  },
+  {
+    num: '2',
+    title: 'Add and verify your sending domain',
+    body: 'In the Resend dashboard go to Domains → Add Domain. Enter the domain you want to send from (e.g. youragency.com). Resend will give you DNS records (a few TXT and MX entries) to add at your domain registrar (GoDaddy, Namecheap, Cloudflare, etc.). Verification usually takes under 10 minutes.',
+    note: 'No custom domain? Resend lets you send from their onboarding address for testing, but a verified domain is required for production.',
+  },
+  {
+    num: '3',
+    title: 'Generate an API key',
+    body: 'In the Resend dashboard go to API Keys → Create API Key. Name it something like "Camel Ranch Booking". Set the permission to Sending Access. Copy the key — you only see it once.',
+  },
+  {
+    num: '4',
+    title: 'Enter your credentials below',
+    body: 'Paste your API key and the email address you want to send from (must match your verified domain, e.g. booking@youragency.com). Save and your email tools will be live.',
+  },
+];
+
+const FAQS = [
+  {
+    q: 'What does email integration actually do?',
+    a: 'It powers the Email tab — letting you send booking pitches, follow-ups, and advance sheets directly from the platform, from your own domain, tracked in one place.',
+  },
+  {
+    q: 'Does my domain need to match exactly?',
+    a: 'Yes — the "From" email address must use a domain you have verified inside your Resend account. You can verify multiple domains.',
+  },
+  {
+    q: 'Is Resend free?',
+    a: 'Yes. The free tier includes 3,000 emails per month and 100/day. That covers most independent booking operations. Paid plans scale from there.',
+  },
+  {
+    q: 'What if I don\'t want to set this up?',
+    a: 'The platform works without email integration. You simply won\'t be able to send outreach directly from the Email tab. Everything else — bookings, tours, calendar — works normally.',
+  },
+];
+
+function HelpGuide() {
+  const [open, setOpen] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  return (
+    <div style={{ marginBottom: '1rem' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '0.6rem',
+          background: 'var(--accent-glow)', border: '1px solid var(--neon-border)',
+          borderRadius: 'var(--radius-sm)', padding: '0.65rem 1rem',
+          cursor: 'pointer', width: '100%', textAlign: 'left',
+          color: 'var(--accent)', fontFamily: 'var(--font-body)',
+          fontSize: '0.88rem', fontWeight: 600, transition: 'background 0.15s',
+        }}
+      >
+        <span style={{ fontSize: '1rem' }}>{open ? '▾' : '▸'}</span>
+        {open ? 'Hide setup guide' : '? How to set up email integration — step by step'}
+      </button>
+
+      {open && (
+        <div style={{ border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 var(--radius-sm) var(--radius-sm)', padding: '1.25rem', background: 'var(--bg-raised)' }}>
+
+          {/* Intro */}
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.65, marginBottom: '1.5rem' }}>
+            This platform uses <strong style={{ color: 'var(--text-primary)' }}>Resend</strong> to send emails from your own domain.
+            Resend is a free email API service — think of it like connecting your agency's email address so pitches and follow-ups
+            go out looking like they came from <em>you</em>, not a generic system address.
+          </p>
+
+          {/* Steps */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+            {STEPS.map(s => (
+              <div key={s.num} style={{ display: 'flex', gap: '0.85rem', alignItems: 'flex-start' }}>
+                <div style={{
+                  flexShrink: 0, width: 28, height: 28, borderRadius: '50%',
+                  background: 'var(--accent)', color: '#1A0800',
+                  fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.04em',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: 'var(--neon-glow-sm)',
+                }}>
+                  {s.num}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.92rem', marginBottom: '0.3rem' }}>
+                    {s.title}
+                  </div>
+                  <div style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                    {s.body}
+                  </div>
+                  {s.note && (
+                    <div style={{ marginTop: '0.4rem', fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      ℹ {s.note}
+                    </div>
+                  )}
+                  {s.link && (
+                    <a href={s.link.href} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '0.35rem', fontSize: '0.82rem', color: 'var(--accent)', fontWeight: 600 }}>
+                      {s.link.label}
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* FAQ */}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+              Common Questions
+            </div>
+            {FAQS.map((faq, i) => (
+              <div key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                <button
+                  type="button"
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    width: '100%', padding: '0.6rem 0',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--text-primary)', fontFamily: 'var(--font-body)',
+                    fontSize: '0.88rem', fontWeight: 600, textAlign: 'left', gap: '0.75rem',
+                  }}
+                >
+                  {faq.q}
+                  <span style={{ color: 'var(--accent)', flexShrink: 0, fontSize: '0.9rem' }}>{openFaq === i ? '−' : '+'}</span>
+                </button>
+                {openFaq === i && (
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.65, paddingBottom: '0.75rem' }}>
+                    {faq.a}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Settings() {
   const router = useRouter();
   const [profile, setProfile]   = useState<UserProfile | null>(null);
@@ -173,11 +319,22 @@ export default function Settings() {
           </div>
         </form>
 
-        {/* Email integration — superadmin only */}
-        {isSuperAdmin && (
-          <form onSubmit={saveEmailSettings}>
-            <div className="card">
-              <div className="card-header"><span className="card-title">EMAIL INTEGRATION</span></div>
+        {/* Email integration — help visible to all agents, config for superadmin */}
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">EMAIL INTEGRATION</span>
+            {apiKeyConfigured && isSuperAdmin && (
+              <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#34d399' }}>✓ Configured</span>
+            )}
+            {!apiKeyConfigured && isSuperAdmin && (
+              <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)' }}>Not set up</span>
+            )}
+          </div>
+
+          <HelpGuide />
+
+          {isSuperAdmin ? (
+            <form onSubmit={saveEmailSettings}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div className="field">
                   <label className="field-label">Resend API Key</label>
@@ -195,7 +352,7 @@ export default function Settings() {
                     </button>
                   </div>
                   {apiKeyConfigured && (
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#34d399' }}>
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#34d399' }}>
                       ✓ API key configured
                     </span>
                   )}
@@ -209,21 +366,26 @@ export default function Settings() {
                     onChange={setEmail('resend_from_email')}
                     placeholder="booking@yourdomain.com"
                   />
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                    Must be a domain verified in your Resend account
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    Must match a domain verified in your Resend account
                   </span>
                 </div>
                 {emailError && (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: '#ef4444' }}>{emailError}</div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#ef4444' }}>{emailError}</div>
                 )}
               </div>
               <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
                 <button type="submit" className="btn btn-primary" disabled={emailSaving}>{emailSaving ? 'Saving...' : 'Save Email Settings'}</button>
-                {emailSaved && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#34d399' }}>✓ Saved</span>}
+                {emailSaved && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#34d399' }}>✓ Saved</span>}
               </div>
+            </form>
+          ) : (
+            <div style={{ padding: '0.85rem 1rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: '0.25rem' }}>Ready to enable email?</strong>
+              Follow the guide above to set up your Resend account, then contact your platform administrator to enter the API key and activate outbound email for your account.
             </div>
-          </form>
-        )}
+          )}
+        </div>
 
         {/* Billing — visible to agents and band_admins */}
         {profile && profile.role !== 'superadmin' && profile.role !== 'member' && (
