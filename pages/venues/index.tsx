@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { Venue } from '../../lib/types';
+import { useLookup } from '../../lib/hooks/useLookup';
 
 declare global {
   interface Window { google: any; initGooglePlaces: () => void; }
@@ -20,8 +21,15 @@ const BLANK: VenueForm = {
   place_id: '', google_maps_url: '',
 };
 
+type ProspectResult = {
+  place_id: string; name: string; address: string; city: string; state: string;
+  formatted_address: string; rating: number | null; user_ratings_total: number;
+  types: string[]; google_maps_url: string; already_added: boolean;
+};
+
 export default function VenuesPage() {
   const router = useRouter();
+  const { values: venueTypes } = useLookup('venue_type');
   const [venues, setVenues]         = useState<Venue[]>([]);
   const [search, setSearch]         = useState('');
   const [filterState, setFilterState] = useState('');
@@ -31,6 +39,14 @@ export default function VenuesPage() {
   const [mapsReady, setMapsReady]   = useState(false);
   const autocompleteRef             = useRef<any>(null);
   const inputRef                    = useRef<HTMLInputElement>(null);
+
+  // Prospecting state
+  const [prospectCity, setProspectCity]   = useState('');
+  const [prospectState, setProspectState] = useState('');
+  const [prospecting, setProspecting]     = useState(false);
+  const [prospects, setProspects]         = useState<ProspectResult[]>([]);
+  const [prospectErr, setProspectErr]     = useState('');
+  const [addingId, setAddingId]           = useState<string | null>(null);
 
   useEffect(() => { loadVenues(); loadGoogleMaps(); }, []);
 
@@ -109,6 +125,39 @@ export default function VenuesPage() {
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm(f => ({ ...f, [k]: e.target.value }));
 
+  const searchProspects = async () => {
+    if (!prospectCity.trim() || !prospectState.trim()) return;
+    setProspecting(true);
+    setProspectErr('');
+    setProspects([]);
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    const res = await fetch(`/api/venues/prospect?city=${encodeURIComponent(prospectCity.trim())}&state=${encodeURIComponent(prospectState.trim())}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = await res.json();
+    if (!res.ok) { setProspectErr(json.error || 'Search failed'); }
+    else { setProspects(json); }
+    setProspecting(false);
+  };
+
+  const addProspect = async (p: ProspectResult) => {
+    setAddingId(p.place_id);
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from('venues').insert({
+      agent_id: user!.id,
+      name: p.name,
+      city: p.city,
+      state: p.state,
+      address: p.address || null,
+      place_id: p.place_id,
+      google_maps_url: p.google_maps_url,
+    });
+    setProspects(prev => prev.map(r => r.place_id === p.place_id ? { ...r, already_added: true } : r));
+    await loadVenues();
+    setAddingId(null);
+  };
+
   const states = [...new Set(venues.map(v => v.state).filter(Boolean))].sort();
   const filtered = venues.filter(v => {
     const q = search.toLowerCase();
@@ -116,8 +165,6 @@ export default function VenuesPage() {
     const stateMatch = !filterState || v.state === filterState;
     return nameMatch && stateMatch;
   });
-
-  const VENUE_TYPES = ['bar','club','concert_hall','festival','restaurant','winery','outdoor','theater','other'];
 
   return (
     <AppShell requireRole="agent">
@@ -166,6 +213,132 @@ export default function VenuesPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Discover Venues Section */}
+      <div className="card" style={{ marginTop: '1.5rem' }}>
+        <div className="card-header">
+          <span className="card-title">DISCOVER VENUES</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
+            Search Google for live music venues in any city
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '1rem' }}>
+          <div className="field" style={{ flex: '1 1 200px', marginBottom: 0 }}>
+            <label className="field-label">City</label>
+            <input
+              className="input"
+              placeholder="Austin"
+              value={prospectCity}
+              onChange={e => setProspectCity(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && searchProspects()}
+            />
+          </div>
+          <div className="field" style={{ width: 100, marginBottom: 0 }}>
+            <label className="field-label">State</label>
+            <input
+              className="input"
+              placeholder="TX"
+              maxLength={2}
+              value={prospectState}
+              onChange={e => setProspectState(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === 'Enter' && searchProspects()}
+            />
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={searchProspects}
+            disabled={prospecting || !prospectCity.trim() || !prospectState.trim()}
+            style={{ flexShrink: 0 }}
+          >
+            {prospecting ? 'Searching…' : 'Search Google'}
+          </button>
+          {prospects.length > 0 && (
+            <button className="btn btn-ghost btn-sm" onClick={() => { setProspects([]); setProspectCity(''); setProspectState(''); }}>
+              Clear
+            </button>
+          )}
+        </div>
+
+        {prospectErr && (
+          <div style={{ padding: '0.75rem', background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-sm)', color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', marginBottom: '1rem' }}>
+            {prospectErr}
+          </div>
+        )}
+
+        {prospects.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: '0.25rem' }}>
+              {prospects.length} results — {prospects.filter(p => p.already_added).length} already in your database
+            </div>
+            {prospects.map(p => (
+              <div
+                key={p.place_id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.75rem',
+                  padding: '0.75rem', borderRadius: 'var(--radius-sm)',
+                  background: p.already_added ? 'rgba(52,211,153,0.06)' : 'var(--bg-overlay)',
+                  border: `1px solid ${p.already_added ? 'rgba(52,211,153,0.2)' : 'var(--border)'}`,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    {p.name}
+                    {p.already_added && (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: '#34d399', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                        ✓ In Database
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontFamily: 'var(--font-mono)', marginTop: '0.15rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {p.formatted_address}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.3rem', flexWrap: 'wrap' }}>
+                    {p.rating && (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: '#fbbf24' }}>
+                        ★ {p.rating} ({p.user_ratings_total.toLocaleString()})
+                      </span>
+                    )}
+                    {p.types.slice(0, 3).map(t => (
+                      <span key={t} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
+                        {t.replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                  <a
+                    href={p.google_maps_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-ghost btn-sm"
+                    style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem' }}
+                  >
+                    Maps ↗
+                  </a>
+                  {!p.already_added && (
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => addProspect(p)}
+                      disabled={addingId === p.place_id}
+                      style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem' }}
+                    >
+                      {addingId === p.place_id ? 'Adding…' : '+ Add'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!prospecting && prospects.length === 0 && !prospectErr && (
+          <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>
+            Enter a city and state to find live music venues, bars, and clubs via Google Places.
+            Results you add go straight into your database.
+          </div>
+        )}
       </div>
 
       {/* Add Venue Modal */}
@@ -233,7 +406,10 @@ export default function VenuesPage() {
                   <label className="field-label">Venue Type</label>
                   <select className="select" value={form.venue_type} onChange={set('venue_type')}>
                     <option value="">—</option>
-                    {VENUE_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+                    {venueTypes.length > 0
+                      ? venueTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)
+                      : ['bar','club','concert_hall','festival','restaurant','winery','outdoor','theater','other'].map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)
+                    }
                   </select>
                 </div>
                 <div className="field">
