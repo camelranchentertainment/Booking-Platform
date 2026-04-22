@@ -69,33 +69,30 @@ export default function Register() {
     if (err) { setError(err.message); setLoading(false); return; }
     if (!data.user) { setError('Registration failed'); setLoading(false); return; }
 
-    const userId = data.user.id;
-
-    if (tier === 'agent') {
-      const { error: pe } = await supabase.from('user_profiles').insert({
-        id: userId, role: 'agent', email: form.email,
-        display_name: form.displayName, agency_name: form.agencyName || null,
-      });
-      if (pe) { setError(pe.message); setLoading(false); return; }
-      router.replace('/dashboard');
-
-    } else {
-      // act_admin: create profile + create their act
-      const { error: pe } = await supabase.from('user_profiles').insert({
-        id: userId, role: 'act_admin', email: form.email,
-        display_name: form.displayName,
-      });
-      if (pe) { setError(pe.message); setLoading(false); return; }
-
-      const { error: ae } = await supabase.from('acts').insert({
-        owner_id: userId,
-        agent_id: null,      // no agent yet — self-managed
-        act_name: form.actName,
-      });
-      if (ae) { setError(ae.message); setLoading(false); return; }
-
-      router.replace('/band');
+    const token = data.session?.access_token;
+    if (!token) {
+      setError('Could not obtain session after signup. Please check your email to confirm your account, then sign in.');
+      setLoading(false);
+      return;
     }
+
+    const body: Record<string, string> = {
+      role: tier,
+      email: form.email,
+      displayName: form.displayName,
+    };
+    if (tier === 'agent' && form.agencyName) body.agencyName = form.agencyName;
+    if (tier === 'act_admin') body.actName = form.actName;
+
+    const apiRes = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    const apiData = await apiRes.json();
+    if (!apiRes.ok) { setError(apiData.error || 'Registration failed'); setLoading(false); return; }
+
+    router.replace(tier === 'agent' ? '/dashboard' : '/band');
   };
 
   const cfg = TIER_CONFIG[tier];
