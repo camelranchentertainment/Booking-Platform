@@ -2,28 +2,28 @@
 
 /* ── Design tokens ─────────────────────────────────────────── */
 :root {
-  /* Background scale — warm mahogany, not pitch black */
-  --bg-base:    #100603;
-  --bg-raised:  #1A0A05;
-  --bg-overlay: #231009;
-  --bg-muted:   #2D1610;
+  /* Background scale */
+  --bg-base:    #0E0603;
+  --bg-raised:  #120703;
+  --bg-overlay: #170904;
+  --bg-muted:   #1D0C05;
 
-  /* Border — warm dark amber */
-  --border:       #3A1C0E;
-  --border-light: #5A2E18;
+  /* Border — gold hairline / cream hairline */
+  --border:       rgba(200,146,26,0.15);
+  --border-light: rgba(200,146,26,0.25);
 
   /* Text — warm cream */
-  --text-primary:   #F2E8D9;
-  --text-secondary: #C4A882;
-  --text-muted:     #8A6A52;
+  --text-primary:   #F0D8A2;
+  --text-secondary: #C4A06A;
+  --text-muted:     #7A5E38;
 
-  /* Accent — warm gold / amber */
-  --accent:       #D4A843;
-  --accent-dim:   #A8822C;
-  --accent-glow:  rgba(212,168,67,0.12);
-  --neon-glow:    0 0 14px rgba(212,168,67,0.55), 0 0 32px rgba(212,168,67,0.22);
-  --neon-glow-sm: 0 0 8px rgba(212,168,67,0.45);
-  --neon-border:  rgba(212,168,67,0.38);
+  /* Accent — gold */
+  --accent:       #C8921A;
+  --accent-dim:   #A07015;
+  --accent-glow:  rgba(200,146,26,0.12);
+  --neon-glow:    0 0 14px rgba(200,146,26,0.55), 0 0 32px rgba(200,146,26,0.22);
+  --neon-glow-sm: 0 0 8px rgba(200,146,26,0.45);
+  --neon-border:  rgba(200,146,26,0.38);
 
   /* Status palette */
   --status-pitch:       #6366f1;
@@ -57,10 +57,10 @@
 html { font-size: 16px; }
 
 body {
-  background: var(--bg-base);
+  background: #0A0502;
   background-image:
-    radial-gradient(ellipse 120% 60% at 15% 0%, rgba(90,35,10,0.55) 0%, transparent 55%),
-    radial-gradient(ellipse 80% 50% at 90% 100%, rgba(60,20,5,0.40) 0%, transparent 50%);
+    radial-gradient(ellipse 120% 60% at 15% 0%, rgba(80,30,8,0.45) 0%, transparent 55%),
+    radial-gradient(ellipse 80% 50% at 90% 100%, rgba(50,15,3,0.35) 0%, transparent 50%);
   background-attachment: fixed;
   color: var(--text-primary);
   font-family: var(--font-body);
@@ -97,10 +97,10 @@ h4 { font-size: 1.2rem; }
 .sidebar {
   width: var(--sidebar-width);
   min-height: 100vh;
-  background: rgba(16,6,3,0.90);
+  background: rgba(12,5,2,0.92);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  border-right: 1px solid rgba(212,168,67,0.15);
+  border-right: 1px solid rgba(200,146,26,0.15);
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -160,7 +160,7 @@ h4 { font-size: 1.2rem; }
 
 .sidebar-link:hover {
   color: var(--text-primary);
-  background: rgba(212,168,67,0.07);
+  background: rgba(200,146,26,0.07);
   text-decoration: none;
 }
 
@@ -209,7 +209,7 @@ h4 { font-size: 1.2rem; }
 
 .stat-block:hover {
   border-color: var(--neon-border);
-  box-shadow: 0 0 18px rgba(212,168,67,0.08);
+  box-shadow: 0 0 18px rgba(200,146,26,0.08);
 }
 
 .stat-value {
@@ -269,7 +269,7 @@ h4 { font-size: 1.2rem; }
 .btn-secondary:hover {
   border-color: var(--accent);
   color: var(--accent);
-  box-shadow: 0 0 8px rgba(212,168,67,0.18);
+  box-shadow: 0 0 8px rgba(200,146,26,0.18);
   text-decoration: none;
 }
 
@@ -280,7 +280,7 @@ h4 { font-size: 1.2rem; }
 }
 .btn-ghost:hover {
   color: var(--text-primary);
-  background: rgba(212,168,67,0.07);
+  background: rgba(200,146,26,0.07);
   text-decoration: none;
 }
 
@@ -328,7 +328,7 @@ h4 { font-size: 1.2rem; }
 .input:focus, .select:focus, .textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(212,168,67,0.28);
+  box-shadow: 0 0 0 1px rgba(200,146,26,0.28);
 }
 
 .textarea { resize: vertical; min-height: 80px; }
@@ -363,7 +363,7 @@ td {
   font-size: 0.9rem;
 }
 
-tr:hover td { background: rgba(212,168,67,0.05); color: var(--text-primary); }
+tr:hover td { background: rgba(200,146,26,0.05); color: var(--text-primary); }
 
 /* ── Badges / Status pills ───────────────────────────────────── */
 .badge {
@@ -444,7 +444,7 @@ tr:hover td { background: rgba(212,168,67,0.05); color: var(--text-primary); }
 
 .kanban-card:hover {
   border-color: var(--neon-border);
-  box-shadow: 0 0 14px rgba(212,168,67,0.12);
+  box-shadow: 0 0 14px rgba(200,146,26,0.12);
 }
 
 .kanban-card-act {
@@ -558,10 +558,10 @@ tr:hover td { background: rgba(212,168,67,0.05); color: var(--text-primary); }
 }
 
 .auth-card {
-  background: rgba(22,8,3,0.88);
+  background: rgba(14,6,3,0.88);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(212,168,67,0.22);
+  border: 1px solid rgba(200,146,26,0.22);
   border-radius: var(--radius);
   padding: 2rem;
   width: 100%;
@@ -647,12 +647,12 @@ tr:hover td { background: rgba(212,168,67,0.05); color: var(--text-primary); }
   --text-secondary: #3D2010;
   --text-muted:     #7A5A3A;
 
-  --accent:       #A0700A;
+  --accent:       #9A6E12;
   --accent-dim:   #7A5208;
-  --accent-glow:  rgba(160,112,10,0.10);
-  --neon-glow:    0 2px 10px rgba(160,112,10,0.22), 0 1px 4px rgba(160,112,10,0.14);
-  --neon-glow-sm: 0 1px 6px rgba(160,112,10,0.20);
-  --neon-border:  rgba(160,112,10,0.45);
+  --accent-glow:  rgba(154,110,18,0.10);
+  --neon-glow:    0 2px 10px rgba(154,110,18,0.22), 0 1px 4px rgba(154,110,18,0.14);
+  --neon-glow-sm: 0 1px 6px rgba(154,110,18,0.20);
+  --neon-border:  rgba(154,110,18,0.45);
 }
 
 [data-theme="light"] body {

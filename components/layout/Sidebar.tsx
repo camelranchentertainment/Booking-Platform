@@ -74,9 +74,9 @@ export default function Sidebar({ profile, onSignOut }: Props) {
           CAMEL RANCH
         </div>
         <div style={{
-          fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.68rem', letterSpacing: '0.45em', color: 'rgba(212,168,67,0.70)',
+          fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.68rem', letterSpacing: '0.45em', color: 'rgba(200,146,26,0.70)',
           textTransform: 'uppercase', marginTop: '0.2rem',
-          borderTop: '1px solid rgba(212,168,67,0.2)', paddingTop: '0.3rem',
+          borderTop: '1px solid rgba(200,146,26,0.15)', paddingTop: '0.3rem',
         }}>
           BOOKING
         </div>

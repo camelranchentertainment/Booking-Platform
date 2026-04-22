@@ -12,7 +12,7 @@ const TIER_CONFIG: Record<Tier, {
   agent: {
     label: 'Booking Agent',
     icon:  '◈',
-    color: '#D4A843',
+    color: '#C8921A',
     price: '$30/mo · 14-day trial',
     desc:  'Manage a full roster of bands, venues, tours & bookings.',
     selfSignup: true,

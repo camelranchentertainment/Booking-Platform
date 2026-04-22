@@ -3,14 +3,14 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 
-const BG    = '#080201';
-const GOLD  = '#E2B84A';
-const GOLD2 = '#F5C850';
-const MUTED = 'rgba(226,184,74,0.55)';
-const GLOW  = '0 0 18px rgba(226,184,74,0.42), 0 0 48px rgba(226,184,74,0.14)';
+const BG    = '#0A0502';
+const GOLD  = '#C8921A';
+const GOLD2 = '#D4A030';
+const MUTED = 'rgba(200,146,26,0.55)';
+const GLOW  = '0 0 18px rgba(200,146,26,0.42), 0 0 48px rgba(200,146,26,0.14)';
 
 const TIERS = [
-  { role: 'agent',     label: 'Booking Agent', icon: '◈', color: '#E2B84A', desc: '$30/mo · 14-day trial' },
+  { role: 'agent',     label: 'Booking Agent', icon: '◈', color: '#C8921A', desc: '$30/mo · 14-day trial' },
   { role: 'act_admin', label: 'Band Admin',    icon: '♪', color: '#a78bfa', desc: '$15/mo · 14-day trial' },
   { role: 'member',    label: 'Band Member',   icon: '◉', color: '#34d399', desc: 'Free via invite'       },
 ];
@@ -96,8 +96,8 @@ export default function Login() {
       {/* Login / Forgot password card */}
       <div style={{
         width: '100%', maxWidth: 400,
-        background: 'rgba(22,8,3,0.82)', backdropFilter: 'blur(20px)',
-        border: `1px solid rgba(226,184,74,0.22)`, borderRadius: '6px',
+        background: 'rgba(14,6,3,0.82)', backdropFilter: 'blur(20px)',
+        border: `1px solid rgba(200,146,26,0.22)`, borderRadius: '6px',
         padding: '2rem', boxShadow: `0 0 60px rgba(0,0,0,0.8), ${GLOW}`,
       }}>
 
@@ -106,11 +106,11 @@ export default function Login() {
           forgotSent ? (
             <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div style={{ fontSize: '2rem' }}>✉️</div>
-              <div style={{ color: '#F5EDDF', fontFamily: 'var(--font-body)', fontSize: '0.95rem' }}>
+              <div style={{ color: '#F0D8A2', fontFamily: 'var(--font-body)', fontSize: '0.95rem' }}>
                 Check your email
               </div>
               <div style={{ color: MUTED, fontFamily: 'var(--font-body)', fontSize: '0.82rem', lineHeight: 1.6 }}>
-                A password reset link was sent to <strong style={{ color: '#F5EDDF' }}>{forgotEmail}</strong>.
+                A password reset link was sent to <strong style={{ color: '#F0D8A2' }}>{forgotEmail}</strong>.
                 Click the link in the email to set a new password.
               </div>
               <button onClick={() => { setShowForgot(false); setForgotSent(false); setError(''); }}
@@ -120,7 +120,7 @@ export default function Login() {
             </div>
           ) : (
             <form onSubmit={handleForgot} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ color: '#F5EDDF', fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.06em', marginBottom: '0.25rem' }}>
+              <div style={{ color: '#F0D8A2', fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.06em', marginBottom: '0.25rem' }}>
                 Reset Password
               </div>
               <div style={{ color: MUTED, fontFamily: 'var(--font-body)', fontSize: '0.82rem', lineHeight: 1.5 }}>
@@ -130,12 +130,12 @@ export default function Login() {
                 <label style={{ display: 'block', fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: MUTED, marginBottom: '0.4rem' }}>Email</label>
                 <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
                   placeholder="you@example.com" required autoFocus
-                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(226,184,74,0.2)', borderRadius: '3px', padding: '0.65rem 0.85rem', color: '#F5EDDF', fontFamily: 'var(--font-body)', fontSize: '0.9rem', outline: 'none' }}
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(200,146,26,0.2)', borderRadius: '3px', padding: '0.65rem 0.85rem', color: '#F0D8A2', fontFamily: 'var(--font-body)', fontSize: '0.9rem', outline: 'none' }}
                 />
               </div>
               {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: '3px', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
               <button type="submit" disabled={forgotLoading}
-                style={{ padding: '0.8rem', background: forgotLoading ? 'rgba(226,184,74,0.5)' : GOLD, color: '#1A0800', border: 'none', borderRadius: '3px', fontFamily: 'var(--font-body)', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: forgotLoading ? 'not-allowed' : 'pointer' }}>
+                style={{ padding: '0.8rem', background: forgotLoading ? 'rgba(200,146,26,0.5)' : GOLD, color: '#1A0800', border: 'none', borderRadius: '3px', fontFamily: 'var(--font-body)', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: forgotLoading ? 'not-allowed' : 'pointer' }}>
                 {forgotLoading ? 'Sending...' : 'Send Reset Link'}
               </button>
               <button type="button" onClick={() => { setShowForgot(false); setError(''); }}
@@ -159,9 +159,9 @@ export default function Login() {
               placeholder="you@example.com" required autoFocus
               style={{
                 width: '100%', boxSizing: 'border-box',
-                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(226,184,74,0.2)',
+                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(200,146,26,0.2)',
                 borderRadius: '3px', padding: '0.65rem 0.85rem',
-                color: '#F5EDDF', fontFamily: 'var(--font-body)', fontSize: '0.9rem',
+                color: '#F0D8A2', fontFamily: 'var(--font-body)', fontSize: '0.9rem',
                 outline: 'none',
               }}
             />
@@ -183,9 +183,9 @@ export default function Login() {
               placeholder="••••••••" required
               style={{
                 width: '100%', boxSizing: 'border-box',
-                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(226,184,74,0.2)',
+                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(200,146,26,0.2)',
                 borderRadius: '3px', padding: '0.65rem 0.85rem',
-                color: '#F5EDDF', fontFamily: 'var(--font-body)', fontSize: '0.9rem',
+                color: '#F0D8A2', fontFamily: 'var(--font-body)', fontSize: '0.9rem',
                 outline: 'none',
               }}
             />
@@ -204,7 +204,7 @@ export default function Login() {
             type="submit" disabled={loading}
             style={{
               marginTop: '0.25rem', padding: '0.8rem',
-              background: loading ? 'rgba(226,184,74,0.5)' : GOLD,
+              background: loading ? 'rgba(200,146,26,0.5)' : GOLD,
               color: '#1A0800', border: 'none', borderRadius: '3px',
               fontFamily: 'var(--font-body)', fontSize: '0.9rem', fontWeight: 700,
               letterSpacing: '0.1em', textTransform: 'uppercase',
@@ -232,8 +232,8 @@ export default function Login() {
             <Link key={t.role} href={`/register?role=${t.role}`} style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem',
               padding: '0.9rem 0.5rem',
-              background: 'rgba(22,8,3,0.75)',
-              border: `1px solid rgba(226,184,74,0.15)`,
+              background: 'rgba(14,6,3,0.75)',
+              border: `1px solid rgba(200,146,26,0.15)`,
               borderRadius: '4px', textDecoration: 'none',
               transition: 'border-color 0.15s, background 0.15s',
             }}
@@ -242,8 +242,8 @@ export default function Login() {
                 (e.currentTarget as HTMLAnchorElement).style.background = `${t.color}14`;
               }}
               onMouseLeave={e => {
-                (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(226,184,74,0.15)';
-                (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(22,8,3,0.75)';
+                (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(200,146,26,0.15)';
+                (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(14,6,3,0.75)';
               }}
             >
               <span style={{ fontSize: '1.3rem', color: t.color }}>{t.icon}</span>
