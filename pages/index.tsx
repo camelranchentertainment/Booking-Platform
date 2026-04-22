@@ -177,7 +177,7 @@ function Hero() {
             <span style={{
               color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase',
             }}>
-              Red Dirt · Honky Tonk · Americana
+              Independent Booking Agency
             </span>
           </div>
 
