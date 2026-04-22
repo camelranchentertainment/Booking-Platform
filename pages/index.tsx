@@ -355,6 +355,80 @@ function Features() {
   );
 }
 
+/* ── Sign-Up CTA ──────────────────────────────────────────── */
+function SignUpCTA() {
+  return (
+    <section style={{
+      position: 'relative', background: DARK,
+      borderTop: BORDER, overflow: 'hidden',
+    }}>
+      <HatchBg id="cta-hatch" rotate={32} opacity={0.035} />
+
+      <div className="cr-hero-content" style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
+        <div style={{ maxWidth: '52rem', margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1 }}>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '2rem' }}>
+            <div style={{ height: 1, width: 48, background: GOLD }} />
+            <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>
+              Get Started
+            </span>
+            <div style={{ height: 1, width: 48, background: GOLD }} />
+          </div>
+
+          <h2 style={{
+            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.9,
+            textTransform: 'uppercase', margin: '0 0 1.5rem',
+            fontSize: 'clamp(2.5rem,7vw,5.5rem)', letterSpacing: '-0.02em',
+          }}>
+            <span style={{ color: CREAM }}>Stop Losing Gigs<br />To </span>
+            <span style={{ color: 'transparent', WebkitTextStroke: `1px ${GOLD}` }}>Disorganization.</span>
+          </h2>
+
+          <p style={{
+            color: 'rgba(240,216,162,0.45)', fontSize: '1rem',
+            lineHeight: 1.7, maxWidth: '34rem', margin: '0 auto 2.5rem',
+          }}>
+            Free to start. Sign up as a band admin to manage your bookings, or join your band with an invite from your admin.
+          </p>
+
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link href="/register" style={{
+              display: 'inline-block', padding: '0.9rem 2.5rem',
+              background: GOLD, color: BG, fontWeight: 700,
+              letterSpacing: '0.22em', fontSize: '0.78rem', textTransform: 'uppercase',
+              textDecoration: 'none', transition: 'background 0.2s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.background = CREAM)}
+              onMouseLeave={e => (e.currentTarget.style.background = GOLD)}
+            >
+              Create Free Account
+            </Link>
+            <Link href="/login" style={{
+              display: 'inline-block', padding: '0.9rem 2.5rem',
+              color: CREAM, letterSpacing: '0.22em', fontSize: '0.78rem',
+              textTransform: 'uppercase', textDecoration: 'none',
+              border: `1px solid rgba(240,216,162,0.22)`, transition: 'border-color 0.2s, color 0.2s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; e.currentTarget.style.color = GOLD; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(240,216,162,0.22)'; e.currentTarget.style.color = CREAM; }}
+            >
+              Already Have an Account
+            </Link>
+          </div>
+
+          <p style={{
+            marginTop: '2rem', color: 'rgba(240,216,162,0.22)',
+            fontSize: '0.72rem', letterSpacing: '0.1em',
+          }}>
+            No credit card required · Free forever for band members
+          </p>
+
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ── Booking Form ─────────────────────────────────────────── */
 type FormState = { name: string; email: string; venue: string; date: string; artist: string; notes: string };
 
@@ -562,15 +636,25 @@ function Footer() {
             </a>
           </div>
           <div>
-            <div style={{ color: 'rgba(240,216,162,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Booking</div>
-            <a href="#booking" style={{
-              color: GOLD, fontSize: '0.88rem', textDecoration: 'none', transition: 'color 0.2s',
+            <div style={{ color: 'rgba(240,216,162,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Platform</div>
+            <Link href="/register" style={{
+              color: GOLD, fontSize: '0.88rem', textDecoration: 'none',
+              display: 'block', marginBottom: '0.5rem', transition: 'color 0.2s',
             }}
               onMouseEnter={e => (e.currentTarget.style.color = CREAM)}
               onMouseLeave={e => (e.currentTarget.style.color = GOLD)}
             >
-              Submit an Inquiry →
-            </a>
+              Create Free Account →
+            </Link>
+            <Link href="/login" style={{
+              color: 'rgba(240,216,162,0.35)', fontSize: '0.82rem',
+              textDecoration: 'none', transition: 'color 0.2s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.color = CREAM)}
+              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(240,216,162,0.35)')}
+            >
+              Sign In
+            </Link>
           </div>
         </div>
 
@@ -693,7 +777,7 @@ export default function Home() {
           <ArtistSpotlight />
         </section>
 
-        <BookingForm />
+        <SignUpCTA />
         <Footer />
       </div>
     </>
