@@ -194,6 +194,37 @@ export interface RoutingRule {
   created_at: string;
 }
 
+export type OutreachStatus = 'target' | 'pitched' | 'followup' | 'negotiating' | 'confirmed' | 'declined';
+export type SocialPlatform = 'instagram' | 'facebook' | 'both';
+export type SocialStatus   = 'pending' | 'approved' | 'posted' | 'dismissed';
+
+export interface TourVenue {
+  id: string;
+  tour_id: string;
+  venue_id: string;
+  status: OutreachStatus;
+  notes?: string | null;
+  added_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  venue?: Venue | null;
+}
+
+export interface SocialQueueItem {
+  id: string;
+  booking_id: string;
+  act_id: string;
+  venue_id?: string | null;
+  platform: SocialPlatform;
+  content: string;
+  status: SocialStatus;
+  show_date?: string | null;
+  created_at: string;
+  updated_at: string;
+  act?: Act | null;
+  venue?: Venue | null;
+}
+
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   pitch:       'Pitch',
   followup:    'Follow-up',

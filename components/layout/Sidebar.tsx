@@ -14,6 +14,7 @@ const agentNav = [
   { label: 'Tours',     href: '/tours',     icon: '⟴' },
   { label: 'Venues',    href: '/venues',    icon: '⌂' },
   { label: 'Email',     href: '/email',     icon: '✉' },
+  { label: 'Social',    href: '/social',    icon: '✦' },
   { label: 'Settings',  href: '/settings',  icon: '⚙' },
 ];
 
