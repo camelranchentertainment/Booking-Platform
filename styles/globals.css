@@ -7,6 +7,7 @@
   --bg-raised:  #120703;
   --bg-overlay: #170904;
   --bg-muted:   #1D0C05;
+  --bg-panel:   #1C0C05;
 
   /* Borders — hairlines only */
   --border:       rgba(200,146,26,0.15);
@@ -104,7 +105,7 @@ h4 { font-size: 1.2rem; }
 .sidebar {
   width: var(--sidebar-width);
   min-height: 100vh;
-  background: #0A0502;
+  background: var(--bg-panel);
   opacity: 1;
   border-right: 1px solid var(--border);
   display: flex;
@@ -180,7 +181,7 @@ h4 { font-size: 1.2rem; }
 
 /* ── Cards ─────────────────────────────────────────────────── */
 .card {
-  background: #120703;
+  background: var(--bg-panel);
   background-image: linear-gradient(135deg, rgba(200,146,26,0.04) 0%, transparent 55%);
   border: 1px solid var(--border);
   padding: 1.25rem;
@@ -206,7 +207,7 @@ h4 { font-size: 1.2rem; }
 
 /* ── Stat blocks ────────────────────────────────────────────── */
 .stat-block {
-  background: #120703;
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   padding: 1.1rem;
   transition: border-color 0.2s;
@@ -399,7 +400,7 @@ tr:hover td { background: rgba(200,146,26,0.05); color: var(--text-primary); }
 
 .kanban-col {
   flex: 0 0 240px;
-  background: #120703;
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   overflow: hidden;
 }
@@ -484,7 +485,7 @@ tr:hover td { background: rgba(200,146,26,0.05); color: var(--text-primary); }
 }
 
 .modal {
-  background: #120703;
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   width: 100%;
   max-width: 560px;
@@ -555,7 +556,7 @@ tr:hover td { background: rgba(200,146,26,0.05); color: var(--text-primary); }
 }
 
 .auth-card {
-  background: #120703;
+  background: var(--bg-panel);
   border: 1px solid var(--border);
   padding: 2rem;
   width: 100%;
