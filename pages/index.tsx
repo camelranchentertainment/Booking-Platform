@@ -10,7 +10,7 @@ const BG     = '#0E0603';
 const DARK   = '#0A0502';
 const BORDER = 'rgba(200,146,26,0.13)';
 
-const NAV_LINKS = ['Artists', 'Booking', 'Contact'];
+const NAV_LINKS = ['Features', 'How It Works', 'Contact'];
 
 /* ── Hatch SVG ────────────────────────────────────────────── */
 function HatchBg({ id, rotate = 45, opacity = 0.04 }: { id: string; rotate?: number; opacity?: number }) {
@@ -75,7 +75,7 @@ function Nav() {
             {l}
           </a>
         ))}
-        <a href="#booking" style={{
+        <Link href="/register" style={{
           color: GOLD, fontSize: '0.72rem', letterSpacing: '0.22em',
           textTransform: 'uppercase', textDecoration: 'none',
           padding: '0.45rem 1rem', border: `1px solid ${GOLD}`,
@@ -84,8 +84,8 @@ function Nav() {
           onMouseEnter={e => { e.currentTarget.style.background = GOLD; e.currentTarget.style.color = BG; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = GOLD; }}
         >
-          Book Now
-        </a>
+          Get Started
+        </Link>
         <Link href="/login" style={{
           color: 'rgba(240,216,162,0.35)', fontSize: '0.68rem',
           letterSpacing: '0.2em', textTransform: 'uppercase', textDecoration: 'none',
@@ -177,7 +177,7 @@ function Hero() {
             <span style={{
               color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase',
             }}>
-              Independent Booking Agency
+              Built for Working Musicians
             </span>
           </div>
 
@@ -186,7 +186,7 @@ function Hero() {
             color: CREAM, textTransform: 'uppercase', margin: '0 0 0.25rem',
             fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
           }}>
-            Where Music
+            Your Shows.
           </h1>
           <h1 style={{
             fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.88,
@@ -194,22 +194,22 @@ function Hero() {
             textTransform: 'uppercase', margin: '0 0 0.25rem',
             fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
           }}>
-            Meets The
+            Your Band.
           </h1>
           <h1 style={{
             fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.88,
             color: CREAM, textTransform: 'uppercase', margin: '0 0 2.5rem',
             fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
           }}>
-            Stage
+            Organized.
           </h1>
 
           <div className="cr-hero-bottom">
-            <p style={{ maxWidth: '24rem', color: 'rgba(240,216,162,0.42)', fontSize: '0.88rem', lineHeight: 1.65 }}>
-              Independent booking representation for roots music artists. Honest advocacy, direct relationships, and a deep commitment to the music.
+            <p style={{ maxWidth: '26rem', color: 'rgba(240,216,162,0.42)', fontSize: '0.88rem', lineHeight: 1.65 }}>
+              Stop losing gigs to missed follow-ups and disorganized schedules. One platform to track every booking, keep your whole band in the loop, and take your career further.
             </p>
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-              <a href="#artists" style={{
+              <Link href="/register" style={{
                 padding: '0.75rem 2rem', background: GOLD, color: BG,
                 fontWeight: 700, letterSpacing: '0.22em', fontSize: '0.72rem',
                 textTransform: 'uppercase', textDecoration: 'none',
@@ -218,9 +218,9 @@ function Hero() {
                 onMouseEnter={e => (e.currentTarget.style.background = CREAM)}
                 onMouseLeave={e => (e.currentTarget.style.background = GOLD)}
               >
-                Our Artists
-              </a>
-              <a href="#booking" style={{
+                Get Started Free
+              </Link>
+              <Link href="/login" style={{
                 padding: '0.75rem 2rem', color: CREAM,
                 letterSpacing: '0.22em', fontSize: '0.72rem',
                 textTransform: 'uppercase', textDecoration: 'none',
@@ -230,8 +230,8 @@ function Hero() {
                 onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; e.currentTarget.style.color = GOLD; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(240,216,162,0.22)'; e.currentTarget.style.color = CREAM; }}
               >
-                Book a Show
-              </a>
+                Sign In
+              </Link>
             </div>
           </div>
         </div>
