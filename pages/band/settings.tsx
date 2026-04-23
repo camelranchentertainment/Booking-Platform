@@ -25,6 +25,10 @@ export default function BandSettings() {
   const [pwSaved, setPwSaved]   = useState(false);
   const [pwError, setPwError]   = useState('');
 
+  const [createName, setCreateName]   = useState('');
+  const [creating, setCreating]       = useState(false);
+  const [createError, setCreateError] = useState('');
+
   useEffect(() => { load(); }, []);
 
   const load = async () => {
@@ -84,13 +88,59 @@ export default function BandSettings() {
     setTimeout(() => setPwSaved(false), 3000);
   };
 
+  const createAct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createName.trim()) return;
+    setCreating(true);
+    setCreateError('');
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/acts/init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ act_name: createName.trim() }),
+    });
+    const json = await res.json();
+    if (!res.ok) { setCreateError(json.error || 'Failed to create band'); setCreating(false); return; }
+    await load();
+    setCreating(false);
+  };
+
   if (loading) return <AppShell requireRole="act_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading…</div></AppShell>;
 
   if (!act) return (
     <AppShell requireRole="act_admin">
-      <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>NO BAND PROFILE</div>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Your account isn't connected to a band yet.</p>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Band Settings</h1>
+          <div className="page-sub">Create your band profile to get started</div>
+        </div>
+      </div>
+      <div style={{ maxWidth: 480 }}>
+        <div className="card">
+          <div className="card-header"><span className="card-title">CREATE YOUR BAND</span></div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: '1.25rem', lineHeight: 1.6 }}>
+            Your account doesn't have a band profile yet. Enter your band name to get started — you can fill in the rest of the details after.
+          </p>
+          <form onSubmit={createAct} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="field">
+              <label className="field-label">Band / Act Name *</label>
+              <input
+                className="input"
+                value={createName}
+                onChange={e => setCreateName(e.target.value)}
+                placeholder="The Band Name"
+                required
+                autoFocus
+              />
+            </div>
+            {createError && (
+              <div style={{ color: '#f87171', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{createError}</div>
+            )}
+            <button type="submit" className="btn btn-primary" disabled={creating}>
+              {creating ? 'Creating…' : 'Create Band Profile'}
+            </button>
+          </form>
+        </div>
       </div>
     </AppShell>
   );
