@@ -25,6 +25,7 @@ export async function getSetting(key: string): Promise<string | null> {
     stripe_agent_price_id:  process.env.STRIPE_AGENT_PRICE_ID,
     stripe_band_price_id:   process.env.STRIPE_BAND_PRICE_ID,
     google_maps_api_key:    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+    google_maps_server_key: process.env.GOOGLE_MAPS_SERVER_KEY,
   };
   return envMap[key] || cache[key] || null;
 }

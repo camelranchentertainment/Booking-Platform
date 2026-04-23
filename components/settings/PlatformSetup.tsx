@@ -9,7 +9,7 @@ const SECTION_KEYS: Record<string, string[]> = {
   firecrawl: ['firecrawl_api_key'],
   resend:    ['resend_api_key', 'resend_from_email', 'resend_webhook_secret'],
   stripe:    ['stripe_secret_key', 'stripe_webhook_secret', 'stripe_agent_price_id', 'stripe_band_price_id'],
-  maps:      ['google_maps_api_key'],
+  maps:      ['google_maps_api_key', 'google_maps_server_key'],
 };
 
 function StatusBadge({ configured }: { configured: boolean }) {
@@ -344,17 +344,23 @@ export default function PlatformSetup() {
               <Step num="2" title="Enable required APIs"
                 body="Search for and enable these three APIs: Maps JavaScript API, Places API, Geocoding API."
                 link={{ label: 'console.cloud.google.com/apis/library', href: 'https://console.cloud.google.com/apis/library' }} />
-              <Step num="3" title="Create an API key"
-                body="Go to APIs & Services → Credentials → Create Credentials → API Key. Copy the key."
+              <Step num="3" title="Create two API keys"
+                body="Go to APIs & Services → Credentials → Create Credentials → API Key. Create one key for the browser and one for the server."
                 link={{ label: 'console.cloud.google.com/apis/credentials', href: 'https://console.cloud.google.com/apis/credentials' }} />
-              <Step num="4" title="Restrict the key (recommended)"
-                body="Click on the key → Application restrictions: HTTP referrers. Add your domain (e.g. yourdomain.com/*) and your Vercel preview URLs. Under API restrictions, limit to the three APIs above."
-                note="Never leave a Maps key unrestricted — it will accumulate unauthorized charges." />
+              <Step num="4" title="Restrict the browser key"
+                body="Click the browser key → Application restrictions: HTTP referrers. Add your domain (e.g. yourdomain.com/*). Under API restrictions, limit to Maps JavaScript API and Places API."
+                note="Never leave a browser key unrestricted — it can accumulate unauthorized charges." />
+              <Step num="5" title="Leave the server key unrestricted"
+                body="The server key is stored securely in Supabase and never exposed to browsers. Set Application restrictions to None. Add GOOGLE_MAPS_SERVER_KEY to your Vercel environment variables as well." />
             </div>
             {divider}
-            {field('maps', 'google_maps_api_key', 'Google Maps API Key', {
+            {field('maps', 'google_maps_api_key', 'Browser API Key (Maps JS + Autocomplete)', {
               placeholder: 'AIza...',
-              hint: 'Restrict this key to your domain in the Google Cloud Console',
+              hint: 'Restrict this key to your domain — it loads in the browser',
+            })}
+            {field('maps', 'google_maps_server_key', 'Server API Key (Places Search)', {
+              placeholder: 'AIza...',
+              hint: 'Unrestricted — used only for server-side venue search, never sent to browsers',
             })}
             {saveRow('maps')}
           </div>

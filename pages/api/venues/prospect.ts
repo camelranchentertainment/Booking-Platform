@@ -18,9 +18,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { city, state } = req.query;
   if (!city || !state) return res.status(400).json({ error: 'city and state required' });
 
-  const apiKey = await getSetting('google_maps_api_key');
+  // Prefer the unrestricted server key; fall back to the browser key
+  const apiKey = (await getSetting('google_maps_server_key')) || (await getSetting('google_maps_api_key'));
   if (!apiKey || apiKey === 'YOUR_GOOGLE_MAPS_API_KEY') {
-    return res.status(501).json({ error: 'Google Maps not configured. Add your API key in Settings → Google Maps.' });
+    return res.status(501).json({ error: 'Google Maps not configured. Add your server API key in Settings → Google Maps.' });
   }
 
   try {
