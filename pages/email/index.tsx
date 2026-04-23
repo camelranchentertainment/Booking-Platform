@@ -5,10 +5,72 @@ import { supabase } from '../../lib/supabase';
 import { Act, Venue, Contact, BookingStatus } from '../../lib/types';
 import { useLookup } from '../../lib/hooks/useLookup';
 import Link from 'next/link';
+import EmailComposer from '../../components/email/EmailComposer';
 
 type EmailType = 'cold_pitch' | 'followup' | 'reply_suggestion';
 type Draft = { subject: string; body: string; preview: string };
-type View = 'outbox' | 'pipeline';
+type View = 'outbox' | 'pipeline' | 'tracker';
+
+const STAGE_LABELS: Record<string, string> = {
+  target: 'Cold Pitch', follow_up_1: 'Follow Up 1', follow_up_2: 'Follow Up 2',
+  confirmation: 'Confirmation', decline: 'Decline', advance: 'Advance', thank_you: 'Thank You', cold: 'Cold',
+};
+const STAGE_COLORS: Record<string, string> = {
+  target: '#60a5fa', follow_up_1: '#fbbf24', follow_up_2: '#f97316',
+  confirmation: '#34d399', decline: '#94a3b8', advance: '#f97316', thank_you: '#a78bfa', cold: '#475569',
+};
+
+function daysSince(dateStr: string | null): number {
+  if (!dateStr) return 999;
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
+}
+function daysUntil(dateStr: string | null): number {
+  if (!dateStr) return 999;
+  return Math.floor((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function getActionInfo(b: any): { label: string; urgency: 'green' | 'yellow' | 'red' | 'gray' | 'blue'; nextCategory: string | null } {
+  const stage = b.email_stage;
+  const since = daysSince(b.last_contact_date);
+  const until = daysUntil(b.show_date);
+
+  if (!stage) {
+    if (['completed', 'cancelled'].includes(b.status)) return { label: 'Archived', urgency: 'gray', nextCategory: null };
+    return { label: 'Not started — send cold pitch', urgency: 'blue', nextCategory: 'target' };
+  }
+  if (stage === 'target') {
+    if (since < 7)  return { label: `Awaiting reply (${since}d ago)`, urgency: 'green', nextCategory: 'follow_up_1' };
+    if (since < 11) return { label: 'Follow up due', urgency: 'yellow', nextCategory: 'follow_up_1' };
+    return { label: `Overdue follow up (${since}d)`, urgency: 'red', nextCategory: 'follow_up_1' };
+  }
+  if (stage === 'follow_up_1') {
+    if (since < 7)  return { label: `Awaiting reply (${since}d ago)`, urgency: 'green', nextCategory: 'follow_up_2' };
+    if (since < 11) return { label: 'Follow up 2 due', urgency: 'yellow', nextCategory: 'follow_up_2' };
+    return { label: `Overdue (${since}d)`, urgency: 'red', nextCategory: 'follow_up_2' };
+  }
+  if (stage === 'follow_up_2') {
+    if (since < 14) return { label: `Awaiting reply (${since}d ago)`, urgency: 'green', nextCategory: null };
+    return { label: 'No response — mark cold?', urgency: 'red', nextCategory: null };
+  }
+  if (stage === 'confirmation') {
+    if (until > 14) return { label: `Advance in ${until - 14}d`, urgency: 'green', nextCategory: 'advance' };
+    if (until >= 0) return { label: 'Send advance now', urgency: until < 7 ? 'red' : 'yellow', nextCategory: 'advance' };
+    return { label: 'Show passed', urgency: 'gray', nextCategory: 'thank_you' };
+  }
+  if (stage === 'advance') {
+    if (until > 0) return { label: `Show in ${until}d`, urgency: 'green', nextCategory: null };
+    if (since < 7) return { label: 'Show just ended', urgency: 'yellow', nextCategory: 'thank_you' };
+    return { label: 'Send thank you', urgency: 'red', nextCategory: 'thank_you' };
+  }
+  if (stage === 'thank_you') return { label: 'Complete', urgency: 'gray', nextCategory: null };
+  if (stage === 'decline')   return { label: 'Declined', urgency: 'gray', nextCategory: null };
+  if (stage === 'cold')      return { label: 'Cold', urgency: 'gray', nextCategory: null };
+  return { label: stage, urgency: 'gray', nextCategory: null };
+}
+
+const URGENCY_DOT: Record<string, string> = {
+  green: '#34d399', yellow: '#fbbf24', red: '#f87171', gray: '#475569', blue: '#60a5fa',
+};
 
 const EMAIL_STATUS_COLOR: Record<string, string> = {
   sent: '#fbbf24', delivered: '#34d399', bounced: '#f87171', failed: '#f87171',
@@ -51,6 +113,12 @@ export default function EmailPage() {
   const [bookings, setBookings]   = useState<any[]>([]);
   const [filterAct, setFilterAct] = useState('');
 
+  // Tracker state
+  const [trackerFilter, setTrackerFilter] = useState<'active' | 'all'>('active');
+  const [composerBooking, setComposerBooking] = useState<any>(null);
+  const [composerCategory, setComposerCategory] = useState('target');
+  const [markingCold, setMarkingCold] = useState<string | null>(null);
+
   useEffect(() => { loadAll(); }, []);
 
   const loadAll = async () => {
@@ -64,9 +132,11 @@ export default function EmailPage() {
       supabase.from('user_profiles').select('display_name, agency_name').eq('id', user.id).single(),
       supabase.from('bookings').select(`
         id, status, show_date, fee, created_at,
+        email_stage, last_contact_date, follow_up_count,
         act:acts(id, act_name),
-        venue:venues(id, name, city, state)
-      `).eq('created_by', user.id).order('created_at', { ascending: false }),
+        venue:venues(id, name, city, state, email),
+        contact:contacts(id, first_name, last_name, email)
+      `).neq('status', 'cancelled').order('show_date', { ascending: true }),
     ]);
     setLog(logRes.data || []);
     setActs(actsRes.data || []);
@@ -145,6 +215,18 @@ export default function EmailPage() {
     }
   };
 
+  const markCold = async (bookingId: string) => {
+    setMarkingCold(bookingId);
+    await supabase.from('bookings').update({ email_stage: 'cold' }).eq('id', bookingId);
+    setBookings(bs => bs.map(b => b.id === bookingId ? { ...b, email_stage: 'cold' } : b));
+    setMarkingCold(null);
+  };
+
+  const openComposer = (b: any, category: string) => {
+    setComposerBooking(b);
+    setComposerCategory(category);
+  };
+
   const resetCompose = () => {
     setEmailType('cold_pitch');
     setSelAct(''); setSelVenue(''); setSelContact('');
@@ -199,22 +281,28 @@ export default function EmailPage() {
 
       {/* Tab bar */}
       <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
-        {(['outbox', 'pipeline'] as View[]).map(v => (
-          <button
-            key={v}
-            onClick={() => setView(v)}
-            style={{
-              padding: '0.55rem 1.25rem',
-              fontFamily: 'var(--font-mono)', fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase',
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              color: view === v ? 'var(--accent)' : 'var(--text-muted)',
-              borderBottom: view === v ? '2px solid var(--accent)' : '2px solid transparent',
-              marginBottom: '-1px',
-            }}
-          >
-            {v === 'outbox' ? `Outbox (${log.length})` : `Pipeline (${bookings.length})`}
-          </button>
-        ))}
+        {(['outbox', 'tracker', 'pipeline'] as View[]).map(v => {
+          const overdueCount = v === 'tracker' ? bookings.filter(b => getActionInfo(b).urgency === 'red').length : 0;
+          return (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              style={{
+                padding: '0.55rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem',
+                fontFamily: 'var(--font-mono)', fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase',
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: view === v ? 'var(--accent)' : 'var(--text-muted)',
+                borderBottom: view === v ? '2px solid var(--accent)' : '2px solid transparent',
+                marginBottom: '-1px',
+              }}
+            >
+              {v === 'outbox' ? `Outbox (${log.length})` : v === 'pipeline' ? `Pipeline (${bookings.length})` : 'Outreach Tracker'}
+              {overdueCount > 0 && (
+                <span style={{ background: '#ef4444', color: '#fff', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, minWidth: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{overdueCount}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* OUTBOX TAB */}
@@ -342,6 +430,128 @@ export default function EmailPage() {
           ))}
         </div>
       )}
+
+      {/* TRACKER TAB */}
+      {view === 'tracker' && (() => {
+        const activeBookings = trackerFilter === 'active'
+          ? bookings.filter(b => !['cold', 'decline', 'thank_you', 'cancelled', 'completed'].includes(b.email_stage) || !b.email_stage)
+          : bookings;
+        const overdueItems = activeBookings.filter(b => getActionInfo(b).urgency === 'red');
+        const dueItems     = activeBookings.filter(b => getActionInfo(b).urgency === 'yellow');
+
+        return (
+          <>
+            {/* Summary row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
+              {[
+                { label: 'Overdue', count: overdueItems.length, color: '#f87171' },
+                { label: 'Due Soon', count: dueItems.length, color: '#fbbf24' },
+                { label: 'Active', count: activeBookings.filter(b => getActionInfo(b).urgency === 'green').length, color: '#34d399' },
+              ].map(({ label, count, color }) => (
+                <div key={label} className="card" style={{ padding: '0.9rem 1.1rem', textAlign: 'center' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', color, lineHeight: 1 }}>{count}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Filter toggle */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+              {(['active', 'all'] as const).map(f => (
+                <button key={f} onClick={() => setTrackerFilter(f)}
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0.25rem 0.75rem', borderRadius: '3px', border: `1px solid ${trackerFilter === f ? 'var(--accent)' : 'var(--border)'}`, background: trackerFilter === f ? 'var(--accent-glow)' : 'transparent', color: trackerFilter === f ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer' }}>
+                  {f === 'active' ? 'Active Only' : 'Show All'}
+                </button>
+              ))}
+            </div>
+
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Venue</th>
+                      <th>Act</th>
+                      <th>Stage</th>
+                      <th>Last Contact</th>
+                      <th>Next Action</th>
+                      <th style={{ width: 120 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeBookings.length === 0 && (
+                      <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>No active outreach.</td></tr>
+                    )}
+                    {activeBookings.map(b => {
+                      const { label, urgency, nextCategory } = getActionInfo(b);
+                      const contactEmail = b.contact?.email || b.venue?.email || '';
+                      return (
+                        <tr key={b.id}>
+                          <td>
+                            <div style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{b.venue?.name || '—'}</div>
+                            <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>{b.venue?.city ? `${b.venue.city}, ${b.venue.state}` : ''}</div>
+                          </td>
+                          <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{b.act?.act_name || '—'}</td>
+                          <td>
+                            {b.email_stage ? (
+                              <span style={{ background: `${STAGE_COLORS[b.email_stage] || '#64748b'}18`, color: STAGE_COLORS[b.email_stage] || '#64748b', fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0.15rem 0.45rem', borderRadius: '3px' }}>
+                                {STAGE_LABELS[b.email_stage] || b.email_stage}
+                              </span>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>none</span>
+                            )}
+                          </td>
+                          <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                            {b.last_contact_date ? new Date(b.last_contact_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ width: 7, height: 7, borderRadius: '50%', background: URGENCY_DOT[urgency], flexShrink: 0 }} />
+                              <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>{label}</span>
+                            </div>
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
+                              {nextCategory && (
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ fontSize: '0.75rem', color: STAGE_COLORS[nextCategory] || 'var(--accent)', borderColor: `${STAGE_COLORS[nextCategory] || 'var(--accent)'}44` }}
+                                  onClick={() => openComposer(b, nextCategory)}
+                                >
+                                  ✉ {STAGE_LABELS[nextCategory]}
+                                </button>
+                              )}
+                              {b.email_stage === 'follow_up_2' && getActionInfo(b).urgency === 'red' && (
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ fontSize: '0.75rem', color: '#94a3b8' }}
+                                  disabled={markingCold === b.id}
+                                  onClick={() => markCold(b.id)}
+                                >
+                                  {markingCold === b.id ? '…' : 'Mark Cold'}
+                                </button>
+                              )}
+                              {b.email_stage === 'confirmation' && !nextCategory && (
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ fontSize: '0.75rem', color: '#a78bfa', borderColor: '#a78bfa44' }}
+                                  onClick={() => openComposer(b, 'thank_you')}
+                                >
+                                  ✉ Thank You
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* AI Compose Modal */}
       {showCompose && (
@@ -476,6 +686,26 @@ export default function EmailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {composerBooking && (
+        <EmailComposer
+          bookingId={composerBooking.id}
+          actId={composerBooking.act?.id}
+          venueId={composerBooking.venue?.id}
+          contactId={composerBooking.contact?.id}
+          contactEmail={composerBooking.contact?.email || composerBooking.venue?.email || ''}
+          defaultCategory={composerCategory}
+          onClose={() => {
+            setComposerBooking(null);
+            // Refresh booking email_stage
+            supabase.from('bookings').select('id, email_stage, last_contact_date, follow_up_count')
+              .eq('id', composerBooking.id).single()
+              .then(({ data }) => {
+                if (data) setBookings(bs => bs.map(b => b.id === data.id ? { ...b, ...data } : b));
+              });
+          }}
+        />
       )}
     </AppShell>
   );
