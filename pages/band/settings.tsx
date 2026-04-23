@@ -34,7 +34,14 @@ export default function BandSettings() {
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data: acts } = await supabase.from('acts').select('*').eq('owner_id', user.id).eq('is_active', true).limit(1);
+    let { data: acts } = await supabase.from('acts').select('*').eq('owner_id', user.id).eq('is_active', true).limit(1);
+    if (!acts?.length) {
+      const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
+      if (prof?.act_id) {
+        const { data: linked } = await supabase.from('acts').select('*').eq('id', prof.act_id).eq('is_active', true).limit(1);
+        acts = linked;
+      }
+    }
     const a = acts?.[0];
     if (a) {
       setAct(a);

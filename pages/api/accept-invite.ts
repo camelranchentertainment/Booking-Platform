@@ -30,6 +30,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (profileErr) return res.status(500).json({ error: profileErr.message });
 
+  // When a band admin accepts, claim ownership of the act so the band portal works
+  if (invite.role === 'act_admin') {
+    await supabase.from('acts').update({ owner_id: userId }).eq('id', invite.act_id);
+  }
+
   // Mark invite accepted
   await supabase.from('act_invitations').update({ status: 'accepted' }).eq('id', invite.id);
 

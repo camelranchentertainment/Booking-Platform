@@ -23,13 +23,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { act_name } = req.body;
   if (!act_name?.trim()) return res.status(400).json({ error: 'Band name is required' });
 
-  // Prevent duplicates
-  const { data: existing } = await service
-    .from('acts')
-    .select('id')
-    .eq('owner_id', user.id)
-    .limit(1);
+  // Prevent duplicates — check both owner_id and profile act_id
+  const { data: existing } = await service.from('acts').select('id').eq('owner_id', user.id).limit(1);
   if (existing?.length) return res.status(400).json({ error: 'You already have a band profile' });
+
+  const { data: prof } = await service.from('user_profiles').select('act_id').eq('id', user.id).single();
+  if (prof?.act_id) return res.status(400).json({ error: 'You already have a band profile' });
 
   const { data: act, error } = await service.from('acts').insert({
     owner_id: user.id,

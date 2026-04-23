@@ -18,8 +18,15 @@ export default function BandPortal() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Find the act this user owns
-    const { data: acts } = await supabase.from('acts').select('*').eq('owner_id', user.id).eq('is_active', true).limit(1);
+    // Find the act: first by direct ownership, then by act_id on the profile (agent-created acts)
+    let { data: acts } = await supabase.from('acts').select('*').eq('owner_id', user.id).eq('is_active', true).limit(1);
+    if (!acts?.length) {
+      const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
+      if (prof?.act_id) {
+        const { data: linked } = await supabase.from('acts').select('*').eq('id', prof.act_id).eq('is_active', true).limit(1);
+        acts = linked;
+      }
+    }
     const act = acts?.[0] || null;
     setMyAct(act);
 
