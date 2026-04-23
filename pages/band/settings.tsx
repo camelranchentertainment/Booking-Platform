@@ -87,7 +87,7 @@ export default function BandSettings() {
         .select('id, role, token, act:act_id(act_name)')
         .eq('email', authEmail)
         .eq('status', 'pending');
-      setPendingInvites((invites || []) as PendingInvite[]);
+      setPendingInvites((invites || []) as unknown as PendingInvite[]);
     }
 
     // Load active agent links for this act (so band admin can revoke)
@@ -97,7 +97,7 @@ export default function BandSettings() {
         .select('id, permissions, agent:agent_id(display_name, agency_name, email)')
         .eq('act_id', a.id)
         .eq('status', 'active');
-      setAgentLinks((links || []) as AgentLink[]);
+      setAgentLinks((links || []) as unknown as AgentLink[]);
     } else {
       setAgentLinks([]);
     }
