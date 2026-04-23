@@ -69,10 +69,12 @@ export default function BandPortal() {
               : 'Self-managed · No agent connected'}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <Link href="/band/settings" className="btn btn-secondary">Band Settings</Link>
-          <Link href="/bookings/new" className="btn btn-primary">+ New Booking</Link>
-        </div>
+        {myAct && (
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <Link href="/band/settings" className="btn btn-secondary">Band Settings</Link>
+            <Link href="/bookings/new" className="btn btn-primary">+ New Booking</Link>
+          </div>
+        )}
       </div>
 
       {/* Pending agent link requests */}
@@ -118,8 +120,11 @@ export default function BandPortal() {
       {/* No act yet */}
       {!myAct && !loading && (
         <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>NO BAND PROFILE</div>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Your account isn't connected to a band yet.</p>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--accent)', marginBottom: '1rem' }}>GET STARTED</div>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+            Your account isn't connected to a band yet. Create your band profile to manage bookings, share your calendar, and connect with agents.
+          </p>
+          <Link href="/band/settings" className="btn btn-primary">Set Up Your Band →</Link>
         </div>
       )}
 
