@@ -13,6 +13,15 @@ export default function BandPortal() {
   const [loading, setLoading]   = useState(true);
   const [responding, setResponding] = useState('');
 
+  // Add show modal
+  const [showModal, setShowModal]   = useState(false);
+  const [showForm, setShowForm]     = useState({ venueName: '', city: '', state: '', show_date: '', status: 'confirmed', fee: '', notes: '' });
+  const [venueSearch, setVenueSearch] = useState<any[]>([]);
+  const [venueSearching, setVenueSearching] = useState(false);
+  const [selectedVenue, setSelectedVenue] = useState<any>(null);
+  const [showSaving, setShowSaving]   = useState(false);
+  const [showError, setShowError]     = useState('');
+
   useEffect(() => { load(); }, []);
 
   const load = async () => {
@@ -54,6 +63,70 @@ export default function BandPortal() {
     setPendingLinks(linksRes.data || []);
     setTours(toursRes.data || []);
     setLoading(false);
+  };
+
+  const openShowModal = () => {
+    setShowForm({ venueName: '', city: '', state: '', show_date: '', status: 'confirmed', fee: '', notes: '' });
+    setSelectedVenue(null);
+    setVenueSearch([]);
+    setShowError('');
+    setShowModal(true);
+  };
+
+  const searchVenues = async (q: string) => {
+    setShowForm(f => ({ ...f, venueName: q }));
+    setSelectedVenue(null);
+    if (q.length < 2) { setVenueSearch([]); return; }
+    setVenueSearching(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data } = await supabase.from('venues').select('id, name, city, state, address, phone, email')
+      .eq('agent_id', user!.id).ilike('name', `%${q}%`).order('name').limit(8);
+    setVenueSearch(data || []);
+    setVenueSearching(false);
+  };
+
+  const saveShow = async () => {
+    if (!myAct) return;
+    if (!showForm.venueName.trim()) { setShowError('Venue name is required'); return; }
+    if (!showForm.show_date) { setShowError('Show date is required'); return; }
+    setShowSaving(true);
+    setShowError('');
+
+    const { data: { user } } = await supabase.auth.getUser();
+    let venueId: string | null = selectedVenue?.id || null;
+
+    // If no venue selected from search, find or create one
+    if (!venueId && showForm.venueName.trim()) {
+      const city = showForm.city.trim() || selectedVenue?.city || '';
+      const { data: existing } = await supabase.from('venues').select('id')
+        .eq('agent_id', user!.id).ilike('name', showForm.venueName.trim())
+        .maybeSingle();
+      if (existing) {
+        venueId = existing.id;
+      } else {
+        const { data: newV } = await supabase.from('venues').insert({
+          agent_id: user!.id, name: showForm.venueName.trim(),
+          city: city || 'Unknown', state: showForm.state.trim() || null,
+          source: 'manual', country: 'US',
+        }).select('id').single();
+        venueId = newV?.id || null;
+      }
+    }
+
+    const { error } = await supabase.from('bookings').insert({
+      created_by: user!.id,
+      act_id:     myAct.id,
+      venue_id:   venueId,
+      status:     showForm.status,
+      show_date:  showForm.show_date,
+      fee:        showForm.fee ? Number(showForm.fee) : null,
+      deal_notes: showForm.notes || null,
+    });
+
+    if (error) { setShowError(error.message); setShowSaving(false); return; }
+    setShowModal(false);
+    await load();
+    setShowSaving(false);
   };
 
   const respondToLink = async (linkId: string, action: 'accept' | 'decline') => {
@@ -198,7 +271,7 @@ export default function BandPortal() {
               </table>
               {shows.length === 0 && !loading && (
                 <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>
-                  No bookings yet. <Link href="/bookings/new" style={{ color: 'var(--accent)' }}>Add your first booking →</Link>
+                  No bookings yet. <button onClick={openShowModal} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: 0, font: 'inherit' }}>Add your first booking →</button>
                 </div>
               )}
             </div>
@@ -222,6 +295,100 @@ export default function BandPortal() {
             </div>
           )}
         </>
+      )}
+      {/* Add Show Modal */}
+      {showModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: '#2c2e45', borderRadius: 'var(--radius)', padding: '2rem', width: '100%', maxWidth: 480, position: 'relative' }}>
+            <button onClick={() => setShowModal(false)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }}>✕</button>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--accent)', letterSpacing: '0.1em', marginBottom: '1.5rem' }}>ADD SHOW</div>
+
+            {showError && (
+              <div style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 'var(--radius-sm)', padding: '0.6rem 0.9rem', color: '#f87171', fontSize: '0.84rem', marginBottom: '1rem' }}>{showError}</div>
+            )}
+
+            {/* Venue name with live search */}
+            <div style={{ marginBottom: '1rem', position: 'relative' }}>
+              <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>Venue Name *</label>
+              <input
+                type="text"
+                className="input"
+                placeholder="Search or type a venue name…"
+                value={showForm.venueName}
+                onChange={e => searchVenues(e.target.value)}
+                autoComplete="off"
+              />
+              {venueSearching && <div style={{ position: 'absolute', right: '0.75rem', top: '2.2rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>…</div>}
+              {venueSearch.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1e2035', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', zIndex: 10, maxHeight: 200, overflowY: 'auto' }}>
+                  {venueSearch.map((v: any) => (
+                    <div key={v.id}
+                      onClick={() => {
+                        setSelectedVenue(v);
+                        setShowForm(f => ({ ...f, venueName: v.name, city: v.city || '', state: v.state || '' }));
+                        setVenueSearch([]);
+                      }}
+                      style={{ padding: '0.6rem 0.85rem', cursor: 'pointer', fontSize: '0.88rem', color: 'var(--text-primary)', borderBottom: '1px solid var(--border)' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <div style={{ fontWeight: 500 }}>{v.name}</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.76rem' }}>{v.city}{v.state ? `, ${v.state}` : ''}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* City / State row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>City</label>
+                <input type="text" className="input" placeholder="City" value={showForm.city} onChange={e => setShowForm(f => ({ ...f, city: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>State</label>
+                <input type="text" className="input" placeholder="CO" value={showForm.state} onChange={e => setShowForm(f => ({ ...f, state: e.target.value }))} maxLength={2} />
+              </div>
+            </div>
+
+            {/* Show date */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>Show Date *</label>
+              <input type="date" className="input" value={showForm.show_date} onChange={e => setShowForm(f => ({ ...f, show_date: e.target.value }))} />
+            </div>
+
+            {/* Status / Fee row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>Status</label>
+                <select className="input" value={showForm.status} onChange={e => setShowForm(f => ({ ...f, status: e.target.value }))}>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="pending">Pending</option>
+                  <option value="hold">Hold</option>
+                  <option value="advance">Advance</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>Fee ($)</label>
+                <input type="number" className="input" placeholder="0" value={showForm.fee} onChange={e => setShowForm(f => ({ ...f, fee: e.target.value }))} min="0" />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>Notes</label>
+              <textarea className="input" rows={3} placeholder="Deal notes, load-in time, contacts…" value={showForm.notes} onChange={e => setShowForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: 'vertical' }} />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setShowModal(false)} disabled={showSaving}>Cancel</button>
+              <button className="btn btn-primary" onClick={saveShow} disabled={showSaving} style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: '#000' }}>
+                {showSaving ? 'Saving…' : 'Add Show'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </AppShell>
   );
