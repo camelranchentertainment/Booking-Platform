@@ -13,6 +13,25 @@ export default function BandPortal() {
   const [loading, setLoading]   = useState(true);
   const [responding, setResponding] = useState('');
 
+  // Booking detail modal
+  const [detailBooking, setDetailBooking] = useState<any>(null);
+
+  // Tour detail modal
+  const [detailTour, setDetailTour]     = useState<any>(null);
+  const [tourBookings, setTourBookings] = useState<any[]>([]);
+  const [tourLoading, setTourLoading]   = useState(false);
+
+  const openTourDetail = async (t: any) => {
+    setDetailTour(t);
+    setTourBookings([]);
+    setTourLoading(true);
+    const { data } = await supabase.from('bookings')
+      .select('id, status, show_date, fee, venue:venues(name, city, state)')
+      .eq('tour_id', t.id).neq('status', 'cancelled').order('show_date', { ascending: true });
+    setTourBookings(data || []);
+    setTourLoading(false);
+  };
+
   // Add show modal
   const [showModal, setShowModal]   = useState(false);
   const [showForm, setShowForm]     = useState({ venueName: '', city: '', state: '', show_date: '', status: 'confirmed', fee: '', notes: '' });
@@ -223,7 +242,7 @@ export default function BandPortal() {
               <div className="card-header"><span className="card-title">UPCOMING SHOWS</span></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {upcoming.map((b: any) => (
-                  <div key={b.id} style={{ display: 'flex', gap: '1rem', padding: '0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)' }}>
+                  <div key={b.id} onClick={() => setDetailBooking(b)} style={{ display: 'flex', gap: '1rem', padding: '0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
                     <div style={{ minWidth: 56, textAlign: 'center', borderRight: '1px solid var(--border)', paddingRight: '1rem' }}>
                       <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--accent)', lineHeight: 1 }}>
                         {b.show_date ? new Date(b.show_date + 'T00:00:00').getDate() : '?'}
@@ -261,7 +280,7 @@ export default function BandPortal() {
                 </thead>
                 <tbody>
                   {shows.map((b: any) => (
-                    <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => window.location.href = `/bookings/${b.id}`}>
+                    <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => setDetailBooking(b)}>
                       <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
                         {b.show_date ? new Date(b.show_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                       </td>
@@ -290,16 +309,90 @@ export default function BandPortal() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 {tours.map((t: any) => (
-                  <Link key={t.id} href={`/tours/${t.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', textDecoration: 'none' }}>
+                  <div key={t.id} onClick={() => openTourDetail(t)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
                     <div style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '0.88rem' }}>{t.name}</div>
                     <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: t.status === 'active' ? '#34d399' : 'var(--text-muted)' }}>{t.status}</span>
-                  </Link>
+                  </div>
                 ))}
               </div>
             </div>
           )}
         </>
       )}
+      {/* Booking Detail Modal */}
+      {detailBooking && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: '#2c2e45', borderRadius: 'var(--radius)', padding: '2rem', width: '100%', maxWidth: 480, position: 'relative' }}>
+            <button onClick={() => setDetailBooking(null)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--accent)', letterSpacing: '0.1em', marginBottom: '0.25rem' }}>
+              {detailBooking.venue?.name || 'TBD'}
+            </div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'var(--font-mono)', marginBottom: '1.25rem' }}>
+              {detailBooking.venue?.city ? `${detailBooking.venue.city}, ${detailBooking.venue.state}` : ''}
+              {detailBooking.venue?.address ? ` · ${detailBooking.venue.address}` : ''}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {([
+                ['Date',      detailBooking.show_date ? new Date(detailBooking.show_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : '—'],
+                ['Status',    BOOKING_STATUS_LABELS[detailBooking.status as keyof typeof BOOKING_STATUS_LABELS] || detailBooking.status],
+                ['Fee',       detailBooking.fee ? `$${Number(detailBooking.fee).toLocaleString()}` : '—'],
+                ['Door',      detailBooking.door_time || '—'],
+                ['Load In',   detailBooking.load_in_time || '—'],
+                ['Set Time',  detailBooking.set_time || '—'],
+                ['Set Length',detailBooking.set_length_min ? `${detailBooking.set_length_min} min` : '—'],
+                ['Phone',     detailBooking.venue?.phone || '—'],
+              ] as [string, string][]).map(([label, value]) => (
+                <div key={label} style={{ display: 'flex', gap: '1rem', fontSize: '0.88rem' }}>
+                  <div style={{ width: 90, flexShrink: 0, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.74rem', textTransform: 'uppercase', paddingTop: 2 }}>{label}</div>
+                  <div style={{ color: 'var(--text-primary)' }}>{value}</div>
+                </div>
+              ))}
+              {detailBooking.advance_notes && (
+                <div style={{ display: 'flex', gap: '1rem', fontSize: '0.88rem' }}>
+                  <div style={{ width: 90, flexShrink: 0, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.74rem', textTransform: 'uppercase', paddingTop: 2 }}>Notes</div>
+                  <div style={{ color: 'var(--text-secondary)', lineHeight: 1.5 }}>{detailBooking.advance_notes}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tour Detail Modal */}
+      {detailTour && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: '#2c2e45', borderRadius: 'var(--radius)', padding: '2rem', width: '100%', maxWidth: 520, position: 'relative', maxHeight: '85vh', overflowY: 'auto' }}>
+            <button onClick={() => setDetailTour(null)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--accent)', letterSpacing: '0.1em', marginBottom: '0.25rem' }}>{detailTour.name}</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-mono)', marginBottom: '1.5rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              {detailTour.status}
+              {detailTour.start_date ? ` · ${new Date(detailTour.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+              {detailTour.end_date ? ` – ${new Date(detailTour.end_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>Shows</div>
+            {tourLoading && <div style={{ color: 'var(--text-muted)', fontSize: '0.84rem' }}>Loading…</div>}
+            {!tourLoading && tourBookings.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: '0.84rem' }}>No shows added yet.</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {tourBookings.map((b: any) => (
+                <div key={b.id} onClick={() => { setDetailTour(null); setDetailBooking(b); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
+                  <div>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '0.88rem' }}>{b.venue?.name || 'TBD'}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.76rem', fontFamily: 'var(--font-mono)', marginTop: '0.1rem' }}>
+                      {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                      {b.venue?.city ? ` · ${b.venue.city}, ${b.venue.state}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    {b.fee && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--accent)' }}>${Number(b.fee).toLocaleString()}</span>}
+                    <span className={`badge badge-${b.status}`}>{BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Show Modal */}
       {showModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
