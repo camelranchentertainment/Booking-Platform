@@ -25,14 +25,13 @@ const agentNav = [
 ];
 
 const bandNav = [
-  { label: 'Dashboard',    href: '/band',          icon: '◈' },
-  { label: 'Tours',        href: '/band/tours',    icon: '⟴' },
-  { label: 'Venues',       href: '/venues',        icon: '⌂' },
-  { label: 'Calendar',     href: '/band/calendar', icon: '◷' },
-  { label: 'Email',        href: '/band/email',    icon: '✉' },
-  { label: 'Social',       href: '/band/social',   icon: '✦' },
-  { label: 'Band Profile', href: '/band/settings', icon: '♪' },
-  { label: 'Account',      href: '/settings',      icon: '⚙' },
+  { label: 'Dashboard', href: '/band',          icon: '◈' },
+  { label: 'Tours',     href: '/band/tours',    icon: '⟴' },
+  { label: 'Venues',    href: '/venues',        icon: '⌂' },
+  { label: 'Calendar',  href: '/band/calendar', icon: '◷' },
+  { label: 'Email',     href: '/band/email',    icon: '✉' },
+  { label: 'Social',    href: '/band/social',   icon: '✦' },
+  { label: 'Account',   href: '/band/settings', icon: '⚙' },
 ];
 
 const memberNav = [
@@ -88,11 +87,13 @@ export default function Sidebar({ profile, onSignOut }: Props) {
     }
 
     // Act invitations for this user's email (any role)
-    if (profile.email) {
+    // Use the auth email as the primary source — profile.email may not be populated for newly signed-up users
+    const authEmail = user.email || profile?.email || null;
+    if (authEmail) {
       const { data: invites } = await supabase
         .from('act_invitations')
         .select('id, role, token, act:act_id(act_name)')
-        .eq('email', profile.email)
+        .eq('email', authEmail)
         .eq('status', 'pending');
       (invites || []).forEach(i => collected.push({ type: 'act_invitation', ...i, act: i.act as any }));
     }
@@ -141,10 +142,11 @@ export default function Sidebar({ profile, onSignOut }: Props) {
     profile?.role === 'act_admin' ? bandNav   :
     memberNav;
 
-  const isActive = (href: string) =>
-    href === '/dashboard'
-      ? router.pathname === href
-      : router.pathname.startsWith(href);
+  const isActive = (href: string) => {
+    // Root portal pages: exact match only to avoid lighting up for all sub-routes
+    if (['/dashboard', '/band', '/member'].includes(href)) return router.pathname === href;
+    return router.pathname.startsWith(href);
+  };
 
   return (
     <nav className="sidebar">

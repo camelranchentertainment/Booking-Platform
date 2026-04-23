@@ -10,37 +10,55 @@ type BandForm = {
   website: string; instagram: string; spotify: string; member_count: string;
 };
 
+type PendingInvite = { id: string; role: string; token: string; act: { act_name: string } | null };
+
 const GENRES = ['Rock','Country','Americana','Folk','Blues','Jazz','Pop','Hip-Hop','R&B','Soul','Metal','Punk','Electronic','Singer-Songwriter','Other'];
 
 export default function BandSettings() {
   const router = useRouter();
+
+  // Act / band profile
   const [act, setAct]       = useState<any>(null);
   const [form, setForm]     = useState<BandForm>({ act_name: '', genre: '', bio: '', website: '', instagram: '', spotify: '', member_count: '1' });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Personal info
+  const [displayName, setDisplayName] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savedProfile, setSavedProfile]   = useState(false);
+
+  // Password
   const [pwForm, setPwForm]   = useState<PwForm>({ newPassword: '', confirmPassword: '' });
   const [pwSaving, setPwSaving] = useState(false);
   const [pwSaved, setPwSaved]   = useState(false);
   const [pwError, setPwError]   = useState('');
 
+  // Create-new-band flow
   const [createName, setCreateName]   = useState('');
   const [creating, setCreating]       = useState(false);
   const [createError, setCreateError] = useState('');
+
+  // Pending invites (for users who haven't accepted yet)
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [accepting, setAccepting] = useState('');
 
   useEffect(() => { load(); }, []);
 
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    // Load personal display_name from profile
+    const { data: prof } = await supabase.from('user_profiles').select('display_name, act_id, email').eq('id', user.id).single();
+    setDisplayName(prof?.display_name || '');
+
+    // Dual-lookup for act: owner first, then profile act_id
     let { data: acts } = await supabase.from('acts').select('*').eq('owner_id', user.id).eq('is_active', true).limit(1);
-    if (!acts?.length) {
-      const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
-      if (prof?.act_id) {
-        const { data: linked } = await supabase.from('acts').select('*').eq('id', prof.act_id).eq('is_active', true).limit(1);
-        acts = linked;
-      }
+    if (!acts?.length && prof?.act_id) {
+      const { data: linked } = await supabase.from('acts').select('*').eq('id', prof.act_id).eq('is_active', true).limit(1);
+      acts = linked;
     }
     const a = acts?.[0];
     if (a) {
@@ -55,7 +73,31 @@ export default function BandSettings() {
         member_count: String(a.member_count || 1),
       });
     }
+
+    // Check for pending invites (uses auth email as primary lookup)
+    const authEmail = user.email || prof?.email || null;
+    if (authEmail) {
+      const { data: invites } = await supabase
+        .from('act_invitations')
+        .select('id, role, token, act:act_id(act_name)')
+        .eq('email', authEmail)
+        .eq('status', 'pending');
+      setPendingInvites((invites || []) as PendingInvite[]);
+    }
+
     setLoading(false);
+  };
+
+  const saveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    setSavedProfile(false);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('user_profiles').update({ display_name: displayName.trim() }).eq('id', user.id);
+    setSavingProfile(false);
+    setSavedProfile(true);
+    setTimeout(() => setSavedProfile(false), 3000);
   };
 
   const save = async (e: React.FormEvent) => {
@@ -112,127 +154,230 @@ export default function BandSettings() {
     setCreating(false);
   };
 
-  if (loading) return <AppShell requireRole="act_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading…</div></AppShell>;
+  const acceptInvite = async (invite: PendingInvite) => {
+    setAccepting(invite.id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setAccepting(''); return; }
+    const { data: prof } = await supabase.from('user_profiles').select('display_name').eq('id', user.id).single();
+    const res = await fetch('/api/accept-invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: invite.token, userId: user.id, displayName: prof?.display_name || '' }),
+    });
+    if (res.ok) {
+      await load();
+      router.reload();
+    }
+    setAccepting('');
+  };
 
-  if (!act) return (
-    <AppShell requireRole="act_admin">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Band Settings</h1>
-          <div className="page-sub">Create your band profile to get started</div>
-        </div>
-      </div>
-      <div style={{ maxWidth: 480 }}>
-        <div className="card">
-          <div className="card-header"><span className="card-title">CREATE YOUR BAND</span></div>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: '1.25rem', lineHeight: 1.6 }}>
-            Your account doesn't have a band profile yet. Enter your band name to get started — you can fill in the rest of the details after.
-          </p>
-          <form onSubmit={createAct} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div className="field">
-              <label className="field-label">Band / Act Name *</label>
-              <input
-                className="input"
-                value={createName}
-                onChange={e => setCreateName(e.target.value)}
-                placeholder="The Band Name"
-                required
-                autoFocus
-              />
-            </div>
-            {createError && (
-              <div style={{ color: '#f87171', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{createError}</div>
-            )}
-            <button type="submit" className="btn btn-primary" disabled={creating}>
-              {creating ? 'Creating…' : 'Create Band Profile'}
-            </button>
-          </form>
-        </div>
-      </div>
-    </AppShell>
-  );
+  if (loading) return <AppShell requireRole="act_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading…</div></AppShell>;
 
   return (
     <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Band Settings</h1>
-          <div className="page-sub">{act.act_name}</div>
+          <h1 className="page-title">Account & Profile</h1>
+          <div className="page-sub">{act ? act.act_name : 'Set up your band profile'}</div>
         </div>
         <button className="btn btn-secondary" onClick={() => router.back()}>← Back</button>
       </div>
 
-      <div style={{ maxWidth: 640 }}>
-        <form onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      {/* Pending invites banner */}
+      {pendingInvites.length > 0 && (
+        <div style={{ marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          {pendingInvites.map(invite => (
+            <div key={invite.id} style={{
+              background: 'rgba(167,139,250,0.08)',
+              border: '1px solid rgba(167,139,250,0.35)',
+              borderRadius: 'var(--radius)',
+              padding: '1rem 1.25rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem',
+            }}>
+              <div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#a78bfa', marginBottom: '0.25rem' }}>
+                  Band Invite
+                </div>
+                <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.93rem' }}>
+                  {invite.act?.act_name || 'A band'} has invited you as {invite.role === 'act_admin' ? 'Band Admin' : 'Band Member'}
+                </div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginTop: '0.2rem' }}>
+                  Accept to link this band profile to your account, or decline and create your own below.
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  disabled={!!accepting}
+                  onClick={async () => {
+                    // Decline: just mark as declined
+                    const { data: { session } } = await supabase.auth.getSession();
+                    await fetch('/api/act-invitations/decline', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+                      body: JSON.stringify({ inviteId: invite.id }),
+                    });
+                    await load();
+                  }}
+                  style={{ color: '#f87171', borderColor: '#f87171' }}
+                >
+                  Decline
+                </button>
+                <button
+                  className="btn btn-sm"
+                  disabled={!!accepting}
+                  onClick={() => acceptInvite(invite)}
+                  style={{ background: '#a78bfa', borderColor: '#a78bfa', color: '#000', fontWeight: 600 }}
+                >
+                  {accepting === invite.id ? 'Accepting…' : 'Accept'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
-          {/* Identity */}
+      <div style={{ maxWidth: 640, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+        {/* ── Personal Info ── */}
+        <form onSubmit={saveProfile}>
           <div className="card">
-            <div className="card-header"><span className="card-title">BAND IDENTITY</span></div>
+            <div className="card-header"><span className="card-title">PERSONAL INFO</span></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <div className="field">
-                <label className="field-label">Band Name *</label>
-                <input className="input" value={form.act_name} onChange={set('act_name')} required />
-              </div>
-              <div className="grid-2">
-                <div className="field">
-                  <label className="field-label">Genre</label>
-                  <select className="select" value={form.genre} onChange={set('genre')}>
-                    <option value="">— select —</option>
-                    {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
-                  </select>
-                </div>
-                <div className="field">
-                  <label className="field-label">Members</label>
-                  <input className="input" type="number" min="1" max="99" value={form.member_count} onChange={set('member_count')} />
-                </div>
-              </div>
-              <div className="field">
-                <label className="field-label">Bio</label>
-                <textarea
+                <label className="field-label">Display Name</label>
+                <input
                   className="input"
-                  value={form.bio}
-                  onChange={set('bio')}
-                  rows={5}
-                  placeholder="Describe your band — this gets used in pitch emails…"
-                  style={{ resize: 'vertical' }}
+                  value={displayName}
+                  onChange={e => setDisplayName(e.target.value)}
+                  placeholder="Your name"
                 />
               </div>
             </div>
-          </div>
-
-          {/* Online presence */}
-          <div className="card">
-            <div className="card-header"><span className="card-title">ONLINE PRESENCE</span></div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div className="field">
-                <label className="field-label">Website</label>
-                <input className="input" value={form.website} onChange={set('website')} placeholder="https://..." />
-              </div>
-              <div className="field">
-                <label className="field-label">Spotify</label>
-                <input className="input" value={form.spotify} onChange={set('spotify')} placeholder="https://open.spotify.com/artist/..." />
-              </div>
-              <div className="field">
-                <label className="field-label">Instagram</label>
-                <input className="input" value={form.instagram} onChange={set('instagram')} placeholder="@bandname or full URL" />
-              </div>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
+              <button type="submit" className="btn btn-primary" disabled={savingProfile}>
+                {savingProfile ? 'Saving…' : 'Save'}
+              </button>
+              {savedProfile && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#34d399', letterSpacing: '0.06em' }}>✓ Saved</span>}
             </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Saving…' : 'Save Changes'}
-            </button>
-            {saved && (
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#34d399', letterSpacing: '0.06em' }}>
-                ✓ Saved
-              </span>
-            )}
           </div>
         </form>
 
-        {/* Change Password */}
-        <form onSubmit={changePassword} style={{ marginTop: '1.25rem' }}>
+        {/* ── Band Profile ── */}
+        {!act && !pendingInvites.length && (
+          <div className="card">
+            <div className="card-header"><span className="card-title">BAND PROFILE</span></div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: '1.25rem', lineHeight: 1.6 }}>
+              Your account doesn't have a band profile yet. Enter your band name to get started — you can fill in the rest of the details after.
+              If your booking agent has set up a profile for you, you'll see an invite notice above once they send it.
+            </p>
+            <form onSubmit={createAct} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="field">
+                <label className="field-label">Band / Act Name *</label>
+                <input
+                  className="input"
+                  value={createName}
+                  onChange={e => setCreateName(e.target.value)}
+                  placeholder="The Band Name"
+                  required
+                  autoFocus
+                />
+              </div>
+              {createError && (
+                <div style={{ color: '#f87171', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{createError}</div>
+              )}
+              <button type="submit" className="btn btn-primary" disabled={creating}>
+                {creating ? 'Creating…' : 'Create Band Profile'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {act && (
+          <form onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+            {/* Agent-created notice */}
+            {act.agent_id && !act.owner_id && (
+              <div style={{
+                background: 'rgba(200,146,26,0.07)',
+                border: '1px solid rgba(200,146,26,0.25)',
+                borderRadius: 'var(--radius)',
+                padding: '0.75rem 1rem',
+                fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5,
+              }}>
+                ◈ This profile was set up by your booking agent. You can edit any details below.
+              </div>
+            )}
+
+            {/* Band Identity */}
+            <div className="card">
+              <div className="card-header"><span className="card-title">BAND IDENTITY</span></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div className="field">
+                  <label className="field-label">Band Name *</label>
+                  <input className="input" value={form.act_name} onChange={set('act_name')} required />
+                </div>
+                <div className="grid-2">
+                  <div className="field">
+                    <label className="field-label">Genre</label>
+                    <select className="select" value={form.genre} onChange={set('genre')}>
+                      <option value="">— select —</option>
+                      {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Members</label>
+                    <input className="input" type="number" min="1" max="99" value={form.member_count} onChange={set('member_count')} />
+                  </div>
+                </div>
+                <div className="field">
+                  <label className="field-label">Bio</label>
+                  <textarea
+                    className="input"
+                    value={form.bio}
+                    onChange={set('bio')}
+                    rows={5}
+                    placeholder="Describe your band — this gets used in pitch emails…"
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Online Presence */}
+            <div className="card">
+              <div className="card-header"><span className="card-title">ONLINE PRESENCE</span></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div className="field">
+                  <label className="field-label">Website</label>
+                  <input className="input" value={form.website} onChange={set('website')} placeholder="https://..." />
+                </div>
+                <div className="field">
+                  <label className="field-label">Spotify</label>
+                  <input className="input" value={form.spotify} onChange={set('spotify')} placeholder="https://open.spotify.com/artist/..." />
+                </div>
+                <div className="field">
+                  <label className="field-label">Instagram</label>
+                  <input className="input" value={form.instagram} onChange={set('instagram')} placeholder="@bandname or full URL" />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? 'Saving…' : 'Save Band Profile'}
+              </button>
+              {saved && (
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#34d399', letterSpacing: '0.06em' }}>
+                  ✓ Saved
+                </span>
+              )}
+            </div>
+          </form>
+        )}
+
+        {/* ── Change Password ── */}
+        <form onSubmit={changePassword}>
           <div className="card">
             <div className="card-header"><span className="card-title">CHANGE PASSWORD</span></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>

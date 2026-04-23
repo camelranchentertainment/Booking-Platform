@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import FirecrawlApp from '@mendable/firecrawl-js';
 import Anthropic from '@anthropic-ai/sdk';
-import { supabase } from '../../../lib/supabase';
+import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
 
 const EXTRACT_PROMPT = `You are extracting booking/contact information from a venue website.
@@ -43,6 +43,12 @@ function hasEmail(extracted: Record<string, any>): boolean {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
+
+  // Auth check — required to save contacts/venues
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const service = getServiceClient();
+  const { data: { user } } = await service.auth.getUser(token || '');
+  if (!user) return res.status(401).json({ error: 'Session expired — please refresh the page and try again' });
 
   const { url, venueId } = req.body;
   if (!url) return res.status(400).json({ error: 'url required' });
@@ -116,7 +122,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!extracted) return res.status(500).json({ error: 'Extraction returned malformed response' });
 
-    // --- Persist to DB if venueId provided ---
+    // --- Persist to DB if venueId provided — use service client to bypass RLS ---
     let updated = false;
     if (venueId) {
       const patch: Record<string, any> = {};
@@ -129,7 +135,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (extracted.notes)            patch.notes      = extracted.notes;
 
       if (Object.keys(patch).length > 0) {
-        await supabase.from('venues').update(patch).eq('id', venueId);
+        await service.from('venues').update(patch).eq('id', venueId);
         updated = true;
       }
 
@@ -139,7 +145,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const last  = parts.slice(1).join(' ') || '';
         const email = extracted.booking_email || extracted.general_email || null;
 
-        const { data: existing } = await supabase
+        const { data: existing } = await service
           .from('contacts')
           .select('id')
           .eq('venue_id', venueId)
@@ -147,21 +153,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           .limit(1);
 
         if (!existing?.length) {
-          const { data: { user } } = await supabase.auth.getUser(
-            req.headers.authorization?.replace('Bearer ', '')
-          );
-          if (user) {
-            await supabase.from('contacts').insert({
-              agent_id:   user.id,
-              venue_id:   venueId,
-              first_name: first,
-              last_name:  last,
-              title:      extracted.booking_contact_title || null,
-              email,
-              phone:      extracted.booking_phone || null,
-              status:     'not_contacted',
-            });
-          }
+          await service.from('contacts').insert({
+            agent_id:   user.id,
+            venue_id:   venueId,
+            first_name: first,
+            last_name:  last,
+            title:      extracted.booking_contact_title || null,
+            email,
+            phone:      extracted.booking_phone || null,
+            status:     'not_contacted',
+          });
         }
       }
     }
