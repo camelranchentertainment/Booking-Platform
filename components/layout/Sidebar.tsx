@@ -26,6 +26,7 @@ const agentNav = [
 
 const bandNav = [
   { label: 'Dashboard', href: '/band',          icon: '◈' },
+  { label: 'Members',   href: '/band/members',  icon: '♟' },
   { label: 'Tours',     href: '/band/tours',    icon: '⟴' },
   { label: 'Venues',    href: '/venues',        icon: '⌂' },
   { label: 'Calendar',  href: '/band/calendar', icon: '◷' },
