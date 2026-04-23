@@ -4,6 +4,7 @@ import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BookingStatus, BOOKING_STATUS_LABELS, BOOKING_STATUS_ORDER } from '../../lib/types';
 import Link from 'next/link';
+import EmailComposer from '../../components/email/EmailComposer';
 
 type ActPick   = { id: string; act_name: string };
 type VenuePick = { id: string; name: string; city: string; state: string };
@@ -16,9 +17,10 @@ export default function BookingDetail() {
   const [acts, setActs]     = useState<ActPick[]>([]);
   const [venues, setVenues] = useState<VenuePick[]>([]);
   const [tours, setTours]   = useState<TourPick[]>([]);
-  const [edit, setEdit]     = useState(false);
-  const [form, setForm]     = useState<any>({});
-  const [saving, setSaving] = useState(false);
+  const [edit, setEdit]           = useState(false);
+  const [form, setForm]           = useState<any>({});
+  const [saving, setSaving]       = useState(false);
+  const [showEmail, setShowEmail] = useState(false);
 
   useEffect(() => { if (id) loadAll(); }, [id]);
 
@@ -91,6 +93,7 @@ export default function BookingDetail() {
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
           <span className={`badge badge-${booking.status}`}>{BOOKING_STATUS_LABELS[booking.status as BookingStatus]}</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowEmail(true)}>✉ Email</button>
           <button className="btn btn-secondary" onClick={() => setEdit(!edit)}>Edit</button>
           <button className="btn btn-danger btn-sm" onClick={deleteBooking}>Delete</button>
         </div>
@@ -240,6 +243,18 @@ export default function BookingDetail() {
             )}
           </div>
         </div>
+      )}
+      {showEmail && booking.act_id && (
+        <EmailComposer
+          bookingId={booking.id}
+          actId={booking.act_id}
+          venueId={booking.venue_id || undefined}
+          contactId={booking.contact?.id || undefined}
+          contactEmail={booking.contact?.email || undefined}
+          defaultCategory={booking.email_stage || 'target'}
+          agentName={undefined}
+          onClose={() => setShowEmail(false)}
+        />
       )}
     </AppShell>
   );

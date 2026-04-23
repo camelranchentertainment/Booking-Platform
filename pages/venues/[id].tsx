@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { Venue, BOOKING_STATUS_LABELS } from '../../lib/types';
 import { useLookup } from '../../lib/hooks/useLookup';
 import Link from 'next/link';
+import EmailComposer from '../../components/email/EmailComposer';
 
 type Contact = {
   id: string; first_name: string; last_name: string; title?: string | null;
@@ -44,19 +45,25 @@ export default function VenueDetail() {
   const [showNewContact, setShowNewContact] = useState(false);
   const [contactForm, setContactForm]       = useState(BLANK_CONTACT);
   const [savingContact, setSavingContact]   = useState(false);
+  const [showEmail, setShowEmail]           = useState(false);
+  const [emailActId, setEmailActId]         = useState('');
+  const [agentActs, setAgentActs]           = useState<{id: string; act_name: string}[]>([]);
 
   useEffect(() => { if (id) loadAll(); }, [id]);
 
   const loadAll = async () => {
-    const [venueRes, bookingsRes, contactsRes] = await Promise.all([
+    const { data: { user } } = await supabase.auth.getUser();
+    const [venueRes, bookingsRes, contactsRes, actsRes] = await Promise.all([
       supabase.from('venues').select('*').eq('id', id).single(),
       supabase.from('bookings').select('id, status, show_date, fee, act:acts(act_name)')
         .eq('venue_id', id).order('show_date', { ascending: false }).limit(20),
       supabase.from('contacts').select('*').eq('venue_id', id).order('last_name'),
+      user ? supabase.from('acts').select('id, act_name').eq('agent_id', user.id).eq('is_active', true).order('act_name') : Promise.resolve({ data: [] }),
     ]);
     if (venueRes.data) { setVenue(venueRes.data); setForm(venueRes.data); }
     setBookings(bookingsRes.data || []);
     setContacts(contactsRes.data || []);
+    setAgentActs(actsRes.data || []);
   };
 
   const saveEdit = async () => {
@@ -170,6 +177,7 @@ export default function VenueDetail() {
               </button>
             </div>
           )}
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowEmail(true)}>✉ Email</button>
           <button className="btn btn-secondary" onClick={() => setEdit(!edit)}>Edit</button>
           <Link href={`/bookings/new?venue=${venue.id}`} className="btn btn-primary">+ Book Venue</Link>
         </div>
@@ -360,6 +368,39 @@ export default function VenueDetail() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Act picker → Email composer */}
+      {showEmail && (
+        emailActId ? (
+          <EmailComposer
+            actId={emailActId}
+            venueId={venue.id}
+            contactId={contacts[0]?.id || undefined}
+            contactEmail={contacts[0]?.email || venue.email || undefined}
+            defaultCategory="target"
+            onClose={() => { setShowEmail(false); setEmailActId(''); }}
+          />
+        ) : (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ background: '#f5f3ee', borderRadius: 'var(--radius)', padding: '2rem', width: 340, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', color: '#1a1a2e', marginBottom: '1rem' }}>Email about which act?</div>
+              {agentActs.length === 0 ? (
+                <div style={{ color: '#888', fontFamily: 'var(--font-body)', fontSize: '0.84rem', marginBottom: '1rem' }}>No active acts found.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+                  {agentActs.map(a => (
+                    <button key={a.id} onClick={() => setEmailActId(a.id)}
+                      style={{ padding: '0.6rem 0.9rem', background: 'var(--bg-overlay)', border: '1px solid #ddd', borderRadius: '4px', textAlign: 'left', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#1a1a2e' }}>
+                      {a.act_name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button onClick={() => setShowEmail(false)} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Cancel</button>
+            </div>
+          </div>
+        )
       )}
     </AppShell>
   );
