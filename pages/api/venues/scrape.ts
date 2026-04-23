@@ -170,9 +170,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ extracted, updated, pagesScraped });
 
   } catch (err: any) {
-    if (err?.message?.includes('FIRECRAWL_API_KEY')) {
+    const msg: string = err?.message ?? '';
+    if (msg.includes('FIRECRAWL_API_KEY')) {
       return res.status(503).json({ error: 'Firecrawl not configured — add FIRECRAWL_API_KEY env var' });
     }
-    return res.status(500).json({ error: err.message });
+    if (msg.toLowerCase().includes('x-api-key') || msg.includes('401') || msg.toLowerCase().includes('unauthorized') || msg.toLowerCase().includes('invalid api key')) {
+      return res.status(401).json({ error: 'Firecrawl API key is invalid or expired. Go to Settings → API Keys and update your Firecrawl key.' });
+    }
+    return res.status(500).json({ error: msg || 'Scan failed' });
   }
 }

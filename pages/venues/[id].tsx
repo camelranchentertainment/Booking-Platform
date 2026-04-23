@@ -38,6 +38,7 @@ export default function VenueDetail() {
   const [scraping, setScraping] = useState(false);
   const [scrapeResult, setScrapeResult] = useState<any>(null);
   const [scrapeErr, setScrapeErr]       = useState('');
+  const [scanUrl, setScanUrl]           = useState('');
 
   // Contact form
   const [showNewContact, setShowNewContact] = useState(false);
@@ -105,16 +106,21 @@ export default function VenueDetail() {
   };
 
   const scrapeWebsite = async () => {
-    if (!venue?.website) return;
+    const url = venue?.website || scanUrl.trim();
+    if (!url) return;
     setScraping(true);
     setScrapeResult(null);
     setScrapeErr('');
     try {
+      // If we're using a manually entered URL and the venue has no website yet, save it first
+      if (!venue?.website && scanUrl.trim() && venue?.id) {
+        await supabase.from('venues').update({ website: scanUrl.trim() }).eq('id', venue.id);
+      }
       const token = (await supabase.auth.getSession()).data.session?.access_token;
       const res = await fetch('/api/venues/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ url: venue.website, venueId: venue.id }),
+        body: JSON.stringify({ url, venueId: venue?.id }),
       });
       const data = await res.json();
       if (!res.ok) { setScrapeErr(data.error || 'Scrape failed'); return; }
@@ -143,11 +149,26 @@ export default function VenueDetail() {
           <h1 className="page-title">{venue.name}</h1>
           <div className="page-sub">{venue.city}, {venue.state}{venue.venue_type ? ` · ${venue.venue_type}` : ''}</div>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          {venue.website && (
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {venue.website ? (
             <button className="btn btn-secondary" onClick={scrapeWebsite} disabled={scraping}>
               {scraping ? '⟳ Scanning…' : '⟳ Scan Website'}
             </button>
+          ) : (
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <input
+                type="url"
+                className="input"
+                placeholder="https://venue.com"
+                value={scanUrl}
+                onChange={e => setScanUrl(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && scanUrl.trim() && scrapeWebsite()}
+                style={{ width: 220, height: 36, fontSize: '0.84rem' }}
+              />
+              <button className="btn btn-secondary" onClick={scrapeWebsite} disabled={scraping || !scanUrl.trim()}>
+                {scraping ? '⟳ Scanning…' : '⟳ Scan'}
+              </button>
+            </div>
           )}
           <button className="btn btn-secondary" onClick={() => setEdit(!edit)}>Edit</button>
           <Link href={`/bookings/new?venue=${venue.id}`} className="btn btn-primary">+ Book Venue</Link>
