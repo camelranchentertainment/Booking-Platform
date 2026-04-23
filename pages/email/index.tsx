@@ -92,6 +92,8 @@ export default function EmailPage() {
   const [pendingDrafts, setPendingDrafts] = useState<any[]>([]);
   const [draftComposer, setDraftComposer] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<string | null>(null);
   const [acts, setActs]       = useState<Act[]>([]);
   const [venues, setVenues]   = useState<Venue[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -227,6 +229,24 @@ export default function EmailPage() {
     }
   };
 
+  const runBackfill = async () => {
+    setBackfilling(true);
+    setBackfillResult(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/email/backfill-drafts', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session?.access_token}` },
+    });
+    const data = await res.json();
+    if (data.created === 0) {
+      setBackfillResult(data.message || 'No new drafts to generate.');
+    } else {
+      setBackfillResult(`Generated ${data.created} draft${data.created > 1 ? 's' : ''}.`);
+      await loadAll();
+    }
+    setBackfilling(false);
+  };
+
   const markCold = async (bookingId: string) => {
     setMarkingCold(bookingId);
     await supabase.from('bookings').update({ email_stage: 'cold' }).eq('id', bookingId);
@@ -286,7 +306,13 @@ export default function EmailPage() {
             </>
           )}
           {view === 'outbox' && (
-            <button className="btn btn-primary" onClick={() => setShowCompose(true)}>✦ AI Compose</button>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              {backfillResult && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{backfillResult}</span>}
+              <button className="btn btn-secondary" onClick={runBackfill} disabled={backfilling} title="Generate cold pitch drafts for all existing bookings that have venues but no draft yet">
+                {backfilling ? '⟳ Generating…' : '⟳ Generate Drafts'}
+              </button>
+              <button className="btn btn-primary" onClick={() => setShowCompose(true)}>✦ AI Compose</button>
+            </div>
           )}
         </div>
       </div>
