@@ -36,6 +36,11 @@ export default function BandSettings() {
   const [pwSaved, setPwSaved]   = useState(false);
   const [pwError, setPwError]   = useState('');
 
+  // Logo upload
+  const [logoUrl, setLogoUrl]           = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError]         = useState('');
+
   // Create-new-band flow
   const [createName, setCreateName]   = useState('');
   const [creating, setCreating]       = useState(false);
@@ -68,6 +73,7 @@ export default function BandSettings() {
     const a = acts?.[0];
     if (a) {
       setAct(a);
+      setLogoUrl(a.logo_url || null);
       setForm({
         act_name:     a.act_name     || '',
         genre:        a.genre        || '',
@@ -199,6 +205,25 @@ export default function BandSettings() {
     });
     await load();
     setRevoking('');
+  };
+
+  const uploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !act) return;
+    if (!file.type.startsWith('image/')) { setLogoError('Please choose an image file'); return; }
+    if (file.size > 5 * 1024 * 1024) { setLogoError('Image must be under 5 MB'); return; }
+    setLogoError('');
+    setLogoUploading(true);
+    const ext  = file.name.split('.').pop() || 'jpg';
+    const path = `act-${act.id}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
+    if (upErr) { setLogoError(upErr.message); setLogoUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+    const url = `${publicUrl}?t=${Date.now()}`;
+    await supabase.from('acts').update({ logo_url: url }).eq('id', act.id);
+    setLogoUrl(url);
+    setLogoUploading(false);
+    e.target.value = '';
   };
 
   if (loading) return <AppShell requireRole="act_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading…</div></AppShell>;
@@ -379,6 +404,29 @@ export default function BandSettings() {
             <div className="card">
               <div className="card-header"><span className="card-title">BAND IDENTITY</span></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+
+                {/* Logo upload */}
+                <div className="field">
+                  <label className="field-label">Band Icon / Logo</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    {logoUrl ? (
+                      <img src={logoUrl} alt="Band logo" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }} />
+                    ) : (
+                      <div style={{ width: 64, height: 64, borderRadius: 'var(--radius-sm)', border: '1px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '1.5rem' }}>♪</div>
+                    )}
+                    <div>
+                      <label style={{ cursor: 'pointer' }}>
+                        <span className="btn btn-secondary btn-sm" style={{ display: 'inline-block' }}>
+                          {logoUploading ? 'Uploading…' : logoUrl ? 'Change Logo' : 'Upload Logo'}
+                        </span>
+                        <input type="file" accept="image/*" onChange={uploadLogo} disabled={logoUploading} style={{ display: 'none' }} />
+                      </label>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>JPG, PNG, GIF · max 5 MB</div>
+                      {logoError && <div style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '0.25rem' }}>{logoError}</div>}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="field">
                   <label className="field-label">Band Name *</label>
                   <input className="input" value={form.act_name} onChange={set('act_name')} required />
