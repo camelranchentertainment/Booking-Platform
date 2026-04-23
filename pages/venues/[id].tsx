@@ -134,10 +134,10 @@ export default function VenueDetail() {
   const bookingLabel = (status: string) =>
     statusValues.find(lv => lv.value === status)?.label ?? BOOKING_STATUS_LABELS[status as keyof typeof BOOKING_STATUS_LABELS] ?? status;
 
-  if (!venue) return <AppShell requireRole="agent"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
+  if (!venue) return <AppShell requireRole={['agent', 'act_admin']}><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
 
   return (
-    <AppShell requireRole="agent">
+    <AppShell requireRole={['agent', 'act_admin']}>
       <div className="page-header">
         <div>
           <h1 className="page-title">{venue.name}</h1>
