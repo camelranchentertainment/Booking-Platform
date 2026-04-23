@@ -79,8 +79,10 @@ export default function BandPortal() {
     if (q.length < 2) { setVenueSearch([]); return; }
     setVenueSearching(true);
     const { data: { user } } = await supabase.auth.getUser();
+    // Search agent's venues if act is agent-managed, otherwise user's own venues
+    const lookupId = myAct?.agent_id || user!.id;
     const { data } = await supabase.from('venues').select('id, name, city, state, address, phone, email')
-      .eq('agent_id', user!.id).ilike('name', `%${q}%`).order('name').limit(8);
+      .eq('agent_id', lookupId).ilike('name', `%${q}%`).order('name').limit(8);
     setVenueSearch(data || []);
     setVenueSearching(false);
   };
@@ -95,15 +97,17 @@ export default function BandPortal() {
     const { data: { user } } = await supabase.auth.getUser();
     let venueId: string | null = selectedVenue?.id || null;
 
-    // If no venue selected from search, find or create one
+    // If no venue selected from search, find or create one under the appropriate owner
     if (!venueId && showForm.venueName.trim()) {
-      const city = showForm.city.trim() || selectedVenue?.city || '';
+      const ownerAgentId = myAct?.agent_id || user!.id;
+      const city = showForm.city.trim() || '';
       const { data: existing } = await supabase.from('venues').select('id')
-        .eq('agent_id', user!.id).ilike('name', showForm.venueName.trim())
+        .eq('agent_id', ownerAgentId).ilike('name', showForm.venueName.trim())
         .maybeSingle();
       if (existing) {
         venueId = existing.id;
       } else {
+        // New venues created by band admins go under their own user id (RLS allows this)
         const { data: newV } = await supabase.from('venues').insert({
           agent_id: user!.id, name: showForm.venueName.trim(),
           city: city || 'Unknown', state: showForm.state.trim() || null,
@@ -155,7 +159,7 @@ export default function BandPortal() {
         {myAct && (
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <Link href="/band/settings" className="btn btn-secondary">Band Settings</Link>
-            <Link href="/bookings/new" className="btn btn-primary">+ New Booking</Link>
+            <button className="btn btn-primary" onClick={openShowModal}>+ Add Show</button>
           </div>
         )}
       </div>
