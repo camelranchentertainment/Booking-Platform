@@ -46,7 +46,8 @@ export default function VenuesPage() {
   const [prospecting, setProspecting]     = useState(false);
   const [prospects, setProspects]         = useState<ProspectResult[]>([]);
   const [prospectErr, setProspectErr]     = useState('');
-  const [addingId, setAddingId]           = useState<string | null>(null);
+  const [prospectStatus, setProspectStatus] = useState<Record<string, string>>({});
+  const [prospectEmails, setProspectEmails] = useState<Record<string, string>>({});
 
   // Add to tour state
   const [tourTarget, setTourTarget]   = useState<Venue | null>(null);
@@ -182,20 +183,61 @@ export default function VenuesPage() {
   };
 
   const addProspect = async (p: ProspectResult) => {
-    setAddingId(p.place_id);
+    const setStatus = (s: string) =>
+      setProspectStatus(prev => ({ ...prev, [p.place_id]: s }));
+
+    setStatus('fetching');
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    // Step 1: Fetch Place Details for website + phone
+    let website: string | null = null;
+    let phone: string | null = null;
+    try {
+      const dr = await fetch(`/api/venues/place-details?place_id=${encodeURIComponent(p.place_id)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (dr.ok) { const d = await dr.json(); website = d.website; phone = d.phone; }
+    } catch { /* continue without */ }
+
+    setStatus('saving');
+
+    // Step 2: Insert venue with full details
     const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('venues').insert({
-      agent_id: user!.id,
-      name: p.name,
-      city: p.city,
-      state: p.state,
-      address: p.address || null,
-      place_id: p.place_id,
+    const { data: newVenue } = await supabase.from('venues').insert({
+      agent_id:        user!.id,
+      name:            p.name,
+      city:            p.city,
+      state:           p.state,
+      address:         p.address         || null,
+      place_id:        p.place_id,
       google_maps_url: p.google_maps_url,
-    });
+      website:         website           || null,
+      phone:           phone             || null,
+    }).select().single();
+
     setProspects(prev => prev.map(r => r.place_id === p.place_id ? { ...r, already_added: true } : r));
     await loadVenues();
-    setAddingId(null);
+
+    // Step 3: Auto-scrape website for booking email + contacts
+    if (website && newVenue?.id) {
+      setStatus('scraping');
+      try {
+        const sr = await fetch('/api/venues/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ url: website, venueId: newVenue.id }),
+        });
+        if (sr.ok) {
+          const { extracted } = await sr.json();
+          const email = extracted?.booking_email || extracted?.general_email || null;
+          if (email) setProspectEmails(prev => ({ ...prev, [p.place_id]: email }));
+          await loadVenues();
+        }
+      } catch { /* scrape failed — not critical */ }
+    }
+
+    setStatus('done');
   };
 
   const states = [...new Set(venues.map(v => v.state).filter(Boolean))].sort();
@@ -265,33 +307,62 @@ export default function VenuesPage() {
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
               {prospects.length} results — {prospects.filter(p => p.already_added).length} already in your database
             </div>
-            {prospects.map(p => (
-              <div key={p.place_id} style={{
-                display: 'flex', alignItems: 'center', gap: '0.75rem',
-                padding: '0.6rem 0.75rem', borderRadius: 'var(--radius-sm)',
-                background: p.already_added ? 'rgba(52,211,153,0.06)' : 'var(--bg-overlay)',
-                border: `1px solid ${p.already_added ? 'rgba(52,211,153,0.2)' : 'var(--border)'}`,
-              }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    {p.name}
-                    {p.already_added && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#34d399', letterSpacing: '0.1em', textTransform: 'uppercase' }}>✓ In DB</span>}
-                    {p.rating && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#fbbf24' }}>★ {p.rating}</span>}
+            {prospects.map(p => {
+              const status = prospectStatus[p.place_id];
+              const email  = prospectEmails[p.place_id];
+              const busy   = !!(status && status !== 'done');
+              const statusLabel: Record<string, string> = {
+                fetching: 'Fetching details…',
+                saving:   'Saving…',
+                scraping: 'Scanning for email…',
+                done:     '✓ Done',
+              };
+              return (
+                <div key={p.place_id} style={{
+                  display: 'flex', alignItems: 'center', gap: '0.75rem',
+                  padding: '0.6rem 0.75rem', borderRadius: 'var(--radius-sm)',
+                  background: p.already_added ? 'rgba(52,211,153,0.06)' : 'var(--bg-overlay)',
+                  border: `1px solid ${p.already_added ? 'rgba(52,211,153,0.2)' : 'var(--border)'}`,
+                  cursor: p.already_added ? 'default' : 'pointer',
+                }}
+                  onClick={() => { if (p.already_added) { const v = venues.find(v => v.place_id === p.place_id); if (v) router.push(`/venues/${v.id}`); } }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {p.name}
+                      {p.already_added && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#34d399', letterSpacing: '0.1em', textTransform: 'uppercase' }}>✓ In DB</span>}
+                      {p.rating && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#fbbf24' }}>★ {p.rating}</span>}
+                    </div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.formatted_address}
+                    </div>
+                    {email && (
+                      <div style={{ color: 'var(--accent)', fontSize: '0.78rem', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
+                        ✉ {email}
+                      </div>
+                    )}
+                    {busy && (
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.76rem', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
+                        {statusLabel[status]}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {p.formatted_address}
+                  <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                    <a href={p.google_maps_url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>Maps ↗</a>
+                    {!p.already_added && (
+                      <button className="btn btn-primary btn-sm" onClick={() => addProspect(p)} disabled={busy} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', minWidth: 52 }}>
+                        {busy ? '…' : '+ Add'}
+                      </button>
+                    )}
+                    {p.already_added && (
+                      <button className="btn btn-ghost btn-sm" onClick={() => { const v = venues.find(v => v.place_id === p.place_id); if (v) router.push(`/venues/${v.id}`); }} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>
+                        View →
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
-                  <a href={p.google_maps_url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>Maps ↗</a>
-                  {!p.already_added && (
-                    <button className="btn btn-primary btn-sm" onClick={() => addProspect(p)} disabled={addingId === p.place_id} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>
-                      {addingId === p.place_id ? 'Adding…' : '+ Add'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
