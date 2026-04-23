@@ -99,7 +99,15 @@ export default function BandEmail() {
       headers: { Authorization: `Bearer ${session?.access_token}` },
     });
     const data = await res.json();
-    setBackfillMsg(data.created === 0 ? (data.message || 'All up to date.') : `Generated ${data.created} draft${data.created > 1 ? 's' : ''}.`);
+    if (!res.ok) {
+      setBackfillMsg(`Error: ${data.error || 'Unknown error'}`);
+    } else if (data.errors?.length) {
+      setBackfillMsg(`Created ${data.created}, errors: ${data.errors[0]}`);
+    } else if (data.created === 0) {
+      setBackfillMsg(data.message || 'All up to date.');
+    } else {
+      setBackfillMsg(`Generated ${data.created} draft${data.created > 1 ? 's' : ''}.`);
+    }
     await loadAll();
     setBackfilling(false);
   };
