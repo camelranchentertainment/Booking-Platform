@@ -25,13 +25,14 @@ const agentNav = [
 ];
 
 const bandNav = [
-  { label: 'Dashboard', href: '/band',          icon: '◈' },
-  { label: 'Tours',     href: '/band/tours',    icon: '⟴' },
-  { label: 'Venues',    href: '/venues',        icon: '⌂' },
-  { label: 'Calendar',  href: '/band/calendar', icon: '◷' },
-  { label: 'Email',     href: '/band/email',    icon: '✉' },
-  { label: 'Social',    href: '/band/social',   icon: '✦' },
-  { label: 'Settings',  href: '/band/settings', icon: '⚙' },
+  { label: 'Dashboard',    href: '/band',          icon: '◈' },
+  { label: 'Tours',        href: '/band/tours',    icon: '⟴' },
+  { label: 'Venues',       href: '/venues',        icon: '⌂' },
+  { label: 'Calendar',     href: '/band/calendar', icon: '◷' },
+  { label: 'Email',        href: '/band/email',    icon: '✉' },
+  { label: 'Social',       href: '/band/social',   icon: '✦' },
+  { label: 'Band Profile', href: '/band/settings', icon: '♪' },
+  { label: 'Account',      href: '/settings',      icon: '⚙' },
 ];
 
 const memberNav = [

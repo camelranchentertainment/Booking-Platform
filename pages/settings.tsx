@@ -185,7 +185,7 @@ export default function Settings() {
                 <label className="field-label">Your Name</label>
                 <input className="input" value={form.display_name} onChange={set('display_name')} placeholder="Your full name" />
               </div>
-              {profile?.role !== 'member' && (
+              {profile?.role === 'agent' && (
                 <div className="field">
                   <label className="field-label">Agency Name</label>
                   <input className="input" value={form.agency_name} onChange={set('agency_name')} placeholder="Your agency / booking company" />
