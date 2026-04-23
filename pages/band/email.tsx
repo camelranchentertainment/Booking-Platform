@@ -38,27 +38,55 @@ export default function BandEmail() {
     setMyAct(act);
     if (!act) { setLoading(false); return; }
 
-    const [logRes, draftsRes] = await Promise.all([
+    const [logRes, bookingIdsRes] = await Promise.all([
       supabase.from('email_log')
         .select('*, venue:venues(name)')
         .eq('act_id', act.id)
         .order('sent_at', { ascending: false })
         .limit(100),
-      supabase.from('email_drafts')
-        .select(`
-          id, category, subject, body, created_at,
-          booking:bookings(
-            id, act_id, venue_id, show_date,
-            venue:venues(name, city, state, email),
-            contact:contacts(id, first_name, last_name, email)
-          )
-        `)
-        .eq('booking.act_id', act.id)
-        .order('created_at', { ascending: false }),
+      supabase.from('bookings').select('id').eq('act_id', act.id),
+    ]);
+
+    const bookingIds = (bookingIdsRes.data || []).map((b: any) => b.id);
+
+    // Get tours for this act to find tour_venue IDs
+    const { data: actTours } = await supabase.from('tours').select('id').eq('act_id', act.id);
+    const tourIds = (actTours || []).map((t: any) => t.id);
+    const { data: actTourVenues } = tourIds.length > 0
+      ? await supabase.from('tour_venues').select('id').in('tour_id', tourIds)
+      : { data: [] };
+    const tourVenueIds = (actTourVenues || []).map((tv: any) => tv.id);
+
+    // Fetch drafts — booking-based and tour_venue-based
+    const [bookingDraftsRes, tourVenueDraftsRes] = await Promise.all([
+      bookingIds.length > 0
+        ? supabase.from('email_drafts')
+            .select(`id, category, subject, body, created_at,
+              booking:bookings(id, act_id, venue_id, show_date,
+                venue:venues(name, city, state, email),
+                contact:contacts(id, first_name, last_name, email))`)
+            .in('booking_id', bookingIds)
+            .eq('category', 'target')
+            .order('created_at', { ascending: false })
+        : Promise.resolve({ data: [] }),
+      tourVenueIds.length > 0
+        ? supabase.from('email_drafts')
+            .select(`id, category, subject, body, created_at, tour_venue_id,
+              tourVenue:tour_venues(id, tour_id, venue_id,
+                venue:venues(name, city, state, email),
+                contact:contacts(id, first_name, last_name, email))`)
+            .in('tour_venue_id', tourVenueIds)
+            .eq('category', 'target')
+            .order('created_at', { ascending: false })
+        : Promise.resolve({ data: [] }),
     ]);
 
     setLog(logRes.data || []);
-    setDrafts((draftsRes.data || []).filter(d => d.booking));
+    const allDrafts = [
+      ...(bookingDraftsRes.data || []).map((d: any) => ({ ...d, _type: 'booking' })),
+      ...(tourVenueDraftsRes.data || []).map((d: any) => ({ ...d, _type: 'tour_venue' })),
+    ];
+    setDrafts(allDrafts);
     setLoading(false);
   };
 
@@ -136,25 +164,27 @@ export default function BandEmail() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                 {drafts.map(d => {
-                  const bk = d.booking as any;
-                  const contact = bk?.contact as any;
+                  const venue = d._type === 'tour_venue'
+                    ? (d as any).tourVenue?.venue
+                    : (d as any).booking?.venue;
+                  const showDate = d._type === 'booking' ? (d as any).booking?.show_date : null;
                   return (
                     <div key={d.id} className="card" style={{ padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.9rem', marginBottom: '0.15rem' }}>
-                          {bk?.venue?.name || '—'}
-                          {bk?.venue?.city && (
+                          {venue?.name || '—'}
+                          {venue?.city && (
                             <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.5rem', fontSize: '0.82rem' }}>
-                              {bk.venue.city}, {bk.venue.state}
+                              {venue.city}, {venue.state}
                             </span>
                           )}
                         </div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'var(--font-body)' }}>
                           {d.subject || '(no subject)'}
                         </div>
-                        {bk?.show_date && (
+                        {showDate && (
                           <div style={{ color: 'var(--text-muted)', fontSize: '0.76rem', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
-                            {new Date(bk.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {new Date(showDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </div>
                         )}
                       </div>
@@ -210,15 +240,18 @@ export default function BandEmail() {
       )}
 
       {draftComposer && (() => {
-        const bk = draftComposer.booking as any;
-        const contact = bk?.contact as any;
+        const isTourVenue = draftComposer._type === 'tour_venue';
+        const tv = isTourVenue ? draftComposer.tourVenue : null;
+        const bk = isTourVenue ? null : draftComposer.booking;
+        const venue  = tv?.venue  || bk?.venue;
+        const contact = tv?.contact || bk?.contact;
         return (
           <EmailComposer
             bookingId={bk?.id}
-            actId={bk?.act_id || myAct?.id}
-            venueId={bk?.venue_id}
+            actId={myAct?.id}
+            venueId={tv?.venue_id || bk?.venue_id}
             contactId={contact?.id}
-            contactEmail={contact?.email || bk?.venue?.email || ''}
+            contactEmail={contact?.email || venue?.email || ''}
             defaultCategory={draftComposer.category || 'target'}
             initialSubject={draftComposer.subject || ''}
             initialBody={draftComposer.body || ''}
