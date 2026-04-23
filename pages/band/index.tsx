@@ -136,7 +136,7 @@ export default function BandPortal() {
       }
     }
 
-    const { error } = await supabase.from('bookings').insert({
+    const { data: newBooking, error } = await supabase.from('bookings').insert({
       created_by: user!.id,
       act_id:     myAct.id,
       venue_id:   venueId,
@@ -144,9 +144,20 @@ export default function BandPortal() {
       show_date:  showForm.show_date,
       fee:        showForm.fee ? Number(showForm.fee) : null,
       deal_notes: showForm.notes || null,
-    });
+    }).select('id').single();
 
     if (error) { setShowError(error.message); setShowSaving(false); return; }
+
+    // Fire auto-draft in background if venue was linked
+    if (newBooking?.id && venueId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      fetch('/api/email/auto-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ bookingId: newBooking.id }),
+      });
+    }
+
     setShowModal(false);
     await load();
     setShowSaving(false);

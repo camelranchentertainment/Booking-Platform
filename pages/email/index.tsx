@@ -89,6 +89,8 @@ export default function EmailPage() {
 
   // Email state
   const [log, setLog]         = useState<any[]>([]);
+  const [pendingDrafts, setPendingDrafts] = useState<any[]>([]);
+  const [draftComposer, setDraftComposer] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [acts, setActs]       = useState<Act[]>([]);
   const [venues, setVenues]   = useState<Venue[]>([]);
@@ -124,7 +126,7 @@ export default function EmailPage() {
   const loadAll = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const [logRes, actsRes, venuesRes, contactsRes, profileRes, bookingsRes] = await Promise.all([
+    const [logRes, actsRes, venuesRes, contactsRes, profileRes, bookingsRes, draftsRes] = await Promise.all([
       supabase.from('email_log').select('*, venue:venues(name)').eq('sent_by', user.id).order('sent_at', { ascending: false }).limit(100),
       supabase.from('acts').select('*').eq('agent_id', user.id).order('act_name'),
       supabase.from('venues').select('*').order('name'),
@@ -137,6 +139,15 @@ export default function EmailPage() {
         venue:venues(id, name, city, state, email),
         contact:contacts(id, first_name, last_name, email)
       `).neq('status', 'cancelled').order('show_date', { ascending: true }),
+      supabase.from('email_drafts').select(`
+        id, category, subject, body, created_at,
+        booking:bookings(
+          id, act_id, venue_id,
+          act:acts(act_name),
+          venue:venues(name, city, state, email),
+          contact:contacts(id, first_name, last_name, email)
+        )
+      `).eq('agent_id', user.id).order('created_at', { ascending: false }),
     ]);
     setLog(logRes.data || []);
     setActs(actsRes.data || []);
@@ -144,6 +155,7 @@ export default function EmailPage() {
     setContacts(contactsRes.data || []);
     setProfile(profileRes.data);
     setBookings(bookingsRes.data || []);
+    setPendingDrafts(draftsRes.data || []);
     setLoading(false);
   };
 
@@ -297,6 +309,9 @@ export default function EmailPage() {
               }}
             >
               {v === 'outbox' ? `Outbox (${log.length})` : v === 'pipeline' ? `Pipeline (${bookings.length})` : 'Outreach Tracker'}
+              {v === 'outbox' && pendingDrafts.length > 0 && (
+                <span style={{ background: 'var(--accent)', color: '#000', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, minWidth: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{pendingDrafts.length}</span>
+              )}
               {overdueCount > 0 && (
                 <span style={{ background: '#ef4444', color: '#fff', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, minWidth: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{overdueCount}</span>
               )}
@@ -308,6 +323,42 @@ export default function EmailPage() {
       {/* OUTBOX TAB */}
       {view === 'outbox' && (
         <>
+          {/* Pending drafts */}
+          {pendingDrafts.length > 0 && (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
+                {pendingDrafts.length} draft{pendingDrafts.length > 1 ? 's' : ''} ready to review
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {pendingDrafts.map(d => {
+                  const bk = d.booking as any;
+                  const contact = bk?.contact as any;
+                  return (
+                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--accent-glow)', border: '1px solid rgba(200,146,26,0.2)', borderRadius: 'var(--radius-sm)', padding: '0.75rem 1rem' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>
+                          {bk?.venue?.name || '—'}
+                          <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.5rem', fontSize: '0.82rem' }}>{bk?.venue?.city ? `${bk.venue.city}, ${bk.venue.state}` : ''}</span>
+                        </div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-body)', marginTop: '0.15rem' }}>
+                          {bk?.act?.act_name || '—'} · {d.subject || '(no subject)'}
+                        </div>
+                      </div>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => setDraftComposer(d)}
+                        style={{ flexShrink: 0, fontSize: '0.78rem' }}
+                      >
+                        Review & Send
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Non-responder alerts */}
           {nonResponders.length > 0 && (
             <div style={{ marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -687,6 +738,28 @@ export default function EmailPage() {
           </div>
         </div>
       )}
+
+      {draftComposer && (() => {
+        const bk = draftComposer.booking as any;
+        const contact = bk?.contact as any;
+        return (
+          <EmailComposer
+            bookingId={bk?.id}
+            actId={bk?.act_id}
+            venueId={bk?.venue_id}
+            contactId={contact?.id}
+            contactEmail={contact?.email || bk?.venue?.email || ''}
+            defaultCategory={draftComposer.category || 'target'}
+            initialSubject={draftComposer.subject || ''}
+            initialBody={draftComposer.body || ''}
+            draftId={draftComposer.id}
+            onClose={() => {
+              setDraftComposer(null);
+              loadAll();
+            }}
+          />
+        );
+      })()}
 
       {composerBooking && (
         <EmailComposer

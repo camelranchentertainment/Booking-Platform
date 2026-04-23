@@ -31,10 +31,13 @@ interface Props {
   contactEmail?: string;
   defaultCategory: string;
   agentName?: string;
+  initialSubject?: string;
+  initialBody?: string;
+  draftId?: string;
   onClose: () => void;
 }
 
-export default function EmailComposer({ bookingId, actId, venueId, contactId, contactEmail, defaultCategory, agentName, onClose }: Props) {
+export default function EmailComposer({ bookingId, actId, venueId, contactId, contactEmail, defaultCategory, agentName, initialSubject, initialBody, draftId, onClose }: Props) {
   const [stage, setStage]       = useState<Stage>('loading');
   const [category, setCategory] = useState(defaultCategory);
   const [subject, setSubject]   = useState('');
@@ -52,6 +55,14 @@ export default function EmailComposer({ bookingId, actId, venueId, contactId, co
     setStage('loading');
     setError('');
     setTemplateSaved(false);
+
+    // If pre-filled content provided (from auto-draft), skip AI generation
+    if (initialSubject || initialBody) {
+      setSubject(initialSubject || '');
+      setBody(initialBody || '');
+      setStage('preview');
+      return;
+    }
 
     const { data: { session } } = await supabase.auth.getSession();
     const auth = session?.access_token ? `Bearer ${session.access_token}` : '';
@@ -132,6 +143,12 @@ export default function EmailComposer({ bookingId, actId, venueId, contactId, co
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error || 'Send failed'); setStage('preview'); return; }
+
+    // Delete auto-draft if this was a review of a saved draft
+    if (draftId) {
+      await supabase.from('email_drafts').delete().eq('id', draftId);
+    }
+
     setStage('sent');
   };
 

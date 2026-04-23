@@ -58,6 +58,18 @@ export default function NewBooking() {
     }).select().single();
 
     if (err) { setError(err.message); setSaving(false); return; }
+
+    // Fire auto-draft in background if venue was selected
+    if (data?.id && form.venue_id) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        fetch('/api/email/auto-draft', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ bookingId: data.id }),
+        });
+      });
+    }
+
     router.push(`/bookings/${data.id}`);
   };
 
