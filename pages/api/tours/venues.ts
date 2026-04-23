@@ -8,6 +8,14 @@ async function getUser(req: NextApiRequest) {
   return user;
 }
 
+async function canAccessTour(service: any, tourId: string, userId: string): Promise<boolean> {
+  const { data: tour } = await service.from('tours').select('id, act_id, created_by').eq('id', tourId).maybeSingle();
+  if (!tour) return false;
+  if (tour.created_by === userId) return true;
+  const { data: act } = await service.from('acts').select('id').eq('id', tour.act_id).eq('owner_id', userId).maybeSingle();
+  return !!act;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const service = getServiceClient();
   const user = await getUser(req);
@@ -17,8 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { tour_id } = req.query;
     if (!tour_id) return res.status(400).json({ error: 'tour_id required' });
 
-    const { data: tour } = await service.from('tours').select('id').eq('id', tour_id).eq('created_by', user.id).maybeSingle();
-    if (!tour) return res.status(403).json({ error: 'Forbidden' });
+    if (!await canAccessTour(service, tour_id as string, user.id)) return res.status(403).json({ error: 'Forbidden' });
 
     const { data, error } = await service
       .from('tour_venues')
@@ -34,8 +41,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { tour_id, venue_id } = req.body;
     if (!tour_id || !venue_id) return res.status(400).json({ error: 'tour_id and venue_id required' });
 
-    const { data: tour } = await service.from('tours').select('id').eq('id', tour_id).eq('created_by', user.id).maybeSingle();
-    if (!tour) return res.status(403).json({ error: 'Forbidden' });
+    if (!await canAccessTour(service, tour_id, user.id)) return res.status(403).json({ error: 'Forbidden' });
 
     const { data, error } = await service.from('tour_venues').insert({
       tour_id,
@@ -58,8 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data: tv } = await service.from('tour_venues').select('tour_id').eq('id', id).maybeSingle();
     if (!tv) return res.status(404).json({ error: 'Not found' });
 
-    const { data: tour } = await service.from('tours').select('id').eq('id', tv.tour_id).eq('created_by', user.id).maybeSingle();
-    if (!tour) return res.status(403).json({ error: 'Forbidden' });
+    if (!await canAccessTour(service, tv.tour_id, user.id)) return res.status(403).json({ error: 'Forbidden' });
 
     const update: any = {};
     if (status !== undefined) update.status = status;
@@ -78,8 +83,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data: tv } = await service.from('tour_venues').select('tour_id').eq('id', id as string).maybeSingle();
     if (!tv) return res.status(404).json({ error: 'Not found' });
 
-    const { data: tour } = await service.from('tours').select('id').eq('id', tv.tour_id).eq('created_by', user.id).maybeSingle();
-    if (!tour) return res.status(403).json({ error: 'Forbidden' });
+    if (!await canAccessTour(service, tv.tour_id, user.id)) return res.status(403).json({ error: 'Forbidden' });
 
     const { error } = await service.from('tour_venues').delete().eq('id', id as string);
     if (error) return res.status(500).json({ error: error.message });

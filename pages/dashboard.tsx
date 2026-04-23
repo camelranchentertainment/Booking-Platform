@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [pipeline, setPipeline]     = useState<PipelineSummary[]>([]);
   const [recent, setRecent]         = useState<Booking[]>([]);
   const [confirmedFees, setConfirmedFees] = useState(0);
+  const [tours, setTours]           = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
 
   useEffect(() => {
@@ -21,17 +22,19 @@ export default function Dashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [actsRes, bookingsRes] = await Promise.all([
+      const [actsRes, bookingsRes, toursRes] = await Promise.all([
         supabase.from('acts').select('*').eq('agent_id', user.id).eq('is_active', true).order('act_name'),
         supabase.from('bookings').select(`
           id, status, show_date, fee, created_at,
           act:acts(act_name),
           venue:venues(name, city, state)
         `).eq('created_by', user.id).order('created_at', { ascending: false }).limit(50),
+        supabase.from('tours').select('id, name, status, act:acts(act_name)').eq('created_by', user.id).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(5),
       ]);
 
       const bookings = (bookingsRes.data || []) as any[];
       setActs(actsRes.data || []);
+      setTours(toursRes.data || []);
 
       // Pipeline counts
       const counts: Record<string, number> = {};
@@ -130,6 +133,27 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Tours */}
+      {tours.length > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">ACTIVE TOURS</span>
+            <Link href="/tours" className="btn btn-ghost btn-sm">View All</Link>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            {tours.map((t: any) => (
+              <Link key={t.id} href={`/tours/${t.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', textDecoration: 'none' }}>
+                <div>
+                  <div style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '0.88rem' }}>{t.name}</div>
+                  <div style={{ color: 'var(--accent)', fontSize: '0.8rem', fontFamily: 'var(--font-body)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{t.act?.act_name}</div>
+                </div>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: t.status === 'active' ? '#34d399' : 'var(--text-muted)' }}>{t.status}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Recent bookings */}
       {recent.length > 0 && (

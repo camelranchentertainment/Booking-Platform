@@ -9,6 +9,7 @@ export default function BandPortal() {
   const [shows, setShows]       = useState<any[]>([]);
   const [upcoming, setUpcoming] = useState<any[]>([]);
   const [pendingLinks, setPendingLinks] = useState<any[]>([]);
+  const [tours, setTours]       = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [responding, setResponding] = useState('');
 
@@ -32,7 +33,7 @@ export default function BandPortal() {
 
     if (!act) { setLoading(false); return; }
 
-    const [bookingsRes, linksRes] = await Promise.all([
+    const [bookingsRes, linksRes, toursRes] = await Promise.all([
       supabase.from('bookings')
         .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, fee, venue:venues(name, city, state, address, phone)')
         .eq('act_id', act.id)
@@ -43,6 +44,7 @@ export default function BandPortal() {
           agent:agent_id(id, display_name, agency_name, email)`)
         .eq('act_id', act.id)
         .eq('status', 'pending'),
+      supabase.from('tours').select('id, name, status, start_date, end_date').or(`act_id.eq.${act.id},created_by.eq.${user.id}`).neq('status', 'cancelled').order('start_date', { ascending: true }).limit(5),
     ]);
 
     const all = bookingsRes.data || [];
@@ -50,6 +52,7 @@ export default function BandPortal() {
     setUpcoming(all.filter((b: any) => b.show_date && b.show_date >= today).slice(0, 5));
     setShows(all);
     setPendingLinks(linksRes.data || []);
+    setTours(toursRes.data || []);
     setLoading(false);
   };
 
@@ -200,6 +203,24 @@ export default function BandPortal() {
               )}
             </div>
           </div>
+
+          {/* Tours */}
+          {tours.length > 0 && (
+            <div className="card" style={{ marginTop: '1.5rem' }}>
+              <div className="card-header">
+                <span className="card-title">TOURS ({tours.length})</span>
+                <Link href="/band/tours" className="btn btn-ghost btn-sm">View All</Link>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                {tours.map((t: any) => (
+                  <Link key={t.id} href={`/tours/${t.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', textDecoration: 'none' }}>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '0.88rem' }}>{t.name}</div>
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: t.status === 'active' ? '#34d399' : 'var(--text-muted)' }}>{t.status}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </AppShell>
