@@ -19,6 +19,7 @@ export default function BandCalendar() {
   const [today]   = useState(new Date());
   const [current, setCurrent] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
   const [selected, setSelected] = useState<string | null>(null);
+  const [detailBooking, setDetailBooking] = useState<any>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -37,7 +38,7 @@ export default function BandCalendar() {
     if (!actId) { setLoading(false); return; }
 
     const { data } = await supabase.from('bookings')
-      .select('id, status, show_date, set_time, load_in_time, fee, venue:venues(name, city, state)')
+      .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, fee, venue:venues(name, city, state, address, phone)')
       .eq('act_id', actId)
       .neq('status', 'cancelled')
       .not('show_date', 'is', null)
@@ -77,7 +78,7 @@ export default function BandCalendar() {
           >
             ↓ Export Calendar
           </button>
-          <Link href="/bookings/new" className="btn btn-primary">+ New Booking</Link>
+          <Link href="/band" className="btn btn-primary">+ Add Show</Link>
         </div>
       </div>
 
@@ -157,7 +158,7 @@ export default function BandCalendar() {
                 </span>
               </div>
               {selectedShows.map((s: any) => (
-                <Link key={s.id} href={`/bookings/${s.id}`} style={{ display: 'block', textDecoration: 'none', padding: '0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', marginBottom: '0.5rem', borderLeft: `3px solid ${STATUS_DOT[s.status] || 'var(--accent)'}` }}>
+                <div key={s.id} onClick={() => setDetailBooking(s)} style={{ display: 'block', cursor: 'pointer', padding: '0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', marginBottom: '0.5rem', borderLeft: `3px solid ${STATUS_DOT[s.status] || 'var(--accent)'}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{s.venue?.name || 'TBD'}</div>
                     <span className={`badge badge-${s.status}`}>{BOOKING_STATUS_LABELS[s.status as keyof typeof BOOKING_STATUS_LABELS]}</span>
@@ -167,7 +168,7 @@ export default function BandCalendar() {
                     {s.set_time ? ` · ${s.set_time}` : ''}
                     {s.fee ? ` · $${Number(s.fee).toLocaleString()}` : ''}
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
           )}
@@ -179,7 +180,7 @@ export default function BandCalendar() {
               <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>No upcoming shows.</div>
             )}
             {upcoming.map((s: any) => (
-              <Link key={s.id} href={`/bookings/${s.id}`} style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', padding: '0.45rem 0', borderBottom: '1px solid var(--border)', textDecoration: 'none' }}>
+              <div key={s.id} onClick={() => setDetailBooking(s)} style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', padding: '0.45rem 0', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
                 <div style={{ minWidth: 32, textAlign: 'center', flexShrink: 0 }}>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', color: 'var(--accent)', lineHeight: 1 }}>
                     {new Date(s.show_date + 'T12:00:00').getDate()}
@@ -193,11 +194,48 @@ export default function BandCalendar() {
                   <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-body)' }}>{s.venue?.city || ''}</div>
                 </div>
                 <div style={{ width: 7, height: 7, borderRadius: '50%', background: STATUS_DOT[s.status] || '#64748b', flexShrink: 0 }} />
-              </Link>
+              </div>
             ))}
           </div>
         </div>
       </div>
+      {detailBooking && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: '#f5f3ee', borderRadius: 'var(--radius)', padding: '2rem', width: '100%', maxWidth: 480, position: 'relative', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+            <button onClick={() => setDetailBooking(null)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: '#1a1a2e', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>
+              {detailBooking.venue?.name || 'TBD'}
+            </div>
+            <div style={{ color: '#888', fontSize: '0.82rem', fontFamily: 'var(--font-mono)', marginBottom: '1.5rem' }}>
+              {detailBooking.venue?.city ? `${detailBooking.venue.city}, ${detailBooking.venue.state}` : ''}
+              {detailBooking.venue?.address ? ` · ${detailBooking.venue.address}` : ''}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+              {([
+                ['Date',       detailBooking.show_date ? new Date(detailBooking.show_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : '—'],
+                ['Status',     BOOKING_STATUS_LABELS[detailBooking.status as keyof typeof BOOKING_STATUS_LABELS] || detailBooking.status],
+                ['Fee',        detailBooking.fee ? `$${Number(detailBooking.fee).toLocaleString()}` : '—'],
+                ['Door',       detailBooking.door_time || '—'],
+                ['Load In',    detailBooking.load_in_time || '—'],
+                ['Set Time',   detailBooking.set_time || '—'],
+                ['Set Length', detailBooking.set_length_min ? `${detailBooking.set_length_min} min` : '—'],
+                ['Phone',      detailBooking.venue?.phone || '—'],
+              ] as [string, string][]).map(([label, value]) => (
+                <div key={label} style={{ display: 'flex', gap: '1rem', fontSize: '0.9rem', borderBottom: '1px solid #e8e5df', paddingBottom: '0.5rem' }}>
+                  <div style={{ width: 90, flexShrink: 0, color: '#888', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', paddingTop: 3 }}>{label}</div>
+                  <div style={{ color: '#1a1a2e', fontWeight: 500 }}>{value}</div>
+                </div>
+              ))}
+              {detailBooking.advance_notes && (
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <div style={{ width: 90, flexShrink: 0, color: '#888', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', paddingTop: 3 }}>Notes</div>
+                  <div style={{ color: '#333', fontSize: '0.9rem', lineHeight: 1.6 }}>{detailBooking.advance_notes}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }
