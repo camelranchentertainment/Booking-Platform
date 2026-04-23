@@ -26,7 +26,7 @@ async function getResendConfig(service: ReturnType<typeof getServiceClient>) {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { to, subject, html, bookingId, venueId, contactId, actId, templateId } = req.body;
+  const { to, subject, html, bookingId, venueId, contactId, actId, templateId, category, bodyPreview } = req.body;
   if (!to || !subject || !html) return res.status(400).json({ error: 'to, subject, html required' });
 
   const service = getServiceClient();
@@ -63,6 +63,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       recipient:   to,
       status:      'sent',
     });
+
+    // Update booking email stage if category provided
+    if (bookingId && category) {
+      await service.from('bookings').update({
+        email_stage:       category,
+        last_contact_date: new Date().toISOString(),
+        follow_up_count:   category === 'follow_up_1' ? 1 : category === 'follow_up_2' ? 2 : undefined,
+      }).eq('id', bookingId);
+
+      await service.from('booking_emails').insert({
+        booking_id:        bookingId,
+        category,
+        sent_at:           new Date().toISOString(),
+        subject,
+        body_preview:      bodyPreview ? bodyPreview.substring(0, 300) : null,
+        resend_message_id: data?.id || null,
+        sent_by:           agentId,
+      });
+    }
 
     return res.status(200).json({ ok: true, id: data?.id });
   } catch (err: any) {

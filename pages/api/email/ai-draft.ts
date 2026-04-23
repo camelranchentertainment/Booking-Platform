@@ -1,61 +1,99 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import Anthropic from '@anthropic-ai/sdk';
-import { supabase } from '../../../lib/supabase';
+import { supabase, getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
 
-// Stable system prompt — cached across all requests
 const SYSTEM_PROMPT = `You are an expert music booking agent assistant for Camel Ranch Entertainment.
-You draft professional, personable emails for booking music acts at venues: cold pitches, follow-ups, and replies to venue responses.
+You draft professional, concise emails for booking music acts at venues.
 
 Style:
-- Professional but warm and human — not corporate
-- Concise — venue managers are busy, keep body under 200 words
-- Lead with the act's most compelling hook (genre, draw, recent gigs)
+- Professional but human — not corporate
+- Music industry voice, not generic business speak
+- Short paragraphs, no walls of text
 - Always include a clear call-to-action
-- Subject lines under 60 characters — specific, not generic
-- Do NOT use em dashes or bullet points in the email body
+- Never open with "I hope this email finds you well" or similar filler
+- No em dashes, no bullet points in the body
+- Subject lines under 60 characters
 
 Output: Return ONLY a valid JSON object with these exact keys:
 {
   "subject": "email subject line",
   "body": "plain email body text — no HTML tags",
-  "preview": "one sentence summary"
+  "preview": "one sentence summary of the email"
 }`;
+
+type Category = 'target' | 'follow_up_1' | 'follow_up_2' | 'confirmation' | 'decline' | 'advance' | 'thank_you';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { type, actId, venueId, contactId, previousEmail, agentName, agencyName } = req.body;
-  if (!type || !actId) return res.status(400).json({ error: 'type and actId required' });
+  const { category, bookingId, actId: bodyActId, venueId: bodyVenueId, contactId, agentName, agencyName } = req.body;
+  if (!category) return res.status(400).json({ error: 'category required' });
+
+  const service = getServiceClient();
+
+  // If bookingId provided, fetch booking and resolve act/venue/tour
+  let booking: any = null;
+  let resolvedActId = bodyActId;
+  let resolvedVenueId = bodyVenueId;
+  let tourDateRange: string | null = null;
+
+  if (bookingId) {
+    const { data: b } = await service.from('bookings').select('*').eq('id', bookingId).single();
+    if (b) {
+      booking = b;
+      resolvedActId = resolvedActId || b.act_id;
+      resolvedVenueId = resolvedVenueId || b.venue_id;
+
+      // Fetch tour date range for target/follow_up categories
+      if (b.tour_id && (category === 'target' || category === 'follow_up_1' || category === 'follow_up_2')) {
+        const [tourRes, tourBookingsRes] = await Promise.all([
+          service.from('tours').select('name, start_date, end_date').eq('id', b.tour_id).single(),
+          service.from('bookings').select('show_date').eq('tour_id', b.tour_id).neq('status', 'cancelled').not('show_date', 'is', null),
+        ]);
+        if (tourRes.data?.start_date) {
+          const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+          const start = fmt(tourRes.data.start_date);
+          const end = tourRes.data.end_date ? fmt(tourRes.data.end_date) : 'TBD';
+          const booked = (tourBookingsRes.data || []).filter(r => r.show_date !== b.show_date).map(r => fmt(r.show_date));
+          tourDateRange = `${start} through ${end}`;
+          if (booked.length) tourDateRange += ` (${booked.join(', ')} already booked)`;
+        }
+      }
+    }
+  }
+
+  if (!resolvedActId) return res.status(400).json({ error: 'actId or bookingId required' });
 
   const [actRes, venueRes, contactRes] = await Promise.all([
-    supabase.from('acts').select('*').eq('id', actId).single(),
-    venueId ? supabase.from('venues').select('*').eq('id', venueId).single() : Promise.resolve({ data: null }),
-    contactId ? supabase.from('contacts').select('*').eq('id', contactId).single() : Promise.resolve({ data: null }),
+    service.from('acts').select('*').eq('id', resolvedActId).single(),
+    resolvedVenueId ? service.from('venues').select('*').eq('id', resolvedVenueId).single() : Promise.resolve({ data: null }),
+    contactId ? service.from('contacts').select('*').eq('id', contactId).single() : Promise.resolve({ data: null }),
   ]);
 
   if (!actRes.data) return res.status(404).json({ error: 'Act not found' });
-  const act = actRes.data;
-  const venue = venueRes.data;
-  const contact = contactRes.data;
 
-  const prompt = buildPrompt({ type, act, venue, contact, previousEmail, agentName, agencyName });
+  const prompt = buildPrompt({
+    category: category as Category,
+    act: actRes.data,
+    venue: venueRes.data,
+    contact: contactRes.data,
+    booking,
+    tourDateRange,
+    agentName,
+    agencyName,
+  });
 
   const anthropicKey = await getSetting('anthropic_api_key');
   if (!anthropicKey) return res.status(500).json({ error: 'AI not configured. Add your Anthropic API key in Settings.' });
+
   const client = new Anthropic({ apiKey: anthropicKey });
 
   try {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
-      system: [
-        {
-          type: 'text',
-          text: SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
+      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -64,10 +102,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!jsonMatch) return res.status(500).json({ error: 'AI returned malformed response' });
 
     const draft = JSON.parse(jsonMatch[0]);
-    return res.status(200).json({
-      draft,
-      cached: (message.usage.cache_read_input_tokens ?? 0) > 0,
-    });
+    return res.status(200).json({ draft, cached: (message.usage.cache_read_input_tokens ?? 0) > 0 });
   } catch (err: any) {
     if (err instanceof Anthropic.RateLimitError) return res.status(429).json({ error: 'Rate limited — try again shortly' });
     if (err instanceof Anthropic.APIError) return res.status(502).json({ error: `AI error: ${err.message}` });
@@ -75,66 +110,107 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-function buildPrompt({ type, act, venue, contact, previousEmail, agentName, agencyName }: any): string {
+function buildPrompt({ category, act, venue, contact, booking, tourDateRange, agentName, agencyName }: {
+  category: Category; act: any; venue: any; contact: any; booking: any;
+  tourDateRange: string | null; agentName?: string; agencyName?: string;
+}): string {
   const lines = (arr: (string | false | null | undefined)[]) => arr.filter(Boolean).join('\n');
+
+  const from = `From: ${agentName || 'the booking agent'}${agencyName ? ` at ${agencyName}` : ''}`;
 
   const actInfo = lines([
     `Act: ${act.act_name}`,
     act.genre && `Genre: ${act.genre}`,
     act.bio && `Bio: ${act.bio}`,
-    act.member_count > 1 && `Members: ${act.member_count}`,
     act.website && `Website: ${act.website}`,
     act.spotify && `Spotify: ${act.spotify}`,
     act.instagram && `Instagram: ${act.instagram}`,
+    'Note: describe the act as maintaining a solid regional following',
   ]);
 
-  const venueInfo = venue
-    ? lines([
-        `Venue: ${venue.name}`,
-        venue.city && venue.state && `Location: ${venue.city}, ${venue.state}`,
-        venue.venue_type && `Type: ${venue.venue_type}`,
-        venue.capacity && `Capacity: ~${venue.capacity}`,
-      ])
-    : 'Venue: not specified';
+  const venueInfo = venue ? lines([
+    `Venue: ${venue.name}`,
+    venue.city && venue.state && `Location: ${venue.city}, ${venue.state}`,
+    venue.capacity && `Capacity: ~${venue.capacity}`,
+  ]) : 'Venue: not specified';
 
-  const contactLine = contact
-    ? `Contact: ${contact.first_name} ${contact.last_name}${contact.title ? ` (${contact.title})` : ''}`
-    : '';
+  const contactName = contact
+    ? `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'the booking manager'
+    : 'the booking manager';
 
-  const agentLine = `From: ${agentName || 'the booking agent'}${agencyName ? ` — ${agencyName}` : ''}`;
+  const showDate = booking?.show_date
+    ? new Date(booking.show_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    : null;
 
-  if (type === 'cold_pitch') {
-    return `Write a cold pitch email to book ${act.act_name} at this venue. First contact — no prior relationship.
+  const availableDates = tourDateRange
+    ? `Available dates: ${tourDateRange}`
+    : 'Available dates: [AGENT: add specific dates here]';
 
-${agentLine}
+  switch (category) {
+    case 'target':
+      return `Write a cold pitch booking email to ${contactName} at ${venue?.name || 'this venue'} about booking ${act.act_name}.
+
+${from}
 ${actInfo}
 ${venueInfo}
-${contactLine}`;
-  }
+${availableDates}
 
-  if (type === 'followup') {
-    return `We pitched ${act.act_name} to this venue about a week ago and haven't heard back. Write a brief, friendly follow-up.
+Introduce the act in 2 sentences. Ask them to hold a date. Keep it under 150 words. Include the EPK/website link if available.`;
 
-${agentLine}
+    case 'follow_up_1':
+      return `Write a brief follow-up email to ${contactName} at ${venue?.name || 'this venue'}. We pitched ${act.act_name} about a week ago with no response.
+
+${from}
 ${actInfo}
 ${venueInfo}
-${contactLine}
-${previousEmail ? `\nOriginal pitch subject: "${previousEmail.subject}"` : ''}
+${availableDates}
 
-Keep it very short — just a gentle check-in.`;
-  }
+Reference the original outreach without being pushy. Light, professional tone. Under 100 words.`;
 
-  if (type === 'reply_suggestion') {
-    return `The venue responded to our pitch for ${act.act_name}. Write a reply that moves toward booking.
+    case 'follow_up_2':
+      return `Write a second follow-up email to ${contactName} at ${venue?.name || 'this venue'} about booking ${act.act_name}. Two weeks since first contact, still no reply.
 
-${agentLine}
+${from}
 ${actInfo}
 ${venueInfo}
-${contactLine}
+${availableDates}
 
-Venue's response:
-"${previousEmail?.body ?? 'They expressed interest in the act.'}"`;
+This is the last outreach. Keep it brief and gracious — leave the door open even if they're not interested right now. Under 80 words.`;
+
+    case 'confirmation':
+      return `Write a booking confirmation email to ${contactName} at ${venue?.name || 'this venue'} confirming ${act.act_name}${showDate ? ` on ${showDate}` : ''}.
+
+${from}
+${venueInfo}
+
+Confirm the date is locked. Mention that a contract will follow and advance details will be sent 14 days before the show. Thank them for their response. Professional and concise.`;
+
+    case 'decline':
+      return `Write a graceful response to ${contactName} at ${venue?.name || 'this venue'} — they passed on booking ${act.act_name}.
+
+${from}
+${actInfo}
+${venueInfo}
+
+Thank them for their time. Keep the relationship warm. Mention ${act.act_name} will be routing through the area again. No bitterness, no over-explanation. Under 80 words.`;
+
+    case 'advance':
+      return `Write a 14-day advance email to ${contactName} at ${venue?.name || 'this venue'} for the upcoming ${act.act_name} show${showDate ? ` on ${showDate}` : ''}.
+
+${from}
+${venueInfo}
+
+Request confirmation on: load-in time, sound check time, PA/backline provided, promotional status (socials, posters), door time, set length, and payment logistics. Use a short list format for the questions. Professional and efficient.`;
+
+    case 'thank_you':
+      return `Write a post-show thank you email to ${contactName} at ${venue?.name || 'this venue'} following the ${act.act_name} show${showDate ? ` on ${showDate}` : ''}.
+
+${from}
+${venueInfo}
+
+Thank them for the hospitality. Keep it warm but brief. Mention you'd love to bring ${act.act_name} back and will be in touch when routing through again. Under 100 words.`;
+
+    default:
+      return `Write a professional booking email for ${act.act_name} to ${venue?.name || 'this venue'}.\n\n${from}\n${actInfo}\n${venueInfo}`;
   }
-
-  return `Write a professional booking email for ${act.act_name}.\n\n${agentLine}\n${actInfo}\n${venueInfo}`;
 }
