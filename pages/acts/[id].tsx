@@ -19,6 +19,7 @@ export default function BandDetail() {
   const [inviteError, setInviteError] = useState('');
   const [edit, setEdit]       = useState(false);
   const [form, setForm]       = useState<Partial<Act>>({});
+  const [linkStatus, setLinkStatus] = useState<'owned' | 'active' | 'revoked' | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -26,7 +27,8 @@ export default function BandDetail() {
   }, [id]);
 
   const loadAll = async () => {
-    const [actRes, membersRes, invitesRes, bookingsRes] = await Promise.all([
+    const { data: { user } } = await supabase.auth.getUser();
+    const [actRes, membersRes, invitesRes, bookingsRes, linkRes] = await Promise.all([
       supabase.from('acts').select('*').eq('id', id).single(),
       supabase.from('user_profiles').select('*').eq('act_id', id),
       supabase.from('act_invitations').select('*').eq('act_id', id).eq('status', 'pending'),
@@ -34,8 +36,17 @@ export default function BandDetail() {
         id, status, show_date, fee,
         venue:venues(name, city, state)
       `).eq('act_id', id).order('show_date', { ascending: true }).limit(10),
+      user ? supabase.from('agent_act_links').select('status').eq('act_id', id).eq('agent_id', user.id).maybeSingle() : Promise.resolve({ data: null }),
     ]);
-    if (actRes.data) { setAct(actRes.data); setForm(actRes.data); }
+    if (actRes.data) {
+      setAct(actRes.data);
+      setForm(actRes.data);
+      // Determine access level for this agent
+      if (user && actRes.data.agent_id === user.id) setLinkStatus('owned');
+      else if (linkRes.data?.status === 'active') setLinkStatus('active');
+      else if (linkRes.data?.status === 'revoked') setLinkStatus('revoked');
+      else setLinkStatus(null);
+    }
     setMembers(membersRes.data || []);
     setInvites(invitesRes.data || []);
     setBookings((bookingsRes.data || []) as any);
@@ -86,6 +97,8 @@ export default function BandDetail() {
 
   if (!act) return <AppShell requireRole="agent"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
 
+  const isRevoked = linkStatus === 'revoked';
+
   return (
     <AppShell requireRole="agent">
       <div className="page-header">
@@ -94,10 +107,29 @@ export default function BandDetail() {
           {act.genre && <div className="page-sub">{act.genre}</div>}
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button className="btn btn-secondary" onClick={() => { setEdit(true); }}>Edit</button>
-          <Link href={`/bookings?act=${act.id}`} className="btn btn-primary">+ Booking</Link>
+          {!isRevoked && <button className="btn btn-secondary" onClick={() => { setEdit(true); }}>Edit</button>}
+          {!isRevoked && <Link href={`/bookings?act=${act.id}`} className="btn btn-primary">+ Booking</Link>}
         </div>
       </div>
+
+      {/* View-only banner for revoked agents */}
+      {isRevoked && (
+        <div style={{
+          marginBottom: '1.25rem',
+          padding: '0.75rem 1.1rem',
+          background: 'rgba(248,113,113,0.07)',
+          border: '1px solid rgba(248,113,113,0.25)',
+          borderRadius: 'var(--radius-sm)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem',
+        }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#f87171', letterSpacing: '0.08em' }}>
+            ⊘ VIEW ONLY — This band has revoked your access. Booking history is visible but no changes can be made.
+          </span>
+          <Link href="/acts" className="btn btn-ghost btn-sm" style={{ fontSize: '0.74rem', flexShrink: 0 }}>
+            ← Back to Roster
+          </Link>
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid var(--border)', marginBottom: '1.5rem' }}>

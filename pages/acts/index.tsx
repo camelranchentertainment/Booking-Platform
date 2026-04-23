@@ -12,6 +12,7 @@ export default function BandsPage() {
   const [linkMessage, setLinkMessage] = useState('');
   const [linkSaving, setLinkSaving] = useState(false);
   const [linkError, setLinkError]   = useState('');
+  const [rerequesting, setRerequesting] = useState('');
   const [loading, setLoading]       = useState(true);
   const [bookingCounts, setBookingCounts] = useState<Record<string, number>>({});
 
@@ -24,11 +25,11 @@ export default function BandsPage() {
     const [myBandsRes, linkedRes, allBandsRes] = await Promise.all([
       // Bands where this user is agent
       supabase.from('acts').select('*').eq('agent_id', user.id).order('act_name'),
-      // Active agent_act_links for this agent
+      // All agent_act_links for this agent (active, pending, revoked)
       supabase.from('agent_act_links')
         .select('id, status, permissions, act:acts(id, act_name, genre, is_active, owner_id)')
         .eq('agent_id', user.id)
-        .in('status', ['active', 'pending']),
+        .in('status', ['active', 'pending', 'revoked']),
       // Bands available to link (have owner, no agent yet)
       supabase.from('acts').select('id, act_name').is('agent_id', null).not('owner_id', 'is', null).order('act_name'),
     ]);
@@ -87,11 +88,27 @@ export default function BandsPage() {
     }
   };
 
+  const sendReRequest = async (actId: string) => {
+    setRerequesting(actId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetch('/api/agent-link/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ actId }),
+      });
+      await loadAll();
+    } finally {
+      setRerequesting('');
+    }
+  };
+
   // Merge: bands I manage directly + bands linked to me
   const linkedBands = links
     .filter(l => l.status === 'active')
     .map(l => ({ ...(l.act as any), _linked: true }));
-  const pendingLinks = links.filter(l => l.status === 'pending');
+  const pendingLinks  = links.filter(l => l.status === 'pending');
+  const revokedLinks  = links.filter(l => l.status === 'revoked');
 
   const allMyBands = [
     ...bands.map(b => ({ ...b, _owned: true })),
@@ -121,6 +138,50 @@ export default function BandsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Revoked access bands */}
+      {revokedLinks.length > 0 && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+            Access Revoked
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {revokedLinks.map((l: any) => (
+              <div key={l.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem',
+                padding: '0.75rem 1rem',
+                background: 'var(--bg-overlay)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)', opacity: 0.65,
+              }}>
+                <div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    {(l.act as any)?.act_name}
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#f87171', border: '1px solid rgba(248,113,113,0.35)', padding: '0.1rem 0.4rem' }}>
+                      Access Revoked
+                    </span>
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                    View-only · Booking history still accessible
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                  <Link href={`/acts/${(l.act as any)?.id}`} className="btn btn-ghost btn-sm" style={{ fontSize: '0.76rem' }}>
+                    View History
+                  </Link>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    disabled={rerequesting === (l.act as any)?.id}
+                    onClick={() => sendReRequest((l.act as any)?.id)}
+                    style={{ fontSize: '0.76rem' }}
+                  >
+                    {rerequesting === (l.act as any)?.id ? 'Sending…' : 'Re-request Access'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
