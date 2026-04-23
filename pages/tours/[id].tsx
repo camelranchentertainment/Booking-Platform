@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
@@ -36,6 +36,15 @@ const STATUS_COLOR: Record<OutreachStatus, string> = {
 
 const FILTER_TABS: (OutreachStatus | 'all')[] = ['all', 'target', 'pitched', 'followup', 'negotiating', 'confirmed', 'declined'];
 
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', minWidth: 64, fontFamily: 'var(--font-body)', paddingTop: '0.05rem' }}>{label}</span>
+      <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.84rem', flex: 1 }}>{value}</span>
+    </div>
+  );
+}
+
 export default function TourDetail() {
   const router = useRouter();
   const { id } = router.query;
@@ -49,6 +58,8 @@ export default function TourDetail() {
   const [deleting, setDeleting] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [venuePopout, setVenuePopout] = useState<any>(null);
+  const [venueContacts, setVenueContacts] = useState<any[]>([]);
+  const [venueLoading, setVenueLoading] = useState(false);
 
   // Venue search modal
   const [showSearch, setShowSearch]       = useState(false);
@@ -106,6 +117,19 @@ export default function TourDetail() {
       body: JSON.stringify({ tourId: id }),
     });
     router.push('/tours');
+  };
+
+  const openVenuePopout = async (basicVenue: any) => {
+    setVenuePopout(basicVenue);
+    setVenueContacts([]);
+    setVenueLoading(true);
+    const [venueRes, contactsRes] = await Promise.all([
+      supabase.from('venues').select('*').eq('id', basicVenue.id).single(),
+      supabase.from('contacts').select('*').eq('venue_id', basicVenue.id).order('last_name'),
+    ]);
+    if (venueRes.data) setVenuePopout(venueRes.data);
+    setVenueContacts(contactsRes.data || []);
+    setVenueLoading(false);
   };
 
   const loadPool = async () => {
@@ -460,7 +484,7 @@ export default function TourDetail() {
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <button
-                      onClick={() => setVenuePopout(tv.venue)}
+                      onClick={() => openVenuePopout(tv.venue)}
                       style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-primary)', fontSize: '0.88rem', fontWeight: 600, textAlign: 'left' }}
                     >
                       {tv.venue?.name}
@@ -725,7 +749,9 @@ export default function TourDetail() {
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              width: '100%', maxWidth: 460,
+              width: '100%', maxWidth: 520,
+              maxHeight: '90vh',
+              overflowY: 'auto',
               background: '#2c2e45',
               border: '1px solid rgba(255,255,255,0.14)',
               borderRadius: 'var(--radius)',
@@ -734,65 +760,93 @@ export default function TourDetail() {
               boxShadow: '0 24px 64px rgba(0,0,0,0.55)',
             }}
           >
+            {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', letterSpacing: '0.04em', color: '#fff' }}>
                   {venuePopout.name}
                 </div>
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'rgba(255,255,255,0.55)', marginTop: '0.2rem' }}>
-                  {venuePopout.city}, {venuePopout.state}
+                  {venuePopout.city}{venuePopout.state ? `, ${venuePopout.state}` : ''}
                 </div>
               </div>
               <button className="btn btn-ghost btn-sm" onClick={() => setVenuePopout(null)} style={{ color: 'rgba(255,255,255,0.5)' }}>✕</button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-              {venuePopout.capacity && (
-                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 'var(--radius-sm)', padding: '0.65rem 0.85rem' }}>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.45)', marginBottom: '0.2rem' }}>Capacity</div>
-                  <div style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 600 }}>{venuePopout.capacity.toLocaleString()}</div>
-                </div>
-              )}
-              {venuePopout.venue_type && (
-                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 'var(--radius-sm)', padding: '0.65rem 0.85rem' }}>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.45)', marginBottom: '0.2rem' }}>Type</div>
-                  <div style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 600, textTransform: 'capitalize' }}>{venuePopout.venue_type}</div>
-                </div>
-              )}
-            </div>
+            {venueLoading && (
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'rgba(255,255,255,0.4)' }}>Loading details…</div>
+            )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            {/* Capacity + Type chips */}
+            {(venuePopout.capacity || venuePopout.venue_type) && (
+              <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                {venuePopout.capacity && (
+                  <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.8rem' }}>
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.45)' }}>Cap </span>
+                    <span style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}>{Number(venuePopout.capacity).toLocaleString()}</span>
+                  </div>
+                )}
+                {venuePopout.venue_type && (
+                  <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.8rem' }}>
+                    <span style={{ color: '#fff', fontSize: '0.85rem', textTransform: 'capitalize' }}>{venuePopout.venue_type}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Contact details */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.75rem' }}>
               {venuePopout.address && (
-                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem', minWidth: 56, fontFamily: 'var(--font-body)' }}>Address</span>
-                  <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.84rem' }}>{venuePopout.address}</span>
-                </div>
+                <Row label="Address" value={venuePopout.address} />
               )}
               {venuePopout.phone && (
-                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem', minWidth: 56, fontFamily: 'var(--font-body)' }}>Phone</span>
-                  <a href={`tel:${venuePopout.phone}`} style={{ color: 'var(--accent)', fontSize: '0.84rem' }}>{venuePopout.phone}</a>
-                </div>
+                <Row label="Phone" value={<a href={`tel:${venuePopout.phone}`} style={{ color: 'var(--accent)' }}>{venuePopout.phone}</a>} />
               )}
               {venuePopout.email && (
-                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem', minWidth: 56, fontFamily: 'var(--font-body)' }}>Email</span>
-                  <a href={`mailto:${venuePopout.email}`} style={{ color: 'var(--accent)', fontSize: '0.84rem' }}>{venuePopout.email}</a>
-                </div>
+                <Row label="Email" value={<a href={`mailto:${venuePopout.email}`} style={{ color: 'var(--accent)' }}>{venuePopout.email}</a>} />
               )}
               {venuePopout.website && (
-                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem', minWidth: 56, fontFamily: 'var(--font-body)' }}>Web</span>
-                  <a href={venuePopout.website} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', fontSize: '0.84rem' }}>{venuePopout.website}</a>
-                </div>
+                <Row label="Website" value={<a href={venuePopout.website} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>{venuePopout.website}</a>} />
               )}
             </div>
 
-            <div style={{ paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-              <Link href={`/venues/${venuePopout.id}`} className="btn btn-secondary" style={{ width: '100%', textAlign: 'center', display: 'block' }}>
-                Open Full Profile →
-              </Link>
-            </div>
+            {/* Notes / Backline */}
+            {(venuePopout.notes || venuePopout.backline) && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.75rem' }}>
+                {venuePopout.notes && (
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', marginBottom: '0.25rem' }}>Notes</div>
+                    <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.84rem', lineHeight: 1.55 }}>{venuePopout.notes}</div>
+                  </div>
+                )}
+                {venuePopout.backline && (
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', marginBottom: '0.25rem' }}>Backline</div>
+                    <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.84rem', lineHeight: 1.55 }}>{venuePopout.backline}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Contacts */}
+            {venueContacts.length > 0 && (
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.75rem' }}>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', marginBottom: '0.6rem' }}>Contacts</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  {venueContacts.map((c: any) => (
+                    <div key={c.id} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-sm)', padding: '0.65rem 0.85rem' }}>
+                      <div style={{ color: '#fff', fontWeight: 600, fontSize: '0.88rem' }}>
+                        {c.first_name} {c.last_name}
+                        {c.title && <span style={{ fontWeight: 400, color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}> · {c.title}</span>}
+                      </div>
+                      {c.email && <a href={`mailto:${c.first_name} ${c.last_name} <${c.email}>`} style={{ color: 'var(--accent)', fontSize: '0.82rem', display: 'block', marginTop: '0.2rem' }}>{c.email}</a>}
+                      {c.phone && <a href={`tel:${c.phone}`} style={{ color: 'var(--accent)', fontSize: '0.82rem', display: 'block' }}>{c.phone}</a>}
+                      {c.notes && <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{c.notes}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
