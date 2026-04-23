@@ -716,60 +716,79 @@ export default function TourDetail() {
         </div>
       )}
 
-      {/* Venue Popout */}
+      {/* Venue Modal */}
       {venuePopout && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 900, display: 'flex' }} onClick={() => setVenuePopout(null)}>
-          <div style={{ flex: 1 }} />
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
+          onClick={() => setVenuePopout(null)}
+        >
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              width: 340, height: '100%', background: 'var(--bg-surface)',
-              borderLeft: '1px solid var(--border)', padding: '1.5rem',
-              overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.85rem',
-              boxShadow: '-4px 0 24px rgba(0,0,0,0.35)',
+              width: '100%', maxWidth: 460,
+              background: '#2c2e45',
+              border: '1px solid rgba(255,255,255,0.14)',
+              borderRadius: 'var(--radius)',
+              padding: '1.75rem',
+              display: 'flex', flexDirection: 'column', gap: '1rem',
+              boxShadow: '0 24px 64px rgba(0,0,0,0.55)',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', letterSpacing: '0.04em', color: 'var(--text-primary)' }}>
-                {venuePopout.name}
+              <div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', letterSpacing: '0.04em', color: '#fff' }}>
+                  {venuePopout.name}
+                </div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'rgba(255,255,255,0.55)', marginTop: '0.2rem' }}>
+                  {venuePopout.city}, {venuePopout.state}
+                </div>
               </div>
-              <button className="btn btn-ghost btn-sm" onClick={() => setVenuePopout(null)}>✕</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setVenuePopout(null)} style={{ color: 'rgba(255,255,255,0.5)' }}>✕</button>
             </div>
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-              {venuePopout.city}, {venuePopout.state}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              {venuePopout.capacity && (
+                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 'var(--radius-sm)', padding: '0.65rem 0.85rem' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.45)', marginBottom: '0.2rem' }}>Capacity</div>
+                  <div style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 600 }}>{venuePopout.capacity.toLocaleString()}</div>
+                </div>
+              )}
+              {venuePopout.venue_type && (
+                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 'var(--radius-sm)', padding: '0.65rem 0.85rem' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.45)', marginBottom: '0.2rem' }}>Type</div>
+                  <div style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 600, textTransform: 'capitalize' }}>{venuePopout.venue_type}</div>
+                </div>
+              )}
             </div>
-            {venuePopout.capacity && (
-              <div style={{ fontSize: '0.82rem' }}>
-                <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>Capacity: </span>
-                <span style={{ color: 'var(--text-primary)' }}>{venuePopout.capacity.toLocaleString()}</span>
-              </div>
-            )}
-            {venuePopout.venue_type && (
-              <div style={{ fontSize: '0.82rem' }}>
-                <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>Type: </span>
-                <span style={{ color: 'var(--text-primary)', textTransform: 'capitalize' }}>{venuePopout.venue_type}</span>
-              </div>
-            )}
-            {venuePopout.phone && (
-              <div style={{ fontSize: '0.82rem' }}>
-                <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>Phone: </span>
-                <a href={`tel:${venuePopout.phone}`} style={{ color: 'var(--accent)' }}>{venuePopout.phone}</a>
-              </div>
-            )}
-            {venuePopout.email && (
-              <div style={{ fontSize: '0.82rem' }}>
-                <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>Email: </span>
-                <a href={`mailto:${venuePopout.email}`} style={{ color: 'var(--accent)' }}>{venuePopout.email}</a>
-              </div>
-            )}
-            {venuePopout.website && (
-              <div style={{ fontSize: '0.82rem' }}>
-                <a href={venuePopout.website} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>
-                  🌐 Website
-                </a>
-              </div>
-            )}
-            <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {venuePopout.address && (
+                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem', minWidth: 56, fontFamily: 'var(--font-body)' }}>Address</span>
+                  <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.84rem' }}>{venuePopout.address}</span>
+                </div>
+              )}
+              {venuePopout.phone && (
+                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem', minWidth: 56, fontFamily: 'var(--font-body)' }}>Phone</span>
+                  <a href={`tel:${venuePopout.phone}`} style={{ color: 'var(--accent)', fontSize: '0.84rem' }}>{venuePopout.phone}</a>
+                </div>
+              )}
+              {venuePopout.email && (
+                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem', minWidth: 56, fontFamily: 'var(--font-body)' }}>Email</span>
+                  <a href={`mailto:${venuePopout.email}`} style={{ color: 'var(--accent)', fontSize: '0.84rem' }}>{venuePopout.email}</a>
+                </div>
+              )}
+              {venuePopout.website && (
+                <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem', minWidth: 56, fontFamily: 'var(--font-body)' }}>Web</span>
+                  <a href={venuePopout.website} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', fontSize: '0.84rem' }}>{venuePopout.website}</a>
+                </div>
+              )}
+            </div>
+
+            <div style={{ paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <Link href={`/venues/${venuePopout.id}`} className="btn btn-secondary" style={{ width: '100%', textAlign: 'center', display: 'block' }}>
                 Open Full Profile →
               </Link>
