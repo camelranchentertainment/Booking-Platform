@@ -34,16 +34,20 @@ export default function ToursPage() {
     const allActs = Array.from(actsMap.values()).sort((a, b) => a.act_name.localeCompare(b.act_name));
     setActs(allActs);
 
-    // Tours: created by this user OR belonging to any managed act
+    // Tours: created by this user + any tours for managed acts (two queries, merged)
     const managedIds = allActs.map(a => a.id);
-    let toursQuery = supabase.from('tours').select('*, act:acts(act_name)').order('created_at', { ascending: false });
-    if (managedIds.length > 0) {
-      toursQuery = toursQuery.or(`created_by.eq.${user.id},act_id.in.(${managedIds.join(',')})`);
-    } else {
-      toursQuery = toursQuery.eq('created_by', user.id);
+    const [createdRes, actToursRes] = await Promise.all([
+      supabase.from('tours').select('*, act:acts(act_name)').eq('created_by', user.id).order('created_at', { ascending: false }),
+      managedIds.length > 0
+        ? supabase.from('tours').select('*, act:acts(act_name)').in('act_id', managedIds).order('created_at', { ascending: false })
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+    const seen = new Set<string>();
+    const merged: any[] = [];
+    for (const t of [...(createdRes.data || []), ...(actToursRes.data || [])]) {
+      if (!seen.has(t.id)) { seen.add(t.id); merged.push(t); }
     }
-    const { data: toursData } = await toursQuery;
-    setTours(toursData || []);
+    setTours(merged.sort((a, b) => b.created_at.localeCompare(a.created_at)));
   };
 
   const save = async (e: React.FormEvent) => {

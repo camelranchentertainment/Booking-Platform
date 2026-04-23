@@ -142,13 +142,21 @@ export default function VenuesPage() {
     setAddTourDone(null);
     if (!toursLoaded) {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data } = await supabase
-        .from('tours')
-        .select('id, name, act:acts(act_name), status')
-        .eq('created_by', user!.id)
-        .neq('status', 'cancelled')
-        .order('created_at', { ascending: false });
-      setTours(data || []);
+      // Fetch tours created by user + tours for acts they manage
+      const [createdRes, managedActsRes] = await Promise.all([
+        supabase.from('tours').select('id, name, act:acts(act_name), status').eq('created_by', user!.id).neq('status', 'cancelled').order('created_at', { ascending: false }),
+        supabase.from('acts').select('id').or(`agent_id.eq.${user!.id},owner_id.eq.${user!.id}`),
+      ]);
+      const actIds = (managedActsRes.data || []).map((a: any) => a.id);
+      const actToursRes = actIds.length > 0
+        ? await supabase.from('tours').select('id, name, act:acts(act_name), status').in('act_id', actIds).neq('status', 'cancelled').order('created_at', { ascending: false })
+        : { data: [] as any[] };
+      const seen = new Set<string>();
+      const merged: any[] = [];
+      for (const t of [...(createdRes.data || []), ...(actToursRes.data || [])]) {
+        if (!seen.has(t.id)) { seen.add(t.id); merged.push(t); }
+      }
+      setTours(merged);
       setToursLoaded(true);
     }
   };

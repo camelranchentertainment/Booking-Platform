@@ -34,7 +34,7 @@ export default function BandTours() {
     const { data } = await supabase
       .from('tours')
       .select('id, name, status, start_date, end_date, description, tour_venues(count)')
-      .eq('act_id', act.id)
+      .or(`act_id.eq.${act.id},created_by.eq.${user.id}`)
       .order('start_date', { ascending: false });
 
     setTours(data || []);
