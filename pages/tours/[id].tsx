@@ -39,8 +39,17 @@ const FILTER_TABS: (OutreachStatus | 'all')[] = ['all', 'target', 'pitched', 'fo
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', minWidth: 64, fontFamily: 'var(--font-body)', paddingTop: '0.05rem' }}>{label}</span>
+      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.78rem', minWidth: 96, fontFamily: 'var(--font-body)', paddingTop: '0.1rem', textTransform: 'uppercase', letterSpacing: '0.07em', flexShrink: 0 }}>{label}</span>
       <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.84rem', flex: 1 }}>{value}</span>
+    </div>
+  );
+}
+
+function VField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+      <label style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.45)' }}>{label}</label>
+      {children}
     </div>
   );
 }
@@ -60,6 +69,11 @@ export default function TourDetail() {
   const [venuePopout, setVenuePopout] = useState<any>(null);
   const [venueContacts, setVenueContacts] = useState<any[]>([]);
   const [venueLoading, setVenueLoading] = useState(false);
+  const [activeTvId, setActiveTvId] = useState<string | null>(null);
+  const [editingVenue, setEditingVenue] = useState(false);
+  const [venueForm, setVenueForm] = useState<any>({});
+  const [savingVenue, setSavingVenue] = useState(false);
+  const [previousPay, setPreviousPay] = useState<number | null>(null);
 
   // Venue search modal
   const [showSearch, setShowSearch]       = useState(false);
@@ -119,17 +133,77 @@ export default function TourDetail() {
     router.push('/tours');
   };
 
-  const openVenuePopout = async (basicVenue: any) => {
+  const openVenuePopout = async (basicVenue: any, tvId: string, tvNotes: string) => {
+    setActiveTvId(tvId);
     setVenuePopout(basicVenue);
     setVenueContacts([]);
     setVenueLoading(true);
-    const [venueRes, contactsRes] = await Promise.all([
+    setEditingVenue(false);
+    setPreviousPay(null);
+    const [venueRes, contactsRes, lastBookingRes] = await Promise.all([
       supabase.from('venues').select('*').eq('id', basicVenue.id).single(),
-      supabase.from('contacts').select('*').eq('venue_id', basicVenue.id).order('last_name'),
+      supabase.from('contacts').select('*').eq('venue_id', basicVenue.id).order('last_name').limit(1),
+      supabase.from('bookings').select('fee').eq('venue_id', basicVenue.id).eq('status', 'confirmed').order('show_date', { ascending: false }).limit(1),
     ]);
-    if (venueRes.data) setVenuePopout(venueRes.data);
+    const full = venueRes.data || basicVenue;
+    const contact = contactsRes.data?.[0] || null;
+    setVenuePopout(full);
     setVenueContacts(contactsRes.data || []);
+    setPreviousPay(lastBookingRes.data?.[0]?.fee ?? null);
+    setVenueForm({
+      name:          full.name    || '',
+      address:       full.address || '',
+      phone:         full.phone   || '',
+      contact_first: contact?.first_name || '',
+      contact_last:  contact?.last_name  || '',
+      contact_email: contact?.email      || '',
+      notes:         tvNotes || '',
+    });
     setVenueLoading(false);
+  };
+
+  const saveVenueEdits = async () => {
+    if (!venuePopout) return;
+    setSavingVenue(true);
+    await supabase.from('venues').update({
+      name:    venueForm.name,
+      address: venueForm.address || null,
+      phone:   venueForm.phone   || null,
+    }).eq('id', venuePopout.id);
+
+    const contact = venueContacts[0];
+    if (contact) {
+      await supabase.from('contacts').update({
+        first_name: venueForm.contact_first,
+        last_name:  venueForm.contact_last,
+        email:      venueForm.contact_email || null,
+      }).eq('id', contact.id);
+    } else if (venueForm.contact_first || venueForm.contact_email) {
+      await supabase.from('contacts').insert({
+        venue_id:   venuePopout.id,
+        first_name: venueForm.contact_first || '',
+        last_name:  venueForm.contact_last  || '',
+        email:      venueForm.contact_email || null,
+        status:     'not_contacted',
+      });
+    }
+
+    if (activeTvId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/tours/venues', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session!.access_token}` },
+        body: JSON.stringify({ id: activeTvId, notes: venueForm.notes }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setPool(p => p.map(v => v.id === activeTvId ? updated : v));
+      }
+    }
+
+    setVenuePopout((prev: any) => ({ ...prev, name: venueForm.name, address: venueForm.address, phone: venueForm.phone }));
+    setEditingVenue(false);
+    setSavingVenue(false);
   };
 
   const loadPool = async () => {
@@ -484,7 +558,7 @@ export default function TourDetail() {
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <button
-                      onClick={() => openVenuePopout(tv.venue)}
+                      onClick={() => openVenuePopout(tv.venue, tv.id, tv.notes)}
                       style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-primary)', fontSize: '0.88rem', fontWeight: 600, textAlign: 'left' }}
                     >
                       {tv.venue?.name}
@@ -744,14 +818,13 @@ export default function TourDetail() {
       {venuePopout && (
         <div
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
-          onClick={() => setVenuePopout(null)}
+          onClick={() => { setVenuePopout(null); setEditingVenue(false); }}
         >
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              width: '100%', maxWidth: 520,
-              maxHeight: '90vh',
-              overflowY: 'auto',
+              width: '100%', maxWidth: 500,
+              maxHeight: '90vh', overflowY: 'auto',
               background: '#2c2e45',
               border: '1px solid rgba(255,255,255,0.14)',
               borderRadius: 'var(--radius)',
@@ -761,92 +834,78 @@ export default function TourDetail() {
             }}
           >
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', letterSpacing: '0.04em', color: '#fff' }}>
-                  {venuePopout.name}
-                </div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'rgba(255,255,255,0.55)', marginTop: '0.2rem' }}>
-                  {venuePopout.city}{venuePopout.state ? `, ${venuePopout.state}` : ''}
-                </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', letterSpacing: '0.04em', color: '#fff' }}>
+                {venuePopout.city}{venuePopout.state ? `, ${venuePopout.state}` : ''}
               </div>
-              <button className="btn btn-ghost btn-sm" onClick={() => setVenuePopout(null)} style={{ color: 'rgba(255,255,255,0.5)' }}>✕</button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {!editingVenue && !venueLoading && (
+                  <button className="btn btn-secondary btn-sm" onClick={() => setEditingVenue(true)}>Edit</button>
+                )}
+                <button className="btn btn-ghost btn-sm" onClick={() => { setVenuePopout(null); setEditingVenue(false); }} style={{ color: 'rgba(255,255,255,0.5)' }}>✕</button>
+              </div>
             </div>
 
             {venueLoading && (
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'rgba(255,255,255,0.4)' }}>Loading details…</div>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'rgba(255,255,255,0.4)' }}>Loading…</div>
             )}
 
-            {/* Capacity + Type chips */}
-            {(venuePopout.capacity || venuePopout.venue_type) && (
-              <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-                {venuePopout.capacity && (
-                  <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.8rem' }}>
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.45)' }}>Cap </span>
-                    <span style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}>{Number(venuePopout.capacity).toLocaleString()}</span>
+            {!venueLoading && (editingVenue ? (
+              /* ── Edit mode ── */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <VField label="Venue Name">
+                  <input className="input" value={venueForm.name} onChange={e => setVenueForm((f: any) => ({ ...f, name: e.target.value }))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff' }} />
+                </VField>
+                <VField label="Address">
+                  <input className="input" value={venueForm.address} onChange={e => setVenueForm((f: any) => ({ ...f, address: e.target.value }))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff' }} />
+                </VField>
+                <VField label="Phone">
+                  <input className="input" value={venueForm.phone} onChange={e => setVenueForm((f: any) => ({ ...f, phone: e.target.value }))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff' }} />
+                </VField>
+                <VField label="Contact Name">
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input className="input" placeholder="First" value={venueForm.contact_first} onChange={e => setVenueForm((f: any) => ({ ...f, contact_first: e.target.value }))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', flex: 1 }} />
+                    <input className="input" placeholder="Last" value={venueForm.contact_last} onChange={e => setVenueForm((f: any) => ({ ...f, contact_last: e.target.value }))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', flex: 1 }} />
                   </div>
-                )}
-                {venuePopout.venue_type && (
-                  <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.8rem' }}>
-                    <span style={{ color: '#fff', fontSize: '0.85rem', textTransform: 'capitalize' }}>{venuePopout.venue_type}</span>
+                </VField>
+                <VField label="Contact Email">
+                  <input className="input" type="email" value={venueForm.contact_email} onChange={e => setVenueForm((f: any) => ({ ...f, contact_email: e.target.value }))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff' }} />
+                </VField>
+                <VField label="Previous Pay">
+                  <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.84rem', paddingTop: '0.3rem', fontFamily: 'var(--font-body)' }}>
+                    {previousPay != null ? `$${Number(previousPay).toLocaleString()} (last confirmed booking)` : 'No confirmed bookings on record'}
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* Contact details */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.75rem' }}>
-              {venuePopout.address && (
-                <Row label="Address" value={venuePopout.address} />
-              )}
-              {venuePopout.phone && (
-                <Row label="Phone" value={<a href={`tel:${venuePopout.phone}`} style={{ color: 'var(--accent)' }}>{venuePopout.phone}</a>} />
-              )}
-              {venuePopout.email && (
-                <Row label="Email" value={<a href={`mailto:${venuePopout.email}`} style={{ color: 'var(--accent)' }}>{venuePopout.email}</a>} />
-              )}
-              {venuePopout.website && (
-                <Row label="Website" value={<a href={venuePopout.website} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>{venuePopout.website}</a>} />
-              )}
-            </div>
-
-            {/* Notes / Backline */}
-            {(venuePopout.notes || venuePopout.backline) && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.75rem' }}>
-                {venuePopout.notes && (
-                  <div>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', marginBottom: '0.25rem' }}>Notes</div>
-                    <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.84rem', lineHeight: 1.55 }}>{venuePopout.notes}</div>
-                  </div>
-                )}
-                {venuePopout.backline && (
-                  <div>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', marginBottom: '0.25rem' }}>Backline</div>
-                    <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.84rem', lineHeight: 1.55 }}>{venuePopout.backline}</div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Contacts */}
-            {venueContacts.length > 0 && (
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.75rem' }}>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', marginBottom: '0.6rem' }}>Contacts</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                  {venueContacts.map((c: any) => (
-                    <div key={c.id} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-sm)', padding: '0.65rem 0.85rem' }}>
-                      <div style={{ color: '#fff', fontWeight: 600, fontSize: '0.88rem' }}>
-                        {c.first_name} {c.last_name}
-                        {c.title && <span style={{ fontWeight: 400, color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}> · {c.title}</span>}
-                      </div>
-                      {c.email && <a href={`mailto:${c.first_name} ${c.last_name} <${c.email}>`} style={{ color: 'var(--accent)', fontSize: '0.82rem', display: 'block', marginTop: '0.2rem' }}>{c.email}</a>}
-                      {c.phone && <a href={`tel:${c.phone}`} style={{ color: 'var(--accent)', fontSize: '0.82rem', display: 'block' }}>{c.phone}</a>}
-                      {c.notes && <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem', marginTop: '0.25rem' }}>{c.notes}</div>}
-                    </div>
-                  ))}
+                </VField>
+                <VField label="Notes">
+                  <textarea className="textarea" rows={3} value={venueForm.notes} onChange={e => setVenueForm((f: any) => ({ ...f, notes: e.target.value }))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', resize: 'vertical' }} />
+                </VField>
+                <div style={{ display: 'flex', gap: '0.6rem', paddingTop: '0.25rem' }}>
+                  <button className="btn btn-secondary" onClick={() => setEditingVenue(false)}>Cancel</button>
+                  <button className="btn btn-primary" onClick={saveVenueEdits} disabled={savingVenue}>{savingVenue ? 'Saving…' : 'Save'}</button>
                 </div>
               </div>
-            )}
+            ) : (
+              /* ── View mode ── */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                <Row label="Venue Name" value={venueForm.name || venuePopout.name} />
+                <Row label="Address" value={venueForm.address || '—'} />
+                <Row label="Phone" value={venueForm.phone
+                  ? <a href={`tel:${venueForm.phone}`} style={{ color: 'var(--accent)' }}>{venueForm.phone}</a>
+                  : <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>} />
+                <Row label="Contact" value={
+                  (venueForm.contact_first || venueForm.contact_last)
+                    ? `${venueForm.contact_first} ${venueForm.contact_last}`.trim()
+                    : <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>
+                } />
+                <Row label="Contact Email" value={venueForm.contact_email
+                  ? <a href={`mailto:${venueForm.contact_first} ${venueForm.contact_last} <${venueForm.contact_email}>`} style={{ color: 'var(--accent)' }}>{venueForm.contact_email}</a>
+                  : <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>} />
+                <Row label="Previous Pay" value={previousPay != null
+                  ? <span style={{ color: '#34d399', fontWeight: 600 }}>${Number(previousPay).toLocaleString()}</span>
+                  : <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>} />
+                <Row label="Notes" value={venueForm.notes || <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>} />
+              </div>
+            ))}
           </div>
         </div>
       )}
