@@ -4,7 +4,6 @@ import Anthropic from '@anthropic-ai/sdk';
 import { supabase } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
 
-// Cached extraction prompt
 const EXTRACT_PROMPT = `You are extracting booking/contact information from a venue website.
 
 Return ONLY a valid JSON object with these keys (use null for anything not found):
@@ -22,13 +21,32 @@ Return ONLY a valid JSON object with these keys (use null for anything not found
 
 Only extract information explicitly stated on the page. Do not guess or infer.`;
 
+// Sub-pages most likely to have booking contact info
+const CONTACT_PATHS = ['/contact', '/about', '/booking', '/book', '/events', '/live-music', '/entertainment', '/contact-us', '/about-us'];
+
+async function scrapeUrl(firecrawl: FirecrawlApp, url: string): Promise<string | null> {
+  try {
+    const result = await firecrawl.scrape(url, {
+      formats: ['markdown'],
+      onlyMainContent: true,
+      timeout: 20000,
+    });
+    return result.markdown?.slice(0, 8000) || null;
+  } catch {
+    return null;
+  }
+}
+
+function hasEmail(extracted: Record<string, any>): boolean {
+  return !!(extracted.booking_email || extracted.general_email);
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const { url, venueId } = req.body;
   if (!url) return res.status(400).json({ error: 'url required' });
 
-  // Validate URL
   let parsed: URL;
   try { parsed = new URL(url); }
   catch { return res.status(400).json({ error: 'Invalid URL' }); }
@@ -42,72 +60,85 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   ]);
   if (!firecrawlKey) return res.status(500).json({ error: 'Venue scraping not configured. Add your Firecrawl API key in Settings.' });
   if (!anthropicKey) return res.status(500).json({ error: 'AI not configured. Add your Anthropic API key in Settings.' });
+
   const firecrawl = new FirecrawlApp({ apiKey: firecrawlKey });
   const claude    = new Anthropic({ apiKey: anthropicKey });
 
-  try {
-    // Scrape the venue website
-    const scrapeResult = await firecrawl.scrape(url, {
-      formats: ['markdown'],
-      onlyMainContent: true,
-      timeout: 30000,
-    });
-
-    if (!scrapeResult.markdown) {
-      return res.status(422).json({ error: 'Could not scrape that URL — no content returned' });
-    }
-
-    // Truncate to first 8000 chars — contact info is usually above the fold
-    const pageText = scrapeResult.markdown.slice(0, 8000);
-
-    // Extract structured contact info with Claude
-    const message = await claude.messages.create({
+  const extract = async (pageText: string, isFirst: boolean) => {
+    const msg = await claude.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 512,
       system: [
         {
           type: 'text',
           text: EXTRACT_PROMPT,
-          cache_control: { type: 'ephemeral' },
+          // Only cache on the first call; subsequent calls reuse the cached prompt
+          ...(isFirst ? { cache_control: { type: 'ephemeral' } } : {}),
         },
       ],
-      messages: [{
-        role: 'user',
-        content: `Website URL: ${url}\n\nPage content:\n${pageText}`,
-      }],
+      messages: [{ role: 'user', content: `Website URL: ${url}\n\nPage content:\n${pageText}` }],
     });
+    const text = msg.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
+    const match = text.match(/\{[\s\S]*\}/);
+    return match ? JSON.parse(match[0]) : null;
+  };
 
-    const text = message.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return res.status(500).json({ error: 'Extraction returned malformed response' });
+  try {
+    // --- Pass 1: scrape the main URL ---
+    const mainText = await scrapeUrl(firecrawl, url);
+    if (!mainText) return res.status(422).json({ error: 'Could not scrape that URL — no content returned' });
 
-    const extracted = JSON.parse(jsonMatch[0]);
+    let extracted = await extract(mainText, true);
+    let pagesScraped = 1;
 
-    // If venueId provided, offer to patch the venue record
+    // --- Pass 2: try sub-pages if no email found yet ---
+    if (extracted && !hasEmail(extracted)) {
+      const base = `${parsed.protocol}//${parsed.host}`;
+
+      for (const path of CONTACT_PATHS) {
+        const subUrl = base + path;
+        const subText = await scrapeUrl(firecrawl, subUrl);
+        if (!subText) continue;
+        pagesScraped++;
+
+        const subExtracted = await extract(subText, false);
+        if (subExtracted && hasEmail(subExtracted)) {
+          // Merge: sub-page email wins; keep any other fields from main if sub is null
+          extracted = { ...extracted, ...Object.fromEntries(
+            Object.entries(subExtracted).filter(([, v]) => v !== null)
+          )};
+          break;
+        }
+
+        if (pagesScraped >= 5) break; // safety limit
+      }
+    }
+
+    if (!extracted) return res.status(500).json({ error: 'Extraction returned malformed response' });
+
+    // --- Persist to DB if venueId provided ---
     let updated = false;
     if (venueId) {
       const patch: Record<string, any> = {};
-      if (extracted.booking_email)   patch.email     = extracted.booking_email;
-      else if (extracted.general_email) patch.email  = extracted.general_email;
-      if (extracted.booking_phone)   patch.phone     = extracted.booking_phone;
-      if (extracted.venue_name)      patch.name      = extracted.venue_name;
-      if (extracted.capacity)        patch.capacity  = extracted.capacity;
-      if (extracted.venue_type)      patch.venue_type = extracted.venue_type;
-      if (extracted.notes)           patch.notes     = extracted.notes;
+      if (extracted.booking_email)    patch.email      = extracted.booking_email;
+      else if (extracted.general_email) patch.email    = extracted.general_email;
+      if (extracted.booking_phone)    patch.phone      = extracted.booking_phone;
+      if (extracted.venue_name)       patch.name       = extracted.venue_name;
+      if (extracted.capacity)         patch.capacity   = extracted.capacity;
+      if (extracted.venue_type)       patch.venue_type = extracted.venue_type;
+      if (extracted.notes)            patch.notes      = extracted.notes;
 
       if (Object.keys(patch).length > 0) {
         await supabase.from('venues').update(patch).eq('id', venueId);
         updated = true;
       }
 
-      // Create a contact record if we got a name
       if (extracted.booking_contact_name) {
         const parts = (extracted.booking_contact_name as string).trim().split(/\s+/);
         const first = parts[0] ?? '';
         const last  = parts.slice(1).join(' ') || '';
         const email = extracted.booking_email || extracted.general_email || null;
 
-        // Check if contact already exists for this venue
         const { data: existing } = await supabase
           .from('contacts')
           .select('id')
@@ -135,7 +166,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    return res.status(200).json({ extracted, updated, cached: (message.usage.cache_read_input_tokens ?? 0) > 0 });
+    return res.status(200).json({ extracted, updated, pagesScraped });
 
   } catch (err: any) {
     if (err?.message?.includes('FIRECRAWL_API_KEY')) {
