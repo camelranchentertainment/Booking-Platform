@@ -42,8 +42,8 @@ BEGIN
 
   -- Swing Station contact: Heather (Owner)
   IF v_id IS NOT NULL THEN
-    INSERT INTO contacts (venue_id, first_name, last_name, title, status)
-    VALUES (v_id, 'Heather', '', 'Owner', 'not_contacted')
+    INSERT INTO contacts (agent_id, venue_id, first_name, last_name, title, status)
+    VALUES (v_uid, v_id, 'Heather', '', 'Owner', 'not_contacted')
     ON CONFLICT DO NOTHING;
   END IF;
   v_id := NULL;
@@ -72,9 +72,9 @@ BEGIN
 
   -- Larimer Lounge contacts: Haylee and Jackson
   IF v_id IS NOT NULL THEN
-    INSERT INTO contacts (venue_id, first_name, last_name, title, email, status)
-    VALUES (v_id, 'Haylee', '', 'Booking', 'haylee@larimerlounge.com', 'not_contacted'),
-           (v_id, 'Jackson', '', 'Booking', 'jackson@larimerlounge.com', 'not_contacted')
+    INSERT INTO contacts (agent_id, venue_id, first_name, last_name, title, email, status)
+    VALUES (v_uid, v_id, 'Haylee', '', 'Booking', 'haylee@larimerlounge.com', 'not_contacted'),
+           (v_uid, v_id, 'Jackson', '', 'Booking', 'jackson@larimerlounge.com', 'not_contacted')
     ON CONFLICT DO NOTHING;
   END IF;
   v_id := NULL;
@@ -91,8 +91,8 @@ BEGIN
 
   -- Soiled Dove contact: Tami McLaughlin
   IF v_id IS NOT NULL THEN
-    INSERT INTO contacts (venue_id, first_name, last_name, title, status, notes)
-    VALUES (v_id, 'Tami', 'McLaughlin', 'Group Sales', 'not_contacted', 'Ext. 101')
+    INSERT INTO contacts (agent_id, venue_id, first_name, last_name, title, status, notes)
+    VALUES (v_uid, v_id, 'Tami', 'McLaughlin', 'Group Sales', 'not_contacted', 'Ext. 101')
     ON CONFLICT DO NOTHING;
   END IF;
   v_id := NULL;
@@ -109,8 +109,8 @@ BEGIN
 
   -- Hi-Dive contact: Curt
   IF v_id IS NOT NULL THEN
-    INSERT INTO contacts (venue_id, first_name, last_name, email, status)
-    VALUES (v_id, 'Curt', '', 'curt@hi-dive.com', 'not_contacted')
+    INSERT INTO contacts (agent_id, venue_id, first_name, last_name, email, status)
+    VALUES (v_uid, v_id, 'Curt', '', 'curt@hi-dive.com', 'not_contacted')
     ON CONFLICT DO NOTHING;
   END IF;
   v_id := NULL;
