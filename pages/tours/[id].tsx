@@ -157,7 +157,7 @@ export default function TourDetail() {
       contact_first: contact?.first_name || '',
       contact_last:  contact?.last_name  || '',
       contact_email: contact?.email      || '',
-      notes:         tvNotes || '',
+      notes:         full.notes || '',
     });
     setVenueLoading(false);
   };
@@ -169,8 +169,10 @@ export default function TourDetail() {
       name:    venueForm.name,
       address: venueForm.address || null,
       phone:   venueForm.phone   || null,
+      notes:   venueForm.notes   || null,
     }).eq('id', venuePopout.id);
 
+    const { data: { user } } = await supabase.auth.getUser();
     const contact = venueContacts[0];
     if (contact) {
       await supabase.from('contacts').update({
@@ -180,6 +182,7 @@ export default function TourDetail() {
       }).eq('id', contact.id);
     } else if (venueForm.contact_first || venueForm.contact_email) {
       await supabase.from('contacts').insert({
+        agent_id:   user!.id,
         venue_id:   venuePopout.id,
         first_name: venueForm.contact_first || '',
         last_name:  venueForm.contact_last  || '',
@@ -188,20 +191,7 @@ export default function TourDetail() {
       });
     }
 
-    if (activeTvId) {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/tours/venues', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session!.access_token}` },
-        body: JSON.stringify({ id: activeTvId, notes: venueForm.notes }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setPool(p => p.map(v => v.id === activeTvId ? updated : v));
-      }
-    }
-
-    setVenuePopout((prev: any) => ({ ...prev, name: venueForm.name, address: venueForm.address, phone: venueForm.phone }));
+    setVenuePopout((prev: any) => ({ ...prev, name: venueForm.name, address: venueForm.address, phone: venueForm.phone, notes: venueForm.notes }));
     setEditingVenue(false);
     setSavingVenue(false);
   };
