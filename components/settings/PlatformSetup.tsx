@@ -123,7 +123,7 @@ export default function PlatformSetup() {
     placeholder?: string; secret?: boolean; hint?: string; readonly?: string;
   } = {}) => (
     <div className="field" key={key}>
-      <label className="field-label">{label}</label>
+      <label className="field-label" htmlFor={`field-${key}`}>{label}</label>
       {opts.readonly ? (
         <div style={{
           fontFamily: 'var(--font-mono)', fontSize: '0.78rem', background: 'var(--bg-base)',
@@ -132,12 +132,14 @@ export default function PlatformSetup() {
         }}>{opts.readonly}</div>
       ) : (
         <input
+          id={`field-${key}`}
+          name={key}
           className="input"
           type={opts.secret ? 'password' : 'text'}
           placeholder={settings[key]?.configured ? '••••••  (leave blank to keep current)' : (opts.placeholder || '')}
           value={forms[section]?.[key] || ''}
           onChange={e => setField(section, key, e.target.value)}
-          autoComplete="off"
+          autoComplete="new-password"
         />
       )}
       {settings[key]?.configured && !opts.readonly && (
