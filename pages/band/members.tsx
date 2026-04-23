@@ -56,14 +56,14 @@ export default function BandMembers() {
     setSending(true);
     setInviteError('');
     setInviteSent(false);
-    const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from('act_invitations').insert({
-      act_id:     actId,
-      email:      inviteEmail.trim().toLowerCase(),
-      role:       inviteRole,
-      invited_by: user!.id,
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/members/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ actId, email: inviteEmail.trim(), role: inviteRole }),
     });
-    if (error) { setInviteError(error.message); setSending(false); return; }
+    const data = await res.json();
+    if (!res.ok) { setInviteError(data.error || 'Failed to send invite'); setSending(false); return; }
     setInviteEmail('');
     setInviteSent(true);
     await load();

@@ -73,14 +73,14 @@ export default function BandDetail() {
     setSaving(true);
     setInviteError('');
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from('act_invitations').insert({
-        act_id:     act.id,
-        email:      inviteEmail,
-        role:       inviteRole,
-        invited_by: user!.id,
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/members/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ actId: act.id, email: inviteEmail, role: inviteRole }),
       });
-      if (error) { setInviteError(error.message); return; }
+      const data = await res.json();
+      if (!res.ok) { setInviteError(data.error || 'Failed to send invite'); return; }
       setInviteEmail('');
       await loadAll();
     } catch {
