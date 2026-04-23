@@ -22,9 +22,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!actId) return res.status(400).json({ error: 'actId required' });
 
   // Verify act exists
-  const { data: act } = await supabase.from('acts').select('id, act_name, owner_id').eq('id', actId).maybeSingle();
+  const { data: act } = await supabase.from('acts').select('id, act_name, owner_id, agent_id').eq('id', actId).maybeSingle();
   if (!act) return res.status(404).json({ error: 'Band not found' });
-  if (!act.owner_id) return res.status(400).json({ error: 'This band has no owner to link with' });
+  // Allow linking even when owner_id is null (agent created the act and is now inviting the band admin)
+  if (act.agent_id === user.id && !act.owner_id) return res.status(400).json({ error: 'You created this band — invite the band admin via act invitations instead' });
 
   // Create or update link
   const { data: link, error } = await supabase.from('agent_act_links').upsert({
