@@ -62,7 +62,6 @@ export default function BandTours() {
     setShowNew(false);
     setForm({ name: '', description: '', start_date: '', end_date: '' });
     await load();
-    if (data) router.push(`/tours/${data.id}`);
     setSaving(false);
   };
 

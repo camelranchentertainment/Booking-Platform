@@ -18,12 +18,32 @@ export default function ToursPage() {
   const loadAll = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const [toursRes, actsRes] = await Promise.all([
-      supabase.from('tours').select('*, act:acts(act_name)').eq('created_by', user.id).order('created_at', { ascending: false }),
+
+    // Get all acts this agent manages: directly (agent_id) or via active links
+    const [directActsRes, linkedLinksRes] = await Promise.all([
       supabase.from('acts').select('id, act_name').eq('agent_id', user.id).order('act_name'),
+      supabase.from('agent_act_links').select('act_id, act:acts(id, act_name)').eq('agent_id', user.id).eq('status', 'active'),
     ]);
-    setTours(toursRes.data || []);
-    setActs(actsRes.data || []);
+
+    const directActs = directActsRes.data || [];
+    const linkedActs = (linkedLinksRes.data || []).map((l: any) => l.act).filter(Boolean);
+
+    const actsMap = new Map<string, ActPick>();
+    for (const a of directActs) actsMap.set(a.id, a);
+    for (const a of linkedActs) if (!actsMap.has(a.id)) actsMap.set(a.id, a);
+    const allActs = Array.from(actsMap.values()).sort((a, b) => a.act_name.localeCompare(b.act_name));
+    setActs(allActs);
+
+    // Tours: created by this user OR belonging to any managed act
+    const managedIds = allActs.map(a => a.id);
+    let toursQuery = supabase.from('tours').select('*, act:acts(act_name)').order('created_at', { ascending: false });
+    if (managedIds.length > 0) {
+      toursQuery = toursQuery.or(`created_by.eq.${user.id},act_id.in.(${managedIds.join(',')})`);
+    } else {
+      toursQuery = toursQuery.eq('created_by', user.id);
+    }
+    const { data: toursData } = await toursQuery;
+    setTours(toursData || []);
   };
 
   const save = async (e: React.FormEvent) => {
