@@ -1,12 +1,17 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { UserProfile } from '../../lib/types';
+import { supabase } from '../../lib/supabase';
 
 interface Props {
   profile: UserProfile | null;
   onSignOut: () => void;
 }
+
+type Notif =
+  | { type: 'agent_link'; id: string; permissions: string; message: string | null; agent: { display_name: string | null; agency_name: string | null; email: string } }
+  | { type: 'act_invitation'; id: string; role: string; token: string; act: { act_name: string } | null };
 
 const agentNav = [
   { label: 'Dashboard', href: '/dashboard', icon: '◈' },
@@ -45,11 +50,83 @@ export default function Sidebar({ profile, onSignOut }: Props) {
   const router = useRouter();
   const isSuperAdmin = profile?.role === 'superadmin';
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [notifs, setNotifs]       = useState<Notif[]>([]);
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [responding, setResponding] = useState('');
 
   useEffect(() => {
     const saved = localStorage.getItem('theme') as 'dark' | 'light' | null;
     if (saved) setTheme(saved);
   }, []);
+
+  const loadNotifs = useCallback(async () => {
+    if (!profile) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const collected: Notif[] = [];
+
+    // Agent link requests pending for this band admin's act
+    if (profile.role === 'act_admin' || isSuperAdmin) {
+      let actId: string | null = null;
+      const { data: acts } = await supabase.from('acts').select('id').eq('owner_id', user.id).eq('is_active', true).limit(1);
+      if (acts?.length) {
+        actId = acts[0].id;
+      } else {
+        const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
+        actId = prof?.act_id || null;
+      }
+      if (actId) {
+        const { data: links } = await supabase
+          .from('agent_act_links')
+          .select('id, permissions, message, agent:agent_id(display_name, agency_name, email)')
+          .eq('act_id', actId)
+          .eq('status', 'pending');
+        (links || []).forEach(l => collected.push({ type: 'agent_link', ...l, agent: l.agent as any }));
+      }
+    }
+
+    // Act invitations for this user's email (any role)
+    if (profile.email) {
+      const { data: invites } = await supabase
+        .from('act_invitations')
+        .select('id, role, token, act:act_id(act_name)')
+        .eq('email', profile.email)
+        .eq('status', 'pending');
+      (invites || []).forEach(i => collected.push({ type: 'act_invitation', ...i, act: i.act as any }));
+    }
+
+    setNotifs(collected);
+  }, [profile, isSuperAdmin]);
+
+  useEffect(() => { loadNotifs(); }, [loadNotifs]);
+
+  const respondLink = async (id: string, action: 'accept' | 'decline') => {
+    setResponding(id);
+    const { data: { session } } = await supabase.auth.getSession();
+    await fetch('/api/agent-link/respond', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ linkId: id, action }),
+    });
+    await loadNotifs();
+    setResponding('');
+  };
+
+  const acceptInvite = async (n: Extract<Notif, { type: 'act_invitation' }>) => {
+    setResponding(n.id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setResponding(''); return; }
+    const { data: prof } = await supabase.from('user_profiles').select('display_name').eq('id', user.id).single();
+    await fetch('/api/accept-invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: n.token, userId: user.id, displayName: prof?.display_name || '' }),
+    });
+    await loadNotifs();
+    setResponding('');
+    router.reload();
+  };
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
@@ -85,7 +162,6 @@ export default function Sidebar({ profile, onSignOut }: Props) {
 
       {profile && (
         <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-          {/* Avatar */}
           <div style={{
             width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
             border: '1px solid var(--border)', overflow: 'hidden',
@@ -99,7 +175,6 @@ export default function Sidebar({ profile, onSignOut }: Props) {
                 </span>
             }
           </div>
-          {/* Name + role */}
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: '0.83rem', color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {profile.display_name || profile.email}
@@ -153,10 +228,94 @@ export default function Sidebar({ profile, onSignOut }: Props) {
             {item.label}
           </Link>
         ))}
+
+        {/* Notifications entry */}
+        {notifs.length > 0 && (
+          <button
+            onClick={() => setShowNotifs(v => !v)}
+            className="sidebar-link"
+            style={{ width: '100%', justifyContent: 'space-between', marginTop: '0.25rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <span style={{ width: '16px', textAlign: 'center' }}>🔔</span>
+              Notifications
+            </span>
+            <span style={{
+              background: '#ef4444', color: '#fff', borderRadius: '999px',
+              fontSize: '0.65rem', fontWeight: 700, minWidth: '18px', height: '18px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
+            }}>{notifs.length}</span>
+          </button>
+        )}
+
+        {/* Inline notifications panel */}
+        {showNotifs && notifs.length > 0 && (
+          <div style={{ margin: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {notifs.map(n => (
+              <div key={n.id} style={{
+                background: 'var(--bg-overlay)',
+                border: '1px solid rgba(200,146,26,0.25)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '0.75rem',
+                fontSize: '0.8rem',
+              }}>
+                {n.type === 'agent_link' && (
+                  <>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.3rem' }}>
+                      Agent Request
+                    </div>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.15rem' }}>
+                      {n.agent.agency_name || n.agent.display_name || n.agent.email}
+                    </div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: '0.4rem' }}>
+                      {n.permissions === 'manage' ? 'Full management access' : 'View access'}
+                    </div>
+                    {n.message && <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginBottom: '0.5rem', lineHeight: 1.4 }}>"{n.message}"</p>}
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button
+                        className="btn btn-sm"
+                        disabled={!!responding}
+                        onClick={() => respondLink(n.id, 'decline')}
+                        style={{ flex: 1, justifyContent: 'center', fontSize: '0.72rem', color: '#f87171', borderColor: '#f87171', background: 'transparent' }}>
+                        {responding === n.id ? '…' : 'Decline'}
+                      </button>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        disabled={!!responding}
+                        onClick={() => respondLink(n.id, 'accept')}
+                        style={{ flex: 1, justifyContent: 'center', fontSize: '0.72rem' }}>
+                        {responding === n.id ? '…' : 'Accept'}
+                      </button>
+                    </div>
+                  </>
+                )}
+                {n.type === 'act_invitation' && (
+                  <>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#a78bfa', marginBottom: '0.3rem' }}>
+                      Band Invite
+                    </div>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.15rem' }}>
+                      {n.act?.act_name || 'A band'}
+                    </div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: '0.5rem' }}>
+                      You've been invited as {n.role === 'act_admin' ? 'Band Admin' : 'Band Member'}
+                    </div>
+                    <button
+                      className="btn btn-sm btn-primary"
+                      disabled={!!responding}
+                      onClick={() => acceptInvite(n)}
+                      style={{ width: '100%', justifyContent: 'center', fontSize: '0.72rem', background: '#a78bfa', borderColor: '#a78bfa', color: '#000' }}>
+                      {responding === n.id ? '…' : 'Accept Invite'}
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ padding: '0.5rem 0', borderTop: '1px solid var(--border)', marginTop: 'auto' }}>
-        {/* Theme toggle */}
         <button
           className="sidebar-link"
           onClick={toggleTheme}
