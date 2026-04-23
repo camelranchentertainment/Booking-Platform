@@ -37,6 +37,15 @@ export default function VenuesPage() {
   const [form, setForm]             = useState<VenueForm>(BLANK);
   const [saving, setSaving]         = useState(false);
   const [mapsReady, setMapsReady]   = useState(false);
+
+  // Bulk import
+  const [showImport, setShowImport]     = useState(false);
+  const [importText, setImportText]     = useState('');
+  const [importRows, setImportRows]     = useState<any[]>([]);
+  const [importParsed, setImportParsed] = useState(false);
+  const [importSaving, setImportSaving] = useState(false);
+  const [importDone, setImportDone]     = useState<{added:number;skipped:number} | null>(null);
+  const [importError, setImportError]   = useState('');
   const autocompleteRef             = useRef<any>(null);
   const inputRef                    = useRef<HTMLInputElement>(null);
 
@@ -131,6 +140,128 @@ export default function VenuesPage() {
     setShowNew(false);
     await loadVenues();
     setSaving(false);
+  };
+
+  const parseImport = () => {
+    setImportError('');
+    setImportDone(null);
+    const lines = importText.trim().split('\n').filter(l => l.trim());
+    if (!lines.length) { setImportError('Paste your venue list first.'); return; }
+
+    // Detect markdown table (lines contain |) or CSV
+    const isTable = lines[0].includes('|');
+    const rows: any[] = [];
+
+    const clean = (s: string) => s?.trim().replace(/^["']|["']$/g, '').trim() || '';
+
+    if (isTable) {
+      // Strip header separator line (---|---)
+      const dataLines = lines.filter(l => !/^\s*\|?\s*[-:]+\s*\|/.test(l));
+      // First data line is headers
+      const headers = dataLines[0].split('|').map(h => clean(h).toLowerCase().replace(/[^a-z0-9]/g, '_'));
+      for (let i = 1; i < dataLines.length; i++) {
+        const cells = dataLines[i].split('|').map(clean);
+        const obj: any = {};
+        headers.forEach((h, idx) => { if (h) obj[h] = cells[idx] || ''; });
+        if (obj.venue_name || obj.name) rows.push(obj);
+      }
+    } else {
+      // CSV — first line is headers
+      const headers = lines[0].split(',').map(h => clean(h).toLowerCase().replace(/[^a-z0-9]/g, '_'));
+      for (let i = 1; i < lines.length; i++) {
+        const cells = lines[i].split(',').map(clean);
+        const obj: any = {};
+        headers.forEach((h, idx) => { if (h) obj[h] = cells[idx] || ''; });
+        if (obj.venue_name || obj.name) rows.push(obj);
+      }
+    }
+
+    if (!rows.length) { setImportError('Could not parse any venue rows. Make sure the first line is a header row.'); return; }
+
+    // Normalize field names to internal keys
+    const norm = rows.map(r => ({
+      name:         clean(r.venue_name || r.name || ''),
+      address:      clean(r.address || ''),
+      city:         clean(r.city || ''),
+      state:        clean(r.state || ''),
+      phone:        clean(r.phone || r.phone_number || ''),
+      email:        clean(r.booking_email || r.general___info_email || r.general_email || r.email || ''),
+      website:      clean(r.website || ''),
+      venue_type:   clean(r.type || r.venue_type || '').toLowerCase(),
+      capacity:     clean(r.capacity || ''),
+      contact_first: clean((r.contact_name || r.booking_contact_name || '').split(' ')[0] || ''),
+      contact_last:  clean((r.contact_name || r.booking_contact_name || '').split(' ').slice(1).join(' ') || ''),
+      contact_title: clean(r.contact_title || r.booking_contact_title || ''),
+      contact_email: clean(r.booking_email || r.contact_email || ''),
+      notes:         clean(r.notes || ''),
+      _selected:     true,
+    })).filter(r => r.name && r.city);
+
+    if (!norm.length) { setImportError('Rows found but none had a Venue Name and City — check your column headers.'); return; }
+    setImportRows(norm);
+    setImportParsed(true);
+  };
+
+  const runImport = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    setImportSaving(true);
+    let added = 0; let skipped = 0;
+
+    for (const row of importRows.filter(r => r._selected)) {
+      // Check for existing venue (same name + city)
+      const { data: existing } = await supabase
+        .from('venues').select('id').eq('agent_id', user.id)
+        .ilike('name', row.name).ilike('city', row.city).maybeSingle();
+
+      if (existing) {
+        // Update with new info
+        await supabase.from('venues').update({
+          address:    row.address    || null,
+          phone:      row.phone      || null,
+          email:      row.email      || null,
+          website:    row.website    || null,
+          venue_type: row.venue_type || null,
+          capacity:   row.capacity   ? Number(row.capacity) : null,
+          notes:      row.notes      || null,
+        }).eq('id', existing.id);
+        skipped++;
+      } else {
+        const { data: newV } = await supabase.from('venues').insert({
+          agent_id:   user.id,
+          name:       row.name,
+          city:       row.city,
+          state:      row.state      || null,
+          address:    row.address    || null,
+          phone:      row.phone      || null,
+          email:      row.email      || null,
+          website:    row.website    || null,
+          venue_type: row.venue_type || null,
+          capacity:   row.capacity   ? Number(row.capacity) : null,
+          notes:      row.notes      || null,
+          source:     'import',
+          country:    'US',
+        }).select('id').single();
+
+        // Create contact if name provided
+        if (newV?.id && (row.contact_first || row.contact_email)) {
+          await supabase.from('contacts').insert({
+            agent_id:   user.id,
+            venue_id:   newV.id,
+            first_name: row.contact_first || '',
+            last_name:  row.contact_last  || '',
+            title:      row.contact_title || null,
+            email:      row.contact_email || null,
+            status:     'not_contacted',
+          });
+        }
+        added++;
+      }
+    }
+
+    await loadVenues();
+    setImportDone({ added, skipped });
+    setImportSaving(false);
   };
 
   const set = (k: keyof VenueForm) =>
@@ -263,7 +394,10 @@ export default function VenuesPage() {
           <h1 className="page-title">Venues</h1>
           <div className="page-sub">{venues.length} in database</div>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ Add Venue</button>
+        <div style={{ display: 'flex', gap: '0.6rem' }}>
+          <button className="btn btn-secondary" onClick={() => { setShowImport(true); setImportParsed(false); setImportText(''); setImportRows([]); setImportDone(null); setImportError(''); }}>⬆ Bulk Import</button>
+          <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ Add Venue</button>
+        </div>
       </div>
 
       {/* Discover Venues — city/state Google search, compact strip at top */}
@@ -569,6 +703,90 @@ export default function VenuesPage() {
           </div>
         </div>
       )}
+      {/* Bulk Import Modal */}
+      {showImport && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
+          onClick={() => !importSaving && setShowImport(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 720, maxHeight: '90vh', overflowY: 'auto', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="card-title">BULK IMPORT VENUES</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowImport(false)}>✕</button>
+            </div>
+
+            {!importParsed ? (
+              <>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                  Paste your venue list below. Accepted formats:
+                  <ul style={{ marginTop: '0.4rem', paddingLeft: '1.2rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                    <li>Markdown table from the AI research prompt (recommended)</li>
+                    <li>CSV with a header row</li>
+                  </ul>
+                  <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    Required columns: <code style={{ background: 'var(--bg-overlay)', padding: '0 4px', borderRadius: 2 }}>Venue Name</code> and <code style={{ background: 'var(--bg-overlay)', padding: '0 4px', borderRadius: 2 }}>City</code>.
+                    If a venue already exists it will be updated, not duplicated.
+                  </div>
+                </div>
+                <textarea
+                  className="textarea"
+                  rows={12}
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', resize: 'vertical' }}
+                  placeholder="Paste markdown table or CSV here..."
+                  value={importText}
+                  onChange={e => setImportText(e.target.value)}
+                />
+                {importError && <div style={{ color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.83rem' }}>{importError}</div>}
+                <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
+                  <button className="btn btn-secondary" onClick={() => setShowImport(false)}>Cancel</button>
+                  <button className="btn btn-primary" onClick={parseImport} disabled={!importText.trim()}>Parse →</button>
+                </div>
+              </>
+            ) : importDone ? (
+              <div style={{ textAlign: 'center', padding: '1.5rem' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: 'var(--accent)', marginBottom: '0.5rem' }}>Done</div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+                  {importDone.added} venue{importDone.added !== 1 ? 's' : ''} added &nbsp;·&nbsp; {importDone.skipped} updated (already existed)
+                </div>
+                <button className="btn btn-primary" style={{ marginTop: '1.25rem' }} onClick={() => setShowImport(false)}>Close</button>
+              </div>
+            ) : (
+              <>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
+                  {importRows.length} venue{importRows.length !== 1 ? 's' : ''} ready to import. Uncheck any you want to skip.
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: 340, overflowY: 'auto' }}>
+                  {importRows.map((row, i) => (
+                    <label key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.6rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={row._selected} onChange={e => setImportRows(rows => rows.map((r, idx) => idx === i ? { ...r, _selected: e.target.checked } : r))} style={{ marginTop: 3, flexShrink: 0 }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{row.name}</div>
+                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                          {[row.city, row.state].filter(Boolean).join(', ')}
+                          {row.phone && ` · ${row.phone}`}
+                          {row.email && ` · ${row.email}`}
+                          {row.capacity && ` · cap ${row.capacity}`}
+                        </div>
+                        {row.contact_first && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--accent)', marginTop: '0.1rem' }}>Contact: {row.contact_first} {row.contact_last} {row.contact_title ? `(${row.contact_title})` : ''}</div>}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                {importError && <div style={{ color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.83rem' }}>{importError}</div>}
+                <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setImportParsed(false)}>← Back</button>
+                  <div style={{ display: 'flex', gap: '0.6rem' }}>
+                    <button className="btn btn-secondary" onClick={() => setShowImport(false)}>Cancel</button>
+                    <button className="btn btn-primary" onClick={runImport} disabled={importSaving || !importRows.some(r => r._selected)}>
+                      {importSaving ? 'Importing…' : `Import ${importRows.filter(r => r._selected).length} Venues`}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
     </AppShell>
   );
 }
