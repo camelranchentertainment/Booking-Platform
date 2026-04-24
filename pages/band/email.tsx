@@ -73,18 +73,34 @@ export default function BandEmail() {
         ? supabase.from('email_drafts')
             .select(`id, category, subject, body, created_at, tour_venue_id,
               tourVenue:tour_venues(id, tour_id, venue_id,
-                venue:venues(name, city, state, email),
-                contact:contacts(id, first_name, last_name, email))`)
+                venue:venues(name, city, state, email))`)
             .in('tour_venue_id', tourVenueIds)
             .eq('category', 'target')
             .order('created_at', { ascending: false })
         : Promise.resolve({ data: [] }),
     ]);
 
+    // Fetch contacts for tour venue drafts separately (tour_venues has no contacts FK)
+    const tvDrafts = (tourVenueDraftsRes.data || []) as any[];
+    const venueIdsForContacts = [...new Set(tvDrafts.map((d: any) => d.tourVenue?.venue_id).filter(Boolean))];
+    let contactsByVenueId: Record<string, any> = {};
+    if (venueIdsForContacts.length > 0) {
+      const { data: tvContacts } = await supabase.from('contacts')
+        .select('id, first_name, last_name, email, venue_id')
+        .in('venue_id', venueIdsForContacts);
+      for (const c of tvContacts || []) {
+        if (!contactsByVenueId[c.venue_id]) contactsByVenueId[c.venue_id] = c;
+      }
+    }
+
     setLog(logRes.data || []);
     const allDrafts = [
       ...(bookingDraftsRes.data || []).map((d: any) => ({ ...d, _type: 'booking' })),
-      ...(tourVenueDraftsRes.data || []).map((d: any) => ({ ...d, _type: 'tour_venue' })),
+      ...tvDrafts.map((d: any) => ({
+        ...d,
+        _type: 'tour_venue',
+        tourVenue: d.tourVenue ? { ...d.tourVenue, contact: contactsByVenueId[d.tourVenue.venue_id] || null } : null,
+      })),
     ];
     setDrafts(allDrafts);
     setLoading(false);
@@ -256,6 +272,7 @@ export default function BandEmail() {
         return (
           <EmailComposer
             bookingId={bk?.id}
+            tourVenueId={tv?.id}
             actId={myAct?.id}
             venueId={tv?.venue_id || bk?.venue_id}
             contactId={contact?.id}

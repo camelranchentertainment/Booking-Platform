@@ -173,14 +173,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (!match) { errors.push(`Claude returned no JSON for tour_venue ${tv.id}`); continue; }
         const draft = JSON.parse(match[0]);
 
-        const { error: insertErr } = await service.from('email_drafts').insert({
-          booking_id: null,
-          tour_venue_id: tv.id,
-          category: 'target',
-          subject: draft.subject,
-          body: draft.body,
-          agent_id: user.id,
-        });
+        const { error: insertErr } = await service.from('email_drafts').upsert(
+          { booking_id: null, tour_venue_id: tv.id, category: 'target', subject: draft.subject, body: draft.body, agent_id: user.id },
+          { onConflict: 'tour_venue_id,category' }
+        );
         if (insertErr) { errors.push(`Insert tour_venue draft ${tv.id}: ${insertErr.message}`); continue; }
         created++;
       } catch (e: any) {

@@ -25,6 +25,7 @@ type Stage = 'loading' | 'preview' | 'editing' | 'sending' | 'sent' | 'error';
 
 interface Props {
   bookingId?: string;
+  tourVenueId?: string;
   actId: string;
   venueId?: string;
   contactId?: string;
@@ -37,7 +38,7 @@ interface Props {
   onClose: () => void;
 }
 
-export default function EmailComposer({ bookingId, actId, venueId, contactId, contactEmail, defaultCategory, agentName, initialSubject, initialBody, draftId, onClose }: Props) {
+export default function EmailComposer({ bookingId, tourVenueId, actId, venueId, contactId, contactEmail, defaultCategory, agentName, initialSubject, initialBody, draftId, onClose }: Props) {
   const [stage, setStage]       = useState<Stage>('loading');
   const [category, setCategory] = useState(defaultCategory);
   const [subject, setSubject]   = useState('');
@@ -133,9 +134,10 @@ export default function EmailComposer({ bookingId, actId, venueId, contactId, co
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
       body: JSON.stringify({
         to, subject, html,
-        bookingId: bookingId || null,
-        venueId:   venueId   || null,
-        contactId: contactId || null,
+        bookingId:    bookingId    || null,
+        tourVenueId:  tourVenueId  || null,
+        venueId:      venueId      || null,
+        contactId:    contactId    || null,
         actId,
         category,
         bodyPreview: body,

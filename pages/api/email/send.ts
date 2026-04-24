@@ -26,7 +26,7 @@ async function getResendConfig(service: ReturnType<typeof getServiceClient>) {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { to, subject, html, bookingId, venueId, contactId, actId, templateId, category, bodyPreview } = req.body;
+  const { to, subject, html, bookingId, tourVenueId, venueId, contactId, actId, templateId, category, bodyPreview } = req.body;
   if (!to || !subject || !html) return res.status(400).json({ error: 'to, subject, html required' });
 
   const service = getServiceClient();
@@ -81,6 +81,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         resend_message_id: data?.id || null,
         sent_by:           agentId,
       });
+    }
+
+    // Update tour_venue status when emailing a prospect
+    if (tourVenueId && category) {
+      const statusMap: Record<string, string> = {
+        target:       'pitched',
+        follow_up_1:  'followup',
+        follow_up_2:  'followup',
+        confirmation: 'confirmed',
+      };
+      const newStatus = statusMap[category];
+      if (newStatus) {
+        await service.from('tour_venues').update({ status: newStatus }).eq('id', tourVenueId);
+      }
     }
 
     return res.status(200).json({ ok: true, id: data?.id });
