@@ -63,20 +63,26 @@ export default function BandCalendar() {
   const selectedShows = selected ? (showsByDate[selected] || []) : [];
   const upcoming      = shows.filter(s => s.show_date >= todayStr).slice(0, 8);
 
+  const goToday = () => setCurrent({ year: today.getFullYear(), month: today.getMonth() });
+  const isCurrentMonth = current.year === today.getFullYear() && current.month === today.getMonth();
+
   return (
     <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Calendar</h1>
-          <div className="page-sub">{shows.length} bookings scheduled</div>
+          <div className="page-sub">{shows.length} booking{shows.length !== 1 ? 's' : ''} scheduled</div>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {!isCurrentMonth && (
+            <button className="btn btn-ghost btn-sm" onClick={goToday}>Today</button>
+          )}
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => downloadIcal(buildIcal(shows, 'Band Shows'), 'band-shows.ics')}
-            title="Export shows to Google Calendar / Apple Calendar / Outlook"
+            title="Export to Google / Apple / Outlook"
           >
-            ↓ Export Calendar
+            ↓ Export
           </button>
           <Link href="/band" className="btn btn-primary">+ Add Show</Link>
         </div>
@@ -180,37 +186,42 @@ export default function BandCalendar() {
               <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>No upcoming shows.</div>
             )}
             {upcoming.map((s: any) => (
-              <div key={s.id} onClick={() => setDetailBooking(s)} style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', padding: '0.45rem 0', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
+              <div
+                key={s.id}
+                onClick={() => setDetailBooking(s)}
+                style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', padding: '0.5rem 0.4rem', borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.12s', borderRadius: 0 }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(200,146,26,0.05)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
                 <div style={{ minWidth: 32, textAlign: 'center', flexShrink: 0 }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', color: 'var(--accent)', lineHeight: 1 }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem', color: 'var(--accent)', lineHeight: 1 }}>
                     {new Date(s.show_date + 'T12:00:00').getDate()}
                   </div>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.66rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                     {new Date(s.show_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })}
                   </div>
                 </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
-                  <div style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.venue?.name || 'TBD'}</div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-body)' }}>{s.venue?.city || ''}</div>
+                  <div style={{ color: 'var(--text-primary)', fontSize: '0.84rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.venue?.name || 'TBD'}</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontFamily: 'var(--font-body)' }}>{s.venue?.city || ''}</div>
                 </div>
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: STATUS_DOT[s.status] || '#64748b', flexShrink: 0 }} />
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_DOT[s.status] || '#64748b', flexShrink: 0 }} />
               </div>
             ))}
           </div>
         </div>
       </div>
       {detailBooking && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ background: '#f5f3ee', borderRadius: 'var(--radius)', padding: '2rem', width: '100%', maxWidth: 480, position: 'relative', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
-            <button onClick={() => setDetailBooking(null)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: '#1a1a2e', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>
+        <div className="modal-backdrop" onClick={() => setDetailBooking(null)}>
+          <div className="modal" style={{ maxWidth: 480, position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setDetailBooking(null)}>✕</button>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: 'var(--accent)', letterSpacing: '0.05em', marginBottom: '0.15rem' }}>
               {detailBooking.venue?.name || 'TBD'}
             </div>
-            <div style={{ color: '#888', fontSize: '0.82rem', fontFamily: 'var(--font-mono)', marginBottom: '1.5rem' }}>
-              {detailBooking.venue?.city ? `${detailBooking.venue.city}, ${detailBooking.venue.state}` : ''}
-              {detailBooking.venue?.address ? ` · ${detailBooking.venue.address}` : ''}
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-mono)', marginBottom: '1.5rem', letterSpacing: '0.06em' }}>
+              {[detailBooking.venue?.city && `${detailBooking.venue.city}, ${detailBooking.venue.state}`, detailBooking.venue?.address].filter(Boolean).join(' · ')}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               {([
                 ['Date',       detailBooking.show_date ? new Date(detailBooking.show_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : '—'],
                 ['Status',     BOOKING_STATUS_LABELS[detailBooking.status as keyof typeof BOOKING_STATUS_LABELS] || detailBooking.status],
@@ -221,15 +232,15 @@ export default function BandCalendar() {
                 ['Set Length', detailBooking.set_length_min ? `${detailBooking.set_length_min} min` : '—'],
                 ['Phone',      detailBooking.venue?.phone || '—'],
               ] as [string, string][]).map(([label, value]) => (
-                <div key={label} style={{ display: 'flex', gap: '1rem', fontSize: '0.9rem', borderBottom: '1px solid #e8e5df', paddingBottom: '0.5rem' }}>
-                  <div style={{ width: 90, flexShrink: 0, color: '#888', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', paddingTop: 3 }}>{label}</div>
-                  <div style={{ color: '#1a1a2e', fontWeight: 500 }}>{value}</div>
+                <div key={label} className="modal-row">
+                  <div className="modal-row-label">{label}</div>
+                  <div className="modal-row-value">{value}</div>
                 </div>
               ))}
               {detailBooking.advance_notes && (
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                  <div style={{ width: 90, flexShrink: 0, color: '#888', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', paddingTop: 3 }}>Notes</div>
-                  <div style={{ color: '#333', fontSize: '0.9rem', lineHeight: 1.6 }}>{detailBooking.advance_notes}</div>
+                <div className="modal-row" style={{ borderBottom: 'none' }}>
+                  <div className="modal-row-label">Notes</div>
+                  <div style={{ color: 'var(--text-secondary)', lineHeight: 1.6, flex: 1 }}>{detailBooking.advance_notes}</div>
                 </div>
               )}
             </div>
