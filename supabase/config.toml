@@ -1,0 +1,6 @@
+# Supabase project config
+# Deploy functions: supabase functions deploy daily-reminders
+
+[functions.daily-reminders]
+# Runs every day at 9am UTC (4am CDT / 3am CST)
+schedule = "0 9 * * *"

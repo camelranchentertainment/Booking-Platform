@@ -15,6 +15,14 @@ type Notif =
   | { type: 'agent_link'; id: string; permissions: string; message: string | null; agent: { display_name: string | null; agency_name: string | null; email: string } }
   | { type: 'act_invitation'; id: string; role: string; token: string; act: { act_name: string } | null };
 
+type SysNotif = {
+  id: string;
+  type: string;
+  message: string;
+  action_url: string | null;
+  created_at: string;
+};
+
 const agentNav = [
   { label: 'Dashboard', href: '/dashboard', icon: '◈' },
   { label: 'Bands',     href: '/acts',      icon: '♪' },
@@ -53,7 +61,8 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
   const router = useRouter();
   const isSuperAdmin = profile?.role === 'superadmin';
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [notifs, setNotifs]       = useState<Notif[]>([]);
+  const [notifs, setNotifs]         = useState<Notif[]>([]);
+  const [sysNotifs, setSysNotifs]   = useState<SysNotif[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
   const [responding, setResponding] = useState('');
 
@@ -102,6 +111,16 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
     }
 
     setNotifs(collected);
+
+    // System notifications (advance due, thank-you due, etc.)
+    const { data: sys } = await supabase
+      .from('notifications')
+      .select('id, type, message, action_url, created_at')
+      .eq('user_id', user.id)
+      .eq('read', false)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    setSysNotifs((sys || []) as SysNotif[]);
   }, [profile, isSuperAdmin]);
 
   useEffect(() => { loadNotifs(); }, [loadNotifs]);
@@ -131,6 +150,11 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
     await loadNotifs();
     setResponding('');
     router.reload();
+  };
+
+  const markSysRead = async (id: string) => {
+    await supabase.from('notifications').update({ read: true }).eq('id', id);
+    setSysNotifs(prev => prev.filter(n => n.id !== id));
   };
 
   const toggleTheme = () => {
@@ -237,7 +261,7 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
         ))}
 
         {/* Notifications entry */}
-        {notifs.length > 0 && (
+        {(notifs.length > 0 || sysNotifs.length > 0) && (
           <button
             onClick={() => setShowNotifs(v => !v)}
             className="sidebar-link"
@@ -251,13 +275,54 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
               background: '#ef4444', color: '#fff', borderRadius: '999px',
               fontSize: '0.65rem', fontWeight: 700, minWidth: '18px', height: '18px',
               display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
-            }}>{notifs.length}</span>
+            }}>{notifs.length + sysNotifs.length}</span>
           </button>
         )}
 
         {/* Inline notifications panel */}
-        {showNotifs && notifs.length > 0 && (
+        {showNotifs && (notifs.length > 0 || sysNotifs.length > 0) && (
           <div style={{ margin: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {/* System notifications (advance due, thank-you due, etc.) */}
+            {sysNotifs.map(n => {
+              const typeColor: Record<string, string> = {
+                advance_due:   '#f97316',
+                thank_you_due: '#a78bfa',
+                follow_up_due: '#fbbf24',
+                system:        'var(--accent)',
+              };
+              const typeLabel: Record<string, string> = {
+                advance_due:   'Advance Due',
+                thank_you_due: 'Thank You Due',
+                follow_up_due: 'Follow Up',
+                system:        'Notice',
+              };
+              return (
+                <div key={n.id} style={{
+                  background: 'var(--bg-overlay)',
+                  border: `1px solid ${typeColor[n.type] || 'var(--accent)'}40`,
+                  borderRadius: 'var(--radius-sm)', padding: '0.75rem', fontSize: '0.8rem',
+                }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: typeColor[n.type] || 'var(--accent)', marginBottom: '0.3rem' }}>
+                    {typeLabel[n.type] || n.type}
+                  </div>
+                  <div style={{ color: 'var(--text-primary)', lineHeight: 1.45, marginBottom: '0.5rem' }}>{n.message}</div>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    {n.action_url && (
+                      <Link href={n.action_url} onClick={() => { markSysRead(n.id); onClose?.(); }}
+                        className="btn btn-sm btn-primary"
+                        style={{ flex: 1, justifyContent: 'center', fontSize: '0.72rem' }}>
+                        Open
+                      </Link>
+                    )}
+                    <button onClick={() => markSysRead(n.id)}
+                      className="btn btn-sm"
+                      style={{ flex: n.action_url ? 0 : 1, justifyContent: 'center', fontSize: '0.72rem', color: 'var(--text-muted)', borderColor: 'var(--border)', background: 'transparent' }}>
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
             {notifs.map(n => (
               <div key={n.id} style={{
                 background: 'var(--bg-overlay)',

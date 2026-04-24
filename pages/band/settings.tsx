@@ -26,7 +26,8 @@ export default function BandSettings() {
   const [loading, setLoading] = useState(true);
 
   // Personal info
-  const [displayName, setDisplayName] = useState('');
+  const [displayName, setDisplayName]     = useState('');
+  const [personalGmail, setPersonalGmail] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [savedProfile, setSavedProfile]   = useState(false);
 
@@ -61,8 +62,9 @@ export default function BandSettings() {
     if (!user) return;
 
     // Load personal display_name from profile
-    const { data: prof } = await supabase.from('user_profiles').select('display_name, act_id, email').eq('id', user.id).single();
+    const { data: prof } = await supabase.from('user_profiles').select('display_name, act_id, email, personal_gmail').eq('id', user.id).single();
     setDisplayName(prof?.display_name || '');
+    setPersonalGmail((prof as any)?.personal_gmail || '');
 
     // Dual-lookup for act: owner first, then profile act_id
     let { data: acts } = await supabase.from('acts').select('*').eq('owner_id', user.id).eq('is_active', true).limit(1);
@@ -117,7 +119,7 @@ export default function BandSettings() {
     setSavedProfile(false);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from('user_profiles').update({ display_name: displayName.trim() }).eq('id', user.id);
+    await supabase.from('user_profiles').update({ display_name: displayName.trim(), personal_gmail: personalGmail.trim() || null } as any).eq('id', user.id);
     setSavingProfile(false);
     setSavedProfile(true);
     setTimeout(() => setSavedProfile(false), 3000);
@@ -343,6 +345,17 @@ export default function BandSettings() {
                   onChange={e => setDisplayName(e.target.value)}
                   placeholder="Your name"
                 />
+              </div>
+              <div className="field">
+                <label className="field-label">Personal Gmail</label>
+                <input
+                  className="input"
+                  type="email"
+                  value={personalGmail}
+                  onChange={e => setPersonalGmail(e.target.value)}
+                  placeholder="yourname@gmail.com"
+                />
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>Used for show reminder emails (advance, thank you)</span>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>

@@ -22,7 +22,7 @@ const STATUS_LABELS: Record<string, string> = {
 export default function Settings() {
   const router = useRouter();
   const [profile, setProfile]       = useState<UserProfile | null>(null);
-  const [form, setForm]             = useState({ display_name: '', agency_name: '', phone: '', email: '' });
+  const [form, setForm]             = useState({ display_name: '', agency_name: '', phone: '', email: '', personal_gmail: '' });
   const [saving, setSaving]         = useState(false);
   const [saved, setSaved]           = useState(false);
   const [avatarUrl, setAvatarUrl]   = useState<string | null>(null);
@@ -47,7 +47,7 @@ export default function Settings() {
     if (data) {
       setProfile(data);
       setAvatarUrl(data.avatar_url || null);
-      setForm({ display_name: data.display_name || '', agency_name: data.agency_name || '', phone: data.phone || '', email: data.email || '' });
+      setForm({ display_name: data.display_name || '', agency_name: data.agency_name || '', phone: data.phone || '', email: data.email || '', personal_gmail: (data as any).personal_gmail || '' });
       setIsSuperAdmin(data.role === 'superadmin');
     }
   };
@@ -104,10 +104,11 @@ export default function Settings() {
     if (!profile) return;
     setSaving(true);
     await supabase.from('user_profiles').update({
-      display_name: form.display_name,
-      agency_name:  form.agency_name || null,
-      phone:        form.phone       || null,
-    }).eq('id', profile.id);
+      display_name:   form.display_name,
+      agency_name:    form.agency_name    || null,
+      phone:          form.phone          || null,
+      personal_gmail: form.personal_gmail || null,
+    } as any).eq('id', profile.id);
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -199,6 +200,11 @@ export default function Settings() {
                 <label className="field-label">Email</label>
                 <input className="input" type="email" value={form.email} disabled style={{ opacity: 0.5 }} />
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>Email cannot be changed here</span>
+              </div>
+              <div className="field">
+                <label className="field-label">Personal Gmail</label>
+                <input className="input" type="email" value={form.personal_gmail} onChange={set('personal_gmail')} placeholder="yourname@gmail.com" />
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>Used for advance & thank-you reminder emails</span>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
