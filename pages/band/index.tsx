@@ -395,17 +395,16 @@ export default function BandPortal() {
       )}
       {/* Booking Detail Modal */}
       {detailBooking && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ background: '#f5f3ee', borderRadius: 'var(--radius)', padding: '2rem', width: '100%', maxWidth: 480, position: 'relative', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
-            <button onClick={() => setDetailBooking(null)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: '#1a1a2e', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>
+        <div className="modal-backdrop" onClick={() => setDetailBooking(null)}>
+          <div className="modal" style={{ maxWidth: 480, position: 'relative', animation: 'fadeIn 0.2s ease both' }} onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setDetailBooking(null)}>✕</button>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: 'var(--accent)', letterSpacing: '0.05em', marginBottom: '0.15rem' }}>
               {detailBooking.venue?.name || 'TBD'}
             </div>
-            <div style={{ color: '#888', fontSize: '0.82rem', fontFamily: 'var(--font-mono)', marginBottom: '1.5rem' }}>
-              {detailBooking.venue?.city ? `${detailBooking.venue.city}, ${detailBooking.venue.state}` : ''}
-              {detailBooking.venue?.address ? ` · ${detailBooking.venue.address}` : ''}
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-mono)', marginBottom: '1.5rem', letterSpacing: '0.06em' }}>
+              {[detailBooking.venue?.city && `${detailBooking.venue.city}, ${detailBooking.venue.state}`, detailBooking.venue?.address].filter(Boolean).join(' · ')}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               {([
                 ['Date',       detailBooking.show_date ? new Date(detailBooking.show_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : '—'],
                 ['Status',     BOOKING_STATUS_LABELS[detailBooking.status as keyof typeof BOOKING_STATUS_LABELS] || detailBooking.status],
@@ -416,15 +415,15 @@ export default function BandPortal() {
                 ['Set Length', detailBooking.set_length_min ? `${detailBooking.set_length_min} min` : '—'],
                 ['Phone',      detailBooking.venue?.phone || '—'],
               ] as [string, string][]).map(([label, value]) => (
-                <div key={label} style={{ display: 'flex', gap: '1rem', fontSize: '0.9rem', borderBottom: '1px solid #e8e5df', paddingBottom: '0.5rem' }}>
-                  <div style={{ width: 90, flexShrink: 0, color: '#888', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', paddingTop: 3 }}>{label}</div>
-                  <div style={{ color: '#1a1a2e', fontWeight: 500 }}>{value}</div>
+                <div key={label} className="modal-row">
+                  <div className="modal-row-label">{label}</div>
+                  <div className="modal-row-value">{value}</div>
                 </div>
               ))}
               {detailBooking.advance_notes && (
-                <div style={{ display: 'flex', gap: '1rem', fontSize: '0.9rem' }}>
-                  <div style={{ width: 90, flexShrink: 0, color: '#888', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', paddingTop: 3 }}>Notes</div>
-                  <div style={{ color: '#333', lineHeight: 1.6 }}>{detailBooking.advance_notes}</div>
+                <div className="modal-row" style={{ borderBottom: 'none' }}>
+                  <div className="modal-row-label">Notes</div>
+                  <div style={{ color: 'var(--text-secondary)', lineHeight: 1.6, flex: 1 }}>{detailBooking.advance_notes}</div>
                 </div>
               )}
             </div>
@@ -434,30 +433,30 @@ export default function BandPortal() {
 
       {/* Tour Detail Modal */}
       {detailTour && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ background: '#f5f3ee', borderRadius: 'var(--radius)', padding: '2rem', width: '100%', maxWidth: 520, position: 'relative', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
-            <button onClick={() => setDetailTour(null)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: '#1a1a2e', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>{detailTour.name}</div>
-            <div style={{ color: '#888', fontSize: '0.78rem', fontFamily: 'var(--font-mono)', marginBottom: '1.5rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              {detailTour.status}
-              {detailTour.start_date ? ` · ${new Date(detailTour.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
-              {detailTour.end_date ? ` – ${new Date(detailTour.end_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
+        <div className="modal-backdrop" onClick={() => setDetailTour(null)}>
+          <div className="modal" style={{ maxWidth: 520, position: 'relative', maxHeight: '85vh', overflowY: 'auto', animation: 'fadeIn 0.2s ease both' }} onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setDetailTour(null)}>✕</button>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: 'var(--accent)', letterSpacing: '0.05em', marginBottom: '0.15rem' }}>{detailTour.name}</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontFamily: 'var(--font-mono)', marginBottom: '1.5rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              {[detailTour.status, detailTour.start_date && new Date(detailTour.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), detailTour.end_date && new Date(detailTour.end_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })].filter(Boolean).join(' · ')}
             </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#888', marginBottom: '0.75rem' }}>Shows</div>
-            {tourLoading && <div style={{ color: '#888', fontSize: '0.84rem' }}>Loading…</div>}
-            {!tourLoading && tourBookings.length === 0 && <div style={{ color: '#888', fontSize: '0.84rem' }}>No shows added yet.</div>}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--accent)', marginBottom: '0.75rem' }}>Shows</div>
+            {tourLoading && <div style={{ color: 'var(--text-muted)', fontSize: '0.84rem' }}>Loading…</div>}
+            {!tourLoading && tourBookings.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: '0.84rem' }}>No shows added yet.</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
               {tourBookings.map((b: any) => (
-                <div key={b.id} onClick={() => { setDetailTour(null); setDetailBooking(b); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.7rem 0.9rem', background: '#fff', border: '1px solid #e8e5df', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
+                <div key={b.id} onClick={() => { setDetailTour(null); setDetailBooking(b); }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.7rem 0.9rem', background: 'var(--bg-overlay)', border: '1px solid var(--border)', cursor: 'pointer', transition: 'border-color 0.15s' }}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
                   <div>
-                    <div style={{ color: '#1a1a2e', fontWeight: 600, fontSize: '0.9rem' }}>{b.venue?.name || 'TBD'}</div>
-                    <div style={{ color: '#888', fontSize: '0.76rem', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
-                      {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                      {b.venue?.city ? ` · ${b.venue.city}, ${b.venue.state}` : ''}
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.9rem' }}>{b.venue?.name || 'TBD'}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
+                      {[b.show_date && new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), b.venue?.city && `${b.venue.city}, ${b.venue.state}`].filter(Boolean).join(' · ')}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    {b.fee && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#1a1a2e', fontWeight: 600 }}>${Number(b.fee).toLocaleString()}</span>}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
+                    {b.fee && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--accent)', fontWeight: 600 }}>${Number(b.fee).toLocaleString()}</span>}
                     <span className={`badge badge-${b.status}`}>{BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}</span>
                   </div>
                 </div>
@@ -469,10 +468,10 @@ export default function BandPortal() {
 
       {/* Add Show Modal */}
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ background: '#2c2e45', borderRadius: 'var(--radius)', padding: '2rem', width: '100%', maxWidth: 480, position: 'relative' }}>
-            <button onClick={() => setShowModal(false)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }}>✕</button>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--accent)', letterSpacing: '0.1em', marginBottom: '1.5rem' }}>ADD SHOW</div>
+        <div className="modal-backdrop" onClick={() => setShowModal(false)}>
+          <div className="modal" style={{ maxWidth: 480, position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: 'var(--accent)', letterSpacing: '0.08em', marginBottom: '1.5rem' }}>ADD SHOW</div>
 
             {showError && (
               <div style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 'var(--radius-sm)', padding: '0.6rem 0.9rem', color: '#f87171', fontSize: '0.84rem', marginBottom: '1rem' }}>{showError}</div>

@@ -215,6 +215,23 @@ h4 { font-size: 1.2rem; }
   box-shadow: 0 0 0 1px rgba(200,146,26,0.06) inset;
 }
 
+/* Left-accent variant — use on alert/feature cards */
+.card-accent {
+  border-left: 3px solid var(--accent);
+}
+
+/* Success tint variant */
+.card-success {
+  border-left: 3px solid #10b981;
+  background-image: linear-gradient(135deg, rgba(16,185,129,0.04) 0%, transparent 55%);
+}
+
+/* Warning tint variant */
+.card-warning {
+  border-left: 3px solid #f59e0b;
+  background-image: linear-gradient(135deg, rgba(245,158,11,0.04) 0%, transparent 55%);
+}
+
 .card-header {
   display: flex;
   align-items: center;
@@ -401,26 +418,37 @@ table {
 
 th {
   font-family: var(--font-body);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.3em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
   text-transform: uppercase;
   color: var(--accent);
-  padding: 0.7rem 0.85rem;
+  padding: 0.6rem 0.85rem;
   text-align: left;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid rgba(200,146,26,0.22);
+  white-space: nowrap;
 }
 
 td {
   padding: 0.8rem 0.85rem;
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   transition: background 0.12s, color 0.12s;
 }
 
 tr { transition: background 0.12s; }
+tr:last-child td { border-bottom: none; }
 tr:hover td { background: rgba(200,146,26,0.06); color: var(--text-primary); }
+
+.table-empty {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.84rem;
+  line-height: 1.7;
+}
 
 /* ── Badges / Status pills ───────────────────────────────────── */
 .badge {
@@ -573,6 +601,53 @@ tr:hover td { background: rgba(200,146,26,0.06); color: var(--text-primary); }
   color: var(--accent);
 }
 
+.modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.3rem 0.5rem;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+  border-color: var(--border-light);
+  background: rgba(200,146,26,0.06);
+}
+
+/* Row used inside modals for detail fields */
+.modal-row {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.6rem;
+  align-items: baseline;
+}
+
+.modal-row-label {
+  width: 90px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding-top: 2px;
+}
+
+.modal-row-value {
+  color: var(--text-primary);
+  font-weight: 500;
+  flex: 1;
+}
+
 /* ── Utility ────────────────────────────────────────────────── */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
@@ -656,6 +731,17 @@ tr:hover td { background: rgba(200,146,26,0.06); color: var(--text-primary); }
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.page-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 60px;
+  height: 2px;
+  background: var(--accent);
 }
 
 .page-title {
