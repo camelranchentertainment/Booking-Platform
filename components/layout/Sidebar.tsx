@@ -7,6 +7,8 @@ import { supabase } from '../../lib/supabase';
 interface Props {
   profile: UserProfile | null;
   onSignOut: () => void;
+  open?: boolean;
+  onClose?: () => void;
 }
 
 type Notif =
@@ -47,7 +49,7 @@ const portals = [
   { label: 'Member View',      href: '/member',    color: '#34d399' },
 ];
 
-export default function Sidebar({ profile, onSignOut }: Props) {
+export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
   const router = useRouter();
   const isSuperAdmin = profile?.role === 'superadmin';
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -150,7 +152,7 @@ export default function Sidebar({ profile, onSignOut }: Props) {
   };
 
   return (
-    <nav className="sidebar">
+    <nav className={`sidebar${open ? ' open' : ''}`}>
       <div className="sidebar-logo">
         <div style={{ fontSize: '2rem', letterSpacing: '0.1em', lineHeight: 1, color: 'var(--accent)', textShadow: 'var(--neon-glow-sm)' }}>
           CAMEL RANCH
@@ -227,6 +229,7 @@ export default function Sidebar({ profile, onSignOut }: Props) {
             key={item.href}
             href={item.href}
             className={`sidebar-link${isActive(item.href) ? ' active' : ''}`}
+            onClick={onClose}
           >
             <span style={{ width: '16px', textAlign: 'center' }}>{item.icon}</span>
             {item.label}

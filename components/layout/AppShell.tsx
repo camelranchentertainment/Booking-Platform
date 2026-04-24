@@ -26,6 +26,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -86,7 +87,15 @@ export default function AppShell({ children, requireRole = null }: Props) {
 
   return (
     <div className="app-shell">
-      <Sidebar profile={profile} onSignOut={handleSignOut} />
+      {/* Mobile hamburger */}
+      <button className="mobile-menu-btn" onClick={() => setNavOpen(v => !v)} aria-label="Open menu">
+        <span /><span /><span />
+      </button>
+
+      {/* Tap-outside overlay */}
+      {navOpen && <div className="mobile-overlay" onClick={() => setNavOpen(false)} />}
+
+      <Sidebar profile={profile} onSignOut={handleSignOut} open={navOpen} onClose={() => setNavOpen(false)} />
       <main className="main-content">
         {/* Trial banner */}
         {trialDays !== null && trialDays <= 7 && (
