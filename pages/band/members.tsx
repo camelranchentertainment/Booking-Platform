@@ -10,13 +10,19 @@ interface PendingInvite {
   invited_at: string;
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  act_admin: 'Admin',
+  member:    'Member',
+  agent:     'Booking Agent',
+};
+
 export default function BandMembers() {
   const [actId, setActId]       = useState<string | null>(null);
   const [actName, setActName]   = useState('');
   const [members, setMembers]   = useState<UserProfile[]>([]);
   const [invites, setInvites]   = useState<PendingInvite[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole]   = useState<'act_admin' | 'member'>('member');
+  const [inviteRole, setInviteRole]   = useState<'act_admin' | 'member' | 'agent'>('member');
   const [sending, setSending]   = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [inviteSent, setInviteSent]   = useState(false);
@@ -27,7 +33,6 @@ export default function BandMembers() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Find act — direct ownership first, then profile linkage
     let foundActId: string | null = null;
     const { data: ownedActs } = await supabase.from('acts').select('id, act_name').eq('owner_id', user.id).eq('is_active', true).limit(1);
     if (ownedActs?.length) {
@@ -51,8 +56,18 @@ export default function BandMembers() {
     setInvites((invitesRes.data || []) as PendingInvite[]);
   };
 
+  // Count admins: current members with act_admin + pending act_admin invites
+  const adminCount =
+    members.filter(m => m.role === 'act_admin').length +
+    invites.filter(i => i.role === 'act_admin').length;
+  const adminLimitReached = adminCount >= 2;
+
   const sendInvite = async () => {
     if (!inviteEmail.trim() || !actId) return;
+    if (inviteRole === 'act_admin' && adminLimitReached) {
+      setInviteError('Maximum of 2 admins allowed per band.');
+      return;
+    }
     setSending(true);
     setInviteError('');
     setInviteSent(false);
@@ -95,7 +110,7 @@ export default function BandMembers() {
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>{m.email}</div>
               </div>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: m.role === 'act_admin' ? 'var(--accent)' : 'var(--text-muted)' }}>
-                {m.role === 'act_admin' ? 'Admin' : 'Member'}
+                {ROLE_LABELS[m.role] || m.role}
               </span>
             </div>
           ))}
@@ -105,17 +120,22 @@ export default function BandMembers() {
         </div>
       </div>
 
-      {/* Invite a member */}
+      {/* Send invite */}
       <div className="card mb-6" style={{ maxWidth: 600 }}>
-        <div className="card-header"><span className="card-title">INVITE A MEMBER</span></div>
+        <div className="card-header">
+          <span className="card-title">SEND INVITE</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
+            {adminCount}/2 admins
+          </span>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '0.75rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: '0.75rem' }}>
             <div>
               <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>Email address</label>
               <input
                 type="email"
                 className="input"
-                placeholder="bandmate@email.com"
+                placeholder="email@example.com"
                 value={inviteEmail}
                 onChange={e => setInviteEmail(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && sendInvite()}
@@ -123,16 +143,34 @@ export default function BandMembers() {
             </div>
             <div>
               <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>Role</label>
-              <select className="input" value={inviteRole} onChange={e => setInviteRole(e.target.value as 'act_admin' | 'member')}>
+              <select className="input" value={inviteRole} onChange={e => setInviteRole(e.target.value as typeof inviteRole)}>
                 <option value="member">Member</option>
-                <option value="act_admin">Admin</option>
+                <option value="act_admin" disabled={adminLimitReached}>
+                  Admin{adminLimitReached ? ' (limit reached)' : ''}
+                </option>
+                <option value="agent">Booking Agent</option>
               </select>
             </div>
           </div>
+
+          {inviteRole === 'agent' && (
+            <div style={{ background: 'rgba(200,146,26,0.07)', border: '1px solid rgba(200,146,26,0.25)', borderRadius: 'var(--radius-sm)', padding: '0.6rem 0.85rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              Inviting as Booking Agent links them to manage bookings and tours for {actName || 'your band'}. They'll get full agent access.
+            </div>
+          )}
+          {inviteRole === 'act_admin' && adminLimitReached && (
+            <div style={{ color: '#f87171', fontSize: '0.82rem' }}>Maximum of 2 admins per band. Revoke an existing admin invite or remove a current admin first.</div>
+          )}
+
           {inviteError && <div style={{ color: '#f87171', fontSize: '0.83rem' }}>{inviteError}</div>}
-          {inviteSent && <div style={{ color: '#34d399', fontSize: '0.83rem' }}>Invite sent — they'll see it when they log in.</div>}
+          {inviteSent && <div style={{ color: '#34d399', fontSize: '0.83rem' }}>Invite sent — they'll receive an email and see it when they log in.</div>}
           <div>
-            <button className="btn btn-primary" onClick={sendInvite} disabled={sending || !inviteEmail.trim()} style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: '#000' }}>
+            <button
+              className="btn btn-primary"
+              onClick={sendInvite}
+              disabled={sending || !inviteEmail.trim() || (inviteRole === 'act_admin' && adminLimitReached)}
+              style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: '#000' }}
+            >
               {sending ? 'Sending…' : 'Send Invite'}
             </button>
           </div>
@@ -148,7 +186,9 @@ export default function BandMembers() {
               <div key={inv.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)' }}>
                 <div>
                   <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>{inv.email}</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.1rem', textTransform: 'uppercase' }}>{inv.role}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem', color: inv.role === 'agent' ? 'var(--accent)' : 'var(--text-muted)', marginTop: '0.1rem', textTransform: 'uppercase' }}>
+                    {ROLE_LABELS[inv.role] || inv.role}
+                  </div>
                 </div>
                 <button
                   className="btn btn-ghost btn-sm"

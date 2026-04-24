@@ -19,20 +19,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!invite) return res.status(404).json({ error: 'Invalid or expired invite' });
   if (new Date(invite.expires_at) < new Date()) return res.status(410).json({ error: 'Invite expired' });
 
-  // Upsert user profile with act membership
-  const { error: profileErr } = await supabase.from('user_profiles').upsert({
-    id:           userId,
-    role:         invite.role,
-    email:        invite.email,
-    display_name: displayName || invite.email,
-    act_id:       invite.act_id,
-  }, { onConflict: 'id' });
+  if (invite.role === 'agent') {
+    // Agents link to an act — they don't join as a band member
+    const { error: profileErr } = await supabase.from('user_profiles').upsert({
+      id:           userId,
+      role:         'agent',
+      email:        invite.email,
+      display_name: displayName || invite.email,
+      // do NOT set act_id — agents are linked via agent_act_links, not via profile.act_id
+    }, { onConflict: 'id' });
 
-  if (profileErr) return res.status(500).json({ error: profileErr.message });
+    if (profileErr) return res.status(500).json({ error: profileErr.message });
 
-  // When a band admin accepts, claim ownership of the act so the band portal works
-  if (invite.role === 'act_admin') {
-    await supabase.from('acts').update({ owner_id: userId }).eq('id', invite.act_id);
+    // Set acts.agent_id so the band's act page knows their primary agent
+    await supabase.from('acts').update({ agent_id: userId }).eq('id', invite.act_id);
+
+    // Create the agent_act_links record (active, full manage permissions)
+    await supabase.from('agent_act_links').upsert({
+      agent_id:    userId,
+      act_id:      invite.act_id,
+      status:      'active',
+      permissions: 'manage',
+    }, { onConflict: 'agent_id,act_id' });
+  } else {
+    // Band members (act_admin, member) get linked via profile.act_id
+    const { error: profileErr } = await supabase.from('user_profiles').upsert({
+      id:           userId,
+      role:         invite.role,
+      email:        invite.email,
+      display_name: displayName || invite.email,
+      act_id:       invite.act_id,
+    }, { onConflict: 'id' });
+
+    if (profileErr) return res.status(500).json({ error: profileErr.message });
+
+    // When a band admin accepts, claim ownership of the act so the band portal works
+    if (invite.role === 'act_admin') {
+      await supabase.from('acts').update({ owner_id: userId }).eq('id', invite.act_id);
+    }
   }
 
   // Mark invite accepted
