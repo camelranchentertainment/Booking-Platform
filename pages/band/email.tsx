@@ -16,6 +16,7 @@ export default function BandEmail() {
   const [backfillMsg, setBackfillMsg] = useState('');
   const [draftComposer, setDraftComposer] = useState<any>(null);
   const [tab, setTab]               = useState<'drafts' | 'sent'>('drafts');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => { loadAll(); }, []);
 
@@ -128,6 +129,13 @@ export default function BandEmail() {
     setBackfilling(false);
   };
 
+  const deleteDraft = async (id: string) => {
+    setDeletingId(id);
+    await supabase.from('email_drafts').delete().eq('id', id);
+    setDrafts(prev => prev.filter(d => d.id !== id));
+    setDeletingId(null);
+  };
+
   return (
     <AppShell requireRole="act_admin">
       <div className="page-header">
@@ -212,13 +220,23 @@ export default function BandEmail() {
                           </div>
                         )}
                       </div>
-                      <button
-                        className="btn btn-primary"
-                        onClick={() => setDraftComposer(d)}
-                        style={{ flexShrink: 0, fontSize: '0.82rem' }}
-                      >
-                        Review & Send
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => setDraftComposer(d)}
+                          style={{ fontSize: '0.82rem' }}
+                        >
+                          Review & Send
+                        </button>
+                        <button
+                          onClick={() => deleteDraft(d.id)}
+                          disabled={deletingId === d.id}
+                          style={{ fontSize: '0.82rem', padding: '0.35rem 0.65rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--text-muted)', cursor: 'pointer', opacity: deletingId === d.id ? 0.5 : 1 }}
+                          title="Delete draft"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

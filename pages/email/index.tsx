@@ -229,6 +229,11 @@ export default function EmailPage() {
     }
   };
 
+  const deleteDraft = async (id: string) => {
+    await supabase.from('email_drafts').delete().eq('id', id);
+    setPendingDrafts(prev => prev.filter(d => d.id !== id));
+  };
+
   const runBackfill = async () => {
     setBackfilling(true);
     setBackfillResult(null);
@@ -371,13 +376,22 @@ export default function EmailPage() {
                           {bk?.act?.act_name || '—'} · {d.subject || '(no subject)'}
                         </div>
                       </div>
-                      <button
-                        className="btn btn-primary btn-sm"
-                        onClick={() => setDraftComposer(d)}
-                        style={{ flexShrink: 0, fontSize: '0.78rem' }}
-                      >
-                        Review & Send
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => setDraftComposer(d)}
+                          style={{ fontSize: '0.78rem' }}
+                        >
+                          Review & Send
+                        </button>
+                        <button
+                          onClick={() => deleteDraft(d.id)}
+                          style={{ fontSize: '0.78rem', padding: '0.3rem 0.6rem', background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-muted)', cursor: 'pointer' }}
+                          title="Delete draft"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
