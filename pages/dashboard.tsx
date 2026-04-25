@@ -65,22 +65,22 @@ export default function Dashboard() {
 
       {/* Top stats */}
       <div className="grid-4 mb-6">
-        <div className="stat-block">
+        <Link href="/acts" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="stat-value">{acts.length}</div>
           <div className="stat-label">Active Bands</div>
-        </div>
-        <div className="stat-block">
+        </Link>
+        <Link href="/tours" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="stat-value">{totalActive}</div>
           <div className="stat-label">In Pipeline</div>
-        </div>
-        <div className="stat-block">
+        </Link>
+        <Link href="/calendar" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="stat-value">{totalConfirmed}</div>
           <div className="stat-label">Confirmed Shows</div>
-        </div>
-        <div className="stat-block">
+        </Link>
+        <Link href="/bookings" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="stat-value">{confirmedFees > 0 ? `$${confirmedFees.toLocaleString()}` : '—'}</div>
           <div className="stat-label">Confirmed Value</div>
-        </div>
+        </Link>
       </div>
 
       <div className="grid-2">

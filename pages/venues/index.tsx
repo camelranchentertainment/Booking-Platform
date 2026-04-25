@@ -58,6 +58,10 @@ export default function VenuesPage() {
   const [prospectStatus, setProspectStatus] = useState<Record<string, string>>({});
   const [prospectEmails, setProspectEmails] = useState<Record<string, string>>({});
 
+  // Delete venue state
+  const [deleteTarget, setDeleteTarget] = useState<Venue | null>(null);
+  const [deleting, setDeleting]         = useState(false);
+
   // Add to tour state
   const [tourTarget, setTourTarget]   = useState<Venue | null>(null);
   const [tours, setTours]             = useState<any[]>([]);
@@ -82,9 +86,10 @@ export default function VenuesPage() {
     } catch { /* Maps unavailable */ }
   };
 
-  // Bind autocomplete once modal opens and Maps is ready
+  // Bind autocomplete once modal opens and Maps is ready; clear on close to prevent duplicate listeners
   useEffect(() => {
-    if (!showNew || !mapsReady || !inputRef.current) return;
+    if (!showNew) { autocompleteRef.current = null; return; }
+    if (!mapsReady || !inputRef.current || autocompleteRef.current) return;
     autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
       types: ['establishment'],
       fields: ['name','formatted_address','address_components','geometry',
@@ -262,6 +267,15 @@ export default function VenuesPage() {
     await loadVenues();
     setImportDone({ added, skipped });
     setImportSaving(false);
+  };
+
+  const deleteVenue = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    await supabase.from('venues').delete().eq('id', deleteTarget.id);
+    setDeleteTarget(null);
+    setDeleting(false);
+    await loadVenues();
   };
 
   const set = (k: keyof VenueForm) =>
@@ -537,13 +551,22 @@ export default function VenuesPage() {
                   <td style={{ color: 'var(--accent)', fontSize: '0.85rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.email || '—'}</td>
                   <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.phone || '—'}</td>
                   <td>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', letterSpacing: '0.06em', color: 'var(--accent)', whiteSpace: 'nowrap' }}
-                      onClick={e => { e.stopPropagation(); openAddToTour(v); }}
-                    >
-                      + Tour
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', letterSpacing: '0.06em', color: 'var(--accent)', whiteSpace: 'nowrap' }}
+                        onClick={e => { e.stopPropagation(); openAddToTour(v); }}
+                      >
+                        + Tour
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#f87171', whiteSpace: 'nowrap' }}
+                        onClick={e => { e.stopPropagation(); setDeleteTarget(v); }}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -783,6 +806,26 @@ export default function VenuesPage() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete Venue Confirmation */}
+      {deleteTarget && (
+        <div className="modal-backdrop">
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Delete Venue?</h3>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: '1.25rem' }}>
+              Delete <strong style={{ color: 'var(--text-primary)' }}>{deleteTarget.name}</strong>? This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</button>
+              <button className="btn btn-primary" style={{ background: '#ef4444', borderColor: '#ef4444' }} onClick={deleteVenue} disabled={deleting}>
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}

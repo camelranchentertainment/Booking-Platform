@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../lib/supabase';
 
+const PROTECTED_ROLES = ['superadmin', 'agent'];
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -19,17 +21,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!invite) return res.status(404).json({ error: 'Invalid or expired invite' });
   if (new Date(invite.expires_at) < new Date()) return res.status(410).json({ error: 'Invite expired' });
 
+  // Fetch existing profile to guard against demoting higher roles
+  const { data: existingProfile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle();
+
+  const hasProtectedRole = existingProfile != null && PROTECTED_ROLES.includes(existingProfile.role);
+
   if (invite.role === 'agent') {
     // Agents link to an act — they don't join as a band member
-    const { error: profileErr } = await supabase.from('user_profiles').upsert({
-      id:           userId,
-      role:         'agent',
-      email:        invite.email,
-      display_name: displayName || invite.email,
-      // do NOT set act_id — agents are linked via agent_act_links, not via profile.act_id
-    }, { onConflict: 'id' });
+    // Only write the profile if the user doesn't already hold a protected role
+    if (!hasProtectedRole) {
+      const { error: profileErr } = await supabase.from('user_profiles').upsert({
+        id:           userId,
+        role:         'agent',
+        email:        invite.email,
+        display_name: displayName || invite.email,
+        // do NOT set act_id — agents are linked via agent_act_links, not via profile.act_id
+      }, { onConflict: 'id' });
 
-    if (profileErr) return res.status(500).json({ error: profileErr.message });
+      if (profileErr) return res.status(500).json({ error: profileErr.message });
+    }
 
     // Set acts.agent_id so the band's act page knows their primary agent
     await supabase.from('acts').update({ agent_id: userId }).eq('id', invite.act_id);
@@ -43,15 +57,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }, { onConflict: 'agent_id,act_id' });
   } else {
     // Band members (act_admin, member) get linked via profile.act_id
-    const { error: profileErr } = await supabase.from('user_profiles').upsert({
-      id:           userId,
-      role:         invite.role,
-      email:        invite.email,
-      display_name: displayName || invite.email,
-      act_id:       invite.act_id,
-    }, { onConflict: 'id' });
+    if (hasProtectedRole) {
+      // Protected role: only link the act, never touch the role column
+      const { error: profileErr } = await supabase.from('user_profiles')
+        .update({ act_id: invite.act_id })
+        .eq('id', userId);
 
-    if (profileErr) return res.status(500).json({ error: profileErr.message });
+      if (profileErr) return res.status(500).json({ error: profileErr.message });
+    } else {
+      const { error: profileErr } = await supabase.from('user_profiles').upsert({
+        id:           userId,
+        role:         invite.role,
+        email:        invite.email,
+        display_name: displayName || invite.email,
+        act_id:       invite.act_id,
+      }, { onConflict: 'id' });
+
+      if (profileErr) return res.status(500).json({ error: profileErr.message });
+    }
 
     // When a band admin accepts, claim ownership of the act so the band portal works
     if (invite.role === 'act_admin') {

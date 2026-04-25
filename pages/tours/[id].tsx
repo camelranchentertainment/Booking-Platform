@@ -65,6 +65,7 @@ export default function TourDetail() {
   const [form, setForm]         = useState<any>({});
   const [saving, setSaving]     = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [venuePopout, setVenuePopout] = useState<any>(null);
   const [venueContacts, setVenueContacts] = useState<any[]>([]);
@@ -122,7 +123,6 @@ export default function TourDetail() {
   };
 
   const deleteTour = async () => {
-    if (!confirm('Delete this tour? This cannot be undone.')) return;
     setDeleting(true);
     const { data: { session } } = await supabase.auth.getSession();
     await fetch('/api/tours/delete', {
@@ -411,7 +411,7 @@ export default function TourDetail() {
           )}
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button className="btn btn-ghost" onClick={deleteTour} disabled={deleting} style={{ color: '#f87171' }}>
+          <button className="btn btn-ghost" onClick={() => setShowDeleteConfirm(true)} disabled={deleting} style={{ color: '#f87171' }}>
             {deleting ? 'Deleting...' : 'Delete Tour'}
           </button>
           <button className="btn btn-secondary" onClick={() => setEdit(!edit)}>Edit</button>
@@ -974,6 +974,25 @@ export default function TourDetail() {
               </div>
             </div>
           </form>
+        </div>
+      )}
+      {/* Delete Tour Confirmation */}
+      {showDeleteConfirm && (
+        <div className="modal-backdrop">
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Delete Tour?</h3>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: '1.25rem' }}>
+              Delete <strong style={{ color: 'var(--text-primary)' }}>{tour?.name}</strong>? This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>Cancel</button>
+              <button className="btn btn-primary" style={{ background: '#ef4444', borderColor: '#ef4444' }} onClick={deleteTour} disabled={deleting}>
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </AppShell>

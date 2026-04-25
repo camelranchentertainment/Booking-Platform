@@ -77,7 +77,7 @@ export default function AgentCalendar() {
     return acc;
   }, {});
 
-  const todayStr    = today.toISOString().substring(0, 10);
+  const todayStr    = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   const selectedShows = selected ? (showsByDate[selected] || []) : [];
   const firstDay    = new Date(current.year, current.month, 1).getDay();
   const daysInMonth = new Date(current.year, current.month + 1, 0).getDate();
