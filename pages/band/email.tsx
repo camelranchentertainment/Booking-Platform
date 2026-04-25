@@ -156,7 +156,9 @@ export default function BandEmail() {
       </div>
 
       {loading ? (
-        <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading…</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          {[1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 76 }} />)}
+        </div>
       ) : !myAct ? (
         <div className="card" style={{ textAlign: 'center', padding: '3rem 2rem', color: 'var(--text-muted)' }}>
           No active band found for this account.

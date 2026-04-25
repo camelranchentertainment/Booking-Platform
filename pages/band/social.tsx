@@ -72,9 +72,17 @@ export default function BandSocial() {
   const loadAct = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data: acts } = await supabase
-      .from('acts').select('*').eq('owner_id', user.id).eq('is_active', true).limit(1);
-    const act = acts?.[0] || null;
+    let act: any = null;
+    const { data: owned } = await supabase.from('acts').select('*').eq('owner_id', user.id).eq('is_active', true).limit(1);
+    if (owned?.length) {
+      act = owned[0];
+    } else {
+      const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).maybeSingle();
+      if (prof?.act_id) {
+        const { data: linked } = await supabase.from('acts').select('*').eq('id', prof.act_id).eq('is_active', true).limit(1);
+        act = linked?.[0] || null;
+      }
+    }
     setMyAct(act);
     if (act) await loadAccounts(act.id);
   };
@@ -300,7 +308,9 @@ export default function BandSocial() {
 
       {/* Post cards */}
       {loading ? (
-        <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading…</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {[1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 140 }} />)}
+        </div>
       ) : filteredPosts.length === 0 ? (
         <div className="card">
           <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem', textAlign: 'center', padding: '2rem 0' }}>
@@ -458,11 +468,11 @@ export default function BandSocial() {
 
       {/* Connect platform modal */}
       {showConnect && (
-        <div className="modal-backdrop">
-          <div className="modal" style={{ maxWidth: 520 }}>
+        <div className="modal-backdrop" onClick={() => setShowConnect(false)}>
+          <div className="modal" style={{ maxWidth: 520, position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setShowConnect(false)}>✕</button>
             <div className="modal-header">
               <h3 className="modal-title">Connect Platforms</h3>
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowConnect(false)}>✕</button>
             </div>
 
             <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
