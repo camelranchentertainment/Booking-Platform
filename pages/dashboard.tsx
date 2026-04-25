@@ -98,12 +98,12 @@ export default function Dashboard() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {acts.map(act => (
-                <Link key={act.id} href={`/acts/${act.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', textDecoration: 'none' }}>
+                <Link key={act.id} href={`/acts/${act.id}`} className="row-link">
                   <div>
                     <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.9rem' }}>{act.act_name}</div>
                     {act.genre && <div style={{ color: 'var(--text-muted)', fontSize: '0.84rem', fontFamily: 'var(--font-body)', letterSpacing: '0.06em' }}>{act.genre}</div>}
                   </div>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>→</span>
+                  <span style={{ color: 'var(--accent)', fontSize: '0.8rem' }}>→</span>
                 </Link>
               ))}
             </div>

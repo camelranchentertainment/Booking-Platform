@@ -256,7 +256,7 @@ h4 { font-size: 1.2rem; }
   border: 1px solid var(--border);
   padding: 1.1rem;
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
-  cursor: default;
+  cursor: pointer;
 }
 
 .stat-block:hover {
@@ -280,6 +280,24 @@ h4 { font-size: 1.2rem; }
   letter-spacing: 0.3em;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+
+/* ── Row links (band cards, tour rows, etc.) ────────────────── */
+.row-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-overlay);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  border: 1px solid transparent;
+}
+.row-link:hover {
+  background: var(--bg-muted);
+  border-color: var(--border-light);
+  color: var(--text-primary);
 }
 
 /* ── Skeleton loader ────────────────────────────────────────── */

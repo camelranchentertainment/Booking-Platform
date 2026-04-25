@@ -40,9 +40,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   };
   if (role === 'agent' && agencyName) profileData.agency_name = agencyName;
 
-  const { error: profileErr } = await admin.from('user_profiles').insert(profileData);
+  // upsert so the on_auth_user_created trigger row (if present) gets overwritten with correct data
+  const { error: profileErr } = await admin.from('user_profiles').upsert(profileData, { onConflict: 'id' });
   if (profileErr) {
-    // Clean up the auth user if profile creation fails
     await admin.auth.admin.deleteUser(userId);
     return res.status(500).json({ error: profileErr.message });
   }

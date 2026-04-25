@@ -35,7 +35,11 @@ export default function Join() {
     let userId: string;
 
     if (mode === 'register') {
-      const { data, error: err } = await supabase.auth.signUp({ email: form.email, password: form.password });
+      const { data, error: err } = await supabase.auth.signUp({
+        email: form.email,
+        password: form.password,
+        options: { data: { role: invite?.role || 'member' } },
+      });
       if (err) { setError(err.message); setSaving(false); return; }
       if (!data.user) { setError('Registration failed'); setSaving(false); return; }
       userId = data.user.id;
