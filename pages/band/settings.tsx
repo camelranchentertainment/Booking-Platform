@@ -228,7 +228,14 @@ export default function BandSettings() {
     e.target.value = '';
   };
 
-  if (loading) return <AppShell requireRole="act_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading…</div></AppShell>;
+  if (loading) return (
+    <AppShell requireRole="act_admin">
+      <div className="page-header"><div><div className="skeleton" style={{ width: 200, height: 28 }} /></div></div>
+      <div style={{ maxWidth: 640, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        {[100, 160, 320].map(h => <div key={h} className="skeleton" style={{ height: h }} />)}
+      </div>
+    </AppShell>
+  );
 
   return (
     <AppShell requireRole="act_admin">
