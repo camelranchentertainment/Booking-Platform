@@ -31,7 +31,8 @@ export default function MemberView() {
     load();
   }, []);
 
-  const today = new Date().toISOString().substring(0, 10);
+  const _td = new Date();
+  const today = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,'0')}-${String(_td.getDate()).padStart(2,'0')}`;
   const upcoming = shows.filter(s => s.show_date && s.show_date >= today);
   const past     = shows.filter(s => s.show_date && s.show_date < today);
 
@@ -68,7 +69,7 @@ export default function MemberView() {
                 <div>
                   <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{b.venue?.name || 'TBD'}</span>
                   <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem', marginLeft: '0.75rem' }}>
-                    {b.show_date ? new Date(b.show_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                    {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                   </span>
                 </div>
                 <span className={`badge badge-${b.status}`}>{BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}</span>

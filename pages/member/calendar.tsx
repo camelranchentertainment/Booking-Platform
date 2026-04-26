@@ -44,7 +44,7 @@ export default function MemberCalendar() {
     return acc;
   }, {});
 
-  const todayStr = today.toISOString().substring(0, 10);
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   const selectedShows = selected ? (showsByDate[selected] || []) : [];
 
   const STATUS_DOT: Record<string, string> = {

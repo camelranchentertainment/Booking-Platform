@@ -81,7 +81,8 @@ export default function BandPortal() {
     ]);
 
     const all = bookingsRes.data || [];
-    const today = new Date().toISOString().substring(0, 10);
+    const _td = new Date();
+    const today = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,'0')}-${String(_td.getDate()).padStart(2,'0')}`;
     setUpcoming(all.filter((b: any) => b.show_date && b.show_date >= today).slice(0, 5));
     setShows(all);
     setPendingLinks(linksRes.data || []);
@@ -134,7 +135,7 @@ export default function BandPortal() {
         // New venues created by band admins go under their own user id (RLS allows this)
         const { data: newV } = await supabase.from('venues').insert({
           agent_id: user!.id, name: showForm.venueName.trim(),
-          city: city || 'Unknown', state: showForm.state.trim() || null,
+          city: city || 'Unknown', state: showForm.state.trim() || '',
           source: 'manual', country: 'US',
         }).select('id').single();
         venueId = newV?.id || null;
@@ -330,7 +331,7 @@ export default function BandPortal() {
                     {shows.map((b: any) => (
                       <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => setDetailBooking(b)}>
                         <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
-                          {b.show_date ? new Date(b.show_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                          {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                         </td>
                         <td style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{b.venue?.name || 'TBD'}</td>
                         <td style={{ color: 'var(--text-secondary)', fontSize: '0.83rem' }}>{b.venue?.city ? `${b.venue.city}, ${b.venue.state}` : '—'}</td>
