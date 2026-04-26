@@ -14,7 +14,9 @@ export default function BandPortal() {
   const [responding, setResponding] = useState('');
 
   // Derived stats
-  const totalEarned    = shows.reduce((sum: number, b: any) => sum + (Number(b.fee) || 0), 0);
+  const today          = new Date().toISOString().split('T')[0];
+  const earned         = shows.filter((b: any) => b.status === 'completed').reduce((sum: number, b: any) => sum + (Number(b.amount_paid) || 0), 0);
+  const potential      = shows.filter((b: any) => b.status === 'confirmed' && b.show_date && b.show_date > today && b.payment_status === 'pending').reduce((sum: number, b: any) => sum + (Number(b.fee) || 0), 0);
   const confirmedShows = shows.filter((b: any) => b.status === 'confirmed').length;
   const activeTours    = tours.filter((t: any) => t.status === 'active' || t.status === 'planning').length;
 
@@ -68,7 +70,7 @@ export default function BandPortal() {
 
     const [bookingsRes, linksRes, toursRes] = await Promise.all([
       supabase.from('bookings')
-        .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, fee, venue:venues(name, city, state, address, phone)')
+        .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, fee, amount_paid, payment_status, venue:venues(name, city, state, address, phone)')
         .eq('act_id', act.id)
         .neq('status', 'cancelled')
         .order('show_date', { ascending: true }),
@@ -203,12 +205,10 @@ export default function BandPortal() {
       {/* Stat cards */}
       {myAct && !loading && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1.5rem' }}>
-          {[
-            { label: 'Total Shows',  value: shows.length,                                          sub: `${confirmedShows} confirmed`,                    href: '/band/calendar', accent: '#60a5fa' },
-            { label: 'Upcoming',     value: upcoming.length,                                        sub: upcoming.length === 1 ? 'next show' : 'shows ahead', href: '/band/calendar', accent: '#f59e0b' },
-            { label: 'Total Earned', value: totalEarned > 0 ? `$${totalEarned.toLocaleString()}` : '—', sub: 'across all shows',                          href: '/band/bookings', accent: '#34d399' },
-            { label: 'Active Tours', value: activeTours || tours.length,                            sub: `${tours.length} total`,                          href: '/band/tours',    accent: '#C8921A' },
-          ].map(({ label, value, sub, href, accent }) => (
+          {([
+            { label: 'Total Shows', value: shows.length,    sub: `${confirmedShows} confirmed`,                       href: '/band/calendar', accent: '#60a5fa' },
+            { label: 'Upcoming',    value: upcoming.length, sub: upcoming.length === 1 ? 'next show' : 'shows ahead', href: '/band/calendar', accent: '#f59e0b' },
+          ] as { label: string; value: number; sub: string; href: string; accent: string }[]).map(({ label, value, sub, href, accent }) => (
             <Link key={label} href={href} className="stat-block" style={{ position: 'relative', overflow: 'hidden', textDecoration: 'none', cursor: 'pointer', borderTop: `3px solid ${accent}` }}>
               <div style={{ position: 'absolute', top: 0, right: 0, width: 60, height: 60, background: 'radial-gradient(circle at top right, rgba(200,146,26,0.12), transparent 70%)', pointerEvents: 'none' }} />
               <div className="stat-value" style={{ fontSize: '2rem' }}>{value}</div>
@@ -216,6 +216,33 @@ export default function BandPortal() {
               <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{sub}</div>
             </Link>
           ))}
+
+          {/* Earned / Potential — split by played vs upcoming */}
+          <Link href="/band/calendar" className="stat-block" style={{ position: 'relative', overflow: 'hidden', textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #34d399' }}>
+            <div style={{ position: 'absolute', top: 0, right: 0, width: 60, height: 60, background: 'radial-gradient(circle at top right, rgba(200,146,26,0.12), transparent 70%)', pointerEvents: 'none' }} />
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', color: '#34d399', lineHeight: 1 }}>
+              {earned > 0 ? `$${earned.toLocaleString()}` : '—'}
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.15rem' }}>Earned</div>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.66rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>collected from played shows</div>
+            {potential > 0 && (
+              <>
+                <div style={{ borderTop: '1px solid var(--border)', margin: '0.5rem 0 0.4rem' }} />
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--accent)', lineHeight: 1 }}>
+                  {`$${potential.toLocaleString()}`}
+                </div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.15rem' }}>Potential</div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.66rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>projected income</div>
+              </>
+            )}
+          </Link>
+
+          <Link href="/band/tours" className="stat-block" style={{ position: 'relative', overflow: 'hidden', textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #C8921A' }}>
+            <div style={{ position: 'absolute', top: 0, right: 0, width: 60, height: 60, background: 'radial-gradient(circle at top right, rgba(200,146,26,0.12), transparent 70%)', pointerEvents: 'none' }} />
+            <div className="stat-value" style={{ fontSize: '2rem' }}>{activeTours || tours.length}</div>
+            <div className="stat-label">Active Tours</div>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{tours.length} total</div>
+          </Link>
         </div>
       )}
 

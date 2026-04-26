@@ -13,7 +13,8 @@ export default function Dashboard() {
   const [acts, setActs]             = useState<Act[]>([]);
   const [pipeline, setPipeline]     = useState<PipelineSummary[]>([]);
   const [recent, setRecent]         = useState<Booking[]>([]);
-  const [confirmedFees, setConfirmedFees] = useState(0);
+  const [potential, setPotential] = useState(0);
+  const [earned, setEarned]       = useState(0);
   const [tours, setTours]           = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
 
@@ -25,7 +26,7 @@ export default function Dashboard() {
       const [actsRes, bookingsRes, toursRes] = await Promise.all([
         supabase.from('acts').select('*').eq('agent_id', user.id).eq('is_active', true).order('act_name'),
         supabase.from('bookings').select(`
-          id, status, show_date, fee, created_at,
+          id, status, show_date, fee, amount_paid, payment_status, created_at,
           act:acts(act_name),
           venue:venues(name, city, state)
         `).eq('created_by', user.id).order('created_at', { ascending: false }).limit(50),
@@ -43,8 +44,15 @@ export default function Dashboard() {
       }
       setPipeline(Object.entries(counts).map(([status, count]) => ({ status, count })));
       setRecent(bookings.slice(0, 8));
-      const confirmedFees = bookings.filter(b => b.status === 'confirmed').reduce((s: number, b: any) => s + (Number(b.fee) || 0), 0);
-      setConfirmedFees(confirmedFees);
+      const todayStr = new Date().toISOString().split('T')[0];
+      const calcPotential = bookings
+        .filter((b: any) => b.status === 'confirmed' && b.show_date && b.show_date > todayStr && b.payment_status === 'pending')
+        .reduce((s: number, b: any) => s + (Number(b.fee) || 0), 0);
+      const calcEarned = bookings
+        .filter((b: any) => b.status === 'completed')
+        .reduce((s: number, b: any) => s + (Number(b.amount_paid) || 0), 0);
+      setPotential(calcPotential);
+      setEarned(calcEarned);
       setLoading(false);
     };
     load();
@@ -77,9 +85,22 @@ export default function Dashboard() {
           <div className="stat-value">{totalConfirmed}</div>
           <div className="stat-label">Confirmed Shows</div>
         </Link>
-        <Link href="/bookings" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #C8921A' }}>
-          <div className="stat-value">{confirmedFees > 0 ? `$${confirmedFees.toLocaleString()}` : '—'}</div>
-          <div className="stat-label">Confirmed Value</div>
+        <Link href="/bookings" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #34d399' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', color: '#34d399', lineHeight: 1 }}>
+            {earned > 0 ? `$${earned.toLocaleString()}` : '—'}
+          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.15rem' }}>Earned</div>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.66rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>collected from played shows</div>
+          {potential > 0 && (
+            <>
+              <div style={{ borderTop: '1px solid var(--border)', margin: '0.5rem 0 0.4rem' }} />
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: '#C8921A', lineHeight: 1 }}>
+                {`$${potential.toLocaleString()}`}
+              </div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.15rem' }}>Potential</div>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.66rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>projected income</div>
+            </>
+          )}
         </Link>
       </div>
 

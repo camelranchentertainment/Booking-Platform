@@ -46,11 +46,16 @@ export default function Financials() {
     setLoading(false);
   };
 
+  const todayStr       = new Date().toISOString().split('T')[0];
   const totalFee       = bookings.reduce((s, b) => s + (b.fee ? Number(b.fee) : 0), 0);
   const totalPaid      = bookings.reduce((s, b) => s + (b.amount_paid ? Number(b.amount_paid) : 0), 0);
   const totalExpenses  = bookings.reduce((s, b) => s + (b.expenses ? Number(b.expenses) : 0), 0);
   const outstanding    = totalFee - totalPaid;
-  const netIncome      = totalPaid - totalExpenses;
+  const potential      = bookings.filter(b => b.status === 'confirmed' && b.show_date && b.show_date > todayStr && b.payment_status === 'pending')
+    .reduce((s, b) => s + (b.fee ? Number(b.fee) : 0), 0);
+  const earned         = bookings.filter(b => b.status === 'completed')
+    .reduce((s, b) => s + (b.amount_paid ? Number(b.amount_paid) : 0), 0);
+  const netIncome      = earned - totalExpenses;
   const showCount      = bookings.filter(b => b.status === 'completed' || b.show_date).length;
 
   // Monthly breakdown
@@ -110,12 +115,12 @@ export default function Financials() {
   };
 
   const summaryCards = [
-    { label: 'Shows Booked', value: showCount, color: '#60a5fa' },
-    { label: 'Total Contracted', value: fmt(totalFee), color: 'var(--accent)' },
-    { label: 'Collected', value: fmt(totalPaid), color: '#34d399' },
-    { label: 'Outstanding', value: fmt(outstanding), color: outstanding > 0 ? '#fbbf24' : '#34d399' },
-    { label: 'Expenses', value: fmt(totalExpenses), color: '#f87171' },
-    { label: 'Net Income', value: fmt(netIncome), color: netIncome >= 0 ? '#34d399' : '#f87171' },
+    { label: 'Shows Booked',  value: showCount,        color: '#60a5fa',                                           sub: `${year} season` },
+    { label: 'Potential',     value: fmt(potential),   color: 'var(--accent)',                                     sub: 'projected income' },
+    { label: 'Earned',        value: fmt(earned),      color: '#34d399',                                           sub: 'collected from played shows' },
+    { label: 'Outstanding',   value: fmt(outstanding), color: outstanding > 0 ? '#fbbf24' : '#34d399',             sub: 'total contracted minus collected' },
+    { label: 'Expenses',      value: fmt(totalExpenses), color: '#f87171',                                         sub: 'recorded costs' },
+    { label: 'Net Income',    value: fmt(netIncome),   color: netIncome >= 0 ? '#34d399' : '#f87171',              sub: 'earned minus expenses' },
   ];
 
   return (
@@ -139,6 +144,7 @@ export default function Financials() {
           <div key={c.label} className="card" style={{ padding: '1rem 1.25rem', borderTop: `3px solid ${c.color}` }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.65rem', color: c.color, lineHeight: 1 }}>{c.value}</div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.35rem' }}>{c.label}</div>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.66rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{c.sub}</div>
           </div>
         ))}
       </div>
