@@ -26,6 +26,7 @@ type InboxMessage = {
   subject: string;
   date: string;
   preview: string;
+  body: string;
   matchedVenueId: string | null;
   matchedVenueName: string | null;
 };
@@ -109,7 +110,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-function fetchImapMessages(host: string, port: number, user: string, password: string): Promise<Omit<InboxMessage, 'matchedVenueId' | 'matchedVenueName'>[]> {
+function fetchImapMessages(host: string, port: number, user: string, password: string): Promise<Omit<InboxMessage, 'matchedVenueId' | 'matchedVenueName'>[]> { // returns full body field
   return new Promise((resolve, reject) => {
     const imap = new Imap({
       user,
@@ -122,7 +123,7 @@ function fetchImapMessages(host: string, port: number, user: string, password: s
       authTimeout: 5000,
     });
 
-    const messages: Omit<InboxMessage, 'matchedVenueId' | 'matchedVenueName'>[] = [];
+    const messages: Omit<InboxMessage, 'matchedVenueId' | 'matchedVenueName'>[] = []; // includes body
 
     imap.once('ready', () => {
       imap.openBox('INBOX', true, (err, box) => {
@@ -152,14 +153,15 @@ function fetchImapMessages(host: string, port: number, user: string, password: s
                     const fromAddr = (parsed.from?.value?.[0]) as any;
                     const fromEmail = fromAddr?.address || '';
                     const fromName  = fromAddr?.name || fromEmail;
-                    const body = parsed.text || '';
+                    const bodyText = parsed.text || '';
                     messages.push({
                       uid,
                       from:      fromName,
                       fromEmail,
                       subject:   parsed.subject || '(no subject)',
                       date:      parsed.date?.toISOString() || '',
-                      preview:   body.slice(0, 160).replace(/\s+/g, ' '),
+                      preview:   bodyText.slice(0, 160).replace(/\s+/g, ' '),
+                      body:      bodyText.trim(),
                     });
                   } catch { /* skip unparseable */ }
                   res2();
