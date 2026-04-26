@@ -204,12 +204,12 @@ export default function BandPortal() {
       {myAct && !loading && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1.5rem' }}>
           {[
-            { label: 'Total Shows',  value: shows.length,                                          sub: `${confirmedShows} confirmed`,                    href: '/band/calendar' },
-            { label: 'Upcoming',     value: upcoming.length,                                        sub: upcoming.length === 1 ? 'next show' : 'shows ahead', href: '/band/calendar' },
-            { label: 'Total Earned', value: totalEarned > 0 ? `$${totalEarned.toLocaleString()}` : '—', sub: 'across all shows',                          href: '/band/bookings' },
-            { label: 'Active Tours', value: activeTours || tours.length,                            sub: `${tours.length} total`,                          href: '/band/tours' },
-          ].map(({ label, value, sub, href }) => (
-            <Link key={label} href={href} className="stat-block" style={{ position: 'relative', overflow: 'hidden', textDecoration: 'none', cursor: 'pointer' }}>
+            { label: 'Total Shows',  value: shows.length,                                          sub: `${confirmedShows} confirmed`,                    href: '/band/calendar', accent: '#60a5fa' },
+            { label: 'Upcoming',     value: upcoming.length,                                        sub: upcoming.length === 1 ? 'next show' : 'shows ahead', href: '/band/calendar', accent: '#f59e0b' },
+            { label: 'Total Earned', value: totalEarned > 0 ? `$${totalEarned.toLocaleString()}` : '—', sub: 'across all shows',                          href: '/band/bookings', accent: '#34d399' },
+            { label: 'Active Tours', value: activeTours || tours.length,                            sub: `${tours.length} total`,                          href: '/band/tours',    accent: '#C8921A' },
+          ].map(({ label, value, sub, href, accent }) => (
+            <Link key={label} href={href} className="stat-block" style={{ position: 'relative', overflow: 'hidden', textDecoration: 'none', cursor: 'pointer', borderTop: `3px solid ${accent}` }}>
               <div style={{ position: 'absolute', top: 0, right: 0, width: 60, height: 60, background: 'radial-gradient(circle at top right, rgba(200,146,26,0.12), transparent 70%)', pointerEvents: 'none' }} />
               <div className="stat-value" style={{ fontSize: '2rem' }}>{value}</div>
               <div className="stat-label">{label}</div>

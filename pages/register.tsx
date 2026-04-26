@@ -3,19 +3,29 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 
-type Tier = 'agent' | 'act_admin' | 'member';
+type Tier = 'agent' | 'agent_t2' | 'act_admin' | 'member';
 
 const TIER_CONFIG: Record<Tier, {
   label: string; icon: string; color: string;
-  price: string; desc: string; selfSignup: boolean;
+  price: string; desc: string; selfSignup: boolean; apiRole: string;
 }> = {
   agent: {
-    label: 'Booking Agent',
+    label: 'Agent — Tier 1',
     icon:  '◈',
     color: '#C8921A',
     price: '$30/mo · 14-day trial',
-    desc:  'Manage a full roster of bands, venues, tours & bookings.',
+    desc:  'Up to 5 acts — pipeline, tours, venues & confirmations.',
     selfSignup: true,
+    apiRole: 'agent',
+  },
+  agent_t2: {
+    label: 'Agent — Tier 2',
+    icon:  '◈',
+    color: '#34d399',
+    price: '$50/mo · 14-day trial',
+    desc:  'Unlimited acts — everything in T1 plus advanced analytics.',
+    selfSignup: true,
+    apiRole: 'agent',
   },
   act_admin: {
     label: 'Band Admin',
@@ -24,14 +34,16 @@ const TIER_CONFIG: Record<Tier, {
     price: '$15/mo · 14-day trial',
     desc:  'Manage your act, connect with booking agents, share calendars.',
     selfSignup: true,
+    apiRole: 'act_admin',
   },
   member: {
     label: 'Band Member',
     icon:  '◉',
-    color: '#34d399',
+    color: '#94a3b8',
     price: 'Free forever',
     desc:  'View your band\'s upcoming shows and calendar. Join via invite.',
     selfSignup: false,
+    apiRole: 'member',
   },
 };
 
@@ -50,7 +62,7 @@ export default function Register() {
 
   useEffect(() => {
     const role = router.query.role as string;
-    if (role === 'act_admin' || role === 'member' || role === 'agent') setTier(role as Tier);
+    if (role === 'act_admin' || role === 'member' || role === 'agent' || role === 'agent_t2') setTier(role as Tier);
   }, [router.query.role]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -72,16 +84,17 @@ export default function Register() {
     if (form.password.length < 8) { setError('Password must be at least 8 characters'); return; }
     if (!form.displayName.trim()) { setError('Name is required'); return; }
     if (tier === 'act_admin' && !form.actName.trim()) { setError('Act / band name is required'); return; }
+    if ((tier === 'agent' || tier === 'agent_t2') && !form.displayName.trim()) { setError('Name is required'); return; }
 
     setLoading(true);
 
     const body: Record<string, string> = {
       email: form.email,
       password: form.password,
-      role: tier,
+      role: cfg!.apiRole,
       displayName: form.displayName,
     };
-    if (tier === 'agent' && form.agencyName) body.agencyName = form.agencyName;
+    if ((tier === 'agent' || tier === 'agent_t2') && form.agencyName) body.agencyName = form.agencyName;
     if (tier === 'act_admin') body.actName = form.actName;
 
     const apiRes = await fetch('/api/auth/register', {
@@ -95,7 +108,9 @@ export default function Register() {
     const { error: signInErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
     if (signInErr) { setError(signInErr.message); setLoading(false); return; }
 
-    router.replace(tier === 'agent' ? '/dashboard' : '/band');
+    if (tier === 'agent' || tier === 'agent_t2') router.replace('/dashboard');
+    else if (tier === 'act_admin') router.replace('/band');
+    else router.replace('/member');
   };
 
   const cfg = tier ? TIER_CONFIG[tier] : null;
@@ -118,7 +133,7 @@ export default function Register() {
           }}>
             Step 1 — I am a...
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.65rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.65rem' }}>
             {(Object.entries(TIER_CONFIG) as [Tier, typeof TIER_CONFIG[Tier]][]).map(([t, c]) => {
               const selected = tier === t;
               return (
@@ -192,8 +207,8 @@ export default function Register() {
               </form>
             )}
 
-            {/* Booking Agent */}
-            {tier === 'agent' && (
+            {/* Booking Agent (T1 and T2) */}
+            {(tier === 'agent' || tier === 'agent_t2') && (
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div className="grid-2">
                   <div className="field">

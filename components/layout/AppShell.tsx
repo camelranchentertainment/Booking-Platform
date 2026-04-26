@@ -25,6 +25,7 @@ function needsSubscription(profile: UserProfile): boolean {
 export default function AppShell({ children, requireRole = null }: Props) {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [actName, setActName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [navOpen, setNavOpen] = useState(false);
 
@@ -58,6 +59,16 @@ export default function AppShell({ children, requireRole = null }: Props) {
         }
 
         setProfile(data as UserProfile);
+
+        // Fetch act name for band admin / member context badge
+        if ((data.role === 'act_admin' || data.role === 'member') && data.act_id) {
+          const { data: act } = await supabase.from('acts').select('act_name').eq('id', data.act_id).maybeSingle();
+          if (act?.act_name) setActName(act.act_name);
+        } else if (data.role === 'act_admin') {
+          const { data: ownedAct } = await supabase.from('acts').select('act_name').eq('owner_id', user.id).limit(1).maybeSingle();
+          if (ownedAct?.act_name) setActName(ownedAct.act_name);
+        }
+
         setLoading(false);
       } catch {
         router.replace('/login');
@@ -85,6 +96,17 @@ export default function AppShell({ children, requireRole = null }: Props) {
     ? daysLeft(profile?.trial_ends_at)
     : null;
 
+  const roleBadge = (() => {
+    if (!profile) return null;
+    switch (profile.role) {
+      case 'superadmin': return { label: 'SUPERADMIN', color: '#C8921A' };
+      case 'agent':      return { label: 'AGENT', color: '#60a5fa' };
+      case 'act_admin':  return { label: actName ? `BAND ADMIN — ${actName}` : 'BAND ADMIN', color: '#a78bfa' };
+      case 'member':     return { label: actName ? `MEMBER — ${actName}` : 'MEMBER', color: '#94a3b8' };
+      default:           return null;
+    }
+  })();
+
   return (
     <div className="app-shell">
       {/* Mobile hamburger */}
@@ -97,6 +119,33 @@ export default function AppShell({ children, requireRole = null }: Props) {
 
       <Sidebar profile={profile} onSignOut={handleSignOut} open={navOpen} onClose={() => setNavOpen(false)} />
       <main className="main-content">
+        {/* Role context badge */}
+        {roleBadge && (
+          <div style={{
+            margin: '-2rem -2rem 1.5rem',
+            padding: '0.38rem 1.5rem',
+            background: 'rgba(0,0,0,0.22)',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', gap: '0.65rem',
+          }}>
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: '0.65rem', fontWeight: 700,
+              letterSpacing: '0.12em', textTransform: 'uppercase',
+              color: roleBadge.color,
+              background: `${roleBadge.color}18`,
+              padding: '0.18rem 0.5rem',
+              border: `1px solid ${roleBadge.color}40`,
+            }}>
+              {roleBadge.label}
+            </span>
+            {profile?.display_name && (
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                {profile.display_name}
+                {profile.role === 'agent' && profile.agency_name ? ` · ${profile.agency_name}` : ''}
+              </span>
+            )}
+          </div>
+        )}
         {/* Trial banner */}
         {trialDays !== null && trialDays <= 7 && (
           <div style={{

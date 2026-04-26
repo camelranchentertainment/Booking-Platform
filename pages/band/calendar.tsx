@@ -92,6 +92,23 @@ export default function BandCalendar() {
         </div>
       </div>
 
+      {/* Status legend */}
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem', alignItems: 'center', padding: '0.5rem 0.75rem', background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
+        {[
+          ['#34d399', 'Confirmed'],
+          ['#60a5fa', 'Advancing'],
+          ['#a78bfa', 'Contract'],
+          ['#f97316', 'Hold'],
+          ['#fbbf24', 'Pitch'],
+          ['#64748b', 'Completed'],
+        ].map(([color, label]) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>{label}</span>
+          </div>
+        ))}
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '1.25rem', alignItems: 'start' }}>
         {/* Calendar grid */}
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>

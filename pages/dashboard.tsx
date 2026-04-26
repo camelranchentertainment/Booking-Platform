@@ -65,19 +65,19 @@ export default function Dashboard() {
 
       {/* Top stats */}
       <div className="grid-4 mb-6">
-        <Link href="/acts" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer' }}>
+        <Link href="/acts" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #60a5fa' }}>
           <div className="stat-value">{acts.length}</div>
           <div className="stat-label">Active Bands</div>
         </Link>
-        <Link href="/bookings" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer' }}>
+        <Link href="/bookings" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #f59e0b' }}>
           <div className="stat-value">{totalActive}</div>
           <div className="stat-label">In Pipeline</div>
         </Link>
-        <Link href="/calendar" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer' }}>
+        <Link href="/calendar" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #34d399' }}>
           <div className="stat-value">{totalConfirmed}</div>
           <div className="stat-label">Confirmed Shows</div>
         </Link>
-        <Link href="/bookings" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer' }}>
+        <Link href="/bookings" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #C8921A' }}>
           <div className="stat-value">{confirmedFees > 0 ? `$${confirmedFees.toLocaleString()}` : '—'}</div>
           <div className="stat-label">Confirmed Value</div>
         </Link>

@@ -321,6 +321,169 @@ function Features() {
   );
 }
 
+/* ── Pricing ──────────────────────────────────────────────── */
+const PRICING_TIERS = [
+  {
+    id: 'member',
+    label: 'Band Member',
+    price: 'Free',
+    period: 'forever',
+    desc: 'Stay in the loop with your band.',
+    color: '#94a3b8',
+    role: 'member',
+    recommended: false,
+    features: [
+      'View upcoming shows & calendar',
+      'Load-in, set time & logistics',
+      'Venue contact details',
+      'Tour schedule access',
+    ],
+  },
+  {
+    id: 'band_admin',
+    label: 'Band Admin',
+    price: '$15',
+    period: '/month',
+    desc: 'Run your act\'s full operation.',
+    color: '#a78bfa',
+    role: 'act_admin',
+    recommended: false,
+    features: [
+      'Everything in Band Member',
+      'Add & manage shows',
+      'Connect with booking agents',
+      'Shared band calendar',
+      'Basic show history',
+    ],
+  },
+  {
+    id: 'agent_t1',
+    label: 'Agent — Tier 1',
+    price: '$30',
+    period: '/month',
+    desc: 'Manage up to 5 acts.',
+    color: '#C8921A',
+    role: 'agent',
+    recommended: true,
+    features: [
+      'Everything in Band Admin',
+      'Up to 5 acts in roster',
+      'Full pipeline & kanban board',
+      'Tour planning & routing',
+      'Venue database & history',
+      'Advance sheet automation',
+      'Confirmation emails via Resend',
+    ],
+  },
+  {
+    id: 'agent_t2',
+    label: 'Agent — Tier 2',
+    price: '$50',
+    period: '/month',
+    desc: 'Unlimited roster, priority support.',
+    color: '#34d399',
+    role: 'agent',
+    recommended: false,
+    features: [
+      'Everything in Agent Tier 1',
+      'Unlimited acts in roster',
+      'Bulk venue import',
+      'Advanced analytics & exports',
+      'Priority email support',
+      'Early access to new features',
+      'Custom agency branding (soon)',
+    ],
+  },
+];
+
+function Pricing() {
+  return (
+    <section id="pricing" style={{ borderTop: BORDER, background: DARK }}>
+      <div className="cr-hero-content" style={{ paddingTop: '5rem', paddingBottom: '1.5rem' }}>
+        <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+            <div style={{ height: 1, width: 48, background: GOLD }} />
+            <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>Pricing</span>
+          </div>
+          <h2 style={{
+            fontFamily: 'var(--font-display)', fontWeight: 900,
+            lineHeight: 1, textTransform: 'uppercase', margin: '0 0 0.75rem',
+            fontSize: 'clamp(2rem,5vw,4rem)', letterSpacing: '-0.01em', color: CREAM,
+          }}>
+            Simple, Honest Pricing.
+          </h2>
+          <p style={{ color: 'rgba(240,216,162,0.38)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '32rem', margin: '0 0 0.5rem' }}>
+            14-day free trial on paid plans. No credit card required to start.
+          </p>
+        </div>
+      </div>
+
+      <div className="cr-hero-content" style={{ paddingTop: '2rem', paddingBottom: '5rem' }}>
+        <div style={{ maxWidth: '68rem', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
+          {PRICING_TIERS.map(tier => (
+            <div key={tier.id} style={{
+              border: `1px solid ${tier.recommended ? tier.color : 'rgba(200,146,26,0.15)'}`,
+              borderTop: `3px solid ${tier.color}`,
+              background: tier.recommended ? `${tier.color}0a` : BG,
+              padding: '1.75rem 1.5rem',
+              position: 'relative',
+              display: 'flex', flexDirection: 'column',
+            }}>
+              {tier.recommended && (
+                <div style={{
+                  position: 'absolute', top: -1, right: '1rem',
+                  background: tier.color, color: BG,
+                  fontFamily: 'var(--font-body)', fontSize: '0.62rem', fontWeight: 700,
+                  letterSpacing: '0.18em', textTransform: 'uppercase',
+                  padding: '0.2rem 0.6rem',
+                }}>
+                  Most Popular
+                </div>
+              )}
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.22em', textTransform: 'uppercase', color: tier.color, marginBottom: '0.5rem' }}>
+                {tier.label}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', marginBottom: '0.35rem' }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: '2.8rem', color: CREAM, lineHeight: 1 }}>{tier.price}</span>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'rgba(240,216,162,0.4)' }}>{tier.period}</span>
+              </div>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'rgba(240,216,162,0.45)', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+                {tier.desc}
+              </div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                {tier.features.map(f => (
+                  <div key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                    <span style={{ color: tier.color, fontSize: '0.7rem', marginTop: '0.1rem', flexShrink: 0 }}>✓</span>
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'rgba(240,216,162,0.6)', lineHeight: 1.45 }}>{f}</span>
+                  </div>
+                ))}
+              </div>
+              <Link href={`/register?role=${tier.role}`} style={{
+                display: 'block', textAlign: 'center',
+                padding: '0.75rem 1rem',
+                background: tier.recommended ? tier.color : 'transparent',
+                color: tier.recommended ? BG : tier.color,
+                border: `1px solid ${tier.color}`,
+                fontFamily: 'var(--font-body)', fontWeight: 700,
+                fontSize: '0.72rem', letterSpacing: '0.18em', textTransform: 'uppercase',
+                textDecoration: 'none', transition: 'background 0.2s, color 0.2s',
+              }}
+                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = tier.color; (e.currentTarget as HTMLAnchorElement).style.color = BG; }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLAnchorElement).style.background = tier.recommended ? tier.color : 'transparent';
+                  (e.currentTarget as HTMLAnchorElement).style.color = tier.recommended ? BG : tier.color;
+                }}
+              >
+                {tier.price === 'Free' ? 'Join Free' : 'Start Free Trial'}
+              </Link>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ── Sign-Up CTA ──────────────────────────────────────────── */
 function SignUpCTA() {
   return (
@@ -647,7 +810,8 @@ export default function Home() {
       if (user) {
         supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle().then(({ data }) => {
           const role = data?.role || 'agent';
-          if (role === 'agent' || role === 'superadmin') router.replace('/dashboard');
+          if (role === 'superadmin') router.replace('/admin');
+          else if (role === 'agent') router.replace('/dashboard');
           else if (role === 'act_admin') router.replace('/band');
           else router.replace('/member');
         });
@@ -740,6 +904,7 @@ export default function Home() {
           <ArtistSpotlight />
         </section>
 
+        <Pricing />
         <SignUpCTA />
         <Footer />
       </div>

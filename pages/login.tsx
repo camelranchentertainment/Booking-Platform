@@ -40,7 +40,8 @@ export default function Login() {
       .from('user_profiles').select('role').eq('id', user.id).maybeSingle();
 
     const role = profile?.role || 'agent';
-    if (role === 'superadmin' || role === 'agent') router.replace('/dashboard');
+    if (role === 'superadmin') router.replace('/admin');
+    else if (role === 'agent') router.replace('/dashboard');
     else if (role === 'act_admin') router.replace('/band');
     else router.replace('/member');
   };
@@ -80,16 +81,22 @@ export default function Login() {
       {/* Logo */}
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <div style={{
-          fontFamily: 'var(--font-display)', fontSize: '2.6rem', letterSpacing: '0.14em',
+          fontFamily: 'var(--font-display)', fontSize: '3.4rem', letterSpacing: '0.14em',
           color: GOLD, lineHeight: 1,
         }}>
           CAMEL RANCH
         </div>
         <div style={{
           fontFamily: 'var(--font-body)', fontSize: '0.7rem', letterSpacing: '0.45em',
-          textTransform: 'uppercase', color: MUTED, marginTop: '0.35rem',
+          textTransform: 'uppercase', color: MUTED, marginTop: '0.3rem',
         }}>
           BOOKING PLATFORM
+        </div>
+        <div style={{
+          fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'rgba(200,146,26,0.7)',
+          marginTop: '0.6rem', letterSpacing: '0.02em', lineHeight: 1.4,
+        }}>
+          From first outreach to final payment — all in one place.
         </div>
       </div>
 
