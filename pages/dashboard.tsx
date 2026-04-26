@@ -69,7 +69,7 @@ export default function Dashboard() {
           <div className="stat-value">{acts.length}</div>
           <div className="stat-label">Active Bands</div>
         </Link>
-        <Link href="/tours" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer' }}>
+        <Link href="/bookings" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="stat-value">{totalActive}</div>
           <div className="stat-label">In Pipeline</div>
         </Link>

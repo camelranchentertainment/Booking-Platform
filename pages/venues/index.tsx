@@ -36,6 +36,7 @@ export default function VenuesPage() {
   const [showNew, setShowNew]       = useState(false);
   const [form, setForm]             = useState<VenueForm>(BLANK);
   const [saving, setSaving]         = useState(false);
+  const [saveError, setSaveError]   = useState('');
   const [mapsReady, setMapsReady]   = useState(false);
 
   // Bulk import
@@ -125,6 +126,9 @@ export default function VenuesPage() {
 
   const saveVenue = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaveError('');
+    if (!form.name.trim()) { setSaveError('Venue name is required'); return; }
+    if (!form.city.trim()) { setSaveError('City is required'); return; }
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     await supabase.from('venues').insert({
@@ -613,6 +617,9 @@ export default function VenuesPage() {
             <div style={{ height: '1px', background: 'var(--border)', margin: '0.5rem 0 1rem' }} />
 
             <form onSubmit={saveVenue} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {saveError && (
+                <div style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 'var(--radius-sm)', padding: '0.6rem 0.9rem', color: '#f87171', fontSize: '0.84rem' }}>{saveError}</div>
+              )}
               <div className="field">
                 <label className="field-label">Venue Name *</label>
                 <input className="input" value={form.name} onChange={set('name')} required autoFocus={!mapsReady} />
