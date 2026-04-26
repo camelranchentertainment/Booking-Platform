@@ -19,8 +19,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const mapsKey = await getSetting('google_maps_api_key').catch(() => null);
 
+  let supabaseOk = false;
+  try {
+    const { error } = await getServiceClient()
+      .from('user_profiles')
+      .select('id', { head: true, count: 'exact' });
+    supabaseOk = !error;
+  } catch {
+    supabaseOk = false;
+  }
+
   return res.json({
-    supabase:       true,
+    supabase:       supabaseOk,
     stripe:         !!process.env.STRIPE_SECRET_KEY,
     resend:         !!process.env.RESEND_API_KEY,
     googleMaps:     !!(process.env.GOOGLE_MAPS_API_KEY || mapsKey),

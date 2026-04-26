@@ -369,8 +369,8 @@ export default function AdminPage() {
     if (u.subscription_status === 'cancelled') return { opacity: 0.55 };
     if (u.subscription_status !== 'trialing' || !u.trial_ends_at) return {};
     const days = Math.ceil((new Date(u.trial_ends_at).getTime() - Date.now()) / 86_400_000);
-    if (days < 0)  return { background: 'rgba(248,113,113,0.08)' };
-    if (days <= 7) return { background: 'rgba(251,191,36,0.07)' };
+    if (days < 0)  return { background: 'rgba(248,113,113,0.18)' };
+    if (days <= 7) return { background: 'rgba(251,191,36,0.15)' };
     return {};
   };
 
