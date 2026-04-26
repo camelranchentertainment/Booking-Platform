@@ -149,8 +149,8 @@ export default function AppShell({ children, requireRole = null }: Props) {
         {/* Trial banner */}
         {trialDays !== null && trialDays <= 7 && (
           <div style={{
-            margin: '-1.5rem -1.5rem 1.5rem',
-            padding: '0.6rem 1.5rem',
+            margin: '-2rem -2rem 1.5rem',
+            padding: '0.6rem 2rem',
             background: trialDays <= 3 ? 'rgba(248,113,113,0.08)' : 'rgba(251,191,36,0.07)',
             borderBottom: `1px solid ${trialDays <= 3 ? 'rgba(248,113,113,0.2)' : 'rgba(251,191,36,0.2)'}`,
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem',

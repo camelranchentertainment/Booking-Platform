@@ -94,6 +94,8 @@ export default function Register() {
       role: cfg!.apiRole,
       displayName: form.displayName,
     };
+    if (tier === 'agent')    body.planTier = 'agent_t1';
+    if (tier === 'agent_t2') body.planTier = 'agent_t2';
     if ((tier === 'agent' || tier === 'agent_t2') && form.agencyName) body.agencyName = form.agencyName;
     if (tier === 'act_admin') body.actName = form.actName;
 
@@ -145,7 +147,7 @@ export default function Register() {
                     padding: '1.1rem 0.75rem',
                     border: `2px solid ${selected ? c.color : 'var(--border)'}`,
                     borderRadius: 'var(--radius-sm)',
-                    background: selected ? `${c.color}18` : 'var(--bg-card)',
+                    background: selected ? `${c.color}18` : 'var(--bg-panel)',
                     color: selected ? c.color : 'var(--text-muted)',
                     cursor: 'pointer',
                     transition: 'all 0.15s',

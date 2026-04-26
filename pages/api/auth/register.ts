@@ -4,13 +4,17 @@ import { getServiceClient } from '../../../lib/supabase';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { email, password, role, displayName, agencyName, actName } = req.body;
+  const { email, password, role, displayName, agencyName, actName, planTier } = req.body;
 
   if (!email || !password || !role || !displayName) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
   if (!['agent', 'act_admin'].includes(role)) {
     return res.status(400).json({ error: 'Invalid role' });
+  }
+  const VALID_TIERS = ['agent_t1', 'agent_t2', 'band_admin'];
+  if (planTier && !VALID_TIERS.includes(planTier)) {
+    return res.status(400).json({ error: 'Invalid plan tier' });
   }
 
   const admin = getServiceClient();
@@ -35,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     email,
     display_name: displayName,
     subscription_status: 'trialing',
-    subscription_tier: role === 'agent' ? 'agent' : 'band_admin',
+    subscription_tier: planTier || (role === 'agent' ? 'agent_t1' : 'band_admin'),
     trial_ends_at: trialEndsAt,
   };
   if (role === 'agent' && agencyName) profileData.agency_name = agencyName;
