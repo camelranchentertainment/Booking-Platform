@@ -43,10 +43,11 @@ export default function HistoryPage() {
   const [bookings, setBookings]     = useState<any[]>([]);
   const [acts, setActs]             = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
-  const [filterAct, setFilterAct]   = useState('');
+  const [filterAct, setFilterAct]       = useState('');
+  const [filterVenue, setFilterVenue]   = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [filterFrom, setFilterFrom] = useState('');
-  const [filterTo, setFilterTo]     = useState('');
+  const [filterFrom, setFilterFrom]     = useState('');
+  const [filterTo, setFilterTo]         = useState('');
   const [sortBy, setSortBy]         = useState<'date' | 'amount'>('date');
   const [expanded, setExpanded]     = useState<string | null>(null);
 
@@ -72,12 +73,13 @@ export default function HistoryPage() {
   const filtered = useMemo(() => {
     let list = bookings;
     if (filterAct) list = list.filter(b => b.act?.id === filterAct);
+    if (filterVenue) list = list.filter(b => b.venue?.name?.toLowerCase().includes(filterVenue.toLowerCase()));
     if (filterStatus) list = list.filter(b => b.payment_status === filterStatus);
     if (filterFrom) list = list.filter(b => b.show_date >= filterFrom);
     if (filterTo) list = list.filter(b => b.show_date <= filterTo);
     if (sortBy === 'amount') list = [...list].sort((a, b) => (Number(b.agreed_amount) || 0) - (Number(a.agreed_amount) || 0));
     return list;
-  }, [bookings, filterAct, filterStatus, filterFrom, filterTo, sortBy]);
+  }, [bookings, filterAct, filterVenue, filterStatus, filterFrom, filterTo, sortBy]);
 
   const totalExpected  = filtered.reduce((s, b) => s + (Number(b.agreed_amount) || 0), 0);
   const totalReceived  = filtered.reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0);
@@ -112,6 +114,10 @@ export default function HistoryPage() {
               {acts.map(a => <option key={a.id} value={a.id}>{a.act_name}</option>)}
             </select>
           </div>
+          <div className="field" style={{ margin: 0, minWidth: 150 }}>
+            <label className="field-label">Venue</label>
+            <input className="input" placeholder="Search venue..." value={filterVenue} onChange={e => setFilterVenue(e.target.value)} />
+          </div>
           <div className="field" style={{ margin: 0, minWidth: 140 }}>
             <label className="field-label">Payment Status</label>
             <select className="select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
@@ -136,8 +142,8 @@ export default function HistoryPage() {
               <option value="amount">Amount</option>
             </select>
           </div>
-          {(filterAct || filterStatus || filterFrom || filterTo) && (
-            <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-end' }} onClick={() => { setFilterAct(''); setFilterStatus(''); setFilterFrom(''); setFilterTo(''); }}>
+          {(filterAct || filterVenue || filterStatus || filterFrom || filterTo) && (
+            <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-end' }} onClick={() => { setFilterAct(''); setFilterVenue(''); setFilterStatus(''); setFilterFrom(''); setFilterTo(''); }}>
               Clear Filters
             </button>
           )}
