@@ -218,7 +218,7 @@ export default function BandPortal() {
           ))}
 
           {/* Earned / Potential — split by played vs upcoming */}
-          <Link href="/band/calendar" className="stat-block" style={{ position: 'relative', overflow: 'hidden', textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #34d399' }}>
+          <Link href="/bookings" className="stat-block" style={{ position: 'relative', overflow: 'hidden', textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #34d399' }}>
             <div style={{ position: 'absolute', top: 0, right: 0, width: 60, height: 60, background: 'radial-gradient(circle at top right, rgba(200,146,26,0.12), transparent 70%)', pointerEvents: 'none' }} />
             <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', color: '#34d399', lineHeight: 1 }}>
               {earned > 0 ? `$${earned.toLocaleString()}` : '—'}

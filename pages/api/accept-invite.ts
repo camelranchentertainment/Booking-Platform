@@ -9,6 +9,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const supabase = getServiceClient();
 
+  // Superadmin guard — must run before any profile or act mutations.
+  // Superadmins accept invites only to create the agent_act_links record;
+  // their role and act_id must never be touched.
+  const { data: currentProfile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (currentProfile?.role === 'superadmin') {
+    const { data: invite } = await supabase
+      .from('act_invitations')
+      .select('id, act_id')
+      .eq('token', token)
+      .eq('status', 'pending')
+      .maybeSingle();
+
+    if (!invite) return res.status(404).json({ error: 'Invalid or expired invite' });
+
+    await supabase.from('agent_act_links').upsert({
+      agent_id:    userId,
+      act_id:      invite.act_id,
+      status:      'active',
+      permissions: 'manage',
+    }, { onConflict: 'agent_id,act_id' });
+
+    await supabase.from('act_invitations').update({ status: 'accepted' }).eq('id', invite.id);
+
+    return res.status(200).json({ ok: true, role: 'superadmin' });
+  }
+
   const { data: invite } = await supabase
     .from('act_invitations')
     .select('*')
