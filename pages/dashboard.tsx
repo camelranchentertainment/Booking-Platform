@@ -85,7 +85,7 @@ export default function Dashboard() {
           <div className="stat-value">{totalConfirmed}</div>
           <div className="stat-label">Confirmed Shows</div>
         </Link>
-        <Link href="/bookings" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #34d399' }}>
+        <Link href="/bookings" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #C8921A' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', color: '#34d399', lineHeight: 1 }}>
             {earned > 0 ? `$${earned.toLocaleString()}` : '—'}
           </div>

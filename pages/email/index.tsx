@@ -18,6 +18,7 @@ type InboxMessage = {
   subject: string;
   date: string;
   preview: string;
+  body: string;
   matchedVenueId: string | null;
   matchedVenueName: string | null;
 };
@@ -140,6 +141,7 @@ export default function EmailPage() {
   const [inboxConfigured, setInboxConfigured] = useState(true);
   const [inboxError, setInboxError]       = useState('');
   const [inboxLoaded, setInboxLoaded]     = useState(false);
+  const [selectedInboxMsg, setSelectedInboxMsg] = useState<InboxMessage | null>(null);
 
   useEffect(() => { loadAll(); }, []);
 
@@ -289,7 +291,9 @@ export default function EmailPage() {
       if (!res.ok) { setInboxError(data.error || 'Failed to load inbox'); }
       else {
         setInboxConfigured(data.configured);
-        setInboxMessages(data.messages || []);
+        const msgs = data.messages || [];
+        setInboxMessages(msgs);
+        localStorage.setItem('inbox_count', String(msgs.length));
       }
     } catch (e: any) {
       setInboxError('Network error fetching inbox');
@@ -733,7 +737,7 @@ export default function EmailPage() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                     {inboxMessages.filter(m => m.matchedVenueId).map(m => (
-                      <div key={m.uid} style={{ background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 'var(--radius-sm)', padding: '0.75rem 1rem', display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                      <div key={m.uid} style={{ background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 'var(--radius-sm)', padding: '0.75rem 1rem', display: 'flex', gap: '1rem', alignItems: 'flex-start', cursor: 'pointer' }} onClick={() => setSelectedInboxMsg(m)}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'baseline', flexWrap: 'wrap', marginBottom: '0.2rem' }}>
                             <span style={{ fontWeight: 600, color: '#60a5fa', fontSize: '0.88rem' }}>{m.matchedVenueName}</span>
@@ -746,7 +750,7 @@ export default function EmailPage() {
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                             {new Date(m.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           </span>
-                          <a href={`/venues/${m.matchedVenueId}`} className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem', color: '#60a5fa', borderColor: '#60a5fa44' }}>
+                          <a href={`/venues/${m.matchedVenueId}`} className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem', color: '#60a5fa', borderColor: '#60a5fa44' }} onClick={e => e.stopPropagation()}>
                             View Venue →
                           </a>
                         </div>
@@ -765,7 +769,7 @@ export default function EmailPage() {
                     </thead>
                     <tbody>
                       {inboxMessages.map(m => (
-                        <tr key={m.uid}>
+                        <tr key={m.uid} style={{ cursor: 'pointer' }} onClick={() => setSelectedInboxMsg(m)}>
                           <td>
                             <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 500 }}>{m.from}</div>
                             <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{m.fromEmail}</div>
@@ -776,7 +780,7 @@ export default function EmailPage() {
                           </td>
                           <td>
                             {m.matchedVenueName ? (
-                              <a href={`/venues/${m.matchedVenueId}`} style={{ color: '#60a5fa', fontSize: '0.82rem', textDecoration: 'none' }}>
+                              <a href={`/venues/${m.matchedVenueId}`} style={{ color: '#60a5fa', fontSize: '0.82rem', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>
                                 {m.matchedVenueName}
                               </a>
                             ) : (
@@ -964,7 +968,6 @@ export default function EmailPage() {
           defaultCategory={composerCategory}
           onClose={() => {
             setComposerBooking(null);
-            // Refresh booking email_stage
             supabase.from('bookings').select('id, email_stage, last_contact_date, follow_up_count')
               .eq('id', composerBooking.id).single()
               .then(({ data }) => {
@@ -972,6 +975,57 @@ export default function EmailPage() {
               });
           }}
         />
+      )}
+
+      {/* Inbox email detail modal */}
+      {selectedInboxMsg && (
+        <div className="modal-backdrop" onClick={() => setSelectedInboxMsg(null)}>
+          <div className="modal" style={{ maxWidth: 640, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" style={{ flexShrink: 0 }}>
+              <h3 className="modal-title" style={{ maxWidth: '88%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {selectedInboxMsg.subject}
+              </h3>
+              <button className="btn btn-ghost btn-sm" onClick={() => setSelectedInboxMsg(null)}>✕</button>
+            </div>
+
+            {/* Meta row */}
+            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '0.3rem', padding: '0.1rem 0 0.9rem', borderBottom: '1px solid var(--border)', marginBottom: '0.85rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>From</span>
+                <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)' }}>{selectedInboxMsg.from}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem', color: 'var(--text-muted)' }}>{selectedInboxMsg.fromEmail}</span>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>Date</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                  {new Date(selectedInboxMsg.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                </span>
+              </div>
+              {selectedInboxMsg.matchedVenueName && (
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>Venue</span>
+                  <a href={`/venues/${selectedInboxMsg.matchedVenueId}`} style={{ color: '#60a5fa', fontSize: '0.84rem', textDecoration: 'none', fontWeight: 600 }}>
+                    {selectedInboxMsg.matchedVenueName} →
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Body */}
+            <div style={{ flex: 1, overflowY: 'auto', fontFamily: 'var(--font-body)', fontSize: '0.88rem', lineHeight: 1.75, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {selectedInboxMsg.body || selectedInboxMsg.preview || '(no content)'}
+            </div>
+
+            <div style={{ flexShrink: 0, marginTop: '1rem', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              {selectedInboxMsg.matchedVenueId && (
+                <a href={`/venues/${selectedInboxMsg.matchedVenueId}`} className="btn btn-secondary btn-sm" style={{ color: '#60a5fa', borderColor: '#60a5fa44' }}>
+                  View Venue →
+                </a>
+              )}
+              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedInboxMsg(null)}>Close</button>
+            </div>
+          </div>
+        </div>
       )}
     </AppShell>
   );

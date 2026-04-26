@@ -33,6 +33,7 @@ const agentNav = [
   { label: 'Email',      href: '/email',      icon: '✉' },
   { label: 'Social',     href: '/social',     icon: '✦' },
   { label: 'Financials', href: '/financials', icon: '$' },
+  { label: 'History',    href: '/history',    icon: '◎' },
   { label: 'Settings',   href: '/settings',   icon: '⚙' },
 ];
 
@@ -70,10 +71,13 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
   const [showNotifs, setShowNotifs] = useState(false);
   const [responding, setResponding] = useState('');
   const [actName, setActName]       = useState<string | null>(null);
+  const [inboxCount, setInboxCount] = useState(0);
 
   useEffect(() => {
     const saved = localStorage.getItem('theme') as 'dark' | 'light' | null;
     if (saved) setTheme(saved);
+    const cnt = localStorage.getItem('inbox_count');
+    if (cnt) setInboxCount(parseInt(cnt, 10) || 0);
   }, []);
 
   const loadNotifs = useCallback(async () => {
@@ -265,17 +269,47 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
 
       <div className="sidebar-section" style={{ flex: 1 }}>
         <div className="sidebar-label">{isSuperAdmin ? 'Agent Tools' : 'Navigation'}</div>
-        {nav.map(item => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`sidebar-link${isActive(item.href) ? ' active' : ''}`}
-            onClick={onClose}
-          >
-            <span style={{ width: '16px', textAlign: 'center' }}>{item.icon}</span>
-            {item.label}
-          </Link>
-        ))}
+        {nav.map(item => {
+          const badge = item.href === '/email' && inboxCount > 0 ? inboxCount : 0;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`sidebar-link${isActive(item.href) ? ' active' : ''}`}
+              onClick={onClose}
+              style={badge ? { justifyContent: 'space-between' } : undefined}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <span style={{ width: '16px', textAlign: 'center' }}>{item.icon}</span>
+                {item.label}
+              </span>
+              {badge > 0 && (
+                <span style={{
+                  background: '#ef4444', color: '#fff', borderRadius: '999px',
+                  fontSize: '0.65rem', fontWeight: 700, minWidth: '18px', height: '18px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
+                }}>{badge}</span>
+              )}
+            </Link>
+          );
+        })}
+
+        {/* Admin — superadmin only */}
+        {isSuperAdmin && (
+          <div style={{ paddingTop: '0.5rem', marginTop: '0.25rem', borderTop: '1px solid var(--border)' }}>
+            <div className="sidebar-label">Admin</div>
+            <Link
+              href="/admin"
+              className={`sidebar-link${isActive('/admin') ? ' active' : ''}`}
+              onClick={onClose}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <span style={{ width: '16px', textAlign: 'center' }}>◈</span>
+                Platform Admin
+              </span>
+            </Link>
+          </div>
+        )}
 
         {/* Notifications entry */}
         {(notifs.length > 0 || sysNotifs.length > 0) && (
