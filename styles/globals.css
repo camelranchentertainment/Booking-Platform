@@ -104,7 +104,7 @@ h4 { font-size: 1.2rem; }
 
 .sidebar {
   width: var(--sidebar-width);
-  min-height: 100vh;
+  height: 100vh;
   background: var(--bg-panel);
   opacity: 1;
   border-right: 1px solid var(--border);
@@ -114,6 +114,7 @@ h4 { font-size: 1.2rem; }
   top: 0;
   left: 0;
   z-index: 100;
+  overflow-y: auto;
 }
 
 .main-content {

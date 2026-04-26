@@ -87,7 +87,7 @@ export default function Dashboard() {
         </Link>
         <Link href="/bookings" className="stat-block" style={{ textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #C8921A' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', color: '#34d399', lineHeight: 1 }}>
-            {earned > 0 ? `$${earned.toLocaleString()}` : '—'}
+            {`$${earned.toLocaleString()}`}
           </div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.15rem' }}>Earned</div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.66rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>collected from played shows</div>
