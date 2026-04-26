@@ -298,7 +298,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .single();
 
   if (!tv) return res.status(404).json({ error: 'Not found' });
-  if ((tv.tour as any).created_by !== user.id) return res.status(403).json({ error: 'Forbidden' });
+
+  // Allow tour creator OR band admin whose act owns this tour
+  const isCreator = (tv.tour as any).created_by === user.id;
+  if (!isCreator) {
+    const { data: prof } = await service
+      .from('user_profiles')
+      .select('act_id, role')
+      .eq('id', user.id)
+      .maybeSingle();
+    const isBandAdmin = prof?.role === 'act_admin' && prof?.act_id === (tv.tour as any).act_id;
+    // Also check acts.owner_id for band admins who own the act directly
+    const { data: ownedAct } = await service
+      .from('acts')
+      .select('id')
+      .eq('id', (tv.tour as any).act_id)
+      .eq('owner_id', user.id)
+      .maybeSingle();
+    if (!isBandAdmin && !ownedAct) return res.status(403).json({ error: 'Forbidden' });
+  }
 
   const { data: act } = await service
     .from('acts')

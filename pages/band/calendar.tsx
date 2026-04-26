@@ -42,7 +42,7 @@ export default function BandCalendar() {
     setActId(actId);
 
     const { data } = await supabase.from('bookings')
-      .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, fee, venue:venues(name, city, state, address, phone)')
+      .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, fee, venue:venues(id, name, city, state, address, phone)')
       .eq('act_id', actId)
       .neq('status', 'cancelled')
       .not('show_date', 'is', null)
