@@ -65,6 +65,7 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
   const [sysNotifs, setSysNotifs]   = useState<SysNotif[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
   const [responding, setResponding] = useState('');
+  const [actName, setActName]       = useState<string | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('theme') as 'dark' | 'light' | null;
@@ -81,12 +82,17 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
     // Agent link requests pending for this band admin's act
     if (profile.role === 'act_admin' || isSuperAdmin) {
       let actId: string | null = null;
-      const { data: acts } = await supabase.from('acts').select('id').eq('owner_id', user.id).eq('is_active', true).limit(1);
+      const { data: acts } = await supabase.from('acts').select('id, act_name').eq('owner_id', user.id).eq('is_active', true).limit(1);
       if (acts?.length) {
         actId = acts[0].id;
+        setActName((acts[0] as any).act_name || null);
       } else {
         const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
         actId = prof?.act_id || null;
+        if (actId) {
+          const { data: linkedAct } = await supabase.from('acts').select('act_name').eq('id', actId).maybeSingle();
+          setActName((linkedAct as any)?.act_name || null);
+        }
       }
       if (actId) {
         const { data: links } = await supabase
@@ -221,10 +227,17 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
                 ◈ SUPERADMIN
               </div>
             ) : (
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                {profile.role === 'agent' ? (profile.agency_name || 'Agent') :
-                 profile.role === 'act_admin' ? 'Band Admin' : 'Member'}
-              </div>
+              <>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  {profile.role === 'agent' ? (profile.agency_name || 'Agent') :
+                   profile.role === 'act_admin' ? 'Band Admin' : 'Member'}
+                </div>
+                {profile.role === 'act_admin' && actName && (
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--accent)', letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {actName}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

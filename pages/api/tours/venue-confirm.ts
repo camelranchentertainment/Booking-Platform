@@ -309,8 +309,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!act) return res.status(404).json({ error: 'Act not found' });
 
   try {
-    await service.from('tour_venues').update({ status: 'confirmed' }).eq('id', tour_venue_id);
-
     const { data: booking, error: bookingError } = await service.from('bookings').insert({
       created_by: user.id,
       act_id:     (act as any).id,
@@ -322,6 +320,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }).select('id').single();
 
     if (bookingError) throw new Error(bookingError.message);
+
+    await service.from('tour_venues').update({ status: 'confirmed' }).eq('id', tour_venue_id);
 
     const dateFormatted = new Date(show_date + 'T00:00:00').toLocaleDateString('en-US', {
       weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',

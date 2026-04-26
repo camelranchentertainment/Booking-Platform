@@ -50,15 +50,8 @@ export default function BandEmail() {
 
     const bookingIds = (bookingIdsRes.data || []).map((b: any) => b.id);
 
-    // Get tours for this act to find tour_venue IDs
-    const { data: actTours } = await supabase.from('tours').select('id').eq('act_id', act.id);
-    const tourIds = (actTours || []).map((t: any) => t.id);
-    const { data: actTourVenues } = tourIds.length > 0
-      ? await supabase.from('tour_venues').select('id').in('tour_id', tourIds)
-      : { data: [] };
-    const tourVenueIds = (actTourVenues || []).map((tv: any) => tv.id);
-
-    // Fetch drafts — booking-based and tour_venue-based
+    // Fetch drafts — booking-based (by act's booking IDs) and tour_venue-based
+    // For tour_venue drafts: query by agent_id = user.id directly, avoiding RLS on tours table
     const [bookingDraftsRes, tourVenueDraftsRes] = await Promise.all([
       bookingIds.length > 0
         ? supabase.from('email_drafts')
@@ -70,15 +63,14 @@ export default function BandEmail() {
             .eq('category', 'target')
             .order('created_at', { ascending: false })
         : Promise.resolve({ data: [] }),
-      tourVenueIds.length > 0
-        ? supabase.from('email_drafts')
-            .select(`id, category, subject, body, created_at, tour_venue_id,
-              tourVenue:tour_venues(id, tour_id, venue_id,
-                venue:venues(name, city, state, email))`)
-            .in('tour_venue_id', tourVenueIds)
-            .eq('category', 'target')
-            .order('created_at', { ascending: false })
-        : Promise.resolve({ data: [] }),
+      supabase.from('email_drafts')
+        .select(`id, category, subject, body, created_at, tour_venue_id,
+          tourVenue:tour_venues(id, tour_id, venue_id,
+            venue:venues(name, city, state, email))`)
+        .eq('agent_id', user.id)
+        .not('tour_venue_id', 'is', null)
+        .eq('category', 'target')
+        .order('created_at', { ascending: false }),
     ]);
 
     // Fetch contacts for tour venue drafts separately (tour_venues has no contacts FK)

@@ -22,22 +22,29 @@ export default function BookingsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    // Load acts first so we can build an OR filter for bookings
+    const { data: agentActs } = await supabase
+      .from('acts').select('id, act_name').eq('agent_id', user.id).order('act_name');
+    const agentActIds = (agentActs || []).map((a: any) => a.id);
+    setActs(agentActs || []);
+
+    // Fetch bookings created by this user OR belonging to acts they agent for
     let q = supabase.from('bookings').select(`
       id, status, show_date, fee, deal_notes, internal_notes, created_at,
       act:acts(id, act_name),
       venue:venues(id, name, city, state),
       tour:tours(id, name)
-    `).eq('created_by', user.id).order('created_at', { ascending: false });
+    `).order('created_at', { ascending: false });
 
+    if (agentActIds.length > 0) {
+      q = q.or(`created_by.eq.${user.id},act_id.in.(${agentActIds.join(',')})`);
+    } else {
+      q = q.eq('created_by', user.id);
+    }
     if (filterAct) q = q.eq('act_id', filterAct);
 
-    const [bookingsRes, actsRes] = await Promise.all([
-      q,
-      supabase.from('acts').select('id, act_name').eq('agent_id', user.id).order('act_name'),
-    ]);
-
-    setBookings(bookingsRes.data || []);
-    setActs(actsRes.data || []);
+    const { data: bookingsData } = await q;
+    setBookings(bookingsData || []);
     setLoading(false);
   };
 

@@ -3,6 +3,7 @@ import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
 import { buildIcal, downloadIcal } from '../../lib/ical';
+import EmailComposer from '../../components/email/EmailComposer';
 import Link from 'next/link';
 
 const DAYS   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -20,6 +21,8 @@ export default function BandCalendar() {
   const [current, setCurrent] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
   const [selected, setSelected] = useState<string | null>(null);
   const [detailBooking, setDetailBooking] = useState<any>(null);
+  const [actId, setActId] = useState<string | null>(null);
+  const [composerBooking, setComposerBooking] = useState<any>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -36,6 +39,7 @@ export default function BandCalendar() {
     }
 
     if (!actId) { setLoading(false); return; }
+    setActId(actId);
 
     const { data } = await supabase.from('bookings')
       .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, fee, venue:venues(name, city, state, address, phone)')
@@ -244,6 +248,33 @@ export default function BandCalendar() {
                 </div>
               )}
             </div>
+            {detailBooking.venue && (
+              <div style={{ marginTop: '1.25rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => { setComposerBooking(detailBooking); setDetailBooking(null); }}
+                >
+                  ✉ Email Venue
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {composerBooking && actId && (
+        <div className="modal-backdrop" onClick={() => setComposerBooking(null)}>
+          <div className="modal" style={{ maxWidth: 600, position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setComposerBooking(null)}>✕</button>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--accent)', marginBottom: '1rem' }}>
+              Email · {composerBooking.venue?.name || 'Venue'}
+            </div>
+            <EmailComposer
+              bookingId={composerBooking.id}
+              actId={actId}
+              venueId={composerBooking.venue?.id}
+              defaultCategory="advance"
+              onClose={() => setComposerBooking(null)}
+            />
           </div>
         </div>
       )}

@@ -98,6 +98,7 @@ export default function TourDetail() {
   const [confirmPlatforms, setConfirmPlatforms] = useState<Platform[]>(['instagram', 'facebook']);
   const [confirming, setConfirming]           = useState(false);
   const [confirmError, setConfirmError]       = useState('');
+  const [confirmSuccess, setConfirmSuccess]   = useState('');
 
   // Pool filter
   const [poolFilter, setPoolFilter] = useState<OutreachStatus | 'all'>('all');
@@ -367,9 +368,12 @@ export default function TourDetail() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to confirm show');
       setPool(p => p.map(v => v.id === confirmTarget.id ? { ...v, status: 'confirmed' } : v));
+      const venueName = confirmTarget.venue?.name || 'Show';
       setConfirmTarget(null);
       setConfirmForm({ show_date: '', fee: '' });
       setConfirmPlatforms(['instagram', 'facebook']);
+      setConfirmSuccess(`${venueName} confirmed and added to bookings.`);
+      setTimeout(() => setConfirmSuccess(''), 5000);
       loadAll();
     } catch (err: any) {
       setConfirmError(err.message);
@@ -418,6 +422,12 @@ export default function TourDetail() {
           <Link href={`/bookings/new?tour=${tour.id}&act=${tour.act_id}`} className="btn btn-primary">+ Add Show</Link>
         </div>
       </div>
+
+      {confirmSuccess && (
+        <div style={{ background: 'rgba(52,211,153,0.12)', border: '1px solid #34d399', borderRadius: 'var(--radius)', padding: '0.7rem 1rem', fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#34d399', marginBottom: '1rem' }}>
+          {confirmSuccess}
+        </div>
+      )}
 
       <div className="grid-2">
         {/* Tour Info */}
