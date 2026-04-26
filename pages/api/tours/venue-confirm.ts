@@ -326,6 +326,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!act) return res.status(404).json({ error: 'Act not found' });
 
+  const { data: agentProfile } = await service
+    .from('user_profiles')
+    .select('display_name, email, agency_name')
+    .eq('id', user.id)
+    .maybeSingle();
+
   try {
     const { data: booking, error: bookingError } = await service.from('bookings').insert({
       created_by:      user.id,
@@ -388,6 +394,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 <tr><td style="padding:0.4rem 0.75rem;font-weight:600">Soundcheck</td><td>TBD</td></tr>
                 <tr><td style="padding:0.4rem 0.75rem;font-weight:600">Showtime</td><td>TBD</td></tr>
                 <tr><td style="padding:0.4rem 0.75rem;font-weight:600">Deal</td><td>${dealStr}</td></tr>
+                <tr><td style="padding:0.4rem 0.75rem;font-weight:600">Booking Contact</td><td>${agentProfile?.display_name || agentProfile?.agency_name || agentProfile?.email || 'Camel Ranch Booking'}</td></tr>
               </table>
               <p style="margin-top:1.25rem">Please reply to this email with any questions or to send additional logistics details.</p>
               <p style="color:#999;font-size:0.85rem;margin-top:2rem">Camel Ranch Booking · camelranchbooking.com</p>

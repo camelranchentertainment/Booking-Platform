@@ -128,7 +128,9 @@ export default function BookingDetail() {
   const saveDetails = async () => {
     setSavingDetails(true);
     await supabase.from('bookings').update({
+      load_in_time:         detailsForm.load_in_time         || null,
       soundcheck_time:      detailsForm.soundcheck_time      || null,
+      set_time:             detailsForm.set_time             || null,
       end_time:             detailsForm.end_time             || null,
       venue_contact_name:   detailsForm.venue_contact_name   || null,
       sound_system:         detailsForm.sound_system         || null,
@@ -480,17 +482,19 @@ export default function BookingDetail() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <div className="grid-2">
+                <div className="field"><label className="field-label">Load-in Time</label>
+                  <input className="input" type="time" value={detailsForm.load_in_time || ''} onChange={setDet('load_in_time')} /></div>
                 <div className="field"><label className="field-label">Soundcheck Time</label>
                   <input className="input" type="time" value={detailsForm.soundcheck_time || ''} onChange={setDet('soundcheck_time')} /></div>
-                <div className="field"><label className="field-label">Set Time</label>
-                  <input className="input" type="time" value={detailsForm.set_time || ''} onChange={setDet('set_time')} /></div>
               </div>
               <div className="grid-2">
+                <div className="field"><label className="field-label">Set Time (Showtime)</label>
+                  <input className="input" type="time" value={detailsForm.set_time || ''} onChange={setDet('set_time')} /></div>
                 <div className="field"><label className="field-label">Estimated End Time</label>
                   <input className="input" type="time" value={detailsForm.end_time || ''} onChange={setDet('end_time')} /></div>
-                <div className="field"><label className="field-label">Set Length (min)</label>
-                  <input className="input" type="number" value={detailsForm.set_length_min || ''} onChange={setDet('set_length_min')} /></div>
               </div>
+              <div className="field"><label className="field-label">Set Length (min)</label>
+                <input className="input" type="number" value={detailsForm.set_length_min || ''} onChange={setDet('set_length_min')} /></div>
               <div className="field"><label className="field-label">Venue Contact Name</label>
                 <input className="input" value={detailsForm.venue_contact_name || ''} onChange={setDet('venue_contact_name')} placeholder="Day-of contact" /></div>
               <div className="field"><label className="field-label">Sound System</label>
