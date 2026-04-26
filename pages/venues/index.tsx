@@ -236,7 +236,7 @@ export default function VenuesPage() {
           agent_id:   user.id,
           name:       row.name,
           city:       row.city,
-          state:      row.state      || null,
+          state:      row.state      || '',
           address:    row.address    || null,
           phone:      row.phone      || null,
           email:      row.email      || null,
