@@ -13,12 +13,13 @@ type VenueForm = {
   name: string; city: string; state: string; address: string;
   phone: string; email: string; website: string; venue_type: string;
   capacity: string; place_id: string; google_maps_url: string;
+  music_genres: string;
 };
 
 const BLANK: VenueForm = {
   name: '', city: '', state: '', address: '', phone: '',
   email: '', website: '', venue_type: '', capacity: '',
-  place_id: '', google_maps_url: '',
+  place_id: '', google_maps_url: '', music_genres: '',
 };
 
 type ProspectResult = {
@@ -45,7 +46,7 @@ export default function VenuesPage() {
   const [importRows, setImportRows]     = useState<any[]>([]);
   const [importParsed, setImportParsed] = useState(false);
   const [importSaving, setImportSaving] = useState(false);
-  const [importDone, setImportDone]     = useState<{added:number;skipped:number} | null>(null);
+  const [importDone, setImportDone]     = useState<{added:number;skipped:number;invalid:number} | null>(null);
   const [importError, setImportError]   = useState('');
   const autocompleteRef             = useRef<any>(null);
   const inputRef                    = useRef<HTMLInputElement>(null);
@@ -58,6 +59,14 @@ export default function VenuesPage() {
   const [prospectErr, setProspectErr]     = useState('');
   const [prospectStatus, setProspectStatus] = useState<Record<string, string>>({});
   const [prospectEmails, setProspectEmails] = useState<Record<string, string>>({});
+
+  // Genre filter
+  const [filterGenre, setFilterGenre] = useState('');
+
+  // Email enrichment
+  const [enrichStatus, setEnrichStatus] = useState<Record<string, string>>({});
+  const [bulkEnriching, setBulkEnriching] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{found: number; hadEmail: number; notFound: number} | null>(null);
 
   // Delete venue state
   const [deleteTarget, setDeleteTarget] = useState<Venue | null>(null);
@@ -131,6 +140,7 @@ export default function VenuesPage() {
     if (!form.city.trim()) { setSaveError('City is required'); return; }
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
+    const genreArr = form.music_genres ? form.music_genres.split(',').map(g => g.trim()).filter(Boolean) : null;
     await supabase.from('venues').insert({
       agent_id:       user!.id,
       name:           form.name,
@@ -144,6 +154,7 @@ export default function VenuesPage() {
       capacity:       form.capacity ? Number(form.capacity) : null,
       place_id:       form.place_id       || null,
       google_maps_url: form.google_maps_url || null,
+      music_genres:   genreArr?.length ? genreArr : null,
     });
     setForm(BLANK);
     setShowNew(false);
@@ -188,7 +199,7 @@ export default function VenuesPage() {
     if (!rows.length) { setImportError('Could not parse any venue rows. Make sure the first line is a header row.'); return; }
 
     // Normalize field names to internal keys
-    const norm = rows.map(r => ({
+    const allNorm = rows.map(r => ({
       name:         clean(r.venue_name || r.name || ''),
       address:      clean(r.address || ''),
       city:         clean(r.city || ''),
@@ -204,9 +215,12 @@ export default function VenuesPage() {
       contact_email: clean(r.booking_email || r.contact_email || ''),
       notes:         clean(r.notes || ''),
       _selected:     true,
-    })).filter(r => r.name && r.city);
+    }));
+    const invalidCount = allNorm.filter(r => !r.name || !r.city).length;
+    const norm = allNorm.filter(r => r.name && r.city);
 
-    if (!norm.length) { setImportError('Rows found but none had a Venue Name and City — check your column headers.'); return; }
+    if (!norm.length) { setImportError(`Rows found but none had a Venue Name and City — ${invalidCount} row${invalidCount !== 1 ? 's' : ''} skipped. Check your column headers.`); return; }
+    if (invalidCount > 0) setImportError(`Note: ${invalidCount} row${invalidCount !== 1 ? 's' : ''} skipped (missing Venue Name or City).`);
     setImportRows(norm);
     setImportParsed(true);
   };
@@ -269,7 +283,7 @@ export default function VenuesPage() {
     }
 
     await loadVenues();
-    setImportDone({ added, skipped });
+    setImportDone({ added, skipped, invalid: importRows.filter(r => !r._selected).length });
     setImportSaving(false);
   };
 
@@ -321,6 +335,64 @@ export default function VenuesPage() {
     });
     if (res.ok) setAddTourDone(tourId);
     setAddingTour(null);
+  };
+
+  const enrichVenueEmail = async (venue: Venue) => {
+    if (!venue.website) return;
+    setEnrichStatus(prev => ({ ...prev, [venue.id]: 'scraping' }));
+    const { data: { session } } = await supabase.auth.getSession();
+    try {
+      const res = await fetch('/api/venues/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session!.access_token}` },
+        body: JSON.stringify({ url: venue.website, venueId: venue.id }),
+      });
+      if (res.ok) {
+        const { extracted } = await res.json();
+        const email = extracted?.booking_email || extracted?.general_email || null;
+        setEnrichStatus(prev => ({ ...prev, [venue.id]: email ? `found:${email}` : 'notfound' }));
+        await loadVenues();
+      } else {
+        setEnrichStatus(prev => ({ ...prev, [venue.id]: 'error' }));
+      }
+    } catch {
+      setEnrichStatus(prev => ({ ...prev, [venue.id]: 'error' }));
+    }
+  };
+
+  const bulkFindEmails = async () => {
+    const noEmail = venues.filter(v => !v.email && v.website);
+    if (!noEmail.length) return;
+    setBulkEnriching(true);
+    setBulkResult(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    let found = 0; let hadEmail = 0; let notFound = 0;
+    for (const v of noEmail) {
+      setEnrichStatus(prev => ({ ...prev, [v.id]: 'scraping' }));
+      try {
+        const res = await fetch('/api/venues/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session!.access_token}` },
+          body: JSON.stringify({ url: v.website, venueId: v.id }),
+        });
+        if (res.ok) {
+          const { extracted } = await res.json();
+          const email = extracted?.booking_email || extracted?.general_email || null;
+          if (email) { found++; setEnrichStatus(prev => ({ ...prev, [v.id]: `found:${email}` })); }
+          else { notFound++; setEnrichStatus(prev => ({ ...prev, [v.id]: 'notfound' })); }
+        } else {
+          notFound++;
+          setEnrichStatus(prev => ({ ...prev, [v.id]: 'error' }));
+        }
+      } catch {
+        notFound++;
+        setEnrichStatus(prev => ({ ...prev, [v.id]: 'error' }));
+      }
+    }
+    hadEmail = venues.filter(v => v.email).length;
+    await loadVenues();
+    setBulkResult({ found, hadEmail, notFound });
+    setBulkEnriching(false);
   };
 
   const searchProspects = async () => {
@@ -398,11 +470,13 @@ export default function VenuesPage() {
   };
 
   const states = [...new Set(venues.map(v => v.state).filter(Boolean))].sort();
+  const allGenres = [...new Set(venues.flatMap(v => (v as any).music_genres || []).filter(Boolean))].sort();
   const filtered = venues.filter(v => {
     const q = search.toLowerCase();
     const nameMatch = !q || v.name.toLowerCase().includes(q) || v.city?.toLowerCase().includes(q);
     const stateMatch = !filterState || v.state === filterState;
-    return nameMatch && stateMatch;
+    const genreMatch = !filterGenre || ((v as any).music_genres || []).includes(filterGenre);
+    return nameMatch && stateMatch && genreMatch;
   });
 
   return (
@@ -412,11 +486,31 @@ export default function VenuesPage() {
           <h1 className="page-title">Venues</h1>
           <div className="page-sub">{venues.length} in database</div>
         </div>
-        <div style={{ display: 'flex', gap: '0.6rem' }}>
+        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          {venues.filter(v => !v.email && v.website).length > 0 && (
+            <button
+              className="btn btn-secondary"
+              onClick={bulkFindEmails}
+              disabled={bulkEnriching}
+              title={`Find emails for ${venues.filter(v => !v.email && v.website).length} venues with websites but no email`}
+            >
+              {bulkEnriching ? '✉ Finding…' : `✉ Find Emails (${venues.filter(v => !v.email && v.website).length})`}
+            </button>
+          )}
           <button className="btn btn-secondary" onClick={() => { setShowImport(true); setImportParsed(false); setImportText(''); setImportRows([]); setImportDone(null); setImportError(''); }}>⬆ Bulk Import</button>
           <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ Add Venue</button>
         </div>
       </div>
+
+      {/* Bulk email find result */}
+      {bulkResult && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '0.6rem 1rem', background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 'var(--radius-sm)', marginBottom: '1rem' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#34d399' }}>✓ {bulkResult.found} new emails found</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#fbbf24' }}>◈ {bulkResult.hadEmail} already had email</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#94a3b8' }}>✕ {bulkResult.notFound} not found</span>
+          <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto', fontSize: '0.72rem' }} onClick={() => setBulkResult(null)}>✕</button>
+        </div>
+      )}
 
       {/* Discover Venues — city/state Google search, compact strip at top */}
       <div className="card" style={{ marginBottom: '1.25rem', padding: '0.85rem 1.25rem' }}>
@@ -534,6 +628,12 @@ export default function VenuesPage() {
           <option value="">All States</option>
           {states.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+        {allGenres.length > 0 && (
+          <select className="select" style={{ width: 180 }} value={filterGenre} onChange={e => setFilterGenre(e.target.value)}>
+            <option value="">All Genres</option>
+            {allGenres.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+        )}
       </div>
 
       <div className="card">
@@ -555,7 +655,20 @@ export default function VenuesPage() {
                   <td style={{ color: 'var(--accent)', fontSize: '0.85rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.email || '—'}</td>
                   <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.phone || '—'}</td>
                   <td>
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      {v.website && !v.email && (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#60a5fa', whiteSpace: 'nowrap' }}
+                          disabled={enrichStatus[v.id] === 'scraping'}
+                          onClick={e => { e.stopPropagation(); enrichVenueEmail(v); }}
+                        >
+                          {enrichStatus[v.id] === 'scraping' ? '✉ …' :
+                           enrichStatus[v.id]?.startsWith('found:') ? `✓ ${enrichStatus[v.id].slice(6)}` :
+                           enrichStatus[v.id] === 'notfound' ? '✕ none' :
+                           '✉ Find Email'}
+                        </button>
+                      )}
                       <button
                         className="btn btn-ghost btn-sm"
                         style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', letterSpacing: '0.06em', color: 'var(--accent)', whiteSpace: 'nowrap' }}
@@ -668,6 +781,10 @@ export default function VenuesPage() {
                 <label className="field-label">Website</label>
                 <input className="input" value={form.website} onChange={set('website')} placeholder="https://..." />
               </div>
+              <div className="field">
+                <label className="field-label">Music Genres</label>
+                <input className="input" value={form.music_genres} onChange={set('music_genres')} placeholder="Country, Americana, Folk (comma-separated)" />
+              </div>
               {form.google_maps_url && (
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent)', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                   ✓ Google Maps linked
@@ -766,16 +883,40 @@ export default function VenuesPage() {
                   onChange={e => setImportText(e.target.value)}
                 />
                 {importError && <div style={{ color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.83rem' }}>{importError}</div>}
-                <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
-                  <button className="btn btn-secondary" onClick={() => setShowImport(false)}>Cancel</button>
-                  <button className="btn btn-primary" onClick={parseImport} disabled={!importText.trim()}>Parse →</button>
+                <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}
+                    onClick={() => {
+                      const csv = 'Venue Name,City,State,Address,Phone,Booking Email,Website,Venue Type,Capacity,Contact Name,Contact Title,Notes\n,,,,,,,bar,,,, ';
+                      const blob = new Blob([csv], { type: 'text/csv' });
+                      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+                      a.download = 'venue-import-template.csv'; a.click();
+                    }}
+                  >
+                    ↓ Download Template
+                  </button>
+                  <div style={{ display: 'flex', gap: '0.6rem' }}>
+                    <button className="btn btn-secondary" onClick={() => setShowImport(false)}>Cancel</button>
+                    <button className="btn btn-primary" onClick={parseImport} disabled={!importText.trim()}>Parse →</button>
+                  </div>
                 </div>
               </>
             ) : importDone ? (
               <div style={{ textAlign: 'center', padding: '1.5rem' }}>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: 'var(--accent)', marginBottom: '0.5rem' }}>Done</div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
-                  {importDone.added} venue{importDone.added !== 1 ? 's' : ''} added &nbsp;·&nbsp; {importDone.skipped} updated (already existed)
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#34d399' }}>
+                    ✓ {importDone.added} imported new
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#fbbf24' }}>
+                    ↺ {importDone.skipped} updated (already existed)
+                  </div>
+                  {importDone.invalid > 0 && (
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#94a3b8' }}>
+                      ✕ {importDone.invalid} skipped (unchecked)
+                    </div>
+                  )}
                 </div>
                 <button className="btn btn-primary" style={{ marginTop: '1.25rem' }} onClick={() => setShowImport(false)}>Close</button>
               </div>

@@ -9,7 +9,18 @@ import EmailComposer from '../../components/email/EmailComposer';
 
 type EmailType = 'cold_pitch' | 'followup' | 'reply_suggestion';
 type Draft = { subject: string; body: string; preview: string };
-type View = 'outbox' | 'pipeline' | 'tracker';
+type View = 'outbox' | 'pipeline' | 'tracker' | 'inbox';
+
+type InboxMessage = {
+  uid: number;
+  from: string;
+  fromEmail: string;
+  subject: string;
+  date: string;
+  preview: string;
+  matchedVenueId: string | null;
+  matchedVenueName: string | null;
+};
 
 const STAGE_LABELS: Record<string, string> = {
   target: 'Cold Pitch', follow_up_1: 'Follow Up 1', follow_up_2: 'Follow Up 2',
@@ -122,6 +133,13 @@ export default function EmailPage() {
   const [composerBooking, setComposerBooking] = useState<any>(null);
   const [composerCategory, setComposerCategory] = useState('target');
   const [markingCold, setMarkingCold] = useState<string | null>(null);
+
+  // Inbox state
+  const [inboxMessages, setInboxMessages] = useState<InboxMessage[]>([]);
+  const [inboxLoading, setInboxLoading]   = useState(false);
+  const [inboxConfigured, setInboxConfigured] = useState(true);
+  const [inboxError, setInboxError]       = useState('');
+  const [inboxLoaded, setInboxLoaded]     = useState(false);
 
   useEffect(() => { loadAll(); }, []);
 
@@ -259,6 +277,27 @@ export default function EmailPage() {
     setMarkingCold(null);
   };
 
+  const loadInbox = async () => {
+    setInboxLoading(true);
+    setInboxError('');
+    const { data: { session } } = await supabase.auth.getSession();
+    try {
+      const res = await fetch('/api/email/inbox', {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) { setInboxError(data.error || 'Failed to load inbox'); }
+      else {
+        setInboxConfigured(data.configured);
+        setInboxMessages(data.messages || []);
+      }
+    } catch (e: any) {
+      setInboxError('Network error fetching inbox');
+    }
+    setInboxLoading(false);
+    setInboxLoaded(true);
+  };
+
   const openComposer = (b: any, category: string) => {
     setComposerBooking(b);
     setComposerCategory(category);
@@ -324,12 +363,16 @@ export default function EmailPage() {
 
       {/* Tab bar */}
       <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
-        {(['outbox', 'tracker', 'pipeline'] as View[]).map(v => {
+        {(['outbox', 'tracker', 'pipeline', 'inbox'] as View[]).map(v => {
           const overdueCount = v === 'tracker' ? bookings.filter(b => getActionInfo(b).urgency === 'red').length : 0;
+          const venueReplies = v === 'inbox' ? inboxMessages.filter(m => m.matchedVenueId).length : 0;
           return (
             <button
               key={v}
-              onClick={() => setView(v)}
+              onClick={() => {
+                setView(v);
+                if (v === 'inbox' && !inboxLoaded) loadInbox();
+              }}
               style={{
                 padding: '0.55rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem',
                 fontFamily: 'var(--font-mono)', fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase',
@@ -339,12 +382,15 @@ export default function EmailPage() {
                 marginBottom: '-1px',
               }}
             >
-              {v === 'outbox' ? `Outbox (${log.length})` : v === 'pipeline' ? `Pipeline (${bookings.length})` : 'Outreach Tracker'}
+              {v === 'outbox' ? `Outbox (${log.length})` : v === 'pipeline' ? `Pipeline (${bookings.length})` : v === 'inbox' ? 'Inbox' : 'Outreach Tracker'}
               {v === 'outbox' && pendingDrafts.length > 0 && (
                 <span style={{ background: 'var(--accent)', color: '#000', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, minWidth: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{pendingDrafts.length}</span>
               )}
               {overdueCount > 0 && (
                 <span style={{ background: '#ef4444', color: '#fff', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, minWidth: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{overdueCount}</span>
+              )}
+              {v === 'inbox' && venueReplies > 0 && (
+                <span style={{ background: '#60a5fa', color: '#000', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, minWidth: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{venueReplies}</span>
               )}
             </button>
           );
@@ -643,6 +689,113 @@ export default function EmailPage() {
           </>
         );
       })()}
+
+      {/* INBOX TAB */}
+      {view === 'inbox' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', letterSpacing: '0.08em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              {inboxLoaded ? `${inboxMessages.length} messages (last 30 days)` : 'Recent emails from your IMAP inbox'}
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={loadInbox} disabled={inboxLoading}>
+              {inboxLoading ? '⟳ Fetching…' : '⟳ Refresh'}
+            </button>
+          </div>
+
+          {!inboxConfigured && (
+            <div className="card" style={{ padding: '1.5rem', textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                IMAP not configured. Set up your email credentials in Settings to enable the inbox.
+              </div>
+              <a href="/settings" className="btn btn-primary btn-sm">Go to Settings →</a>
+            </div>
+          )}
+
+          {inboxError && (
+            <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 'var(--radius-sm)', padding: '0.75rem 1rem', color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.84rem', marginBottom: '1rem' }}>
+              {inboxError}
+            </div>
+          )}
+
+          {inboxConfigured && !inboxLoading && inboxMessages.length === 0 && inboxLoaded && !inboxError && (
+            <div className="card" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>
+              No messages found in the last 30 days.
+            </div>
+          )}
+
+          {inboxMessages.length > 0 && (
+            <>
+              {/* Venue replies highlighted */}
+              {inboxMessages.filter(m => m.matchedVenueId).length > 0 && (
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#60a5fa', marginBottom: '0.5rem' }}>
+                    ◈ Venue Replies ({inboxMessages.filter(m => m.matchedVenueId).length})
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    {inboxMessages.filter(m => m.matchedVenueId).map(m => (
+                      <div key={m.uid} style={{ background: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 'var(--radius-sm)', padding: '0.75rem 1rem', display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'baseline', flexWrap: 'wrap', marginBottom: '0.2rem' }}>
+                            <span style={{ fontWeight: 600, color: '#60a5fa', fontSize: '0.88rem' }}>{m.matchedVenueName}</span>
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{m.fromEmail}</span>
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '0.2rem' }}>{m.subject}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.preview}</div>
+                        </div>
+                        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                            {new Date(m.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                          <a href={`/venues/${m.matchedVenueId}`} className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem', color: '#60a5fa', borderColor: '#60a5fa44' }}>
+                            View Venue →
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* All messages */}
+              <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr><th>From</th><th>Subject</th><th>Venue Match</th><th>Date</th></tr>
+                    </thead>
+                    <tbody>
+                      {inboxMessages.map(m => (
+                        <tr key={m.uid}>
+                          <td>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 500 }}>{m.from}</div>
+                            <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{m.fromEmail}</div>
+                          </td>
+                          <td style={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>{m.subject}</div>
+                            <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.preview}</div>
+                          </td>
+                          <td>
+                            {m.matchedVenueName ? (
+                              <a href={`/venues/${m.matchedVenueId}`} style={{ color: '#60a5fa', fontSize: '0.82rem', textDecoration: 'none' }}>
+                                {m.matchedVenueName}
+                              </a>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-mono)' }}>—</span>
+                            )}
+                          </td>
+                          <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                            {new Date(m.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* AI Compose Modal */}
       {showCompose && (

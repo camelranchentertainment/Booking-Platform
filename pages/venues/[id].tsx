@@ -55,8 +55,8 @@ export default function VenueDetail() {
     const { data: { user } } = await supabase.auth.getUser();
     const [venueRes, bookingsRes, contactsRes, actsRes] = await Promise.all([
       supabase.from('venues').select('*').eq('id', id).single(),
-      supabase.from('bookings').select('id, status, show_date, fee, act:acts(act_name)')
-        .eq('venue_id', id).order('show_date', { ascending: false }).limit(20),
+      supabase.from('bookings').select('id, status, show_date, fee, deal_type, amount_paid, payment_status, rebook, post_show_notes, act:acts(act_name)')
+        .eq('venue_id', id).order('show_date', { ascending: false }).limit(50),
       supabase.from('contacts').select('*').eq('venue_id', id).order('last_name'),
       user ? supabase.from('acts').select('id, act_name').eq('agent_id', user.id).eq('is_active', true).order('act_name') : Promise.resolve({ data: [] }),
     ]);
@@ -316,25 +316,79 @@ export default function VenueDetail() {
 
           {/* Booking History */}
           <div className="card">
-            <div className="card-header"><span className="card-title">BOOKING HISTORY</span></div>
+            <div className="card-header"><span className="card-title">BOOKING HISTORY ({bookings.length})</span></div>
             {bookings.length === 0 ? (
               <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>No bookings at this venue</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                {bookings.map((b: any) => (
-                  <Link key={b.id} href={`/bookings/${b.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.6rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', textDecoration: 'none' }}>
-                    <div>
-                      <div style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 500 }}>{b.act?.act_name || '—'}</div>
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>
-                        {b.show_date ? new Date(b.show_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                        {b.fee ? ` · $${Number(b.fee).toLocaleString()}` : ''}
+            ) : (() => {
+              const totalFee = bookings.reduce((s, b) => s + (b.fee ? Number(b.fee) : 0), 0);
+              const totalPaid = bookings.reduce((s, b) => s + (b.amount_paid ? Number(b.amount_paid) : 0), 0);
+              const completed = bookings.filter((b: any) => b.status === 'completed').length;
+              return (
+                <>
+                  {/* Summary stats */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '1rem' }}>
+                    {[
+                      { label: 'Shows', value: completed },
+                      { label: 'Total Booked', value: totalFee ? `$${totalFee.toLocaleString()}` : '—' },
+                      { label: 'Collected', value: totalPaid ? `$${totalPaid.toLocaleString()}` : '—' },
+                    ].map(s => (
+                      <div key={s.label} style={{ background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', padding: '0.5rem 0.65rem', textAlign: 'center' }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--accent)', lineHeight: 1 }}>{s.value}</div>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{s.label}</div>
                       </div>
+                    ))}
+                  </div>
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Act</th>
+                          <th>Date</th>
+                          <th>Fee</th>
+                          <th>Deal</th>
+                          <th>Paid</th>
+                          <th>Status</th>
+                          <th>Rebook</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bookings.map((b: any) => (
+                          <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => router.push(`/bookings/${b.id}`)}>
+                            <td style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.85rem' }}>{b.act?.act_name || '—'}</td>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                              {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
+                            </td>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>{b.fee ? `$${Number(b.fee).toLocaleString()}` : '—'}</td>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{b.deal_type || '—'}</td>
+                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: b.amount_paid ? '#34d399' : 'var(--text-muted)' }}>
+                              {b.amount_paid ? `$${Number(b.amount_paid).toLocaleString()}` : '—'}
+                            </td>
+                            <td><span className={`badge badge-${b.status}`} style={{ fontSize: '0.7rem' }}>{bookingLabel(b.status)}</span></td>
+                            <td>
+                              {b.rebook === true && <span style={{ color: '#34d399', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>✓</span>}
+                              {b.rebook === false && <span style={{ color: '#f87171', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>✕</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {bookings.some((b: any) => b.post_show_notes) && (
+                    <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Post-Show Notes</div>
+                      {bookings.filter((b: any) => b.post_show_notes).map((b: any) => (
+                        <div key={b.id} style={{ background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', padding: '0.5rem 0.65rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                          <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', marginRight: '0.5rem' }}>
+                            {b.act?.act_name} · {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : ''}
+                          </span>
+                          {b.post_show_notes}
+                        </div>
+                      ))}
                     </div>
-                    <span className={`badge badge-${b.status}`}>{bookingLabel(b.status)}</span>
-                  </Link>
-                ))}
-              </div>
-            )}
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>

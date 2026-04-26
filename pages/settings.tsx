@@ -35,8 +35,11 @@ export default function Settings() {
   const [pwSaved, setPwSaved]     = useState(false);
   const [pwError, setPwError]     = useState('');
 
-  const [portalLoading, setPortalLoading] = useState(false);
-  const [isSuperAdmin, setIsSuperAdmin]   = useState(false);
+  const [portalLoading, setPortalLoading]   = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin]     = useState(false);
+  const [calSettings, setCalSettings]       = useState<any>(null);
+  const [calConnecting, setCalConnecting]   = useState(false);
+  const [calMsg, setCalMsg]                 = useState('');
 
   useEffect(() => { load(); }, []);
 
@@ -49,6 +52,15 @@ export default function Settings() {
       setAvatarUrl(data.avatar_url || null);
       setForm({ display_name: data.display_name || '', agency_name: data.agency_name || '', phone: data.phone || '', email: data.email || '', personal_gmail: (data as any).personal_gmail || '' });
       setIsSuperAdmin(data.role === 'superadmin');
+
+      // Load calendar settings
+      const { data: calData } = await supabase.from('user_calendar_settings').select('*').eq('user_id', user.id).maybeSingle();
+      setCalSettings(calData);
+
+      // Show query param messages
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('calendar_connected')) setCalMsg('Google Calendar connected!');
+      if (params.get('calendar_error')) setCalMsg(`Connection error: ${params.get('calendar_error')}`);
     }
   };
 
@@ -112,6 +124,20 @@ export default function Settings() {
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
+  };
+
+  const connectGoogleCalendar = async () => {
+    setCalConnecting(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    window.location.href = `/api/auth/google/connect?token=${session?.access_token}`;
+  };
+
+  const disconnectGoogleCalendar = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('user_calendar_settings').upsert({ user_id: user.id, calendar_type: 'none', is_active: false, google_access_token: null, google_refresh_token: null }, { onConflict: 'user_id' });
+    setCalSettings(null);
+    setCalMsg('Google Calendar disconnected.');
   };
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -284,6 +310,50 @@ export default function Settings() {
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Google Calendar — agents only */}
+        {profile && profile.role === 'agent' && (
+          <div className="card">
+            <div className="card-header"><span className="card-title">GOOGLE CALENDAR</span></div>
+            {calMsg && (
+              <div style={{
+                marginBottom: '0.75rem', padding: '0.5rem 0.75rem',
+                background: calMsg.includes('error') ? 'rgba(248,113,113,0.1)' : 'rgba(52,211,153,0.1)',
+                border: `1px solid ${calMsg.includes('error') ? 'rgba(248,113,113,0.3)' : 'rgba(52,211,153,0.3)'}`,
+                borderRadius: 'var(--radius-sm)', fontSize: '0.82rem',
+                color: calMsg.includes('error') ? '#f87171' : '#34d399',
+                fontFamily: 'var(--font-body)',
+              }}>
+                {calMsg}
+              </div>
+            )}
+            {calSettings?.calendar_type === 'google' && calSettings?.is_active ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#34d399', flexShrink: 0 }} />
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: '#34d399' }}>Connected</span>
+                  {calSettings.last_synced_at && (
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      · synced {new Date(calSettings.last_synced_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
+                  )}
+                </div>
+                <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start', color: '#f87171' }} onClick={disconnectGoogleCalendar}>
+                  Disconnect Google Calendar
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                  Connect Google Calendar to sync your booked shows and see them alongside personal events.
+                </div>
+                <button className="btn btn-primary" style={{ alignSelf: 'flex-start' }} onClick={connectGoogleCalendar} disabled={calConnecting}>
+                  {calConnecting ? 'Redirecting…' : 'Connect Google Calendar'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

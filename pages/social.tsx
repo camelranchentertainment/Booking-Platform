@@ -405,6 +405,16 @@ export default function SocialQueue() {
                       </button>
                       <button
                         className="btn btn-ghost btn-sm"
+                        onClick={() => {
+                          navigator.clipboard.writeText(post.content);
+                          setCopyDone(post.id);
+                          setTimeout(() => setCopyDone(null), 2500);
+                        }}
+                      >
+                        {copyDone === post.id ? '✓ Copied' : 'Copy'}
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-sm"
                         style={{ color: '#f87171' }}
                         disabled={saving === post.id}
                         onClick={() => updatePost(post.id, 'dismissed')}
