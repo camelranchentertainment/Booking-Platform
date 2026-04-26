@@ -136,6 +136,11 @@ export interface Tour {
   act?: Act | null;
 }
 
+export type DealType       = 'guarantee' | 'door_split' | 'percentage' | 'flat_fee' | 'other';
+export type PaymentStatus  = 'pending' | 'received' | 'settled';
+export type RebookFlag     = 'yes' | 'no' | 'maybe';
+export type SoundSystem    = 'house' | 'self';
+
 export interface Booking {
   id: string;
   created_by: string;
@@ -146,10 +151,34 @@ export interface Booking {
   status: BookingStatus;
   show_date?: string | null;
   load_in_time?: string | null;
+  soundcheck_time?: string | null;
   set_time?: string | null;
+  end_time?: string | null;
   set_length_min?: number | null;
   door_time?: string | null;
   fee?: number | null;
+  deal_type?: DealType | null;
+  agreed_amount?: number | null;
+  actual_amount_received?: number | null;
+  payment_status?: PaymentStatus | null;
+  date_paid?: string | null;
+  expense_notes?: string | null;
+  payout_notes?: string | null;
+  source?: string | null;
+  confirmed_by?: string | null;
+  settled_by?: string | null;
+  details_pending?: boolean | null;
+  agent_id?: string | null;
+  meals_provided?: boolean | null;
+  drinks_provided?: boolean | null;
+  hotel_booked?: boolean | null;
+  lodging_details?: string | null;
+  sound_system?: SoundSystem | null;
+  venue_contact_name?: string | null;
+  special_requirements?: string | null;
+  rebook_flag?: RebookFlag | null;
+  issue_notes?: string | null;
+  post_show_notes?: string | null;
   deal_notes?: string | null;
   contract_url?: string | null;
   deposit_paid: boolean;

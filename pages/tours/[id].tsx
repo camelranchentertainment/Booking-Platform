@@ -94,7 +94,7 @@ export default function TourDetail() {
 
   // Confirm show modal
   const [confirmTarget, setConfirmTarget]     = useState<any>(null);
-  const [confirmForm, setConfirmForm]         = useState({ show_date: '', fee: '' });
+  const [confirmForm, setConfirmForm]         = useState({ show_date: '', agreed_amount: '', deal_type: '' });
   const [confirmPlatforms, setConfirmPlatforms] = useState<Platform[]>(['instagram', 'facebook']);
   const [confirming, setConfirming]           = useState(false);
   const [confirmError, setConfirmError]       = useState('');
@@ -203,7 +203,38 @@ export default function TourDetail() {
     const res = await fetch(`/api/tours/venues?tour_id=${id}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
-    if (res.ok) setPool(await res.json());
+    if (!res.ok) return;
+    const poolData = await res.json();
+    setPool(poolData);
+
+    // ITEM 8: notify on pitched venues with no reply after 7 days
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 7);
+    const overdue = (poolData as any[]).filter((tv: any) =>
+      tv.status === 'pitched' && tv.updated_at && new Date(tv.updated_at) < cutoff,
+    );
+    for (const tv of overdue) {
+      const venueName = tv.venue?.name || 'venue';
+      const { data: existing } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('type', 'follow_up_due')
+        .eq('read', false)
+        .ilike('message', `%${venueName}%`)
+        .limit(1);
+      if (!existing?.length) {
+        await supabase.from('notifications').insert({
+          user_id:    user.id,
+          type:       'follow_up_due',
+          message:    `Follow up with ${venueName}${tv.venue?.city ? ` (${tv.venue.city})` : ''} — pitched 7+ days ago`,
+          action_url: `/tours/${id}`,
+          read:       false,
+        });
+      }
+    }
   };
 
   const save = async () => {
@@ -361,7 +392,8 @@ export default function TourDetail() {
         body: JSON.stringify({
           tour_venue_id: confirmTarget.id,
           show_date:     confirmForm.show_date,
-          fee:           confirmForm.fee || null,
+          deal_type:     confirmForm.deal_type || null,
+          agreed_amount: confirmForm.agreed_amount || null,
           platforms:     confirmPlatforms,
         }),
       });
@@ -370,7 +402,7 @@ export default function TourDetail() {
       setPool(p => p.map(v => v.id === confirmTarget.id ? { ...v, status: 'confirmed' } : v));
       const venueName = confirmTarget.venue?.name || 'Show';
       setConfirmTarget(null);
-      setConfirmForm({ show_date: '', fee: '' });
+      setConfirmForm({ show_date: '', agreed_amount: '', deal_type: '' });
       setConfirmPlatforms(['instagram', 'facebook']);
       setConfirmSuccess(`${venueName} confirmed and added to bookings.`);
       setTimeout(() => setConfirmSuccess(''), 5000);
@@ -543,7 +575,10 @@ export default function TourDetail() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            {filteredPool.map((tv: any) => (
+            {filteredPool.map((tv: any) => {
+              const isOverdue = tv.status === 'pitched' && tv.updated_at &&
+                (Date.now() - new Date(tv.updated_at).getTime()) >= 7 * 24 * 60 * 60 * 1000;
+              return (
               <div key={tv.id} style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr auto auto auto',
@@ -552,7 +587,7 @@ export default function TourDetail() {
                 padding: '0.65rem 0.75rem',
                 background: 'var(--bg-overlay)',
                 borderRadius: 'var(--radius-sm)',
-                borderLeft: `3px solid ${STATUS_COLOR[tv.status as OutreachStatus] || 'var(--border)'}`,
+                borderLeft: `3px solid ${isOverdue ? '#ef4444' : STATUS_COLOR[tv.status as OutreachStatus] || 'var(--border)'}`,
               }}>
                 {/* Venue info */}
                 <div>
@@ -563,6 +598,11 @@ export default function TourDetail() {
                     >
                       {tv.venue?.name}
                     </button>
+                    {isOverdue && (
+                      <span style={{ background: '#ef4444', color: '#fff', borderRadius: '999px', fontSize: '0.65rem', fontWeight: 700, padding: '0.1rem 0.45rem', fontFamily: 'var(--font-body)', letterSpacing: '0.04em', flexShrink: 0 }}>
+                        7d+ no reply
+                      </span>
+                    )}
                     {tv.venue?.capacity && (
                       <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', background: 'var(--bg-surface)', padding: '0.1rem 0.35rem', borderRadius: '2px' }}>
                         cap {tv.venue.capacity.toLocaleString()}
@@ -616,7 +656,7 @@ export default function TourDetail() {
                     className="btn btn-primary btn-sm"
                     onClick={() => {
                       setConfirmTarget(tv);
-                      setConfirmForm({ show_date: '', fee: '' });
+                      setConfirmForm({ show_date: '', agreed_amount: '', deal_type: '' });
                       setConfirmPlatforms(['instagram', 'facebook']);
                       setConfirmError('');
                     }}
@@ -635,7 +675,8 @@ export default function TourDetail() {
                   ✕
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -936,15 +977,30 @@ export default function TourDetail() {
                   />
                 </div>
                 <div className="field">
-                  <label className="field-label">Fee (optional)</label>
+                  <label className="field-label">Deal Type (optional)</label>
+                  <select
+                    className="select"
+                    value={confirmForm.deal_type}
+                    onChange={e => setConfirmForm(f => ({ ...f, deal_type: e.target.value }))}
+                  >
+                    <option value="">Select deal type...</option>
+                    <option value="guarantee">Guarantee</option>
+                    <option value="door_split">Door Split</option>
+                    <option value="percentage">Percentage</option>
+                    <option value="flat_fee">Flat Fee</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="field-label">Agreed Amount (optional)</label>
                   <input
                     className="input"
                     type="number"
                     min="0"
                     step="0.01"
                     placeholder="e.g. 1500"
-                    value={confirmForm.fee}
-                    onChange={e => setConfirmForm(f => ({ ...f, fee: e.target.value }))}
+                    value={confirmForm.agreed_amount}
+                    onChange={e => setConfirmForm(f => ({ ...f, agreed_amount: e.target.value }))}
                   />
                 </div>
                 <div className="field">

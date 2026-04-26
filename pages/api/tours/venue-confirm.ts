@@ -284,7 +284,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: { user } } = await service.auth.getUser(token);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { tour_venue_id, show_date, fee, platforms } = req.body;
+  const { tour_venue_id, show_date, fee, deal_type, agreed_amount, platforms } = req.body;
   if (!tour_venue_id || !show_date) return res.status(400).json({ error: 'tour_venue_id and show_date required' });
 
   const selectedPlatforms: Platform[] = Array.isArray(platforms) && platforms.length > 0
@@ -293,7 +293,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { data: tv } = await service
     .from('tour_venues')
-    .select('*, tour:tours(id, act_id, name, created_by), venue:venues(id, name, city, state)')
+    .select('*, tour:tours(id, act_id, name, created_by), venue:venues(id, name, city, state, email)')
     .eq('id', tour_venue_id)
     .single();
 
@@ -328,18 +328,84 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const { data: booking, error: bookingError } = await service.from('bookings').insert({
-      created_by: user.id,
-      act_id:     (act as any).id,
-      venue_id:   (tv.venue as any).id,
-      tour_id:    (tv.tour as any).id,
-      status:     'confirmed',
+      created_by:      user.id,
+      act_id:          (act as any).id,
+      venue_id:        (tv.venue as any).id,
+      tour_id:         (tv.tour as any).id,
+      status:          'confirmed',
       show_date,
-      fee:        fee ? parseFloat(fee) : null,
+      fee:             fee ? parseFloat(fee) : null,
+      deal_type:       deal_type || null,
+      agreed_amount:   agreed_amount ? parseFloat(agreed_amount) : (fee ? parseFloat(fee) : null),
+      confirmed_by:    user.id,
+      agent_id:        user.id,
+      source:          'tour',
+      details_pending: true,
     }).select('id').single();
 
     if (bookingError) throw new Error(bookingError.message);
 
     await service.from('tour_venues').update({ status: 'confirmed' }).eq('id', tour_venue_id);
+
+    // Send venue confirmation email (ITEM 3)
+    const venueEmail = (tv.venue as any).email as string | undefined;
+    if (venueEmail) {
+      try {
+        const { data: contact } = await service
+          .from('contacts')
+          .select('first_name, last_name, email')
+          .eq('venue_id', (tv.venue as any).id)
+          .order('created_at')
+          .limit(1)
+          .maybeSingle();
+        const toEmail = contact?.email || venueEmail;
+        const { apiKey, from } = await getResendConfig(service);
+        if (apiKey) {
+          const resend = new Resend(apiKey);
+          const confDate = new Date(show_date + 'T00:00:00').toLocaleDateString('en-US', {
+            weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+          });
+          const dealLabels: Record<string, string> = {
+            guarantee: 'Guarantee', door_split: 'Door Split',
+            percentage: 'Percentage', flat_fee: 'Flat Fee', other: 'Other',
+          };
+          const amt = agreed_amount || fee;
+          const dealStr = deal_type
+            ? `${dealLabels[deal_type] || deal_type}${amt ? ` — $${Number(amt).toLocaleString()}` : ''}`
+            : amt ? `$${Number(amt).toLocaleString()}` : 'TBD';
+          await resend.emails.send({
+            from,
+            to: toEmail,
+            subject: `${(act as any).act_name} — Show Confirmation — ${(tv.venue as any).name}, ${confDate}`,
+            html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:1.5rem">
+              <h2 style="color:#c49a3c;margin-top:0">Show Confirmation</h2>
+              <p>Hi${contact?.first_name ? ` ${contact.first_name}` : ''},</p>
+              <p>This confirms the upcoming show for <strong>${(act as any).act_name}</strong>:</p>
+              <table style="background:#f8f8f8;border-radius:8px;padding:1rem;width:100%;border-collapse:collapse;margin-top:0.5rem">
+                <tr><td style="padding:0.4rem 0.75rem;font-weight:600;width:140px">Venue</td><td>${(tv.venue as any).name}</td></tr>
+                <tr><td style="padding:0.4rem 0.75rem;font-weight:600">Date</td><td>${confDate}</td></tr>
+                <tr><td style="padding:0.4rem 0.75rem;font-weight:600">Load-in</td><td>TBD — we'll follow up with full logistics</td></tr>
+                <tr><td style="padding:0.4rem 0.75rem;font-weight:600">Soundcheck</td><td>TBD</td></tr>
+                <tr><td style="padding:0.4rem 0.75rem;font-weight:600">Showtime</td><td>TBD</td></tr>
+                <tr><td style="padding:0.4rem 0.75rem;font-weight:600">Deal</td><td>${dealStr}</td></tr>
+              </table>
+              <p style="margin-top:1.25rem">Please reply to this email with any questions or to send additional logistics details.</p>
+              <p style="color:#999;font-size:0.85rem;margin-top:2rem">Camel Ranch Booking · camelranchbooking.com</p>
+            </div>`,
+          });
+          await service.from('email_logs').insert({
+            sent_by:    user.id,
+            booking_id: (booking as any).id,
+            venue_id:   (tv.venue as any).id,
+            act_id:     (act as any).id,
+            subject:    `${(act as any).act_name} — Show Confirmation — ${(tv.venue as any).name}, ${confDate}`,
+            recipient:  toEmail,
+            status:     'sent',
+            sent_at:    new Date().toISOString(),
+          });
+        }
+      } catch { /* email failures don't block */ }
+    }
 
     const dateFormatted = new Date(show_date + 'T00:00:00').toLocaleDateString('en-US', {
       weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',

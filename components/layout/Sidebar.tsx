@@ -25,6 +25,7 @@ type SysNotif = {
 
 const agentNav = [
   { label: 'Dashboard', href: '/dashboard', icon: '◈' },
+  { label: 'Today',     href: '/today',     icon: '◉' },
   { label: 'Bands',     href: '/acts',      icon: '♪' },
   { label: 'Tours',     href: '/tours',     icon: '⟴' },
   { label: 'Venues',    href: '/venues',    icon: '⌂' },
@@ -36,6 +37,7 @@ const agentNav = [
 
 const bandNav = [
   { label: 'Dashboard', href: '/band',          icon: '◈' },
+  { label: 'Today',     href: '/today',         icon: '◉' },
   { label: 'Members',   href: '/band/members',  icon: '♟' },
   { label: 'Tours',     href: '/band/tours',    icon: '⟴' },
   { label: 'Venues',    href: '/venues',        icon: '⌂' },
@@ -47,6 +49,7 @@ const bandNav = [
 
 const memberNav = [
   { label: 'Dashboard', href: '/member',          icon: '◈' },
+  { label: 'Today',     href: '/today',           icon: '◉' },
   { label: 'Calendar',  href: '/member/calendar', icon: '◷' },
   { label: 'Account',   href: '/settings',        icon: '⚙' },
 ];
