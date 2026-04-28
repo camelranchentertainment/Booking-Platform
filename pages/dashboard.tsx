@@ -26,7 +26,7 @@ export default function Dashboard() {
       const [actsRes, bookingsRes, toursRes] = await Promise.all([
         supabase.from('acts').select('*').eq('agent_id', user.id).eq('is_active', true).order('act_name'),
         supabase.from('bookings').select(`
-          id, status, show_date, fee, amount_paid, payment_status, created_at,
+          id, status, show_date, fee, agreed_amount, amount_paid, actual_amount_received, payment_status, created_at,
           act:acts(act_name),
           venue:venues(name, city, state)
         `).eq('created_by', user.id).order('created_at', { ascending: false }).limit(50),
@@ -47,10 +47,10 @@ export default function Dashboard() {
       const todayStr = new Date().toISOString().split('T')[0];
       const calcPotential = bookings
         .filter((b: any) => b.status === 'confirmed' && b.show_date && b.show_date > todayStr && b.payment_status === 'pending')
-        .reduce((s: number, b: any) => s + (Number(b.fee) || 0), 0);
+        .reduce((s: number, b: any) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
       const calcEarned = bookings
         .filter((b: any) => b.status === 'completed')
-        .reduce((s: number, b: any) => s + (Number(b.amount_paid) || 0), 0);
+        .reduce((s: number, b: any) => s + (Number(b.actual_amount_received ?? b.amount_paid) || 0), 0);
       setPotential(calcPotential);
       setEarned(calcEarned);
       setLoading(false);

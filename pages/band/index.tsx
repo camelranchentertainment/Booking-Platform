@@ -15,8 +15,8 @@ export default function BandPortal() {
 
   // Derived stats
   const today          = new Date().toISOString().split('T')[0];
-  const earned         = shows.filter((b: any) => b.status === 'completed').reduce((sum: number, b: any) => sum + (Number(b.amount_paid) || 0), 0);
-  const potential      = shows.filter((b: any) => b.status === 'confirmed' && b.show_date && b.show_date > today && b.payment_status === 'pending').reduce((sum: number, b: any) => sum + (Number(b.fee) || 0), 0);
+  const earned         = shows.filter((b: any) => b.status === 'completed').reduce((sum: number, b: any) => sum + (Number(b.actual_amount_received ?? b.amount_paid) || 0), 0);
+  const potential      = shows.filter((b: any) => b.status === 'confirmed' && b.show_date && b.show_date > today && b.payment_status === 'pending').reduce((sum: number, b: any) => sum + (Number(b.agreed_amount ?? b.fee) || 0), 0);
   const confirmedShows = shows.filter((b: any) => b.status === 'confirmed').length;
   const activeTours    = tours.filter((t: any) => t.status === 'active' || t.status === 'planning').length;
 
@@ -70,7 +70,7 @@ export default function BandPortal() {
 
     const [bookingsRes, linksRes, toursRes] = await Promise.all([
       supabase.from('bookings')
-        .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, fee, amount_paid, payment_status, venue:venues(name, city, state, address, phone)')
+        .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, fee, agreed_amount, amount_paid, actual_amount_received, payment_status, venue:venues(name, city, state, address, phone)')
         .eq('act_id', act.id)
         .neq('status', 'cancelled')
         .order('show_date', { ascending: true }),
