@@ -4,8 +4,6 @@ import type { NextRequest } from 'next/server';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-// Validates a Supabase Bearer token and returns the user ID if superadmin, else null.
-// Uses the Supabase REST API directly so this works in Edge runtime without Node.js deps.
 async function verifySuperadmin(token: string): Promise<boolean> {
   try {
     const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
@@ -30,10 +28,6 @@ async function verifySuperadmin(token: string): Promise<boolean> {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // ── /api/admin/* ──────────────────────────────────────────────────────────
-  // Full server-side superadmin check on every admin API request.
-  // The individual route handlers also guard themselves; this adds a
-  // proxy layer so invalid tokens are rejected before handlers run.
   if (pathname.startsWith('/api/admin/')) {
     const token = request.headers.get('authorization')?.replace('Bearer ', '').trim();
     if (!token) {
@@ -46,15 +40,6 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // ── /admin page ───────────────────────────────────────────────────────────
-  // The app uses localStorage-based Supabase sessions (default supabase-js v2
-  // behaviour), so the session token is NOT sent as an HTTP cookie with page
-  // requests and cannot be read here. To get true SSR protection this page
-  // would need @supabase/ssr or getServerSideProps; the client-side role
-  // check in admin.tsx remains the enforcement mechanism for page access.
-  //
-  // What we CAN do: if the token was forwarded in a custom cookie (e.g. a
-  // future migration to cookie-based storage), validate it here.
   if (pathname.startsWith('/admin')) {
     const cookieToken =
       request.cookies.get('sb-access-token')?.value ||
