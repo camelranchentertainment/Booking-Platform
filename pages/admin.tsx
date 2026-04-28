@@ -33,6 +33,7 @@ type AdminUser = {
   resolvedActId: string | null;
   agentName: string | null;
   bandsUsed: number;
+  billing_date: string | null;
 };
 
 type Act = { id: string; act_name: string; owner_id: string | null; agent_id: string | null };
@@ -131,7 +132,10 @@ export default function AdminPage() {
   const loadData = async () => {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    const [profilesRes, actsRes, bookingsRes] = await Promise.all([
+    const { data: { session: sess } } = await supabase.auth.getSession();
+    const token = sess?.access_token;
+
+    const [profilesRes, actsRes, bookingsRes, billingRes] = await Promise.all([
       supabase.from('user_profiles').select('*').order('created_at', { ascending: false }),
       supabase.from('acts').select('id, act_name, owner_id, agent_id').eq('is_active', true),
       supabase.from('bookings').select(`
@@ -140,7 +144,12 @@ export default function AdminPage() {
         venue:venues(name, city, state),
         created_by
       `).eq('status', 'confirmed').gte('created_at', thirtyDaysAgo).order('show_date', { ascending: true }),
+      token
+        ? fetch('/api/admin/billing-dates', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({}))
+        : Promise.resolve({}),
     ]);
+
+    const billingDates: Record<string, string | null> = billingRes || {};
 
     const rawUsers  = (profilesRes.data || []) as any[];
     const rawActs   = (actsRes.data || []) as Act[];
@@ -182,6 +191,7 @@ export default function AdminPage() {
         resolvedActId: act?.id       || null,
         agentName:     agentId ? (agentById[agentId] || null) : null,
         bandsUsed,
+        billing_date:  billingDates[u.id] ?? null,
       } as AdminUser;
     });
 
@@ -662,7 +672,9 @@ export default function AdminPage() {
                         {u.trial_ends_at ? new Date(u.trial_ends_at).toLocaleDateString() : '—'}
                         {days != null && days >= 0 ? ` (${days}d)` : ''}
                       </td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>—</td>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        {u.billing_date ? new Date(u.billing_date).toLocaleDateString() : '—'}
+                      </td>
                       <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#34d399' }}>
                         {u.subscription_status === 'active' && u.subscription_tier
                           ? `$${TIER_PRICE[u.subscription_tier] || 0}`
