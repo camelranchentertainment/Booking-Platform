@@ -1,0 +1,176 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Google Calendar OAuth End-to-End Verification",
+        "description": "The constraint error fix in the Google Calendar OAuth flow was committed in code but has not been confirmed in a live browser session. Test the full OAuth connect → authorize → sync cycle for a real user account to verify the fix works end-to-end.",
+        "status": "pending",
+        "priority": "medium",
+        "dependencies": [],
+        "details": "Navigate to /settings as an agent, click 'Connect Google Calendar', complete the OAuth flow in the browser, and confirm events sync to the calendar page. Verify no constraint errors appear in Supabase logs.",
+        "testStrategy": "Manual browser test: connect a Google account, create a booking, verify it appears on Google Calendar. Check Supabase edge function logs for errors.",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Agent Avatar in Sidebar",
+        "description": "Agent avatars are not displaying in the sidebar — only band avatars are visible. Fix the avatar lookup so the logged-in agent's avatar is shown for agent and superadmin roles.",
+        "status": "pending",
+        "priority": "low",
+        "dependencies": [],
+        "details": "Check components/layout/Sidebar.tsx to find where avatar is sourced. Likely needs to read from user_profiles.avatar_url for the current user rather than only looking at act/band avatar. Add fallback to initials if no avatar.",
+        "testStrategy": "Log in as an agent, verify avatar appears in the sidebar header. Confirm band admins still see band avatars.",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Show History Venue Filter",
+        "description": "The in-app inbox has a venue filter on the history page that was listed as 'partial — test in production'. Verify the venue filter on /history works correctly and fix any issues found.",
+        "status": "pending",
+        "priority": "low",
+        "dependencies": [],
+        "details": "Navigate to /history, confirm the venue filter dropdown populates with real venues, and that selecting a venue correctly filters the shown bookings. Verify the filter resets properly.",
+        "testStrategy": "Confirm at least 3 venues appear in the filter. Select one and verify only that venue's bookings show. Select 'All' and verify full list returns.",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Wed-Sat Touring Window Calendar View",
+        "description": "Add visual highlighting for Wednesday-Saturday show windows on the tour calendar views. These are the primary booking targets for touring bands and should be highlighted as a distinct visual layer.",
+        "status": "pending",
+        "priority": "low",
+        "dependencies": [],
+        "details": "On the tour calendar (pages/tours/[id].tsx calendar section and any calendar component), add a subtle background tint or border to Wed-Sat columns/cells. Should be non-intrusive — a very light overlay that still lets booking events read clearly.",
+        "testStrategy": "View a tour's calendar. Wed-Sat slots should have a distinct but subtle visual treatment. Mon-Tue and Sun slots should look normal.",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Band Member Payout Tracking",
+        "description": "Add per-member payout tracking to the expense system. Band admins need to record how much each band member was paid for a show/tour. This feeds into the net income calculation.",
+        "status": "pending",
+        "priority": "low",
+        "dependencies": [],
+        "details": "The 'Band Member Payments' expense category already exists. Extend the expense entry form to optionally associate the expense with a specific member (select from act members list). Add a per-member payout summary view on the tour financials card and the financials page.",
+        "testStrategy": "Add a 'Band Member Payments' expense, link it to a member. Verify the member name appears in the expense row. Check that the financials summary shows the breakdown.",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Receipt Photo Upload on Expenses",
+        "description": "Allow users to attach a receipt photo to any expense entry. Photos should be stored in Supabase storage and displayed as a thumbnail on the expense row with a click-to-enlarge view.",
+        "status": "pending",
+        "priority": "low",
+        "dependencies": [5],
+        "details": "Add a Supabase storage bucket 'expense-receipts' with RLS policies. Add a receipt_url column to the expenses table. On the expense add/edit modal, add a file input for image upload. Display a thumbnail in the expense table row. Use Supabase client .storage.from('expense-receipts').upload() for the file upload.",
+        "testStrategy": "Upload a JPEG receipt photo on a new expense. Verify the thumbnail appears in the expense list. Click it and verify the full image opens. Delete the expense and verify the storage file is cleaned up.",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Routing Optimizer on Tours",
+        "description": "Add a route optimization view to tour creation and tour detail pages that suggests the optimal city order for the defined tour stops, minimizing total drive time.",
+        "status": "pending",
+        "priority": "low",
+        "dependencies": [],
+        "details": "Use Google Maps Distance Matrix API (already have GOOGLE_MAPS_SERVER_KEY in platform settings) to calculate pairwise drive times between all tour cities. Run a nearest-neighbor or 2-opt optimization to suggest an optimal ordering. Display as a re-orderable list on the tour detail page with total estimated drive time.",
+        "testStrategy": "Create a tour with 4+ cities in a suboptimal order. Click 'Optimize Route'. Verify the suggested order reduces total drive time. Verify manually re-ordering still works.",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Buffer API Integration for Social Sharing",
+        "description": "Integrate Buffer API as a post-to-social option alongside the existing copy-to-clipboard fallback. Allows agents and band admins to schedule show announcements directly to connected social accounts.",
+        "status": "pending",
+        "priority": "low",
+        "dependencies": [],
+        "details": "Add Buffer API key to platform_settings. On the booking detail and show confirmation screens, add a 'Schedule with Buffer' button that POSTs the show announcement to Buffer's API for scheduling. The copy-to-clipboard path remains as fallback.",
+        "testStrategy": "Configure a Buffer API key in admin settings. Open a confirmed booking, click 'Schedule with Buffer'. Verify the post appears in the Buffer queue. Verify copy-to-clipboard still works when Buffer is not configured.",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Live Booking Workflow Run — Better Than Nothin'",
+        "description": "Perform a complete end-to-end live booking run for the band 'Better Than Nothin'' using the real platform. This validates the full workflow works in production: Discovery → Outreach → Confirm → Advance → Settle → History.",
+        "status": "pending",
+        "priority": "high",
+        "dependencies": [1],
+        "details": "Steps: (1) Create a new tour. (2) Search for venues in 2-3 target cities. (3) Add venues to outreach pool. (4) Generate AI pitch drafts and send. (5) Track follow-ups. (6) Confirm at least one booking. (7) Fill in show logistics. (8) Use Tour Day View on show day. (9) Mark as played, record payout, add notes. (10) Verify show appears in history and financials.",
+        "testStrategy": "Entire workflow produces a real archived booking with financial data. All pages render without errors at each stage.",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Phase 6 Definition",
+        "description": "After completing the live booking run (#9), hold a review session to identify gaps, friction points, and new features discovered during real use. Define Phase 6 as a prioritized feature list.",
+        "status": "pending",
+        "priority": "medium",
+        "dependencies": [9],
+        "details": "Review the live run notes. Identify: (a) anything that broke or felt wrong, (b) features that were missing, (c) UX improvements needed. Produce an updated PRD section for Phase 6 and add corresponding tasks to this list.",
+        "testStrategy": "Output is an updated prd.txt with a Phase 6 section and new tasks added to tasks.json.",
+        "subtasks": []
+      },
+      {
+        "id": 11,
+        "title": "Expand User Base — Second Band Onboarding",
+        "description": "Onboard at least one band besides Better Than Nothin' to actively use the platform and pay for a subscription. This validates the multi-band agent workflow and the subscription/billing system end-to-end.",
+        "status": "pending",
+        "priority": "medium",
+        "dependencies": [9],
+        "details": "Identify a second band. Create their act record, invite band admin, connect them to an agent. Have them go through a real outreach cycle. Verify subscription billing fires correctly when trial ends.",
+        "testStrategy": "Second band completes first booking. Stripe subscription shows active for band admin. Agent band-switcher shows both bands.",
+        "subtasks": []
+      },
+      {
+        "id": 12,
+        "title": "Mobile Tour Day View Polish",
+        "description": "The Tour Day View (/today) needs to be usable on mobile during an active tour. Audit and fix responsive layout issues, touch interactions, and readability on small screens.",
+        "status": "pending",
+        "priority": "medium",
+        "dependencies": [],
+        "details": "Test /today on a 390px-wide viewport (iPhone 15 size). Fix: (a) font sizes too small to read at a glance, (b) tables/cards that overflow horizontally, (c) Daily Notes panel that may not be visible below the fold, (d) any buttons/inputs that are hard to tap. Target: all critical info visible without horizontal scroll.",
+        "testStrategy": "Open /today in Chrome DevTools at 390px width. All 4 show info sections are readable. Daily Notes panel is accessible by scrolling. No horizontal overflow.",
+        "subtasks": []
+      },
+      {
+        "id": 13,
+        "title": "Venue Email Discovery Reliability Audit",
+        "description": "The Auto-Find Emails feature needs to find booking contact emails for 60%+ of discovered venues. Audit the current success rate, identify failure patterns, and improve the scraping/parsing logic.",
+        "status": "pending",
+        "priority": "medium",
+        "dependencies": [],
+        "details": "Run Auto-Find Emails on a set of 20 test venues. Record success rate. For failures, examine what the scraper found vs. what was expected. Common failure modes: email behind contact forms, obfuscated emails (user [at] domain), JavaScript-rendered pages. Improve the parser to handle at least 2 of the most common failure patterns.",
+        "testStrategy": "Before: run on 20 venues, record % found. After fix: run same 20 venues, verify success rate improved. Target ≥60%.",
+        "subtasks": []
+      },
+      {
+        "id": 14,
+        "title": "Financial Design Polish — Net Income Prominence",
+        "description": "The Net Income figure on /financials should be the most prominent number on the page — currently it may be buried or styled like other cards. Make it the hero metric.",
+        "status": "pending",
+        "priority": "low",
+        "dependencies": [],
+        "details": "On /financials, find the Net Income card (Total Earned - Total Expenses). Increase its visual weight: larger font size, gold accent border or highlight, position it at the top of the summary cards row. Use color to signal positive (green) vs. negative (red) net income.",
+        "testStrategy": "Open /financials. Net Income is visually the most prominent card. Positive net income shows in green, negative in red.",
+        "subtasks": []
+      },
+      {
+        "id": 15,
+        "title": "Platform Design Quality Gate",
+        "description": "Before showing the platform to prospective bands or agents, run a complete visual audit of every page. The design must feel professional enough that you don't have to apologize when showing it.",
+        "status": "pending",
+        "priority": "medium",
+        "dependencies": [12, 14],
+        "details": "Audit all main pages: /dashboard, /tours, /tours/[id], /bookings, /today, /history, /financials, /venues, /settings, /band/settings, /admin. For each page note: (a) any broken layouts, (b) placeholder text still visible, (c) color/contrast issues, (d) inconsistent spacing or typography. File a task for each issue found.",
+        "testStrategy": "After audit: zero broken layouts, zero placeholder text. All pages consistent with the dark/gold design language.",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2026-04-28T00:00:00.000Z",
+      "updated": "2026-04-28T00:00:00.000Z",
+      "description": "Camel Ranch Booking Platform — remaining features and improvements derived from PRD v2 (April 2026). Covers outstanding medium/low priority items, live workflow validation, and platform growth goals."
+    }
+  }
+}
