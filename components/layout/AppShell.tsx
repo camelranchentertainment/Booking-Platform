@@ -44,13 +44,11 @@ export default function AppShell({ children, requireRole = null }: Props) {
 
         if (!data) { router.replace('/login'); return; }
 
-        // Subscription gate — redirect paid tiers with expired/no subscription
         if (needsSubscription(data as UserProfile) && router.pathname !== '/pricing') {
           router.replace('/pricing?trial=expired');
           return;
         }
 
-        // Role gate — superadmin bypasses
         const allowedRoles = Array.isArray(requireRole) ? requireRole : requireRole ? [requireRole] : null;
         if (data.role !== 'superadmin' && allowedRoles && !allowedRoles.includes(data.role as any)) {
           if (data.role === 'agent') router.replace('/dashboard');
@@ -61,13 +59,11 @@ export default function AppShell({ children, requireRole = null }: Props) {
 
         setProfile(data as UserProfile);
 
-        // Impersonation state
         try {
           const imp = localStorage.getItem('impersonate_user');
           if (imp) setImpersonating(JSON.parse(imp));
         } catch {}
 
-        // Fetch act name for band admin / member context badge
         if ((data.role === 'act_admin' || data.role === 'member') && data.act_id) {
           const { data: act } = await supabase.from('acts').select('act_name').eq('id', data.act_id).maybeSingle();
           if (act?.act_name) setActName(act.act_name);
@@ -116,17 +112,14 @@ export default function AppShell({ children, requireRole = null }: Props) {
 
   return (
     <div className="app-shell">
-      {/* Mobile hamburger */}
       <button className="mobile-menu-btn" onClick={() => setNavOpen(v => !v)} aria-label="Open menu">
         <span /><span /><span />
       </button>
 
-      {/* Tap-outside overlay */}
       {navOpen && <div className="mobile-overlay" onClick={() => setNavOpen(false)} />}
 
       <Sidebar profile={profile} onSignOut={handleSignOut} open={navOpen} onClose={() => setNavOpen(false)} />
       <main className="main-content">
-        {/* Role context badge */}
         {roleBadge && (
           <div style={{
             margin: '-2rem -2rem 1.5rem',
@@ -153,7 +146,6 @@ export default function AppShell({ children, requireRole = null }: Props) {
             )}
           </div>
         )}
-        {/* Impersonation banner */}
         {impersonating && (
           <div style={{
             margin: '-2rem -2rem 1.5rem',
@@ -178,7 +170,6 @@ export default function AppShell({ children, requireRole = null }: Props) {
             </button>
           </div>
         )}
-        {/* Trial banner */}
         {trialDays !== null && trialDays <= 7 && (
           <div style={{
             margin: '-2rem -2rem 1.5rem',
