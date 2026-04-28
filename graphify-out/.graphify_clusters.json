@@ -1,0 +1,1492 @@
+{
+  "node_community": {
+    "pages_api_agent_link_send_ts": 0,
+    "public_acts_handler": 0,
+    "pages_api_public_acts_ts": 0,
+    "email_inbox_fetchimapmessages": 0,
+    "pages_api_admin_fix_role_ts": 0,
+    "pages_dashboard_load": 0,
+    "agent_link_revoke_handler": 0,
+    "agent_link_send_handler": 0,
+    "pages_api_admin_bootstrap_ts": 0,
+    "act_invitations_decline_handler": 0,
+    "pages_dashboard_tsx": 0,
+    "stripe_portal_handler": 0,
+    "pages_api_social_accounts_ts": 0,
+    "pages_api_invite_info_ts": 0,
+    "social_accounts_handler": 0,
+    "admin_platform_settings_handler": 0,
+    "notes_id_getautheduser": 0,
+    "pages_api_stripe_portal_ts": 0,
+    "admin_update_subscription_getauthedsuperadmin": 0,
+    "admin_extend_trial_handler": 0,
+    "admin_update_subscription_handler": 0,
+    "admin_platform_settings_getauthedsuperadmin": 0,
+    "lib_platformsettings_invalidatecache": 0,
+    "pages_api_admin_update_subscription_ts": 0,
+    "tours_delete_getuser": 0,
+    "pages_api_acts_create_ts": 0,
+    "admin_fix_agent_link_getauthedsuperadmin": 0,
+    "pages_api_auth_google_callback_ts": 0,
+    "pages_api_admin_public_config_ts": 0,
+    "api_accept_invite_handler": 0,
+    "pages_api_venues_place_details_ts": 0,
+    "pages_api_accept_invite_ts": 0,
+    "pages_api_admin_platform_settings_ts": 0,
+    "pages_api_auth_register_ts": 0,
+    "acts_create_handler": 0,
+    "pages_api_email_webhook_ts": 0,
+    "pages_api_notes_index_ts": 0,
+    "pages_api_admin_system_status_ts": 0,
+    "google_callback_handler": 0,
+    "pages_api_stripe_checkout_ts": 0,
+    "tours_delete_canaccesstour": 0,
+    "admin_fix_role_getauthedsuperadmin": 0,
+    "email_inbox_handler": 0,
+    "member_index_load": 0,
+    "admin_extend_trial_getauthedsuperadmin": 0,
+    "google_connect_handler": 0,
+    "pages_api_acts_init_ts": 0,
+    "api_invite_info_handler": 0,
+    "email_inbox_decrypt": 0,
+    "social_queue_handler": 0,
+    "pages_api_tours_delete_ts": 0,
+    "venues_prospect_handler": 0,
+    "pages_api_auth_google_connect_ts": 0,
+    "pages_api_notes_id_ts": 0,
+    "stripe_checkout_handler": 0,
+    "notes_index_handler": 0,
+    "bookings_settle_handler": 0,
+    "pages_api_admin_extend_trial_ts": 0,
+    "pages_api_agent_link_respond_ts": 0,
+    "email_webhook_handler": 0,
+    "pages_api_act_invitations_decline_ts": 0,
+    "lib_platformsettings_getsetting": 0,
+    "admin_system_status_handler": 0,
+    "auth_register_handler": 0,
+    "admin_system_status_getauthedsuperadmin": 0,
+    "notes_id_handler": 0,
+    "venues_place_details_handler": 0,
+    "admin_delete_user_handler": 0,
+    "pages_api_venues_prospect_ts": 0,
+    "pages_api_admin_delete_user_ts": 0,
+    "admin_public_config_handler": 0,
+    "notes_index_enrichwithauthors": 0,
+    "pages_api_email_templates_ts": 0,
+    "pages_api_admin_fix_agent_link_ts": 0,
+    "email_templates_handler": 0,
+    "pages_api_email_inbox_ts": 0,
+    "lib_platformsettings_ts": 0,
+    "lib_supabase_ts": 0,
+    "admin_delete_user_getauthedsuperadmin": 0,
+    "admin_fix_agent_link_handler": 0,
+    "admin_fix_band_link_getauthedsuperadmin": 0,
+    "pages_api_admin_fix_band_link_ts": 0,
+    "tours_delete_handler": 0,
+    "agent_link_respond_handler": 0,
+    "admin_fix_role_handler": 0,
+    "lib_supabase_getserviceclient": 0,
+    "notes_index_getautheduser": 0,
+    "pages_member_index_tsx": 0,
+    "notes_index_buildvisibilityor": 0,
+    "admin_bootstrap_handler": 0,
+    "pages_api_social_queue_ts": 0,
+    "admin_fix_band_link_handler": 0,
+    "pages_api_bookings_settle_ts": 0,
+    "pages_api_agent_link_revoke_ts": 0,
+    "acts_init_handler": 0,
+    "api_email_backfill": 1,
+    "venues_index_page": 1,
+    "financials_page": 1,
+    "bandcalendar_page": 1,
+    "api_stripe_cancel": 1,
+    "acts_new_page": 1,
+    "lib_ical": 1,
+    "join_page": 1,
+    "bandsocial_page": 1,
+    "api_admin_invite": 1,
+    "comp_sidebar": 1,
+    "api_tours_confirm": 1,
+    "settings_page": 1,
+    "bandsettings_page": 1,
+    "history_page": 1,
+    "ext_resend": 1,
+    "contacts_index_page": 1,
+    "ext_firecrawl": 1,
+    "comp_artist_spotlight": 1,
+    "api_stripe_portal": 1,
+    "db_venues": 1,
+    "login_page": 1,
+    "db_agent_act_links": 1,
+    "register_page": 1,
+    "db_bookings": 1,
+    "api_email_ai_draft": 1,
+    "api_bookings_settle": 1,
+    "api_tours_venues": 1,
+    "comp_email_composer": 1,
+    "appshell_auth_shell": 1,
+    "admin_page": 1,
+    "api_admin_users": 1,
+    "email_emailcomposer": 1,
+    "api_admin_health": 1,
+    "api_stripe_webhook": 1,
+    "api_email_inbox": 1,
+    "api_admin_metrics": 1,
+    "db_user_profiles": 1,
+    "api_venues_prospect": 1,
+    "db_user_calendar_settings": 1,
+    "bookings_index_page": 1,
+    "db_act_invitations": 1,
+    "acts_index_page": 1,
+    "emailpage_email_stage_urgency": 1,
+    "tours_index_page": 1,
+    "doc_venue_research": 1,
+    "api_venues_place_details": 1,
+    "api_email_send": 1,
+    "api_stripe_checkout": 1,
+    "db_email_log": 1,
+    "db_subscriptions": 1,
+    "api_acts_init": 1,
+    "bandemail_page": 1,
+    "db_acts": 1,
+    "api_email_templates": 1,
+    "db_contacts": 1,
+    "api_public_acts": 1,
+    "emailpage_page": 1,
+    "api_acts_create": 1,
+    "ext_anthropic": 1,
+    "api_venues_scrape": 1,
+    "ext_google_places": 1,
+    "comp_appshell": 1,
+    "acts_detail_page": 1,
+    "api_agent_link_send": 1,
+    "middleware_superadmin_guard": 1,
+    "bookings_detail_page": 1,
+    "calendar_page": 1,
+    "ext_stripe": 1,
+    "api_members_invite": 1,
+    "venues_detail_page": 1,
+    "api_accept_invite": 1,
+    "api_agent_link_revoke": 1,
+    "bandtours_page": 1,
+    "today_page": 1,
+    "db_email_drafts": 1,
+    "middleware_auth_redirect": 1,
+    "bookings_new_page": 1,
+    "db_tours": 1,
+    "api_email_webhook": 1,
+    "api_invite_info": 1,
+    "dashboard_page": 1,
+    "tours_detail_page": 1,
+    "api_email_auto_draft": 1,
+    "edge_fn_daily_reminders": 1,
+    "api_agent_link_respond": 1,
+    "bandmembers_page": 1,
+    "api_admin_subscriptions": 1,
+    "bookings_id_savedetails": 2,
+    "bookings_id_setfin": 2,
+    "bookings_id_set": 2,
+    "venues_index_addvenuetotour": 2,
+    "venues_index_deletevenue": 2,
+    "pages_venues_index_tsx": 2,
+    "venues_index_enrichvenueemail": 2,
+    "bookings_id_loadall": 2,
+    "bookings_id_saveedit": 2,
+    "venues_index_bulkfindemails": 2,
+    "bookings_id_deletebooking": 2,
+    "venues_index_loadgooglemaps": 2,
+    "bookings_id_setdet": 2,
+    "venues_index_set": 2,
+    "venues_index_savevenue": 2,
+    "bookings_id_settle": 2,
+    "pages_bookings_id_tsx": 2,
+    "venues_index_parseimport": 2,
+    "venues_index_addprospect": 2,
+    "venues_index_runimport": 2,
+    "venues_index_searchprospects": 2,
+    "venues_index_loadvenues": 2,
+    "venues_index_openaddtotour": 2,
+    "bookings_id_savefinancial": 2,
+    "bookings_id_setstatus": 2,
+    "pages_admin_async": 3,
+    "pages_admin_tsx": 3,
+    "pages_admin_doviewas": 3,
+    "pages_admin_dofixband": 3,
+    "pages_admin_dofixrole": 3,
+    "pages_admin_doupgrade": 3,
+    "pages_admin_loaddata": 3,
+    "pages_admin_loadsysstatus": 3,
+    "pages_admin_doresetpassword": 3,
+    "pages_admin_dodelete": 3,
+    "pages_admin_dot": 3,
+    "pages_admin_dorefund": 3,
+    "pages_admin_subrowstyle": 3,
+    "pages_admin_doextendtrial": 3,
+    "pages_admin_dofixagent": 3,
+    "pages_admin_init": 3,
+    "pages_admin_docancel": 3,
+    "member_calendar_prev": 4,
+    "pages_settings_save": 4,
+    "booking_platform_middleware_middleware": 4,
+    "pages_settings_uploadavatar": 4,
+    "member_calendar_load": 4,
+    "pages_settings_changepassword": 4,
+    "middleware_ts": 4,
+    "pages_settings_load": 4,
+    "pages_settings_tsx": 4,
+    "pages_settings_openportal": 4,
+    "pages_settings_connectgooglecalendar": 4,
+    "member_calendar_next": 4,
+    "booking_platform_middleware_verifysuperadmin": 4,
+    "pages_settings_disconnectgooglecalendar": 4,
+    "pages_settings_set": 4,
+    "venues_index_get": 4,
+    "pages_member_calendar_tsx": 4,
+    "tours_venue_confirm_handler": 5,
+    "tours_venue_confirm_buildhashtagblock": 5,
+    "pages_api_tours_venue_confirm_ts": 5,
+    "email_emailcomposer_saveastemplate": 5,
+    "email_emailcomposer_send": 5,
+    "email_send_handler": 5,
+    "pages_api_email_send_ts": 5,
+    "email_emailcomposer_switchsource": 5,
+    "tours_venue_confirm_generatepost": 5,
+    "email_send_getresendconfig": 5,
+    "members_invite_handler": 5,
+    "tours_venue_confirm_getlocationtags": 5,
+    "components_email_emailcomposer_tsx": 5,
+    "pages_api_members_invite_ts": 5,
+    "tours_venue_confirm_getresendconfig": 5,
+    "email_emailcomposer_loaddraft": 5,
+    "tours_id_openvenuepopout": 6,
+    "tours_id_discovervenues": 6,
+    "tours_id_set": 6,
+    "tours_id_savevenueedits": 6,
+    "tours_id_save": 6,
+    "tours_id_loadall": 6,
+    "pages_tours_id_tsx": 6,
+    "tours_id_loadpool": 6,
+    "tours_id_deletetour": 6,
+    "tours_id_addvenue": 6,
+    "tours_id_confirmshow": 6,
+    "tours_id_adddiscoveredvenue": 6,
+    "tours_id_updatestatus": 6,
+    "tours_id_savenotes": 6,
+    "tours_id_removevenue": 6,
+    "email_index_loadinbox": 7,
+    "email_index_movestatus": 7,
+    "email_index_getactioninfo": 7,
+    "email_index_getdraft": 7,
+    "email_index_resetcompose": 7,
+    "email_index_opencomposer": 7,
+    "email_index_markcold": 7,
+    "email_index_sendemail": 7,
+    "email_index_loadall": 7,
+    "email_index_runbackfill": 7,
+    "email_index_deletedraft": 7,
+    "pages_email_index_tsx": 7,
+    "email_index_dayssince": 7,
+    "email_index_daysuntil": 7,
+    "pages_api_email_ai_draft_ts": 8,
+    "pages_api_email_backfill_drafts_ts": 8,
+    "supabase_functions_daily_reminders_index_ts": 8,
+    "email_ai_draft_handler": 8,
+    "daily_reminders_index_adddays": 8,
+    "email_backfill_drafts_buildprompt": 8,
+    "pages_api_email_auto_draft_ts": 8,
+    "daily_reminders_index_sendemail": 8,
+    "email_auto_draft_handler": 8,
+    "email_backfill_drafts_handler": 8,
+    "daily_reminders_index_fmt": 8,
+    "email_ai_draft_buildprompt": 8,
+    "email_backfill_drafts_gettourdaterange": 8,
+    "pages_social_loadposts": 9,
+    "pages_social_saveedit": 9,
+    "pages_social_updatepost": 9,
+    "pages_social_openconnectmodal": 9,
+    "pages_social_disconnectplatform": 9,
+    "pages_social_loadacts": 9,
+    "pages_social_tsx": 9,
+    "pages_social_publishpost": 9,
+    "pages_social_loadaccounts": 9,
+    "pages_social_savecredentials": 9,
+    "band_settings_load": 10,
+    "band_settings_save": 10,
+    "band_settings_saveprofile": 10,
+    "band_settings_acceptinvite": 10,
+    "band_settings_uploadlogo": 10,
+    "band_settings_set": 10,
+    "band_settings_revokeagent": 10,
+    "band_settings_createact": 10,
+    "band_settings_changepassword": 10,
+    "pages_band_settings_tsx": 10,
+    "band_social_savecredentials": 11,
+    "band_social_saveedit": 11,
+    "band_social_openconnectmodal": 11,
+    "band_social_loadact": 11,
+    "pages_band_social_tsx": 11,
+    "band_social_disconnectplatform": 11,
+    "band_social_loadaccounts": 11,
+    "band_social_publishpost": 11,
+    "band_social_updatepost": 11,
+    "band_social_loadposts": 11,
+    "venues_id_set": 12,
+    "venues_id_setcontact": 12,
+    "venues_id_saveedit": 12,
+    "venues_id_loadall": 12,
+    "venues_id_bookinglabel": 12,
+    "pages_venues_id_tsx": 12,
+    "venues_id_scrapewebsite": 12,
+    "venues_id_updatecontactstatus": 12,
+    "venues_id_savecontact": 12,
+    "band_index_searchvenues": 13,
+    "band_index_respondtolink": 13,
+    "band_index_load": 13,
+    "pages_band_index_tsx": 13,
+    "band_index_openshowmodal": 13,
+    "band_index_saveshow": 13,
+    "band_index_opentourdetail": 13,
+    "settings_platformsetup_load": 14,
+    "settings_platformsetup_toggle": 14,
+    "settings_platformsetup_statusbadge": 14,
+    "settings_platformsetup_setfield": 14,
+    "settings_platformsetup_save": 14,
+    "components_settings_platformsetup_tsx": 14,
+    "settings_platformsetup_isconfigured": 14,
+    "band_calendar_load": 15,
+    "band_calendar_prev": 15,
+    "band_calendar_gotoday": 15,
+    "pages_band_calendar_tsx": 15,
+    "band_calendar_e": 15,
+    "band_calendar_next": 15,
+    "layout_sidebar_marksysread": 16,
+    "layout_sidebar_acceptinvite": 16,
+    "layout_sidebar_toggletheme": 16,
+    "components_layout_sidebar_tsx": 16,
+    "layout_sidebar_isactive": 16,
+    "layout_sidebar_respondlink": 16,
+    "pages_calendar_actname": 17,
+    "pages_calendar_prev": 17,
+    "pages_calendar_tsx": 17,
+    "pages_calendar_next": 17,
+    "pages_calendar_load": 17,
+    "band_members_initials": 18,
+    "band_members_revokeinvite": 18,
+    "pages_band_members_tsx": 18,
+    "band_members_sendinvite": 18,
+    "band_members_load": 18,
+    "acts_id_loadall": 19,
+    "pages_acts_id_tsx": 19,
+    "acts_id_saveedit": 19,
+    "acts_id_revokeinvite": 19,
+    "acts_id_sendinvite": 19,
+    "contacts_index_save": 20,
+    "contacts_index_set": 20,
+    "contacts_index_updatestatus": 20,
+    "pages_contacts_index_tsx": 20,
+    "contacts_index_loadall": 20,
+    "lib_ical_buildical": 21,
+    "lib_ical_nextday": 21,
+    "lib_ical_downloadical": 21,
+    "lib_ical_escape": 21,
+    "lib_ical_ts": 21,
+    "layout_appshell_init": 22,
+    "layout_appshell_handlesignout": 22,
+    "layout_appshell_daysleft": 22,
+    "layout_appshell_needssubscription": 22,
+    "components_layout_appshell_tsx": 22,
+    "api_social_queue": 23,
+    "api_social_publish": 23,
+    "db_social_queue": 23,
+    "db_social_accounts": 23,
+    "api_social_accounts": 23,
+    "doc_setup_guide": 24,
+    "comp_platform_setup": 24,
+    "lib_platform_settings": 24,
+    "db_platform_settings": 24,
+    "doc_quick_ref": 24,
+    "type_booking_status": 25,
+    "lib_types": 25,
+    "type_user_role": 25,
+    "type_outreach_status": 25,
+    "type_contact_status": 25,
+    "pages_history_exportcsv": 26,
+    "pages_history_load": 26,
+    "pages_history_tocsv": 26,
+    "pages_history_tsx": 26,
+    "pages_today_datelabel": 27,
+    "pages_today_fmt": 27,
+    "pages_today_tsx": 27,
+    "pages_today_load": 27,
+    "pages_financials_fmt": 28,
+    "pages_financials_loadbookings": 28,
+    "pages_financials_tsx": 28,
+    "pages_financials_downloadcsv": 28,
+    "band_tours_load": 29,
+    "pages_band_tours_tsx": 29,
+    "band_tours_field": 29,
+    "band_tours_save": 29,
+    "band_email_generatedrafts": 30,
+    "band_email_deletedraft": 30,
+    "band_email_loadall": 30,
+    "pages_band_email_tsx": 30,
+    "acts_index_sendrerequest": 31,
+    "acts_index_loadall": 31,
+    "acts_index_sendlinkrequest": 31,
+    "pages_acts_index_tsx": 31,
+    "tours_index_save": 32,
+    "pages_tours_index_tsx": 32,
+    "tours_index_loadall": 32,
+    "tours_index_set": 32,
+    "social_publish_handler": 33,
+    "pages_api_social_publish_ts": 33,
+    "social_publish_posttodiscord": 33,
+    "social_publish_posttofacebook": 33,
+    "pages_api_stripe_webhook_ts": 34,
+    "stripe_webhook_getrawbody": 34,
+    "stripe_webhook_updatesubscription": 34,
+    "stripe_webhook_handler": 34,
+    "pages_api_tours_venues_ts": 35,
+    "tours_venues_canaccesstour": 35,
+    "tours_venues_getuser": 35,
+    "tours_venues_handler": 35,
+    "venues_scrape_scrapeurl": 36,
+    "pages_api_venues_scrape_ts": 36,
+    "venues_scrape_hasemail": 36,
+    "venues_scrape_handler": 36,
+    "bookings_new_set": 37,
+    "bookings_new_save": 37,
+    "pages_bookings_new_tsx": 37,
+    "bookings_new_load": 37,
+    "api_auth_callback": 38,
+    "lib_hook_use_lookup": 38,
+    "lib_supabase": 38,
+    "api_auth_signout": 38,
+    "pages_login_handleforgot": 39,
+    "pages_login_handlelogin": 39,
+    "pages_login_tsx": 39,
+    "pages_register_tsx": 40,
+    "pages_register_set": 40,
+    "pages_register_handlesubmit": 40,
+    "pages_join_tsx": 41,
+    "pages_join_set": 41,
+    "pages_join_handlesubmit": 41,
+    "acts_new_save": 42,
+    "acts_new_set": 42,
+    "pages_acts_new_tsx": 42,
+    "pages_api_public_booking_inquiry_ts": 43,
+    "public_booking_inquiry_esc": 43,
+    "public_booking_inquiry_handler": 43,
+    "bookings_index_movestatus": 44,
+    "bookings_index_loadall": 44,
+    "pages_bookings_index_tsx": 44,
+    "db_daily_notes": 45,
+    "api_notes_save": 45,
+    "api_notes_today": 45,
+    "pages_app_tsx": 46,
+    "pages_app_app": 46,
+    "pages_pricing_tsx": 47,
+    "pages_pricing_subscribe": 47,
+    "pages_document_tsx": 48,
+    "pages_document_document": 48,
+    "lib_hooks_uselookup_ts": 49,
+    "hooks_uselookup_uselookup": 49,
+    "components_splinebackground_splinebackground": 50,
+    "components_splinebackground_tsx": 50,
+    "public_artistspotlight_ghostnum": 51,
+    "components_public_artistspotlight_tsx": 51,
+    "comp_bar_bg": 52,
+    "comp_spline_bg": 52,
+    "global_d_ts": 53,
+    "next_config_js": 54,
+    "next_env_d_ts": 55,
+    "pages_index_tsx": 56,
+    "lib_types_ts": 57,
+    "components_barbackground_tsx": 58,
+    "index_page": 59,
+    "social_page": 60,
+    "pricing_page": 61,
+    "bandportal_page": 62,
+    "member_calendar_page": 63,
+    "member_index_page": 64
+  },
+  "communities": [
+    {
+      "id": 0,
+      "nodes": [
+        "pages_api_agent_link_send_ts",
+        "public_acts_handler",
+        "pages_api_public_acts_ts",
+        "email_inbox_fetchimapmessages",
+        "pages_api_admin_fix_role_ts",
+        "pages_dashboard_load",
+        "agent_link_revoke_handler",
+        "agent_link_send_handler",
+        "pages_api_admin_bootstrap_ts",
+        "act_invitations_decline_handler",
+        "pages_dashboard_tsx",
+        "stripe_portal_handler",
+        "pages_api_social_accounts_ts",
+        "pages_api_invite_info_ts",
+        "social_accounts_handler",
+        "admin_platform_settings_handler",
+        "notes_id_getautheduser",
+        "pages_api_stripe_portal_ts",
+        "admin_update_subscription_getauthedsuperadmin",
+        "admin_extend_trial_handler",
+        "admin_update_subscription_handler",
+        "admin_platform_settings_getauthedsuperadmin",
+        "lib_platformsettings_invalidatecache",
+        "pages_api_admin_update_subscription_ts",
+        "tours_delete_getuser",
+        "pages_api_acts_create_ts",
+        "admin_fix_agent_link_getauthedsuperadmin",
+        "pages_api_auth_google_callback_ts",
+        "pages_api_admin_public_config_ts",
+        "api_accept_invite_handler",
+        "pages_api_venues_place_details_ts",
+        "pages_api_accept_invite_ts",
+        "pages_api_admin_platform_settings_ts",
+        "pages_api_auth_register_ts",
+        "acts_create_handler",
+        "pages_api_email_webhook_ts",
+        "pages_api_notes_index_ts",
+        "pages_api_admin_system_status_ts",
+        "google_callback_handler",
+        "pages_api_stripe_checkout_ts",
+        "tours_delete_canaccesstour",
+        "admin_fix_role_getauthedsuperadmin",
+        "email_inbox_handler",
+        "member_index_load",
+        "admin_extend_trial_getauthedsuperadmin",
+        "google_connect_handler",
+        "pages_api_acts_init_ts",
+        "api_invite_info_handler",
+        "email_inbox_decrypt",
+        "social_queue_handler",
+        "pages_api_tours_delete_ts",
+        "venues_prospect_handler",
+        "pages_api_auth_google_connect_ts",
+        "pages_api_notes_id_ts",
+        "stripe_checkout_handler",
+        "notes_index_handler",
+        "bookings_settle_handler",
+        "pages_api_admin_extend_trial_ts",
+        "pages_api_agent_link_respond_ts",
+        "email_webhook_handler",
+        "pages_api_act_invitations_decline_ts",
+        "lib_platformsettings_getsetting",
+        "admin_system_status_handler",
+        "auth_register_handler",
+        "admin_system_status_getauthedsuperadmin",
+        "notes_id_handler",
+        "venues_place_details_handler",
+        "admin_delete_user_handler",
+        "pages_api_venues_prospect_ts",
+        "pages_api_admin_delete_user_ts",
+        "admin_public_config_handler",
+        "notes_index_enrichwithauthors",
+        "pages_api_email_templates_ts",
+        "pages_api_admin_fix_agent_link_ts",
+        "email_templates_handler",
+        "pages_api_email_inbox_ts",
+        "lib_platformsettings_ts",
+        "lib_supabase_ts",
+        "admin_delete_user_getauthedsuperadmin",
+        "admin_fix_agent_link_handler",
+        "admin_fix_band_link_getauthedsuperadmin",
+        "pages_api_admin_fix_band_link_ts",
+        "tours_delete_handler",
+        "agent_link_respond_handler",
+        "admin_fix_role_handler",
+        "lib_supabase_getserviceclient",
+        "notes_index_getautheduser",
+        "pages_member_index_tsx",
+        "notes_index_buildvisibilityor",
+        "admin_bootstrap_handler",
+        "pages_api_social_queue_ts",
+        "admin_fix_band_link_handler",
+        "pages_api_bookings_settle_ts",
+        "pages_api_agent_link_revoke_ts",
+        "acts_init_handler"
+      ],
+      "size": 95
+    },
+    {
+      "id": 1,
+      "nodes": [
+        "api_email_backfill",
+        "venues_index_page",
+        "financials_page",
+        "bandcalendar_page",
+        "api_stripe_cancel",
+        "acts_new_page",
+        "lib_ical",
+        "join_page",
+        "bandsocial_page",
+        "api_admin_invite",
+        "comp_sidebar",
+        "api_tours_confirm",
+        "settings_page",
+        "bandsettings_page",
+        "history_page",
+        "ext_resend",
+        "contacts_index_page",
+        "ext_firecrawl",
+        "comp_artist_spotlight",
+        "api_stripe_portal",
+        "db_venues",
+        "login_page",
+        "db_agent_act_links",
+        "register_page",
+        "db_bookings",
+        "api_email_ai_draft",
+        "api_bookings_settle",
+        "api_tours_venues",
+        "comp_email_composer",
+        "appshell_auth_shell",
+        "admin_page",
+        "api_admin_users",
+        "email_emailcomposer",
+        "api_admin_health",
+        "api_stripe_webhook",
+        "api_email_inbox",
+        "api_admin_metrics",
+        "db_user_profiles",
+        "api_venues_prospect",
+        "db_user_calendar_settings",
+        "bookings_index_page",
+        "db_act_invitations",
+        "acts_index_page",
+        "emailpage_email_stage_urgency",
+        "tours_index_page",
+        "doc_venue_research",
+        "api_venues_place_details",
+        "api_email_send",
+        "api_stripe_checkout",
+        "db_email_log",
+        "db_subscriptions",
+        "api_acts_init",
+        "bandemail_page",
+        "db_acts",
+        "api_email_templates",
+        "db_contacts",
+        "api_public_acts",
+        "emailpage_page",
+        "api_acts_create",
+        "ext_anthropic",
+        "api_venues_scrape",
+        "ext_google_places",
+        "comp_appshell",
+        "acts_detail_page",
+        "api_agent_link_send",
+        "middleware_superadmin_guard",
+        "bookings_detail_page",
+        "calendar_page",
+        "ext_stripe",
+        "api_members_invite",
+        "venues_detail_page",
+        "api_accept_invite",
+        "api_agent_link_revoke",
+        "bandtours_page",
+        "today_page",
+        "db_email_drafts",
+        "middleware_auth_redirect",
+        "bookings_new_page",
+        "db_tours",
+        "api_email_webhook",
+        "api_invite_info",
+        "dashboard_page",
+        "tours_detail_page",
+        "api_email_auto_draft",
+        "edge_fn_daily_reminders",
+        "api_agent_link_respond",
+        "bandmembers_page",
+        "api_admin_subscriptions"
+      ],
+      "size": 88
+    },
+    {
+      "id": 2,
+      "nodes": [
+        "bookings_id_savedetails",
+        "bookings_id_setfin",
+        "bookings_id_set",
+        "venues_index_addvenuetotour",
+        "venues_index_deletevenue",
+        "pages_venues_index_tsx",
+        "venues_index_enrichvenueemail",
+        "bookings_id_loadall",
+        "bookings_id_saveedit",
+        "venues_index_bulkfindemails",
+        "bookings_id_deletebooking",
+        "venues_index_loadgooglemaps",
+        "bookings_id_setdet",
+        "venues_index_set",
+        "venues_index_savevenue",
+        "bookings_id_settle",
+        "pages_bookings_id_tsx",
+        "venues_index_parseimport",
+        "venues_index_addprospect",
+        "venues_index_runimport",
+        "venues_index_searchprospects",
+        "venues_index_loadvenues",
+        "venues_index_openaddtotour",
+        "bookings_id_savefinancial",
+        "bookings_id_setstatus"
+      ],
+      "size": 25
+    },
+    {
+      "id": 3,
+      "nodes": [
+        "pages_admin_async",
+        "pages_admin_tsx",
+        "pages_admin_doviewas",
+        "pages_admin_dofixband",
+        "pages_admin_dofixrole",
+        "pages_admin_doupgrade",
+        "pages_admin_loaddata",
+        "pages_admin_loadsysstatus",
+        "pages_admin_doresetpassword",
+        "pages_admin_dodelete",
+        "pages_admin_dot",
+        "pages_admin_dorefund",
+        "pages_admin_subrowstyle",
+        "pages_admin_doextendtrial",
+        "pages_admin_dofixagent",
+        "pages_admin_init",
+        "pages_admin_docancel"
+      ],
+      "size": 17
+    },
+    {
+      "id": 4,
+      "nodes": [
+        "member_calendar_prev",
+        "pages_settings_save",
+        "booking_platform_middleware_middleware",
+        "pages_settings_uploadavatar",
+        "member_calendar_load",
+        "pages_settings_changepassword",
+        "middleware_ts",
+        "pages_settings_load",
+        "pages_settings_tsx",
+        "pages_settings_openportal",
+        "pages_settings_connectgooglecalendar",
+        "member_calendar_next",
+        "booking_platform_middleware_verifysuperadmin",
+        "pages_settings_disconnectgooglecalendar",
+        "pages_settings_set",
+        "venues_index_get",
+        "pages_member_calendar_tsx"
+      ],
+      "size": 17
+    },
+    {
+      "id": 5,
+      "nodes": [
+        "tours_venue_confirm_handler",
+        "tours_venue_confirm_buildhashtagblock",
+        "pages_api_tours_venue_confirm_ts",
+        "email_emailcomposer_saveastemplate",
+        "email_emailcomposer_send",
+        "email_send_handler",
+        "pages_api_email_send_ts",
+        "email_emailcomposer_switchsource",
+        "tours_venue_confirm_generatepost",
+        "email_send_getresendconfig",
+        "members_invite_handler",
+        "tours_venue_confirm_getlocationtags",
+        "components_email_emailcomposer_tsx",
+        "pages_api_members_invite_ts",
+        "tours_venue_confirm_getresendconfig",
+        "email_emailcomposer_loaddraft"
+      ],
+      "size": 16
+    },
+    {
+      "id": 6,
+      "nodes": [
+        "tours_id_openvenuepopout",
+        "tours_id_discovervenues",
+        "tours_id_set",
+        "tours_id_savevenueedits",
+        "tours_id_save",
+        "tours_id_loadall",
+        "pages_tours_id_tsx",
+        "tours_id_loadpool",
+        "tours_id_deletetour",
+        "tours_id_addvenue",
+        "tours_id_confirmshow",
+        "tours_id_adddiscoveredvenue",
+        "tours_id_updatestatus",
+        "tours_id_savenotes",
+        "tours_id_removevenue"
+      ],
+      "size": 15
+    },
+    {
+      "id": 7,
+      "nodes": [
+        "email_index_loadinbox",
+        "email_index_movestatus",
+        "email_index_getactioninfo",
+        "email_index_getdraft",
+        "email_index_resetcompose",
+        "email_index_opencomposer",
+        "email_index_markcold",
+        "email_index_sendemail",
+        "email_index_loadall",
+        "email_index_runbackfill",
+        "email_index_deletedraft",
+        "pages_email_index_tsx",
+        "email_index_dayssince",
+        "email_index_daysuntil"
+      ],
+      "size": 14
+    },
+    {
+      "id": 8,
+      "nodes": [
+        "pages_api_email_ai_draft_ts",
+        "pages_api_email_backfill_drafts_ts",
+        "supabase_functions_daily_reminders_index_ts",
+        "email_ai_draft_handler",
+        "daily_reminders_index_adddays",
+        "email_backfill_drafts_buildprompt",
+        "pages_api_email_auto_draft_ts",
+        "daily_reminders_index_sendemail",
+        "email_auto_draft_handler",
+        "email_backfill_drafts_handler",
+        "daily_reminders_index_fmt",
+        "email_ai_draft_buildprompt",
+        "email_backfill_drafts_gettourdaterange"
+      ],
+      "size": 13
+    },
+    {
+      "id": 9,
+      "nodes": [
+        "pages_social_loadposts",
+        "pages_social_saveedit",
+        "pages_social_updatepost",
+        "pages_social_openconnectmodal",
+        "pages_social_disconnectplatform",
+        "pages_social_loadacts",
+        "pages_social_tsx",
+        "pages_social_publishpost",
+        "pages_social_loadaccounts",
+        "pages_social_savecredentials"
+      ],
+      "size": 10
+    },
+    {
+      "id": 10,
+      "nodes": [
+        "band_settings_load",
+        "band_settings_save",
+        "band_settings_saveprofile",
+        "band_settings_acceptinvite",
+        "band_settings_uploadlogo",
+        "band_settings_set",
+        "band_settings_revokeagent",
+        "band_settings_createact",
+        "band_settings_changepassword",
+        "pages_band_settings_tsx"
+      ],
+      "size": 10
+    },
+    {
+      "id": 11,
+      "nodes": [
+        "band_social_savecredentials",
+        "band_social_saveedit",
+        "band_social_openconnectmodal",
+        "band_social_loadact",
+        "pages_band_social_tsx",
+        "band_social_disconnectplatform",
+        "band_social_loadaccounts",
+        "band_social_publishpost",
+        "band_social_updatepost",
+        "band_social_loadposts"
+      ],
+      "size": 10
+    },
+    {
+      "id": 12,
+      "nodes": [
+        "venues_id_set",
+        "venues_id_setcontact",
+        "venues_id_saveedit",
+        "venues_id_loadall",
+        "venues_id_bookinglabel",
+        "pages_venues_id_tsx",
+        "venues_id_scrapewebsite",
+        "venues_id_updatecontactstatus",
+        "venues_id_savecontact"
+      ],
+      "size": 9
+    },
+    {
+      "id": 13,
+      "nodes": [
+        "band_index_searchvenues",
+        "band_index_respondtolink",
+        "band_index_load",
+        "pages_band_index_tsx",
+        "band_index_openshowmodal",
+        "band_index_saveshow",
+        "band_index_opentourdetail"
+      ],
+      "size": 7
+    },
+    {
+      "id": 14,
+      "nodes": [
+        "settings_platformsetup_load",
+        "settings_platformsetup_toggle",
+        "settings_platformsetup_statusbadge",
+        "settings_platformsetup_setfield",
+        "settings_platformsetup_save",
+        "components_settings_platformsetup_tsx",
+        "settings_platformsetup_isconfigured"
+      ],
+      "size": 7
+    },
+    {
+      "id": 15,
+      "nodes": [
+        "band_calendar_load",
+        "band_calendar_prev",
+        "band_calendar_gotoday",
+        "pages_band_calendar_tsx",
+        "band_calendar_e",
+        "band_calendar_next"
+      ],
+      "size": 6
+    },
+    {
+      "id": 16,
+      "nodes": [
+        "layout_sidebar_marksysread",
+        "layout_sidebar_acceptinvite",
+        "layout_sidebar_toggletheme",
+        "components_layout_sidebar_tsx",
+        "layout_sidebar_isactive",
+        "layout_sidebar_respondlink"
+      ],
+      "size": 6
+    },
+    {
+      "id": 17,
+      "nodes": [
+        "pages_calendar_actname",
+        "pages_calendar_prev",
+        "pages_calendar_tsx",
+        "pages_calendar_next",
+        "pages_calendar_load"
+      ],
+      "size": 5
+    },
+    {
+      "id": 18,
+      "nodes": [
+        "band_members_initials",
+        "band_members_revokeinvite",
+        "pages_band_members_tsx",
+        "band_members_sendinvite",
+        "band_members_load"
+      ],
+      "size": 5
+    },
+    {
+      "id": 19,
+      "nodes": [
+        "acts_id_loadall",
+        "pages_acts_id_tsx",
+        "acts_id_saveedit",
+        "acts_id_revokeinvite",
+        "acts_id_sendinvite"
+      ],
+      "size": 5
+    },
+    {
+      "id": 20,
+      "nodes": [
+        "contacts_index_save",
+        "contacts_index_set",
+        "contacts_index_updatestatus",
+        "pages_contacts_index_tsx",
+        "contacts_index_loadall"
+      ],
+      "size": 5
+    },
+    {
+      "id": 21,
+      "nodes": [
+        "lib_ical_buildical",
+        "lib_ical_nextday",
+        "lib_ical_downloadical",
+        "lib_ical_escape",
+        "lib_ical_ts"
+      ],
+      "size": 5
+    },
+    {
+      "id": 22,
+      "nodes": [
+        "layout_appshell_init",
+        "layout_appshell_handlesignout",
+        "layout_appshell_daysleft",
+        "layout_appshell_needssubscription",
+        "components_layout_appshell_tsx"
+      ],
+      "size": 5
+    },
+    {
+      "id": 23,
+      "nodes": [
+        "api_social_queue",
+        "api_social_publish",
+        "db_social_queue",
+        "db_social_accounts",
+        "api_social_accounts"
+      ],
+      "size": 5
+    },
+    {
+      "id": 24,
+      "nodes": [
+        "doc_setup_guide",
+        "comp_platform_setup",
+        "lib_platform_settings",
+        "db_platform_settings",
+        "doc_quick_ref"
+      ],
+      "size": 5
+    },
+    {
+      "id": 25,
+      "nodes": [
+        "type_booking_status",
+        "lib_types",
+        "type_user_role",
+        "type_outreach_status",
+        "type_contact_status"
+      ],
+      "size": 5
+    },
+    {
+      "id": 26,
+      "nodes": [
+        "pages_history_exportcsv",
+        "pages_history_load",
+        "pages_history_tocsv",
+        "pages_history_tsx"
+      ],
+      "size": 4
+    },
+    {
+      "id": 27,
+      "nodes": [
+        "pages_today_datelabel",
+        "pages_today_fmt",
+        "pages_today_tsx",
+        "pages_today_load"
+      ],
+      "size": 4
+    },
+    {
+      "id": 28,
+      "nodes": [
+        "pages_financials_fmt",
+        "pages_financials_loadbookings",
+        "pages_financials_tsx",
+        "pages_financials_downloadcsv"
+      ],
+      "size": 4
+    },
+    {
+      "id": 29,
+      "nodes": [
+        "band_tours_load",
+        "pages_band_tours_tsx",
+        "band_tours_field",
+        "band_tours_save"
+      ],
+      "size": 4
+    },
+    {
+      "id": 30,
+      "nodes": [
+        "band_email_generatedrafts",
+        "band_email_deletedraft",
+        "band_email_loadall",
+        "pages_band_email_tsx"
+      ],
+      "size": 4
+    },
+    {
+      "id": 31,
+      "nodes": [
+        "acts_index_sendrerequest",
+        "acts_index_loadall",
+        "acts_index_sendlinkrequest",
+        "pages_acts_index_tsx"
+      ],
+      "size": 4
+    },
+    {
+      "id": 32,
+      "nodes": [
+        "tours_index_save",
+        "pages_tours_index_tsx",
+        "tours_index_loadall",
+        "tours_index_set"
+      ],
+      "size": 4
+    },
+    {
+      "id": 33,
+      "nodes": [
+        "social_publish_handler",
+        "pages_api_social_publish_ts",
+        "social_publish_posttodiscord",
+        "social_publish_posttofacebook"
+      ],
+      "size": 4
+    },
+    {
+      "id": 34,
+      "nodes": [
+        "pages_api_stripe_webhook_ts",
+        "stripe_webhook_getrawbody",
+        "stripe_webhook_updatesubscription",
+        "stripe_webhook_handler"
+      ],
+      "size": 4
+    },
+    {
+      "id": 35,
+      "nodes": [
+        "pages_api_tours_venues_ts",
+        "tours_venues_canaccesstour",
+        "tours_venues_getuser",
+        "tours_venues_handler"
+      ],
+      "size": 4
+    },
+    {
+      "id": 36,
+      "nodes": [
+        "venues_scrape_scrapeurl",
+        "pages_api_venues_scrape_ts",
+        "venues_scrape_hasemail",
+        "venues_scrape_handler"
+      ],
+      "size": 4
+    },
+    {
+      "id": 37,
+      "nodes": [
+        "bookings_new_set",
+        "bookings_new_save",
+        "pages_bookings_new_tsx",
+        "bookings_new_load"
+      ],
+      "size": 4
+    },
+    {
+      "id": 38,
+      "nodes": [
+        "api_auth_callback",
+        "lib_hook_use_lookup",
+        "lib_supabase",
+        "api_auth_signout"
+      ],
+      "size": 4
+    },
+    {
+      "id": 39,
+      "nodes": [
+        "pages_login_handleforgot",
+        "pages_login_handlelogin",
+        "pages_login_tsx"
+      ],
+      "size": 3
+    },
+    {
+      "id": 40,
+      "nodes": [
+        "pages_register_tsx",
+        "pages_register_set",
+        "pages_register_handlesubmit"
+      ],
+      "size": 3
+    },
+    {
+      "id": 41,
+      "nodes": [
+        "pages_join_tsx",
+        "pages_join_set",
+        "pages_join_handlesubmit"
+      ],
+      "size": 3
+    },
+    {
+      "id": 42,
+      "nodes": [
+        "acts_new_save",
+        "acts_new_set",
+        "pages_acts_new_tsx"
+      ],
+      "size": 3
+    },
+    {
+      "id": 43,
+      "nodes": [
+        "pages_api_public_booking_inquiry_ts",
+        "public_booking_inquiry_esc",
+        "public_booking_inquiry_handler"
+      ],
+      "size": 3
+    },
+    {
+      "id": 44,
+      "nodes": [
+        "bookings_index_movestatus",
+        "bookings_index_loadall",
+        "pages_bookings_index_tsx"
+      ],
+      "size": 3
+    },
+    {
+      "id": 45,
+      "nodes": [
+        "db_daily_notes",
+        "api_notes_save",
+        "api_notes_today"
+      ],
+      "size": 3
+    },
+    {
+      "id": 46,
+      "nodes": [
+        "pages_app_tsx",
+        "pages_app_app"
+      ],
+      "size": 2
+    },
+    {
+      "id": 47,
+      "nodes": [
+        "pages_pricing_tsx",
+        "pages_pricing_subscribe"
+      ],
+      "size": 2
+    },
+    {
+      "id": 48,
+      "nodes": [
+        "pages_document_tsx",
+        "pages_document_document"
+      ],
+      "size": 2
+    },
+    {
+      "id": 49,
+      "nodes": [
+        "lib_hooks_uselookup_ts",
+        "hooks_uselookup_uselookup"
+      ],
+      "size": 2
+    },
+    {
+      "id": 50,
+      "nodes": [
+        "components_splinebackground_splinebackground",
+        "components_splinebackground_tsx"
+      ],
+      "size": 2
+    },
+    {
+      "id": 51,
+      "nodes": [
+        "public_artistspotlight_ghostnum",
+        "components_public_artistspotlight_tsx"
+      ],
+      "size": 2
+    },
+    {
+      "id": 52,
+      "nodes": [
+        "comp_bar_bg",
+        "comp_spline_bg"
+      ],
+      "size": 2
+    },
+    {
+      "id": 53,
+      "nodes": [
+        "global_d_ts"
+      ],
+      "size": 1
+    },
+    {
+      "id": 54,
+      "nodes": [
+        "next_config_js"
+      ],
+      "size": 1
+    },
+    {
+      "id": 55,
+      "nodes": [
+        "next_env_d_ts"
+      ],
+      "size": 1
+    },
+    {
+      "id": 56,
+      "nodes": [
+        "pages_index_tsx"
+      ],
+      "size": 1
+    },
+    {
+      "id": 57,
+      "nodes": [
+        "lib_types_ts"
+      ],
+      "size": 1
+    },
+    {
+      "id": 58,
+      "nodes": [
+        "components_barbackground_tsx"
+      ],
+      "size": 1
+    },
+    {
+      "id": 59,
+      "nodes": [
+        "index_page"
+      ],
+      "size": 1
+    },
+    {
+      "id": 60,
+      "nodes": [
+        "social_page"
+      ],
+      "size": 1
+    },
+    {
+      "id": 61,
+      "nodes": [
+        "pricing_page"
+      ],
+      "size": 1
+    },
+    {
+      "id": 62,
+      "nodes": [
+        "bandportal_page"
+      ],
+      "size": 1
+    },
+    {
+      "id": 63,
+      "nodes": [
+        "member_calendar_page"
+      ],
+      "size": 1
+    },
+    {
+      "id": 64,
+      "nodes": [
+        "member_index_page"
+      ],
+      "size": 1
+    }
+  ],
+  "method": "greedy_modularity",
+  "god_nodes": [
+    {
+      "id": "tours_delete_getuser",
+      "label": "getUser()",
+      "degree": 83
+    },
+    {
+      "id": "lib_supabase_getserviceclient",
+      "label": "getServiceClient()",
+      "degree": 57
+    },
+    {
+      "id": "db_bookings",
+      "label": "bookings table",
+      "degree": 22
+    },
+    {
+      "id": "pages_admin_tsx",
+      "label": "admin.tsx",
+      "degree": 16
+    },
+    {
+      "id": "lib_platformsettings_getsetting",
+      "label": "getSetting()",
+      "degree": 15
+    },
+    {
+      "id": "db_acts",
+      "label": "acts table",
+      "degree": 15
+    },
+    {
+      "id": "pages_tours_id_tsx",
+      "label": "[id].tsx",
+      "degree": 14
+    },
+    {
+      "id": "pages_venues_index_tsx",
+      "label": "index.tsx",
+      "degree": 14
+    },
+    {
+      "id": "db_user_profiles",
+      "label": "user_profiles table",
+      "degree": 14
+    },
+    {
+      "id": "pages_email_index_tsx",
+      "label": "index.tsx",
+      "degree": 13
+    },
+    {
+      "id": "emailpage_page",
+      "label": "Email & Pipeline Page",
+      "degree": 12
+    },
+    {
+      "id": "pages_admin_loaddata",
+      "label": "loadData()",
+      "degree": 10
+    },
+    {
+      "id": "pages_bookings_id_tsx",
+      "label": "[id].tsx",
+      "degree": 10
+    },
+    {
+      "id": "api_email_ai_draft",
+      "label": "API: /api/email/ai-draft",
+      "degree": 10
+    },
+    {
+      "id": "pages_social_tsx",
+      "label": "social.tsx",
+      "degree": 9
+    }
+  ]
+}

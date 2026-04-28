@@ -1,0 +1,45 @@
+{
+  "nodes": [
+    {"id":"comp_appshell","label":"AppShell Component","file_type":"code","source_file":"components/layout/AppShell.tsx","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"comp_sidebar","label":"Sidebar Component","file_type":"code","source_file":"components/layout/Sidebar.tsx","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"comp_email_composer","label":"EmailComposer Component","file_type":"code","source_file":"components/email/EmailComposer.tsx","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"comp_platform_setup","label":"PlatformSetup Component","file_type":"code","source_file":"components/PlatformSetup.tsx","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"comp_spline_bg","label":"SplineBackground Component","file_type":"code","source_file":"components/SplineBackground.tsx","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"comp_bar_bg","label":"BarBackground Component","file_type":"code","source_file":"components/BarBackground.tsx","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"comp_artist_spotlight","label":"ArtistSpotlight Component","file_type":"code","source_file":"components/ArtistSpotlight.tsx","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"doc_setup_guide","label":"SETUP_GUIDE.md","file_type":"docs","source_file":"SETUP_GUIDE.md","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"doc_quick_ref","label":"QUICK_REFERENCE.md","file_type":"docs","source_file":"QUICK_REFERENCE.md","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"doc_venue_research","label":"docs/venue-research-prompt.md","file_type":"docs","source_file":"docs/venue-research-prompt.md","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"api_email_ai_draft","label":"API: /api/email/ai-draft","file_type":"code","source_file":"pages/api/email/ai-draft.ts","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"api_email_send","label":"API: /api/email/send","file_type":"code","source_file":"pages/api/email/send.ts","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"api_email_templates","label":"API: /api/email/templates","file_type":"code","source_file":"pages/api/email/templates.ts","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"db_user_profiles","label":"user_profiles table","file_type":"code","source_file":"lib/supabase.ts","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"db_agent_act_links","label":"agent_act_links table","file_type":"code","source_file":"lib/supabase.ts","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"db_platform_settings","label":"platform_settings table","file_type":"code","source_file":"lib/supabase.ts","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"lib_platform_settings","label":"lib/platformSettings (getSetting)","file_type":"code","source_file":"lib/platformSettings.ts","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null},
+    {"id":"type_user_role","label":"UserRole type","file_type":"code","source_file":"lib/types.ts","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null}
+  ],
+  "edges": [
+    {"source":"comp_appshell","target":"db_user_profiles","relation":"shares_data_with","confidence":"EXTRACTED","confidence_score":1.0,"source_file":"components/layout/AppShell.tsx","source_location":null,"weight":1.0},
+    {"source":"comp_appshell","target":"comp_sidebar","relation":"references","confidence":"EXTRACTED","confidence_score":1.0,"source_file":"components/layout/AppShell.tsx","source_location":null,"weight":1.0},
+    {"source":"comp_sidebar","target":"type_user_role","relation":"references","confidence":"EXTRACTED","confidence_score":1.0,"source_file":"components/layout/Sidebar.tsx","source_location":null,"weight":1.0},
+    {"source":"comp_sidebar","target":"db_agent_act_links","relation":"shares_data_with","confidence":"EXTRACTED","confidence_score":1.0,"source_file":"components/layout/Sidebar.tsx","source_location":null,"weight":1.0},
+    {"source":"comp_email_composer","target":"api_email_ai_draft","relation":"calls","confidence":"EXTRACTED","confidence_score":1.0,"source_file":"components/email/EmailComposer.tsx","source_location":null,"weight":1.0},
+    {"source":"comp_email_composer","target":"api_email_send","relation":"calls","confidence":"EXTRACTED","confidence_score":1.0,"source_file":"components/email/EmailComposer.tsx","source_location":null,"weight":1.0},
+    {"source":"comp_email_composer","target":"api_email_templates","relation":"calls","confidence":"EXTRACTED","confidence_score":1.0,"source_file":"components/email/EmailComposer.tsx","source_location":null,"weight":1.0},
+    {"source":"comp_platform_setup","target":"lib_platform_settings","relation":"references","confidence":"EXTRACTED","confidence_score":1.0,"source_file":"components/PlatformSetup.tsx","source_location":null,"weight":1.0},
+    {"source":"comp_platform_setup","target":"db_platform_settings","relation":"shares_data_with","confidence":"EXTRACTED","confidence_score":1.0,"source_file":"components/PlatformSetup.tsx","source_location":null,"weight":1.0},
+    {"source":"comp_spline_bg","target":"comp_bar_bg","relation":"semantically_similar_to","confidence":"INFERRED","confidence_score":0.75,"source_file":"components/SplineBackground.tsx","source_location":null,"weight":1.0},
+    {"source":"doc_setup_guide","target":"comp_platform_setup","relation":"references","confidence":"INFERRED","confidence_score":0.8,"source_file":"SETUP_GUIDE.md","source_location":null,"weight":1.0},
+    {"source":"doc_setup_guide","target":"doc_quick_ref","relation":"semantically_similar_to","confidence":"INFERRED","confidence_score":0.9,"source_file":"SETUP_GUIDE.md","source_location":null,"weight":1.0},
+    {"source":"doc_venue_research","target":"api_email_ai_draft","relation":"semantically_similar_to","confidence":"INFERRED","confidence_score":0.75,"source_file":"docs/venue-research-prompt.md","source_location":null,"weight":1.0},
+    {"source":"comp_artist_spotlight","target":"db_user_profiles","relation":"shares_data_with","confidence":"INFERRED","confidence_score":0.8,"source_file":"components/ArtistSpotlight.tsx","source_location":null,"weight":1.0}
+  ],
+  "hyperedges": [
+    {"id":"email_outreach_ui_flow","label":"Email Outreach UI Flow","nodes":["comp_email_composer","api_email_ai_draft","api_email_send","api_email_templates"],"relation":"participate_in","confidence":"EXTRACTED","confidence_score":0.95,"source_file":"components/email/EmailComposer.tsx"},
+    {"id":"auth_layout_shell","label":"Auth Layout Shell","nodes":["comp_appshell","comp_sidebar","db_user_profiles","type_user_role"],"relation":"implement","confidence":"EXTRACTED","confidence_score":0.9,"source_file":"components/layout/AppShell.tsx"},
+    {"id":"platform_integration_config","label":"Platform Integration Config","nodes":["comp_platform_setup","lib_platform_settings","db_platform_settings","doc_setup_guide"],"relation":"participate_in","confidence":"INFERRED","confidence_score":0.85,"source_file":"components/PlatformSetup.tsx"}
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

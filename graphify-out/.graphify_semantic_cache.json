@@ -1,0 +1,3424 @@
+{
+  "nodes": [
+    {
+      "id": "middleware_superadmin_guard",
+      "label": "Superadmin Edge Guard",
+      "file_type": "code",
+      "source_file": "middleware.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "middleware_auth_redirect",
+      "label": "Auth Redirect Logic",
+      "file_type": "code",
+      "source_file": "middleware.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "appshell_auth_shell",
+      "label": "AppShell Auth Shell",
+      "file_type": "code",
+      "source_file": "components/layout/AppShell.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "history_page",
+      "label": "History Page",
+      "file_type": "code",
+      "source_file": "pages/history.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "login_page",
+      "label": "Login Page",
+      "file_type": "code",
+      "source_file": "pages/login.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "register_page",
+      "label": "Register Page",
+      "file_type": "code",
+      "source_file": "pages/register.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "settings_page",
+      "label": "Settings Page",
+      "file_type": "code",
+      "source_file": "pages/settings.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "dashboard_page",
+      "label": "Dashboard Page",
+      "file_type": "code",
+      "source_file": "pages/dashboard.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "admin_page",
+      "label": "Admin Page",
+      "file_type": "code",
+      "source_file": "pages/admin.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "calendar_page",
+      "label": "Calendar Page",
+      "file_type": "code",
+      "source_file": "pages/calendar.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "today_page",
+      "label": "Today Page",
+      "file_type": "code",
+      "source_file": "pages/today.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "financials_page",
+      "label": "Financials Page",
+      "file_type": "code",
+      "source_file": "pages/financials.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "index_page",
+      "label": "Landing / Public Index",
+      "file_type": "code",
+      "source_file": "pages/index.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "social_page",
+      "label": "Social Page",
+      "file_type": "code",
+      "source_file": "pages/social.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "pricing_page",
+      "label": "Pricing Page",
+      "file_type": "code",
+      "source_file": "pages/pricing.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "join_page",
+      "label": "Join Page",
+      "file_type": "code",
+      "source_file": "pages/join.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_user_profiles",
+      "label": "user_profiles table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_acts",
+      "label": "acts table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_bookings",
+      "label": "bookings table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_tours",
+      "label": "tours table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_agent_act_links",
+      "label": "agent_act_links table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_user_calendar_settings",
+      "label": "user_calendar_settings table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "emailpage_page",
+      "label": "Email & Pipeline Page",
+      "file_type": "code",
+      "source_file": "pages/email/index.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "bandsettings_page",
+      "label": "Band Settings Page",
+      "file_type": "code",
+      "source_file": "pages/band/settings.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "bandsocial_page",
+      "label": "Band Social Page",
+      "file_type": "code",
+      "source_file": "pages/band/social.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "bandcalendar_page",
+      "label": "Band Calendar Page",
+      "file_type": "code",
+      "source_file": "pages/band/calendar.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "bandtours_page",
+      "label": "Band Tours Page",
+      "file_type": "code",
+      "source_file": "pages/band/tours.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "bandemail_page",
+      "label": "Band Email Page",
+      "file_type": "code",
+      "source_file": "pages/band/email.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "bandportal_page",
+      "label": "Band Portal Index",
+      "file_type": "code",
+      "source_file": "pages/band/index.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "bandmembers_page",
+      "label": "Band Members Page",
+      "file_type": "code",
+      "source_file": "pages/band/members.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "email_emailcomposer",
+      "label": "EmailComposer Component",
+      "file_type": "code",
+      "source_file": "components/email/EmailComposer.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_email_log",
+      "label": "email_log table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_email_drafts",
+      "label": "email_drafts table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_venues",
+      "label": "venues table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_contacts",
+      "label": "contacts table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_act_invitations",
+      "label": "act_invitations table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_email_ai_draft",
+      "label": "API: /api/email/ai-draft",
+      "file_type": "code",
+      "source_file": "pages/api/email/ai-draft.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_email_send",
+      "label": "API: /api/email/send",
+      "file_type": "code",
+      "source_file": "pages/api/email/send.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_email_inbox",
+      "label": "API: /api/email/inbox",
+      "file_type": "code",
+      "source_file": "pages/api/email/inbox.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_email_backfill",
+      "label": "API: /api/email/backfill-drafts",
+      "file_type": "code",
+      "source_file": "pages/api/email/backfill-drafts.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_agent_link_revoke",
+      "label": "API: /api/agent-link/revoke",
+      "file_type": "code",
+      "source_file": "pages/api/agent-link/revoke.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_agent_link_respond",
+      "label": "API: /api/agent-link/respond",
+      "file_type": "code",
+      "source_file": "pages/api/agent-link/respond.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "emailpage_email_stage_urgency",
+      "label": "Email Stage Urgency Logic",
+      "file_type": "code",
+      "source_file": "pages/email/index.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "acts_detail_page",
+      "label": "Act Detail Page",
+      "file_type": "code",
+      "source_file": "pages/acts/[id].tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "acts_index_page",
+      "label": "Acts List Page",
+      "file_type": "code",
+      "source_file": "pages/acts/index.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "acts_new_page",
+      "label": "New Act Page",
+      "file_type": "code",
+      "source_file": "pages/acts/new.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "member_calendar_page",
+      "label": "Member Calendar Page",
+      "file_type": "code",
+      "source_file": "pages/member/calendar.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "member_index_page",
+      "label": "Member Portal Index",
+      "file_type": "code",
+      "source_file": "pages/member/index.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tours_detail_page",
+      "label": "Tour Detail Page",
+      "file_type": "code",
+      "source_file": "pages/tours/[id].tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tours_index_page",
+      "label": "Tours List Page",
+      "file_type": "code",
+      "source_file": "pages/tours/index.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "venues_detail_page",
+      "label": "Venue Detail Page",
+      "file_type": "code",
+      "source_file": "pages/venues/[id].tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "venues_index_page",
+      "label": "Venues List Page",
+      "file_type": "code",
+      "source_file": "pages/venues/index.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "bookings_detail_page",
+      "label": "Booking Detail Page",
+      "file_type": "code",
+      "source_file": "pages/bookings/[id].tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "bookings_index_page",
+      "label": "Bookings List Page",
+      "file_type": "code",
+      "source_file": "pages/bookings/index.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "bookings_new_page",
+      "label": "New Booking Page",
+      "file_type": "code",
+      "source_file": "pages/bookings/new.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "contacts_index_page",
+      "label": "Contacts Page",
+      "file_type": "code",
+      "source_file": "pages/contacts/index.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_members_invite",
+      "label": "API: /api/members/invite",
+      "file_type": "code",
+      "source_file": "pages/api/members/invite.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_acts_create",
+      "label": "API: /api/acts/create",
+      "file_type": "code",
+      "source_file": "pages/api/acts/create.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_agent_link_send",
+      "label": "API: /api/agent-link/send",
+      "file_type": "code",
+      "source_file": "pages/api/agent-link/send.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_tours_venues",
+      "label": "API: /api/tours/venues",
+      "file_type": "code",
+      "source_file": "pages/api/tours/venues.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_venues_scrape",
+      "label": "API: /api/venues/scrape",
+      "file_type": "code",
+      "source_file": "pages/api/venues/scrape.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "type_outreach_status",
+      "label": "OutreachStatus type",
+      "file_type": "code",
+      "source_file": "lib/types.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "type_booking_status",
+      "label": "BookingStatus type",
+      "file_type": "code",
+      "source_file": "lib/types.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "type_contact_status",
+      "label": "ContactStatus type",
+      "file_type": "code",
+      "source_file": "lib/types.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_email_webhook",
+      "label": "API: /api/email/webhook",
+      "file_type": "code",
+      "source_file": "pages/api/email/webhook.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_email_templates",
+      "label": "API: /api/email/templates",
+      "file_type": "code",
+      "source_file": "pages/api/email/templates.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_email_auto_draft",
+      "label": "API: /api/email/auto-draft",
+      "file_type": "code",
+      "source_file": "pages/api/email/auto-draft.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_social_queue",
+      "label": "API: /api/social/queue",
+      "file_type": "code",
+      "source_file": "pages/api/social/queue.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_social_accounts",
+      "label": "API: /api/social/accounts",
+      "file_type": "code",
+      "source_file": "pages/api/social/accounts.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_social_publish",
+      "label": "API: /api/social/publish",
+      "file_type": "code",
+      "source_file": "pages/api/social/publish.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_accept_invite",
+      "label": "API: /api/accept-invite",
+      "file_type": "code",
+      "source_file": "pages/api/accept-invite.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_invite_info",
+      "label": "API: /api/invite-info",
+      "file_type": "code",
+      "source_file": "pages/api/invite-info.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ext_anthropic",
+      "label": "Anthropic SDK (claude-3-5-sonnet)",
+      "file_type": "code",
+      "source_file": "pages/api/venues/scrape.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ext_resend",
+      "label": "Resend Email API",
+      "file_type": "code",
+      "source_file": "supabase/functions/daily-reminders/index.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_social_queue",
+      "label": "social_queue table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_social_accounts",
+      "label": "social_accounts table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_acts_init",
+      "label": "API: /api/acts/init",
+      "file_type": "code",
+      "source_file": "pages/api/acts/init.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_stripe_checkout",
+      "label": "API: /api/stripe/checkout",
+      "file_type": "code",
+      "source_file": "pages/api/stripe/checkout.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_stripe_webhook",
+      "label": "API: /api/stripe/webhook",
+      "file_type": "code",
+      "source_file": "pages/api/stripe/webhook.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_stripe_portal",
+      "label": "API: /api/stripe/portal",
+      "file_type": "code",
+      "source_file": "pages/api/stripe/portal.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_stripe_cancel",
+      "label": "API: /api/stripe/cancel",
+      "file_type": "code",
+      "source_file": "pages/api/stripe/cancel.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_public_acts",
+      "label": "API: /api/public/acts",
+      "file_type": "code",
+      "source_file": "pages/api/public/acts.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_tours_confirm",
+      "label": "API: /api/tours/confirm",
+      "file_type": "code",
+      "source_file": "pages/api/tours/confirm.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_admin_users",
+      "label": "API: /api/admin/users",
+      "file_type": "code",
+      "source_file": "pages/api/admin/users.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_admin_invite",
+      "label": "API: /api/admin/invite",
+      "file_type": "code",
+      "source_file": "pages/api/admin/invite.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_admin_metrics",
+      "label": "API: /api/admin/metrics",
+      "file_type": "code",
+      "source_file": "pages/api/admin/metrics.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_admin_subscriptions",
+      "label": "API: /api/admin/subscriptions",
+      "file_type": "code",
+      "source_file": "pages/api/admin/subscriptions.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_admin_health",
+      "label": "API: /api/admin/health",
+      "file_type": "code",
+      "source_file": "pages/api/admin/health.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ext_stripe",
+      "label": "Stripe SDK",
+      "file_type": "code",
+      "source_file": "pages/api/stripe/checkout.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_subscriptions",
+      "label": "subscriptions table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_auth_callback",
+      "label": "API: /api/auth/callback",
+      "file_type": "code",
+      "source_file": "pages/api/auth/callback.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_auth_signout",
+      "label": "API: /api/auth/signout",
+      "file_type": "code",
+      "source_file": "pages/api/auth/signout.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_venues_prospect",
+      "label": "API: /api/venues/prospect",
+      "file_type": "code",
+      "source_file": "pages/api/venues/prospect.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_venues_place_details",
+      "label": "API: /api/venues/place-details",
+      "file_type": "code",
+      "source_file": "pages/api/venues/place-details.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_bookings_settle",
+      "label": "API: /api/bookings/settle",
+      "file_type": "code",
+      "source_file": "pages/api/bookings/settle.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_notes_save",
+      "label": "API: /api/notes/save",
+      "file_type": "code",
+      "source_file": "pages/api/notes/save.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "api_notes_today",
+      "label": "API: /api/notes/today",
+      "file_type": "code",
+      "source_file": "pages/api/notes/today.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_ical",
+      "label": "lib/ical (iCal generation)",
+      "file_type": "code",
+      "source_file": "lib/ical.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_types",
+      "label": "lib/types (domain types)",
+      "file_type": "code",
+      "source_file": "lib/types.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_platform_settings",
+      "label": "lib/platformSettings (getSetting)",
+      "file_type": "code",
+      "source_file": "lib/platformSettings.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_supabase",
+      "label": "lib/supabase (client/admin)",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "lib_hook_use_lookup",
+      "label": "lib/hooks/useLookup",
+      "file_type": "code",
+      "source_file": "lib/hooks/useLookup.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "edge_fn_daily_reminders",
+      "label": "Edge Fn: daily-reminders",
+      "file_type": "code",
+      "source_file": "supabase/functions/daily-reminders/index.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ext_firecrawl",
+      "label": "Firecrawl API (web scraping)",
+      "file_type": "code",
+      "source_file": "pages/api/venues/scrape.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "ext_google_places",
+      "label": "Google Places API",
+      "file_type": "code",
+      "source_file": "pages/api/venues/prospect.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_daily_notes",
+      "label": "daily_notes table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "db_platform_settings",
+      "label": "platform_settings table",
+      "file_type": "code",
+      "source_file": "lib/supabase.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "type_user_role",
+      "label": "UserRole type",
+      "file_type": "code",
+      "source_file": "lib/types.ts",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "comp_appshell",
+      "label": "AppShell Component",
+      "file_type": "code",
+      "source_file": "components/layout/AppShell.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "comp_sidebar",
+      "label": "Sidebar Component",
+      "file_type": "code",
+      "source_file": "components/layout/Sidebar.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "comp_email_composer",
+      "label": "EmailComposer Component",
+      "file_type": "code",
+      "source_file": "components/email/EmailComposer.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "comp_platform_setup",
+      "label": "PlatformSetup Component",
+      "file_type": "code",
+      "source_file": "components/PlatformSetup.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "comp_spline_bg",
+      "label": "SplineBackground Component",
+      "file_type": "code",
+      "source_file": "components/SplineBackground.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "comp_bar_bg",
+      "label": "BarBackground Component",
+      "file_type": "code",
+      "source_file": "components/BarBackground.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "comp_artist_spotlight",
+      "label": "ArtistSpotlight Component",
+      "file_type": "code",
+      "source_file": "components/ArtistSpotlight.tsx",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "doc_setup_guide",
+      "label": "SETUP_GUIDE.md",
+      "file_type": "docs",
+      "source_file": "SETUP_GUIDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "doc_quick_ref",
+      "label": "QUICK_REFERENCE.md",
+      "file_type": "docs",
+      "source_file": "QUICK_REFERENCE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "doc_venue_research",
+      "label": "docs/venue-research-prompt.md",
+      "file_type": "docs",
+      "source_file": "docs/venue-research-prompt.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "middleware_superadmin_guard",
+      "target": "admin_page",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "middleware.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "middleware_auth_redirect",
+      "target": "login_page",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "middleware.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "middleware_superadmin_guard",
+      "target": "middleware_auth_redirect",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "middleware.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "history_page",
+      "target": "appshell_auth_shell",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/history.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "history_page",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/history.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "history_page",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/history.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "login_page",
+      "target": "db_user_profiles",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/login.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "register_page",
+      "target": "login_page",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "pages/register.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "settings_page",
+      "target": "appshell_auth_shell",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/settings.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "settings_page",
+      "target": "db_user_profiles",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/settings.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "settings_page",
+      "target": "db_user_calendar_settings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/settings.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "dashboard_page",
+      "target": "appshell_auth_shell",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/dashboard.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "dashboard_page",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/dashboard.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "dashboard_page",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/dashboard.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "dashboard_page",
+      "target": "db_tours",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/dashboard.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "admin_page",
+      "target": "appshell_auth_shell",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/admin.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "admin_page",
+      "target": "db_user_profiles",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/admin.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "admin_page",
+      "target": "middleware_superadmin_guard",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "pages/admin.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "calendar_page",
+      "target": "db_agent_act_links",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/calendar.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "calendar_page",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/calendar.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "today_page",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/today.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "today_page",
+      "target": "db_tours",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/today.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "financials_page",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/financials.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "financials_page",
+      "target": "history_page",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "pages/financials.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "calendar_page",
+      "target": "today_page",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "pages/calendar.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "admin_page",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/admin.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "admin_page",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/admin.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "login_page",
+      "target": "join_page",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.7,
+      "source_file": "pages/login.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "emailpage_page",
+      "target": "email_emailcomposer",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/email/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "emailpage_page",
+      "target": "api_email_ai_draft",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/email/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "emailpage_page",
+      "target": "api_email_send",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/email/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "emailpage_page",
+      "target": "api_email_inbox",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/email/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "emailpage_page",
+      "target": "api_email_backfill",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/email/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "emailpage_page",
+      "target": "db_email_log",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/email/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "emailpage_page",
+      "target": "db_email_drafts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/email/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "emailpage_page",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/email/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "emailpage_page",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/email/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "emailpage_page",
+      "target": "db_venues",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/email/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "emailpage_page",
+      "target": "db_contacts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/email/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "emailpage_page",
+      "target": "emailpage_email_stage_urgency",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/email/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "email_emailcomposer",
+      "target": "api_email_ai_draft",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/email/EmailComposer.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "email_emailcomposer",
+      "target": "api_email_send",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/email/EmailComposer.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bandemail_page",
+      "target": "email_emailcomposer",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/band/email.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bandsettings_page",
+      "target": "db_agent_act_links",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/band/settings.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bandmembers_page",
+      "target": "db_act_invitations",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/band/members.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bandmembers_page",
+      "target": "api_agent_link_revoke",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/band/members.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bandmembers_page",
+      "target": "api_agent_link_respond",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/band/members.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bandsocial_page",
+      "target": "bandemail_page",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.65,
+      "source_file": "pages/band/social.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bandcalendar_page",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/band/calendar.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bandtours_page",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/band/tours.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "acts_detail_page",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/acts/[id].tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "acts_detail_page",
+      "target": "db_act_invitations",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/acts/[id].tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "acts_detail_page",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/acts/[id].tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "acts_detail_page",
+      "target": "db_agent_act_links",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/acts/[id].tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "acts_detail_page",
+      "target": "api_members_invite",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/acts/[id].tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "acts_index_page",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/acts/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "acts_index_page",
+      "target": "db_agent_act_links",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/acts/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "acts_index_page",
+      "target": "api_agent_link_send",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/acts/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "acts_new_page",
+      "target": "api_acts_create",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/acts/new.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "tours_detail_page",
+      "target": "db_tours",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/tours/[id].tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "tours_detail_page",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/tours/[id].tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "tours_detail_page",
+      "target": "api_tours_venues",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/tours/[id].tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "tours_detail_page",
+      "target": "api_venues_scrape",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/tours/[id].tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "venues_detail_page",
+      "target": "db_venues",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/venues/[id].tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "venues_detail_page",
+      "target": "email_emailcomposer",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/venues/[id].tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "venues_detail_page",
+      "target": "api_venues_scrape",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/venues/[id].tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "venues_index_page",
+      "target": "db_venues",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/venues/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "venues_index_page",
+      "target": "db_contacts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/venues/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "venues_index_page",
+      "target": "api_venues_scrape",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/venues/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bookings_detail_page",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/bookings/[id].tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bookings_detail_page",
+      "target": "email_emailcomposer",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/bookings/[id].tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bookings_index_page",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/bookings/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bookings_new_page",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/bookings/new.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "contacts_index_page",
+      "target": "db_contacts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/contacts/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "contacts_index_page",
+      "target": "db_venues",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/contacts/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "type_outreach_status",
+      "target": "type_booking_status",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "lib/types.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "type_contact_status",
+      "target": "type_booking_status",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "lib/types.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "tours_index_page",
+      "target": "db_tours",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/tours/index.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_ai_draft",
+      "target": "ext_anthropic",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/ai-draft.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_ai_draft",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/ai-draft.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_ai_draft",
+      "target": "db_venues",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/ai-draft.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_ai_draft",
+      "target": "db_contacts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/ai-draft.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_ai_draft",
+      "target": "db_email_drafts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/ai-draft.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_send",
+      "target": "ext_resend",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/send.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_send",
+      "target": "db_email_log",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/send.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_send",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/send.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_webhook",
+      "target": "db_email_log",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/webhook.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_webhook",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/webhook.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_templates",
+      "target": "db_email_drafts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/templates.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_auto_draft",
+      "target": "ext_anthropic",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/auto-draft.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_auto_draft",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/auto-draft.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_auto_draft",
+      "target": "db_email_drafts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/auto-draft.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_backfill",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/backfill-drafts.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_backfill",
+      "target": "db_email_drafts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/backfill-drafts.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_inbox",
+      "target": "db_email_log",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/email/inbox.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_auto_draft",
+      "target": "api_email_ai_draft",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "pages/api/email/auto-draft.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_social_queue",
+      "target": "db_social_queue",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/social/queue.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_social_accounts",
+      "target": "db_social_accounts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/social/accounts.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_social_publish",
+      "target": "db_social_queue",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/social/publish.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_social_publish",
+      "target": "db_social_accounts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/social/publish.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_agent_link_send",
+      "target": "db_agent_act_links",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/agent-link/send.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_agent_link_send",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/agent-link/send.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_agent_link_send",
+      "target": "ext_resend",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/agent-link/send.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_agent_link_revoke",
+      "target": "db_agent_act_links",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/agent-link/revoke.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_agent_link_respond",
+      "target": "db_agent_act_links",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/agent-link/respond.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_agent_link_respond",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/agent-link/respond.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_accept_invite",
+      "target": "db_act_invitations",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/accept-invite.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_accept_invite",
+      "target": "db_user_profiles",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/accept-invite.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_accept_invite",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/accept-invite.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_invite_info",
+      "target": "db_act_invitations",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/invite-info.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_members_invite",
+      "target": "db_act_invitations",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/members/invite.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_members_invite",
+      "target": "ext_resend",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/members/invite.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_invite_info",
+      "target": "api_accept_invite",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "pages/api/invite-info.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_email_send",
+      "target": "api_email_webhook",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "pages/api/email/send.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_acts_create",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/acts/create.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_acts_create",
+      "target": "db_user_profiles",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/acts/create.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_acts_init",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/acts/init.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_acts_init",
+      "target": "api_acts_create",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "pages/api/acts/init.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_stripe_checkout",
+      "target": "ext_stripe",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/stripe/checkout.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_stripe_checkout",
+      "target": "db_user_profiles",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/stripe/checkout.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_stripe_webhook",
+      "target": "ext_stripe",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/stripe/webhook.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_stripe_webhook",
+      "target": "db_user_profiles",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/stripe/webhook.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_stripe_webhook",
+      "target": "db_subscriptions",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/stripe/webhook.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_stripe_portal",
+      "target": "ext_stripe",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/stripe/portal.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_stripe_portal",
+      "target": "db_user_profiles",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/stripe/portal.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_stripe_cancel",
+      "target": "ext_stripe",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/stripe/cancel.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_stripe_cancel",
+      "target": "db_user_profiles",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/stripe/cancel.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_public_acts",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/public/acts.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_tours_venues",
+      "target": "db_tours",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/tours/venues.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_tours_venues",
+      "target": "db_venues",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/tours/venues.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_tours_confirm",
+      "target": "db_tours",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/tours/confirm.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_tours_confirm",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/tours/confirm.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_tours_confirm",
+      "target": "ext_anthropic",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/tours/confirm.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_admin_users",
+      "target": "db_user_profiles",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/admin/users.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_admin_users",
+      "target": "middleware_superadmin_guard",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "pages/api/admin/users.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_admin_invite",
+      "target": "db_user_profiles",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/admin/invite.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_admin_invite",
+      "target": "middleware_superadmin_guard",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "pages/api/admin/invite.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_admin_metrics",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/admin/metrics.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_admin_metrics",
+      "target": "db_acts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/admin/metrics.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_admin_metrics",
+      "target": "middleware_superadmin_guard",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "pages/api/admin/metrics.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_admin_subscriptions",
+      "target": "db_subscriptions",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/admin/subscriptions.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_admin_subscriptions",
+      "target": "middleware_superadmin_guard",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "pages/api/admin/subscriptions.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_admin_health",
+      "target": "middleware_superadmin_guard",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "pages/api/admin/health.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_auth_callback",
+      "target": "lib_supabase",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/auth/callback.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_auth_signout",
+      "target": "lib_supabase",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/auth/signout.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_venues_scrape",
+      "target": "ext_firecrawl",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/venues/scrape.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_venues_scrape",
+      "target": "ext_anthropic",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/venues/scrape.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_venues_scrape",
+      "target": "db_venues",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/venues/scrape.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_venues_scrape",
+      "target": "db_contacts",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/venues/scrape.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_venues_prospect",
+      "target": "ext_google_places",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/venues/prospect.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_venues_prospect",
+      "target": "db_venues",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/venues/prospect.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_venues_place_details",
+      "target": "ext_google_places",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/venues/place-details.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_venues_place_details",
+      "target": "api_venues_prospect",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "pages/api/venues/place-details.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_bookings_settle",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/bookings/settle.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_notes_save",
+      "target": "db_daily_notes",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/notes/save.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_notes_today",
+      "target": "db_daily_notes",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "pages/api/notes/today.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "lib_platform_settings",
+      "target": "db_platform_settings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/platformSettings.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "lib_hook_use_lookup",
+      "target": "lib_supabase",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/hooks/useLookup.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "edge_fn_daily_reminders",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/functions/daily-reminders/index.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "edge_fn_daily_reminders",
+      "target": "db_user_profiles",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/functions/daily-reminders/index.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "edge_fn_daily_reminders",
+      "target": "ext_resend",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/functions/daily-reminders/index.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "lib_types",
+      "target": "type_user_role",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/types.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "lib_types",
+      "target": "type_booking_status",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/types.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "lib_types",
+      "target": "type_outreach_status",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/types.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "lib_types",
+      "target": "type_contact_status",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "lib/types.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "type_outreach_status",
+      "target": "type_contact_status",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "lib/types.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "api_venues_scrape",
+      "target": "api_venues_prospect",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "pages/api/venues/scrape.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "lib_ical",
+      "target": "db_bookings",
+      "relation": "shares_data_with",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "lib/ical.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "comp_appshell",
+      "target": "db_user_profiles",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/layout/AppShell.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "comp_appshell",
+      "target": "comp_sidebar",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/layout/AppShell.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "comp_sidebar",
+      "target": "type_user_role",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/layout/Sidebar.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "comp_sidebar",
+      "target": "db_agent_act_links",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/layout/Sidebar.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "comp_email_composer",
+      "target": "api_email_ai_draft",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/email/EmailComposer.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "comp_email_composer",
+      "target": "api_email_send",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/email/EmailComposer.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "comp_email_composer",
+      "target": "api_email_templates",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/email/EmailComposer.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "comp_platform_setup",
+      "target": "lib_platform_settings",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/PlatformSetup.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "comp_platform_setup",
+      "target": "db_platform_settings",
+      "relation": "shares_data_with",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "components/PlatformSetup.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "comp_spline_bg",
+      "target": "comp_bar_bg",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "components/SplineBackground.tsx",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "doc_setup_guide",
+      "target": "comp_platform_setup",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "SETUP_GUIDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "doc_setup_guide",
+      "target": "doc_quick_ref",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "SETUP_GUIDE.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "doc_venue_research",
+      "target": "api_email_ai_draft",
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "docs/venue-research-prompt.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "comp_artist_spotlight",
+      "target": "db_user_profiles",
+      "relation": "shares_data_with",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "components/ArtistSpotlight.tsx",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "user_auth_onboarding_flow",
+      "label": "User Auth & Onboarding Flow",
+      "nodes": [
+        "login_page",
+        "register_page",
+        "join_page"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "middleware.ts"
+    },
+    {
+      "id": "superadmin_dual_guard",
+      "label": "Superadmin Dual-Layer Guard",
+      "nodes": [
+        "middleware_superadmin_guard",
+        "admin_page",
+        "appshell_auth_shell"
+      ],
+      "relation": "implement",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "middleware.ts"
+    },
+    {
+      "id": "stripe_subscription_lifecycle",
+      "label": "Stripe Subscription Lifecycle",
+      "nodes": [
+        "api_stripe_checkout",
+        "api_stripe_webhook",
+        "api_stripe_portal",
+        "api_stripe_cancel",
+        "ext_stripe",
+        "db_user_profiles",
+        "db_subscriptions"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "pages/api/stripe/webhook.ts"
+    },
+    {
+      "id": "band_act_lookup_pattern",
+      "label": "Band Pages Act Lookup Pattern",
+      "nodes": [
+        "bandportal_page",
+        "bandsettings_page",
+        "bandcalendar_page",
+        "bandtours_page",
+        "bandemail_page",
+        "bandmembers_page",
+        "bandsocial_page"
+      ],
+      "relation": "implement",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "pages/band/index.tsx"
+    },
+    {
+      "id": "email_draft_send_flow",
+      "label": "AI Email Draft & Send Flow",
+      "nodes": [
+        "emailpage_page",
+        "api_email_ai_draft",
+        "api_email_send",
+        "db_email_log"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "pages/email/index.tsx"
+    },
+    {
+      "id": "agent_band_link_flow",
+      "label": "Agent-Band Link Management Flow",
+      "nodes": [
+        "db_agent_act_links",
+        "api_agent_link_revoke",
+        "api_agent_link_respond",
+        "bandmembers_page"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "pages/band/members.tsx"
+    },
+    {
+      "id": "booking_creation_flow",
+      "label": "Booking Creation Flow",
+      "nodes": [
+        "bookings_new_page",
+        "db_bookings",
+        "db_acts",
+        "db_venues"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "pages/bookings/new.tsx"
+    },
+    {
+      "id": "tour_venue_outreach_flow",
+      "label": "Tour Venue Outreach & Confirm Flow",
+      "nodes": [
+        "tours_detail_page",
+        "api_tours_venues",
+        "api_venues_scrape",
+        "email_emailcomposer"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "pages/tours/[id].tsx"
+    },
+    {
+      "id": "venue_discovery_flow",
+      "label": "Venue Discovery & Enrichment Flow",
+      "nodes": [
+        "venues_index_page",
+        "venues_detail_page",
+        "api_venues_scrape",
+        "db_contacts"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "pages/venues/index.tsx"
+    },
+    {
+      "id": "ai_email_draft_pipeline",
+      "label": "AI Email Drafting Subsystem",
+      "nodes": [
+        "api_email_ai_draft",
+        "api_email_auto_draft",
+        "api_email_backfill",
+        "ext_anthropic",
+        "db_email_drafts",
+        "db_bookings"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "pages/api/email/ai-draft.ts"
+    },
+    {
+      "id": "agent_act_link_lifecycle",
+      "label": "Agent-Act Link Lifecycle",
+      "nodes": [
+        "api_agent_link_send",
+        "api_agent_link_revoke",
+        "api_agent_link_respond",
+        "db_agent_act_links",
+        "db_acts",
+        "ext_resend"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "pages/api/agent-link/send.ts"
+    },
+    {
+      "id": "invite_acceptance_flow",
+      "label": "Member Invite Acceptance Flow",
+      "nodes": [
+        "api_members_invite",
+        "api_invite_info",
+        "api_accept_invite",
+        "db_act_invitations",
+        "db_user_profiles",
+        "ext_resend"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "pages/api/accept-invite.ts"
+    },
+    {
+      "id": "admin_superadmin_gate",
+      "label": "Admin API Superadmin Gate",
+      "nodes": [
+        "middleware_superadmin_guard",
+        "api_admin_users",
+        "api_admin_invite",
+        "api_admin_metrics",
+        "api_admin_subscriptions",
+        "api_admin_health"
+      ],
+      "relation": "implement",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "middleware.ts"
+    },
+    {
+      "id": "venue_confirm_orchestration",
+      "label": "Tour Venue Confirm Orchestration",
+      "nodes": [
+        "api_tours_venues",
+        "api_tours_confirm",
+        "ext_anthropic",
+        "db_tours",
+        "db_bookings",
+        "db_venues"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "pages/api/tours/confirm.ts"
+    },
+    {
+      "id": "venue_discovery_pipeline",
+      "label": "Venue Discovery & Enrichment Pipeline",
+      "nodes": [
+        "api_venues_scrape",
+        "api_venues_prospect",
+        "api_venues_place_details",
+        "ext_firecrawl",
+        "ext_google_places",
+        "ext_anthropic",
+        "db_venues",
+        "db_contacts"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "pages/api/venues/scrape.ts"
+    },
+    {
+      "id": "email_reminder_pipeline",
+      "label": "Automated Email Reminder Pipeline",
+      "nodes": [
+        "edge_fn_daily_reminders",
+        "db_bookings",
+        "db_user_profiles",
+        "ext_resend"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "supabase/functions/daily-reminders/index.ts"
+    },
+    {
+      "id": "member_invitation_flow",
+      "label": "Member Invitation & Auth Flow",
+      "nodes": [
+        "api_auth_callback",
+        "api_auth_signout",
+        "lib_supabase",
+        "db_user_profiles"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "pages/api/auth/callback.ts"
+    },
+    {
+      "id": "email_outreach_ui_flow",
+      "label": "Email Outreach UI Flow",
+      "nodes": [
+        "comp_email_composer",
+        "api_email_ai_draft",
+        "api_email_send",
+        "api_email_templates"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "components/email/EmailComposer.tsx"
+    },
+    {
+      "id": "auth_layout_shell",
+      "label": "Auth Layout Shell",
+      "nodes": [
+        "comp_appshell",
+        "comp_sidebar",
+        "db_user_profiles",
+        "type_user_role"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "components/layout/AppShell.tsx"
+    },
+    {
+      "id": "platform_integration_config",
+      "label": "Platform Integration Config",
+      "nodes": [
+        "comp_platform_setup",
+        "lib_platform_settings",
+        "db_platform_settings",
+        "doc_setup_guide"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "components/PlatformSetup.tsx"
+    }
+  ]
+}

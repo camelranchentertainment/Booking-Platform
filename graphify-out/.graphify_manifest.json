@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-04-28",
+  "files_scanned": 103,
+  "total_words": 92931,
+  "graph_nodes": 509,
+  "graph_edges": 1040,
+  "hyperedges": 20,
+  "communities": 65,
+  "token_reduction_estimate": 3.7,
+  "outputs": [
+    "graphify-out/graph.json",
+    "graphify-out/graph.html",
+    "graphify-out/GRAPH_REPORT.md"
+  ]
+}

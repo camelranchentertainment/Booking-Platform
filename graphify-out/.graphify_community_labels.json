@@ -1,0 +1,277 @@
+[
+  {
+    "id": 0,
+    "size": 95,
+    "prefix": "pages/api",
+    "label": "Pages",
+    "sample": [
+      "send.ts",
+      "handler()",
+      "acts.ts"
+    ]
+  },
+  {
+    "id": 1,
+    "size": 88,
+    "prefix": "pages/api",
+    "label": "Pages",
+    "sample": [
+      "API: /api/email/backfill-drafts",
+      "Venues List Page",
+      "Financials Page"
+    ]
+  },
+  {
+    "id": 2,
+    "size": 25,
+    "prefix": "pages/venues",
+    "label": "Pages",
+    "sample": [
+      "saveDetails()",
+      "setFin()",
+      "set()"
+    ]
+  },
+  {
+    "id": 3,
+    "size": 17,
+    "prefix": "pages/admin.tsx",
+    "label": "Pages",
+    "sample": [
+      "async()",
+      "admin.tsx",
+      "doViewAs()"
+    ]
+  },
+  {
+    "id": 4,
+    "size": 17,
+    "prefix": "pages/settings.tsx",
+    "label": "Pages",
+    "sample": [
+      "prev()",
+      "save()",
+      "middleware()"
+    ]
+  },
+  {
+    "id": 5,
+    "size": 16,
+    "prefix": "pages/api",
+    "label": "Pages",
+    "sample": [
+      "handler()",
+      "buildHashtagBlock()",
+      "venue-confirm.ts"
+    ]
+  },
+  {
+    "id": 6,
+    "size": 15,
+    "prefix": "pages/tours",
+    "label": "Pages",
+    "sample": [
+      "openVenuePopout()",
+      "discoverVenues()",
+      "set()"
+    ]
+  },
+  {
+    "id": 7,
+    "size": 14,
+    "prefix": "pages/email",
+    "label": "Pages",
+    "sample": [
+      "loadInbox()",
+      "moveStatus()",
+      "getActionInfo()"
+    ]
+  },
+  {
+    "id": 8,
+    "size": 13,
+    "prefix": "pages/api",
+    "label": "Pages",
+    "sample": [
+      "ai-draft.ts",
+      "backfill-drafts.ts",
+      "index.ts"
+    ]
+  },
+  {
+    "id": 9,
+    "size": 10,
+    "prefix": "pages/social.tsx",
+    "label": "Pages",
+    "sample": [
+      "loadPosts()",
+      "saveEdit()",
+      "updatePost()"
+    ]
+  },
+  {
+    "id": 10,
+    "size": 10,
+    "prefix": "pages/band",
+    "label": "Pages",
+    "sample": [
+      "load()",
+      "save()",
+      "saveProfile()"
+    ]
+  },
+  {
+    "id": 11,
+    "size": 10,
+    "prefix": "pages/band",
+    "label": "Pages",
+    "sample": [
+      "saveCredentials()",
+      "saveEdit()",
+      "openConnectModal()"
+    ]
+  },
+  {
+    "id": 12,
+    "size": 9,
+    "prefix": "pages/venues",
+    "label": "Pages",
+    "sample": [
+      "set()",
+      "setContact()",
+      "saveEdit()"
+    ]
+  },
+  {
+    "id": 13,
+    "size": 7,
+    "prefix": "pages/band",
+    "label": "Pages",
+    "sample": [
+      "searchVenues()",
+      "respondToLink()",
+      "load()"
+    ]
+  },
+  {
+    "id": 14,
+    "size": 7,
+    "prefix": "components/settings",
+    "label": "Components",
+    "sample": [
+      "load()",
+      "toggle()",
+      "StatusBadge()"
+    ]
+  },
+  {
+    "id": 15,
+    "size": 6,
+    "prefix": "pages/band",
+    "label": "Pages",
+    "sample": [
+      "load()",
+      "prev()",
+      "goToday()"
+    ]
+  },
+  {
+    "id": 16,
+    "size": 6,
+    "prefix": "components/layout",
+    "label": "Components",
+    "sample": [
+      "markSysRead()",
+      "acceptInvite()",
+      "toggleTheme()"
+    ]
+  },
+  {
+    "id": 17,
+    "size": 5,
+    "prefix": "pages/calendar.tsx",
+    "label": "Pages",
+    "sample": [
+      "actName()",
+      "prev()",
+      "calendar.tsx"
+    ]
+  },
+  {
+    "id": 18,
+    "size": 5,
+    "prefix": "pages/band",
+    "label": "Pages",
+    "sample": [
+      "Initials()",
+      "revokeInvite()",
+      "members.tsx"
+    ]
+  },
+  {
+    "id": 19,
+    "size": 5,
+    "prefix": "pages/acts",
+    "label": "Pages",
+    "sample": [
+      "loadAll()",
+      "[id].tsx",
+      "saveEdit()"
+    ]
+  },
+  {
+    "id": 20,
+    "size": 5,
+    "prefix": "pages/contacts",
+    "label": "Pages",
+    "sample": [
+      "save()",
+      "set()",
+      "updateStatus()"
+    ]
+  },
+  {
+    "id": 21,
+    "size": 5,
+    "prefix": "lib/ical.ts",
+    "label": "Shared Libraries",
+    "sample": [
+      "buildIcal()",
+      "nextDay()",
+      "downloadIcal()"
+    ]
+  },
+  {
+    "id": 22,
+    "size": 5,
+    "prefix": "components/layout",
+    "label": "Components",
+    "sample": [
+      "init()",
+      "handleSignOut()",
+      "daysLeft()"
+    ]
+  },
+  {
+    "id": 23,
+    "size": 5,
+    "prefix": "pages/api",
+    "label": "Pages",
+    "sample": [
+      "API: /api/social/queue",
+      "API: /api/social/publish",
+      "social_queue table"
+    ]
+  },
+  {
+    "id": 24,
+    "size": 5,
+    "prefix": "SETUP_GUIDE.md",
+    "label": "SETUP_GUIDE.md",
+    "sample": [
+      "SETUP_GUIDE.md",
+      "PlatformSetup Component",
+      "lib/platformSettings (getSetting)"
+    ]
+  }
+]
