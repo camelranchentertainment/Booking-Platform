@@ -27,6 +27,7 @@ const agentNav = [
   { label: 'Dashboard',  href: '/dashboard',  icon: '◈' },
   { label: 'Today',      href: '/today',      icon: '◉' },
   { label: 'Bands',      href: '/acts',       icon: '♪' },
+  { label: 'Bookings',   href: '/bookings',   icon: '⊞' },
   { label: 'Tours',      href: '/tours',      icon: '⟴' },
   { label: 'Venues',     href: '/venues',     icon: '⌂' },
   { label: 'Calendar',   href: '/calendar',   icon: '◷' },

@@ -23,7 +23,10 @@ export default function MemberCalendar() {
     const { data: profile } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
     if (!profile?.act_id) { setLoading(false); return; }
     const { data } = await supabase.from('bookings')
-      .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, venue:venues(name, city, state, address, phone)')
+      .select(`id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes,
+        soundcheck_time, end_time, meals_provided, drinks_provided, hotel_booked, sound_system,
+        special_requirements, venue_contact_name,
+        venue:venues(name, city, state, address, phone)`)
       .eq('act_id', profile.act_id)
       .in('status', ['confirmed', 'advancing', 'completed'])
       .not('show_date', 'is', null)
@@ -67,7 +70,7 @@ export default function MemberCalendar() {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '1.25rem', alignItems: 'start' }}>
+      <div className="calendar-layout">
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
             <button className="btn btn-ghost btn-sm" onClick={prev}>←</button>
@@ -141,12 +144,23 @@ export default function MemberCalendar() {
                   </div>
                   {s.venue?.address && <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', marginTop: '0.3rem' }}>{s.venue.address}</div>}
                   <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                    {s.load_in_time && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>Load-in: <strong style={{ color: 'var(--text-primary)' }}>{s.load_in_time}</strong></span>}
-                    {s.set_time && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Set: <strong style={{ color: 'var(--accent)' }}>{s.set_time}</strong></span>}
+                    {s.load_in_time && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Load-in: <strong style={{ color: 'var(--text-primary)' }}>{s.load_in_time}</strong></span>}
+                    {s.soundcheck_time && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Soundcheck: <strong style={{ color: 'var(--text-primary)' }}>{s.soundcheck_time}</strong></span>}
                     {s.door_time && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Doors: <strong style={{ color: 'var(--text-primary)' }}>{s.door_time}</strong></span>}
-                    {s.set_length_min && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>{s.set_length_min} min set</span>}
+                    {s.set_time && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Set: <strong style={{ color: 'var(--accent)' }}>{s.set_time}</strong>{s.set_length_min ? ` (${s.set_length_min}min)` : ''}</span>}
+                    {s.end_time && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>End: <strong style={{ color: 'var(--text-primary)' }}>{s.end_time}</strong></span>}
                   </div>
+                  {(s.meals_provided || s.drinks_provided || s.hotel_booked || s.sound_system) && (
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.4rem' }}>
+                      {s.meals_provided && <span style={{ fontSize: '0.72rem', background: '#34d39922', color: '#34d399', padding: '0.1rem 0.4rem', borderRadius: '3px', fontFamily: 'var(--font-body)' }}>Meals</span>}
+                      {s.drinks_provided && <span style={{ fontSize: '0.72rem', background: '#34d39922', color: '#34d399', padding: '0.1rem 0.4rem', borderRadius: '3px', fontFamily: 'var(--font-body)' }}>Drinks</span>}
+                      {s.hotel_booked && <span style={{ fontSize: '0.72rem', background: '#60a5fa22', color: '#60a5fa', padding: '0.1rem 0.4rem', borderRadius: '3px', fontFamily: 'var(--font-body)' }}>Hotel</span>}
+                      {s.sound_system && <span style={{ fontSize: '0.72rem', background: 'var(--bg-base)', color: 'var(--text-muted)', padding: '0.1rem 0.4rem', borderRadius: '3px', fontFamily: 'var(--font-body)', textTransform: 'uppercase' }}>Sound: {s.sound_system}</span>}
+                    </div>
+                  )}
                   {s.venue?.phone && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>📞 {s.venue.phone}</div>}
+                  {s.venue_contact_name && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>Contact: {s.venue_contact_name}</div>}
+                  {s.special_requirements && <div style={{ marginTop: '0.4rem', fontSize: '0.76rem', color: '#f59e0b', fontFamily: 'var(--font-body)' }}>⚠ {s.special_requirements}</div>}
                   {s.advance_notes && <div style={{ marginTop: '0.5rem', fontSize: '0.78rem', color: 'var(--text-secondary)', borderTop: '1px solid var(--border)', paddingTop: '0.4rem' }}>{s.advance_notes}</div>}
                 </div>
               ))}

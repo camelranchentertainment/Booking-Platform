@@ -129,7 +129,7 @@ export default function VenuesPage() {
   const loadVenues = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase.from('venues').select('*').order('name');
+    const { data } = await supabase.from('venues').select('*').order('name').limit(500);
     setVenues(data || []);
   };
 

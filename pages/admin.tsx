@@ -136,7 +136,7 @@ export default function AdminPage() {
     const token = sess?.access_token;
 
     const [profilesRes, actsRes, bookingsRes, billingRes] = await Promise.all([
-      supabase.from('user_profiles').select('*').order('created_at', { ascending: false }),
+      supabase.from('user_profiles').select('*').order('created_at', { ascending: false }).limit(500),
       supabase.from('acts').select('id, act_name, owner_id, agent_id').eq('is_active', true),
       supabase.from('bookings').select(`
         id, show_date, deal_type, agreed_amount, fee,

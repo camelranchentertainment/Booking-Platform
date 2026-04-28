@@ -20,6 +20,8 @@ export default function MemberView() {
 
       const { data: bookings } = await supabase.from('bookings')
         .select(`id, status, show_date, set_time, set_length_min, load_in_time, door_time, advance_notes,
+          soundcheck_time, end_time, meals_provided, drinks_provided, hotel_booked, sound_system,
+          special_requirements, venue_contact_name,
           venue:venues(name, city, state, address, phone)`)
         .eq('act_id', profile.act_id)
         .in('status', ['confirmed', 'advancing', 'completed'])
@@ -104,11 +106,23 @@ function ShowCard({ booking: b }: { booking: any }) {
       </div>
 
       {/* Times */}
-      {(b.load_in_time || b.set_time || b.door_time) && (
-        <div style={{ display: 'flex', gap: '1.5rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.6rem', padding: '0.5rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)' }}>
-          {b.door_time    && <span>DOORS: <span style={{ color: 'var(--text-primary)' }}>{b.door_time}</span></span>}
-          {b.load_in_time && <span>LOAD-IN: <span style={{ color: 'var(--text-primary)' }}>{b.load_in_time}</span></span>}
-          {b.set_time     && <span>SET: <span style={{ color: 'var(--accent)' }}>{b.set_time}</span>{b.set_length_min ? ` (${b.set_length_min}min)` : ''}</span>}
+      {(b.load_in_time || b.soundcheck_time || b.set_time || b.door_time || b.end_time) && (
+        <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.6rem', padding: '0.5rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)' }}>
+          {b.door_time      && <span>DOORS: <span style={{ color: 'var(--text-primary)' }}>{b.door_time}</span></span>}
+          {b.load_in_time   && <span>LOAD-IN: <span style={{ color: 'var(--text-primary)' }}>{b.load_in_time}</span></span>}
+          {b.soundcheck_time && <span>SOUNDCHECK: <span style={{ color: 'var(--text-primary)' }}>{b.soundcheck_time}</span></span>}
+          {b.set_time       && <span>SET: <span style={{ color: 'var(--accent)' }}>{b.set_time}</span>{b.set_length_min ? ` (${b.set_length_min}min)` : ''}</span>}
+          {b.end_time       && <span>END: <span style={{ color: 'var(--text-primary)' }}>{b.end_time}</span></span>}
+        </div>
+      )}
+
+      {/* Logistics badges */}
+      {(b.meals_provided || b.drinks_provided || b.hotel_booked || b.sound_system) && (
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+          {b.meals_provided  && <span style={{ fontSize: '0.72rem', background: '#34d39922', color: '#34d399', padding: '0.15rem 0.5rem', borderRadius: '3px' }}>Meals Provided</span>}
+          {b.drinks_provided && <span style={{ fontSize: '0.72rem', background: '#34d39922', color: '#34d399', padding: '0.15rem 0.5rem', borderRadius: '3px' }}>Drinks Provided</span>}
+          {b.hotel_booked    && <span style={{ fontSize: '0.72rem', background: '#60a5fa22', color: '#60a5fa', padding: '0.15rem 0.5rem', borderRadius: '3px' }}>Hotel Booked</span>}
+          {b.sound_system    && <span style={{ fontSize: '0.72rem', background: 'var(--bg-overlay)', color: 'var(--text-muted)', padding: '0.15rem 0.5rem', borderRadius: '3px', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>Sound: {b.sound_system}</span>}
         </div>
       )}
 
@@ -120,6 +134,16 @@ function ShowCard({ booking: b }: { booking: any }) {
       {b.venue?.phone && (
         <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
           📞 {b.venue.phone}
+        </div>
+      )}
+      {b.venue_contact_name && (
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
+          Contact: {b.venue_contact_name}
+        </div>
+      )}
+      {b.special_requirements && (
+        <div style={{ marginBottom: '0.4rem', fontSize: '0.8rem', color: '#f59e0b' }}>
+          ⚠ {b.special_requirements}
         </div>
       )}
       {b.advance_notes && (

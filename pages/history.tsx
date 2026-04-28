@@ -12,8 +12,9 @@ const DEAL_LABELS: Record<string, string> = {
 };
 const PAY_COLORS: Record<string, string> = {
   pending:  '#f97316',
+  partial:  '#fbbf24',
   received: '#34d399',
-  settled:  '#60a5fa',
+  waived:   '#60a5fa',
 };
 const REBOOK_COLORS: Record<string, string> = {
   yes:   '#34d399',
@@ -123,8 +124,9 @@ export default function HistoryPage() {
             <select className="select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
               <option value="">All Statuses</option>
               <option value="pending">Pending</option>
+              <option value="partial">Partial</option>
               <option value="received">Received</option>
-              <option value="settled">Settled</option>
+              <option value="waived">Waived</option>
             </select>
           </div>
           <div className="field" style={{ margin: 0 }}>

@@ -18,7 +18,7 @@ const DEAL_OPTIONS = [
   { value: 'other',      label: 'Other' },
 ];
 const DEAL_LABELS: Record<string, string> = Object.fromEntries(DEAL_OPTIONS.map(d => [d.value, d.label]));
-const PAY_COLORS: Record<string, string> = { pending: '#f97316', received: '#34d399', settled: '#60a5fa' };
+const PAY_COLORS: Record<string, string> = { pending: '#f97316', partial: '#fbbf24', received: '#34d399', waived: '#60a5fa' };
 
 function Row({ label, value }: { label: string; value: any }) {
   if (!value && value !== 0 && value !== false) return null;
@@ -380,8 +380,9 @@ export default function BookingDetail() {
                       <div className="field"><label className="field-label">Payment Status</label>
                         <select className="select" value={financialForm.payment_status || 'pending'} onChange={setFin('payment_status')}>
                           <option value="pending">Pending</option>
+                          <option value="partial">Partial</option>
                           <option value="received">Received</option>
-                          <option value="settled">Settled</option>
+                          <option value="waived">Waived</option>
                         </select></div>
                     </div>
                     <div className="field"><label className="field-label">Date Paid</label>
@@ -550,7 +551,8 @@ export default function BookingDetail() {
                 <div className="field"><label className="field-label">Payment Status</label>
                   <select className="select" value={settleForm.payment_status} onChange={e => setSettleForm((f: any) => ({ ...f, payment_status: e.target.value }))}>
                     <option value="received">Received</option>
-                    <option value="settled">Settled</option>
+                    <option value="partial">Partial</option>
+                    <option value="waived">Waived</option>
                     <option value="pending">Pending / Unpaid</option>
                   </select></div>
               </div>
