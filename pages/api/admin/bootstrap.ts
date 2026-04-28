@@ -1,9 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 
-const SUPERADMIN_EMAIL = 'scott@camelranchbooking.com';
-const SUPERADMIN_PASSWORD = 'Password123';
-const SUPERADMIN_NAME = 'Scott';
+const SUPERADMIN_EMAIL = process.env.BOOTSTRAP_EMAIL || 'scott@camelranchbooking.com';
+const SUPERADMIN_NAME  = process.env.BOOTSTRAP_NAME  || 'Scott';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -19,9 +18,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // 1. Create or retrieve the auth user
   let userId: string | undefined;
 
+  const bootstrapPassword = process.env.BOOTSTRAP_PASSWORD;
+  if (!bootstrapPassword) {
+    return res.status(500).json({ error: 'BOOTSTRAP_PASSWORD env var is required' });
+  }
+
   const { data: created, error: createErr } = await supabase.auth.admin.createUser({
     email:          SUPERADMIN_EMAIL,
-    password:       SUPERADMIN_PASSWORD,
+    password:       bootstrapPassword,
     email_confirm:  true,
   });
 
