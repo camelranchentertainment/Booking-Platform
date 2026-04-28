@@ -23,22 +23,19 @@ export default function ResetPassword() {
   const [done, setDone]         = useState(false);
 
   useEffect(() => {
-    // Check URL immediately — both hash-based (#type=recovery) and PKCE (?code=)
+    // Only trust actual auth events from Supabase — do NOT use getSession() here,
+    // because an existing session + a spoofed ?code= param would otherwise set ready=true
+    // without a valid recovery token.
     const hashParams  = new URLSearchParams(window.location.hash.slice(1));
     const queryParams = new URLSearchParams(window.location.search);
     const isRecoveryUrl = hashParams.get('type') === 'recovery' || queryParams.has('code');
 
-    // Also check if a recovery session is already established before mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && isRecoveryUrl) setReady(true);
-    });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // PASSWORD_RECOVERY = hash-based flow
-      // SIGNED_IN on this page with a code param = PKCE recovery flow
+      // PASSWORD_RECOVERY = hash-based flow (Supabase implicit)
+      // SIGNED_IN on this page after a code= exchange = PKCE recovery flow
       if (event === 'PASSWORD_RECOVERY') {
         setReady(true);
-      } else if (event === 'SIGNED_IN' && isRecoveryUrl) {
+      } else if (event === 'SIGNED_IN' && isRecoveryUrl && session) {
         setReady(true);
       }
     });

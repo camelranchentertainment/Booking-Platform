@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data, error } = await service.auth.admin.generateLink({
     type: 'recovery',
     email,
-    options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || ''}/login` },
+    options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || ''}/reset-password` },
   });
 
   if (error) return res.status(500).json({ error: error.message });
