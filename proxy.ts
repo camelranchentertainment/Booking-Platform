@@ -27,13 +27,13 @@ async function verifySuperadmin(token: string): Promise<boolean> {
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // ── /api/admin/* ──────────────────────────────────────────────────────────
   // Full server-side superadmin check on every admin API request.
   // The individual route handlers also guard themselves; this adds a
-  // middleware layer so invalid tokens are rejected before handlers run.
+  // proxy layer so invalid tokens are rejected before handlers run.
   if (pathname.startsWith('/api/admin/')) {
     const token = request.headers.get('authorization')?.replace('Bearer ', '').trim();
     if (!token) {

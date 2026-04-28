@@ -6,7 +6,7 @@ import Sidebar from './Sidebar';
 
 interface Props {
   children: React.ReactNode;
-  requireRole?: 'agent' | 'act_admin' | 'member' | ('agent' | 'act_admin' | 'member')[] | null;
+  requireRole?: 'agent' | 'act_admin' | 'member' | 'superadmin' | ('agent' | 'act_admin' | 'member' | 'superadmin')[] | null;
 }
 
 function daysLeft(trialEndsAt: string | null | undefined): number {
