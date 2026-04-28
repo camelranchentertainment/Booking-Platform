@@ -53,11 +53,9 @@ export default function Settings() {
       setForm({ display_name: data.display_name || '', agency_name: data.agency_name || '', phone: data.phone || '', email: data.email || '', personal_gmail: (data as any).personal_gmail || '' });
       setIsSuperAdmin(data.role === 'superadmin');
 
-      // Load calendar settings
       const { data: calData } = await supabase.from('user_calendar_settings').select('*').eq('user_id', user.id).maybeSingle();
       setCalSettings(calData);
 
-      // Show query param messages
       const params = new URLSearchParams(window.location.search);
       if (params.get('calendar_connected')) setCalMsg('Google Calendar connected!');
       if (params.get('calendar_error')) setCalMsg(`Connection error: ${params.get('calendar_error')}`);
@@ -143,217 +141,222 @@ export default function Settings() {
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
+  const sectionLabelStyle: React.CSSProperties = {
+    fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.14em',
+    textTransform: 'uppercase', color: 'var(--text-muted)',
+    marginBottom: '0.75rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)',
+  };
+
   return (
-    <AppShell requireRole={['agent', 'act_admin', 'member']}>
+    <AppShell requireRole={['agent', 'superadmin', 'member']}>
       <div className="page-header">
         <div>
           <h1 className="page-title">Settings</h1>
           <div className="page-sub">
             {isSuperAdmin ? 'Platform configuration & profile'
               : profile?.role === 'member' ? 'Account & password'
-              : profile?.role === 'act_admin' ? 'Band profile & account'
               : 'Agent profile & preferences'}
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 560, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      <div style={{ maxWidth: 560, display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
 
         {/* Platform Setup — superadmin only */}
         {isSuperAdmin && <PlatformSetup />}
 
-        {/* Profile */}
-        <form onSubmit={save}>
-          <div className="card">
-            <div className="card-header"><span className="card-title">PROFILE</span></div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        {/* ── ACCOUNT ── */}
+        <div>
+          <div style={sectionLabelStyle}>Account</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
-              {/* Avatar */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border)' }}>
-                <div
-                  onClick={() => !avatarUploading && fileInputRef.current?.click()}
-                  style={{
-                    width: 80, height: 80, borderRadius: '50%', flexShrink: 0,
-                    background: avatarUrl ? 'transparent' : 'var(--bg-overlay)',
-                    border: '2px solid var(--border)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: avatarUploading ? 'wait' : 'pointer',
-                    overflow: 'hidden', position: 'relative',
-                    transition: 'border-color 0.15s',
-                  }}
-                  title="Click to upload avatar"
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
-                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                >
-                  {avatarUrl
-                    ? <img src={avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', color: 'var(--accent)', lineHeight: 1 }}>
-                        {(form.display_name || profile?.email || '?')[0].toUpperCase()}
-                      </span>
-                  }
-                  {avatarUploading && (
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ color: '#fff', fontSize: '0.7rem', fontFamily: 'var(--font-body)' }}>Uploading…</span>
+            {/* Profile */}
+            <form onSubmit={save}>
+              <div className="card">
+                <div className="card-header"><span className="card-title">PROFILE</span></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {/* Avatar */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border)' }}>
+                    <div
+                      onClick={() => !avatarUploading && fileInputRef.current?.click()}
+                      style={{
+                        width: 80, height: 80, borderRadius: '50%', flexShrink: 0,
+                        background: avatarUrl ? 'transparent' : 'var(--bg-overlay)',
+                        border: '2px solid var(--border)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: avatarUploading ? 'wait' : 'pointer',
+                        overflow: 'hidden', position: 'relative', transition: 'border-color 0.15s',
+                      }}
+                      title="Click to upload avatar"
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                    >
+                      {avatarUrl
+                        ? <img src={avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', color: 'var(--accent)', lineHeight: 1 }}>
+                            {(form.display_name || profile?.email || '?')[0].toUpperCase()}
+                          </span>
+                      }
+                      {avatarUploading && (
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ color: '#fff', fontSize: '0.7rem', fontFamily: 'var(--font-body)' }}>Uploading…</span>
+                        </div>
+                      )}
+                    </div>
+                    <input ref={fileInputRef} type="file" accept="image/*" onChange={uploadAvatar} style={{ display: 'none' }} />
+                    <div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.2rem' }}>Profile Photo</div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                        Click your avatar to upload.<br />PNG or JPG · max 5 MB · ideal 200×200 px
+                      </div>
+                      {avatarError && <div style={{ color: '#f87171', fontSize: '0.75rem', fontFamily: 'var(--font-body)', marginTop: '0.25rem' }}>{avatarError}</div>}
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Your Name</label>
+                    <input className="input" value={form.display_name} onChange={set('display_name')} placeholder="Your full name" />
+                  </div>
+                  {profile?.role === 'agent' && (
+                    <div className="field">
+                      <label className="field-label">Agency Name</label>
+                      <input className="input" value={form.agency_name} onChange={set('agency_name')} placeholder="Your agency / booking company" />
                     </div>
                   )}
-                </div>
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={uploadAvatar} style={{ display: 'none' }} />
-                <div>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.2rem' }}>Profile Photo</div>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                    Click your avatar to upload.<br />
-                    PNG or JPG · max 5 MB · ideal 200×200 px
+                  <div className="field">
+                    <label className="field-label">Phone</label>
+                    <input className="input" type="tel" value={form.phone} onChange={set('phone')} />
                   </div>
-                  {avatarError && <div style={{ color: '#f87171', fontSize: '0.75rem', fontFamily: 'var(--font-body)', marginTop: '0.25rem' }}>{avatarError}</div>}
+                  <div className="field">
+                    <label className="field-label">Email</label>
+                    <input className="input" type="email" value={form.email} disabled style={{ opacity: 0.5 }} />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>Email cannot be changed here</span>
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Personal Gmail</label>
+                    <input className="input" type="email" value={form.personal_gmail} onChange={set('personal_gmail')} placeholder="yourname@gmail.com" />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>Used for advance &amp; thank-you reminder emails</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</button>
+                  {saved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>✓ Saved</span>}
                 </div>
               </div>
+            </form>
 
-              <div className="field">
-                <label className="field-label">Your Name</label>
-                <input className="input" value={form.display_name} onChange={set('display_name')} placeholder="Your full name" />
-              </div>
-              {profile?.role === 'agent' && (
-                <div className="field">
-                  <label className="field-label">Agency Name</label>
-                  <input className="input" value={form.agency_name} onChange={set('agency_name')} placeholder="Your agency / booking company" />
+            {/* Change Password */}
+            <form onSubmit={changePassword}>
+              <div className="card">
+                <div className="card-header"><span className="card-title">CHANGE PASSWORD</span></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div className="field">
+                    <label className="field-label">New Password</label>
+                    <input className="input" type="password" value={pwForm.newPassword}
+                      onChange={e => setPwForm(f => ({ ...f, newPassword: e.target.value }))}
+                      placeholder="Min. 8 characters" autoComplete="new-password" />
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Confirm New Password</label>
+                    <input className="input" type="password" value={pwForm.confirmPassword}
+                      onChange={e => setPwForm(f => ({ ...f, confirmPassword: e.target.value }))}
+                      placeholder="Repeat password" autoComplete="new-password" />
+                  </div>
+                  {pwError && <div style={{ color: '#f87171', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{pwError}</div>}
                 </div>
-              )}
-              <div className="field">
-                <label className="field-label">Phone</label>
-                <input className="input" type="tel" value={form.phone} onChange={set('phone')} />
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
+                  <button type="submit" className="btn btn-primary" disabled={pwSaving}>{pwSaving ? 'Saving...' : 'Update Password'}</button>
+                  {pwSaved && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#34d399' }}>✓ Password Updated</span>}
+                </div>
               </div>
-              <div className="field">
-                <label className="field-label">Email</label>
-                <input className="input" type="email" value={form.email} disabled style={{ opacity: 0.5 }} />
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>Email cannot be changed here</span>
-              </div>
-              <div className="field">
-                <label className="field-label">Personal Gmail</label>
-                <input className="input" type="email" value={form.personal_gmail} onChange={set('personal_gmail')} placeholder="yourname@gmail.com" />
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>Used for advance & thank-you reminder emails</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
-              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</button>
-              {saved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>✓ Saved</span>}
-            </div>
-          </div>
-        </form>
+            </form>
 
-        {/* Change Password */}
-        <form onSubmit={changePassword}>
-          <div className="card">
-            <div className="card-header"><span className="card-title">CHANGE PASSWORD</span></div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div className="field">
-                <label className="field-label">New Password</label>
-                <input
-                  className="input" type="password"
-                  value={pwForm.newPassword}
-                  onChange={e => setPwForm(f => ({ ...f, newPassword: e.target.value }))}
-                  placeholder="Min. 8 characters"
-                  autoComplete="new-password"
-                />
-              </div>
-              <div className="field">
-                <label className="field-label">Confirm New Password</label>
-                <input
-                  className="input" type="password"
-                  value={pwForm.confirmPassword}
-                  onChange={e => setPwForm(f => ({ ...f, confirmPassword: e.target.value }))}
-                  placeholder="Repeat password"
-                  autoComplete="new-password"
-                />
-              </div>
-              {pwError && <div style={{ color: '#f87171', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{pwError}</div>}
-            </div>
-            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
-              <button type="submit" className="btn btn-primary" disabled={pwSaving}>{pwSaving ? 'Saving...' : 'Update Password'}</button>
-              {pwSaved && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#34d399' }}>✓ Password Updated</span>}
-            </div>
           </div>
-        </form>
+        </div>
 
-        {/* Billing — visible to agents and band_admins */}
+        {/* ── PLAN & BILLING ── */}
         {profile && profile.role !== 'superadmin' && profile.role !== 'member' && (
-          <div className="card">
-            <div className="card-header"><span className="card-title">BILLING</span></div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.88rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.4rem' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Plan</span>
-                <span style={{ color: 'var(--text-secondary)' }}>{TIER_LABELS[profile.subscription_tier || 'agent']}</span>
+          <div>
+            <div style={sectionLabelStyle}>Plan &amp; Billing</div>
+            <div className="card">
+              <div className="card-header"><span className="card-title">BILLING</span></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.88rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.4rem' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Plan</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{TIER_LABELS[profile.subscription_tier || 'agent']}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.4rem' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Status</span>
+                  <span style={{
+                    color: profile.subscription_status === 'active' ? '#34d399'
+                         : profile.subscription_status === 'trialing' ? '#fbbf24'
+                         : '#f87171',
+                  }}>
+                    {STATUS_LABELS[profile.subscription_status || 'inactive']}
+                    {profile.subscription_status === 'trialing' && profile.trial_ends_at && (
+                      <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.68rem' }}>
+                        (expires {new Date(profile.trial_ends_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})
+                      </span>
+                    )}
+                  </span>
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.4rem' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Status</span>
-                <span style={{
-                  color: profile.subscription_status === 'active' ? '#34d399'
-                       : profile.subscription_status === 'trialing' ? '#fbbf24'
-                       : '#f87171',
-                }}>
-                  {STATUS_LABELS[profile.subscription_status || 'inactive']}
-                  {profile.subscription_status === 'trialing' && profile.trial_ends_at && (
-                    <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.68rem' }}>
-                      (expires {new Date(profile.trial_ends_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})
-                    </span>
-                  )}
-                </span>
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                {profile.stripe_customer_id ? (
+                  <button className="btn btn-secondary" onClick={openPortal} disabled={portalLoading}>
+                    {portalLoading ? 'Opening...' : 'Manage Billing'}
+                  </button>
+                ) : (
+                  <button className="btn btn-primary" onClick={() => router.push('/pricing')}>Subscribe</button>
+                )}
               </div>
-            </div>
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-              {profile.stripe_customer_id ? (
-                <button className="btn btn-secondary" onClick={openPortal} disabled={portalLoading}>
-                  {portalLoading ? 'Opening...' : 'Manage Billing'}
-                </button>
-              ) : (
-                <button className="btn btn-primary" onClick={() => router.push('/pricing')}>
-                  Subscribe
-                </button>
-              )}
             </div>
           </div>
         )}
 
-        {/* Google Calendar — agents only */}
-        {profile && profile.role === 'agent' && (
-          <div className="card">
-            <div className="card-header"><span className="card-title">GOOGLE CALENDAR</span></div>
-            {calMsg && (
-              <div style={{
-                marginBottom: '0.75rem', padding: '0.5rem 0.75rem',
-                background: calMsg.includes('error') ? 'rgba(248,113,113,0.1)' : 'rgba(52,211,153,0.1)',
-                border: `1px solid ${calMsg.includes('error') ? 'rgba(248,113,113,0.3)' : 'rgba(52,211,153,0.3)'}`,
-                borderRadius: 'var(--radius-sm)', fontSize: '0.82rem',
-                color: calMsg.includes('error') ? '#f87171' : '#34d399',
-                fontFamily: 'var(--font-body)',
-              }}>
-                {calMsg}
-              </div>
-            )}
-            {calSettings?.calendar_type === 'google' && calSettings?.is_active ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#34d399', flexShrink: 0 }} />
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: '#34d399' }}>Connected</span>
-                  {calSettings.last_synced_at && (
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      · synced {new Date(calSettings.last_synced_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </span>
-                  )}
+        {/* ── INTEGRATIONS ── */}
+        {profile?.role === 'agent' && (
+          <div>
+            <div style={sectionLabelStyle}>Integrations</div>
+            <div className="card">
+              <div className="card-header"><span className="card-title">GOOGLE CALENDAR</span></div>
+              {calMsg && (
+                <div style={{
+                  marginBottom: '0.75rem', padding: '0.5rem 0.75rem',
+                  background: calMsg.includes('error') ? 'rgba(248,113,113,0.1)' : 'rgba(52,211,153,0.1)',
+                  border: `1px solid ${calMsg.includes('error') ? 'rgba(248,113,113,0.3)' : 'rgba(52,211,153,0.3)'}`,
+                  borderRadius: 'var(--radius-sm)', fontSize: '0.82rem',
+                  color: calMsg.includes('error') ? '#f87171' : '#34d399',
+                  fontFamily: 'var(--font-body)',
+                }}>
+                  {calMsg}
                 </div>
-                <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start', color: '#f87171' }} onClick={disconnectGoogleCalendar}>
-                  Disconnect Google Calendar
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-                  Connect Google Calendar to sync your booked shows and see them alongside personal events.
+              )}
+              {calSettings?.calendar_type === 'google' && calSettings?.is_active ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#34d399', flexShrink: 0 }} />
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: '#34d399' }}>Connected</span>
+                    {calSettings.last_synced_at && (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        · synced {new Date(calSettings.last_synced_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    )}
+                  </div>
+                  <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start', color: '#f87171' }} onClick={disconnectGoogleCalendar}>
+                    Disconnect Google Calendar
+                  </button>
                 </div>
-                <button className="btn btn-primary" style={{ alignSelf: 'flex-start' }} onClick={connectGoogleCalendar} disabled={calConnecting}>
-                  {calConnecting ? 'Redirecting…' : 'Connect Google Calendar'}
-                </button>
-              </div>
-            )}
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                    Connect Google Calendar to sync your booked shows and see them alongside personal events.
+                  </div>
+                  <button className="btn btn-primary" style={{ alignSelf: 'flex-start' }} onClick={connectGoogleCalendar} disabled={calConnecting}>
+                    {calConnecting ? 'Redirecting…' : 'Connect Google Calendar'}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
