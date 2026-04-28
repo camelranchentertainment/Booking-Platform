@@ -107,7 +107,38 @@ export default function TourDetail() {
   const [editingNotes, setEditingNotes] = useState<string | null>(null);
   const [notesDraft, setNotesDraft]     = useState('');
 
+  // Expense state
+  type TourExpense = {
+    id: string;
+    expense_date: string;
+    category: string;
+    amount: number;
+    notes: string | null;
+    tour_id: string | null;
+    booking_id: string | null;
+  };
+  const [tourExpenses, setTourExpenses] = useState<TourExpense[]>([]);
+  const [expModal, setExpModal] = useState<{
+    open: boolean;
+    mode: 'add' | 'edit';
+    expense: Partial<TourExpense> | null;
+    saving: boolean;
+    error: string;
+  }>({ open: false, mode: 'add', expense: null, saving: false, error: '' });
+
+  const fmtMoney = (n: number) => '$' + Math.round(n).toLocaleString();
+
   useEffect(() => { if (id) loadAll(); }, [id]);
+
+  const loadTourExpenses = async (tourId: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch(`/api/expenses?tour_id=${tourId}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    const json = await res.json();
+    setTourExpenses(json.expenses || []);
+  };
 
   const loadAll = async () => {
     const [tourRes, bookingsRes] = await Promise.all([
@@ -117,8 +148,11 @@ export default function TourDetail() {
         venue:venues(name, city, state)
       `).eq('tour_id', id).order('show_date', { ascending: true }),
     ]);
-    if (tourRes.data) { setTour(tourRes.data); setForm(tourRes.data); }
-    else setLoadError(true);
+    if (tourRes.data) {
+      setTour(tourRes.data);
+      setForm(tourRes.data);
+      loadTourExpenses(tourRes.data.id);
+    } else setLoadError(true);
     setBookings(bookingsRes.data || []);
     loadPool();
   };
@@ -533,6 +567,98 @@ export default function TourDetail() {
           )}
         </div>
       </div>
+
+      {/* Tour Expenses */}
+        <div className="card" style={{ marginTop: '1rem' }}>
+          <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span className="card-title">
+              EXPENSES
+              {tourExpenses.length > 0 && (
+                <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: '0.4rem' }}>
+                  · {fmtMoney(tourExpenses.reduce((s, e) => s + Number(e.amount), 0))} total
+                </span>
+              )}
+            </span>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setExpModal({
+                open: true,
+                mode: 'add',
+                expense: {
+                  expense_date: new Date().toISOString().split('T')[0],
+                  tour_id: tour?.id ?? null,
+                },
+                saving: false,
+                error: '',
+              })}>
+              + Add Expense
+            </button>
+          </div>
+
+          {tourExpenses.length === 0 ? (
+            <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>
+              No expenses recorded for this tour yet.
+            </div>
+          ) : (
+            <>
+              {/* Category summary pills */}
+              {(() => {
+                const byCat: Record<string, number> = {};
+                for (const e of tourExpenses) byCat[e.category] = (byCat[e.category] || 0) + Number(e.amount);
+                return (
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
+                    {Object.entries(byCat).map(([cat, total]) => (
+                      <div key={cat} style={{ background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', padding: '0.25rem 0.6rem', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-muted)' }}>{cat}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#f87171', fontWeight: 600 }}>{fmtMoney(total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Expense rows */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                {tourExpenses.map(e => (
+                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.45rem 0.6rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)' }}>
+                    <div>
+                      <div style={{ fontSize: '0.84rem', color: 'var(--text-primary)', fontWeight: 500 }}>{e.category}</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
+                        {new Date(e.expense_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {e.notes ? ` · ${e.notes}` : ''}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#f87171', fontWeight: 600 }}>
+                        {fmtMoney(Number(e.amount))}
+                      </span>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.68rem', padding: '0.15rem 0.4rem' }}
+                        onClick={() => setExpModal({ open: true, mode: 'edit', expense: e, saving: false, error: '' })}>
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-danger"
+                        style={{ fontSize: '0.68rem', padding: '0.15rem 0.4rem' }}
+                        onClick={async () => {
+                          if (!confirm('Delete this expense?')) return;
+                          const { data: { session } } = await supabase.auth.getSession();
+                          await fetch(`/api/expenses/${e.id}`, {
+                            method: 'DELETE',
+                            headers: { Authorization: `Bearer ${session!.access_token}` },
+                          });
+                          if (tour?.id) loadTourExpenses(tour.id);
+                        }}>
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
 
       {/* Outreach Pool */}
       <div className="card" style={{ marginTop: '1.25rem' }}>
@@ -1042,6 +1168,89 @@ export default function TourDetail() {
           </form>
         </div>
       )}
+      {/* Expense Add/Edit Modal */}
+      {expModal.open && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setExpModal(m => ({ ...m, open: false }))}>
+          <div
+            style={{ background: 'var(--surface)', borderRadius: 12, padding: '1.75rem', width: 400, maxWidth: '94vw' }}
+            onClick={e => e.stopPropagation()}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', marginBottom: '1.25rem' }}>
+              {expModal.mode === 'add' ? 'Add Expense' : 'Edit Expense'}
+            </h2>
+
+            <label style={{ display: 'block', marginBottom: '0.8rem' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>DATE</div>
+              <input type="date" className="input" style={{ width: '100%' }}
+                value={expModal.expense?.expense_date || ''}
+                onChange={e => setExpModal(m => ({ ...m, expense: { ...m.expense, expense_date: e.target.value } }))} />
+            </label>
+
+            <label style={{ display: 'block', marginBottom: '0.8rem' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>CATEGORY <span style={{ color: '#f87171' }}>*</span></div>
+              <select className="select" style={{ width: '100%' }}
+                value={expModal.expense?.category || ''}
+                onChange={e => setExpModal(m => ({ ...m, expense: { ...m.expense, category: e.target.value } }))}>
+                <option value="">Select…</option>
+                {['Gas / Mileage','Hotel / Lodging','Band Member Payments','Food / Meals','Equipment','Other'].map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ display: 'block', marginBottom: '0.8rem' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>AMOUNT <span style={{ color: '#f87171' }}>*</span></div>
+              <input type="number" className="input" style={{ width: '100%' }} placeholder="0.00" min="0" step="0.01"
+                value={expModal.expense?.amount ?? ''}
+                onChange={e => setExpModal(m => ({ ...m, expense: { ...m.expense, amount: Number(e.target.value) } }))} />
+            </label>
+
+            <label style={{ display: 'block', marginBottom: '1.25rem' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>NOTES</div>
+              <input type="text" className="input" style={{ width: '100%' }} placeholder="Optional"
+                value={expModal.expense?.notes || ''}
+                onChange={e => setExpModal(m => ({ ...m, expense: { ...m.expense, notes: e.target.value } }))} />
+            </label>
+
+            {expModal.error && (
+              <div style={{ color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', marginBottom: '0.75rem' }}>{expModal.error}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setExpModal(m => ({ ...m, open: false }))}>Cancel</button>
+              <button className="btn btn-primary" disabled={expModal.saving}
+                onClick={async () => {
+                  const exp = expModal.expense;
+                  if (!exp?.category)     return setExpModal(m => ({ ...m, error: 'Category is required' }));
+                  if (!exp?.amount)       return setExpModal(m => ({ ...m, error: 'Amount is required' }));
+                  if (!exp?.expense_date) return setExpModal(m => ({ ...m, error: 'Date is required' }));
+
+                  setExpModal(m => ({ ...m, saving: true, error: '' }));
+                  const { data: { session } } = await supabase.auth.getSession();
+                  const method = expModal.mode === 'add' ? 'POST' : 'PUT';
+                  const url    = expModal.mode === 'add' ? '/api/expenses' : `/api/expenses/${exp.id}`;
+
+                  const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session!.access_token}` },
+                    body: JSON.stringify({ ...exp, tour_id: exp.tour_id ?? tour?.id }),
+                  });
+
+                  if (!res.ok) {
+                    const err = await res.json();
+                    return setExpModal(m => ({ ...m, saving: false, error: err.error || 'Save failed' }));
+                  }
+                  setExpModal(m => ({ ...m, open: false, saving: false }));
+                  if (tour?.id) loadTourExpenses(tour.id);
+                }}>
+                {expModal.saving ? 'Saving…' : expModal.mode === 'add' ? 'Add Expense' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Tour Confirmation */}
       {showDeleteConfirm && (
         <div className="modal-backdrop">

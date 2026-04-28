@@ -1,0 +1,245 @@
+CAMEL RANCH BOOKING
+MASTER REBUILD PLAN  —  VERSION 2
+Based on Full Platform Review + Development Sessions  |  April 2026
+Reviewer: Scott McCumber  |  Agent, Band Admin, Superadmin  |  camelranchbooking.com
+
+
+This document is the complete and updated plan for Camel Ranch Booking. It incorporates all decisions made during the full platform review, all 5 build phases completed, and all new features added after the initial rebuild — including Daily Notes, Expense Tracking, the Admin Panel, and tool integrations.
+"From first venue outreach to confirmed shows, payments, and history — all in one place."
+
+
+THE NORTH STAR
+One system that takes a band from "we want to play these cities" all the way through to "we got paid and here's what we made this year" — without leaving the platform at any point.
+Three layers: Tour & Outreach Engine  +  Booking Pipeline  +  Financial Operating System
+
+
+1. WHAT HAS BEEN BUILT (ALL 5 PHASES COMPLETE)
+As of April 2026 all 5 phases of the rebuild plan have been completed and deployed to camelranchbooking.com. The platform now supports a complete end-to-end booking workflow.
+Phase 1 — Stop the Bleeding
+Role override bug fixed — accepting invitations never overwrites existing role
+Registration foreign key bug fixed
+Stat cards and band cards on dashboard are clickable
+Venue form validation (name + city required)
+Tour delete now requires confirmation dialog
+Venue delete button added
+Dark mode set as default for new users
+Phase 2 — Connect What Exists
+Email tab now uses the same working code path as Calendar email
+Generate Drafts pulls venues from tour outreach pool
+Confirm Show creates a real booking record AND populates calendar
+Bookings pipeline fed from tour confirmations
+Single source of truth for band profile data established
+Member list consistency fixed across all pages
+Agent appears in band member list with Booking Agent label
+Phase 3 — Build the Back Half
+Booking confirmation flow — full record with deal type, amount, confirmed_by
+Post-confirmation details modal — load-in, soundcheck, showtime, logistics
+Confirmation email sent to venue on booking with agent name and band details
+Financial tracking per show — deal type, agreed amount, actual received, payment status
+Settle stage — Mark as Played, post-show notes, rebook flag, thank-you reminder
+Show History archive at /history — filterable, sortable, CSV export
+Tour Day View at /today — all roles, members see no financial data
+Follow-up automation — 7-day timer, red badge on overdue venues, notifications
+Phase 4 — Design & Polish
+Persistent role context badge on every page (Superadmin/Agent/Band Admin/Member)
+Superadmin dashboard rebuilt at /admin — user management, subscriptions, analytics
+New 4-tier pricing cards: Member (Free), Band Admin ($15), Agent T1 ($30), Agent T2 ($50)
+Sign up flow redesign — tier selection appears before registration form
+Login page typography strengthened — logo enlarged, tagline added
+Stat cards color-coded with hover lift effect
+Calendar status legend added to all calendar pages
+Light mode contrast fixes — dark mode now the default for new users
+Phase 5 — Expand
+In-app inbox — reads IMAP, matches replies to venues, full body on click, unread badge
+Annual income summary at /financials — year selector, 6 cards, monthly/by-act/by-venue tabs, CSV export
+Venue booking history on venue detail page — summary stats, full table, post-show notes
+Bulk import with downloadable CSV template — duplicate check, results summary
+Social — copy-to-clipboard for all platforms, Discord webhook, Facebook Graph API
+Google Calendar OAuth constraint error fixed
+Genre filtering with music_genres TEXT[] column
+Auto-Find Emails — bulk + per-row, progress indicator, results summary
+Earned vs Potential correctly separated on all financial displays
+Admin panel — clickable stat cards, impersonation, subscription management, system status
+Daily Notes at /today — rich text, auto-save, visibility selector, Past Notes by date/tour
+
+2. NEW FEATURES ADDED AFTER PHASES
+2.1 Daily Notes (at /today)
+A daily scratchpad on the Tour Day View. Write notes, bullet points, numbered lists, and checkboxes while on the road. Auto-saves every 2 seconds. Organized by date and by tour.
+
+Quarter-panel on the right side of /today
+Supports: plain text, bullet points (- or *), numbered lists (1. 2. 3.), checkboxes ([ ] and [x])
+Auto-saves 2 seconds after you stop typing — shows a subtle "Saved" indicator
+Visibility selector per note: Only Me / Band Admin Can See / Whole Band Can See — default: Only Me
+Active tour auto-detected from today's show or most recent active tour
+Past Notes button opens modal with two tabs: By Date and By Tour
+By Date: scrollable list of dates with notes, click to read that day's note
+By Tour: dropdown of all tours showing notes written during that tour period
+Notes from other authors shown in different color with author name
+Members and Band Admins see notes shared with their role — cannot see agent-only notes
+DATABASE: daily_notes table with user_id, act_id, tour_id, note_date, content, visibility, RLS policies.
+2.2 Expense Tracking (at /financials)
+Expenses live only in /financials — not on /today. Each expense is tied to a tour (required) and optionally a specific show. Feeds net income calculation across the platform.
+
+Expense entry via "+ Add Expense" button on the Expenses tab in /financials
+Each expense: Date, Tour (required), Show/Booking (optional), Category, Amount, Notes
+Default categories: Gas / Mileage, Hotel / Lodging, Band Member Payments, Food / Meals, Equipment, Other
+Per-show expenses: see what each show night cost
+Per-tour rollup: total expenses for the full run
+Summary bar: total by category
+Filter by tour, date range, and category
+Edit and delete per row with confirmation
+Net Income = Total Earned minus Total Expenses — all financial cards updated to reflect real expense data
+Tour detail page shows expense summary card with "+ Add Expense" button
+DATABASE: expenses table with user_id, act_id, tour_id, booking_id, expense_date, category, amount, notes, RLS policies.
+
+3. THE COMPLETE BOOKING LIFECYCLE
+Stage 1 — Design the Tour
+Create tour with name, band, date range (date picker)
+Define target cities for the run
+System shows routing context — city order, drive windows
+Wed-Sat show windows highlighted as primary booking targets
+Stage 2 — Discover Venues
+Google Places search by city and state
+Email is prioritized — booking contact email surfaced first
+Venue added to both tour outreach pool AND main venue database simultaneously
+Auto-Find Emails: scrapes venue websites for missing booking contact emails
+Bulk import with downloadable CSV template
+Genre filtering with multi-select (music_genres TEXT[] column)
+Stage 3 — Initial Outreach
+AI generates cold pitch draft for each venue in outreach pool
+Subject: "[Band Name] — Booking Inquiry — [Venue], [City]"
+Agent sends include: "Sent on behalf of [Band] by Camel Ranch Booking" signature
+Send individually or bulk send
+Status updates to Initial Contact Sent with timestamp
+Logged in outreach tracker
+Stage 4 — Follow-Up Automation
+7-day timer starts at send
+No reply after 7 days: red badge on venue card, notification created
+Reply received: venue moves to In Conversation status, notification sent
+All follow-up actions logged with timestamps
+Stage 5 — Confirm the Booking
+CONFIRM SHOW button on venue in outreach pool
+Creates booking record with deal type, agreed amount, confirmed_by, details_pending flag
+Calendar event created immediately — status Details Pending until logistics filled
+Confirmation email sent to venue automatically — includes band, agent, show date, deal
+Venue fills in logistics form — details push into booking record and calendar
+Stage 6 — The Booking Record
+All fields configurable per band admin
+Stage 7 — Advance the Show
+14 days before: advance reminder notification
+Pending logistics flagged amber on Tour Day View
+Stage 8 — Tour Day View (/today)
+Agent/Band Admin: venue, drive time, load-in/soundcheck/showtime, hotel, meals, drinks, sound, deal/pay
+Member: same operational details — NO deal type, NO pay amounts, NO financial data
+Daily Notes panel
+Stage 9 — Settle
+Mark as Played button
+Post-show form: actual pay, payment status, notes, rebook flag
+Expense tracking: add tour/show expenses
+Stage 10 — Show History & Financials
+Every played show permanently archived at /history
+Annual summary at /financials
+Expense tracking feeds Net Income calculation
+
+4. PRICING & ROLE STRUCTURE
+Tier | Price | Who | Access
+Band Member | Free | Read-only musician/crew | Calendar, notifications, Tour Day View (no financials)
+Band Admin | $15/mo | Self-booking band manager | Full band tools
+Agent Tier 1 | $30/mo | Agent managing 1-5 bands | All Band Admin tools + band switcher
+Agent Tier 2 | $50/mo | Agent managing 6+ bands | Unlimited bands
+Superadmin | N/A | Scott only | Full platform control
+
+5. ROLE ACCESS CONTROL
+Key Rules
+Shared venue database
+Email on behalf of
+Double-booking protection
+Role override protection
+Superadmin guard
+Financial privacy — members never see deal amounts
+Email privacy
+Daily notes visibility
+Expense visibility — agent and band admin only; not members
+
+6. OUTSTANDING ITEMS & KNOWN ISSUES
+6.1 Immediate Fixes Needed
+Item | Priority | Status | Notes
+Supabase migration — daily_notes table | CRITICAL | Missing | Run migration SQL in Supabase before daily notes will work
+Supabase migration — expenses table | CRITICAL | Missing | Run migration SQL in Supabase before expense tracking will work
+Expense tracking feature build | CRITICAL | Missing | Prompt written — paste into Claude Code after migrations
+Billing Date in admin subscription table | MEDIUM | Partial | Shows — not connected to Stripe billing data yet
+Google Calendar OAuth — full end-to-end test | MEDIUM | Partial | Constraint error fixed in code — needs live browser confirmation
+Password reset security review | MEDIUM | Partial | Security concern flagged during review — needs audit
+Account vs band settings separation | MEDIUM | Missing | Settings page needs clear separation
+Agent avatar in sidebar | LOW | Broken | Only band avatars visible
+
+6.2 Features Still to Build
+Item | Priority | Status | Notes
+In-app inbox — venue filter on history page | LOW | Partial | Test in production
+Taskmaster AI integration | MEDIUM | Missing | Install and configure
+GStack QA audit | MEDIUM | Missing | Run /qa for visual browser audit
+Superpowers TDD framework | LOW | Missing | Optional
+Social — Buffer API integration | LOW | Missing | Copy-to-clipboard works as fallback
+Show history — venue filter | LOW | Working | Confirm in production
+Wed-Sat touring window calendar view | LOW | Missing |
+Band member payout tracking | LOW | Missing |
+Receipt photo upload on expenses | LOW | Missing |
+Routing optimizer on tours | LOW | Missing |
+
+7. TOOL INTEGRATIONS
+7.1 GStack — Install: git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git ~/.claude/skills/gstack && cd ~/.claude/skills/gstack && ./setup
+7.2 Taskmaster AI — Install: claude mcp add task-master-ai --scope user -- npx -y task-master-ai@latest
+7.3 Superpowers — Install: /plugin install superpowers@claude-plugins-official
+
+8. DATABASE MIGRATIONS — RUN THESE IN SUPABASE
+8.1 Daily Notes Table
+CREATE TABLE daily_notes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  act_id uuid REFERENCES acts(id) ON DELETE SET NULL,
+  tour_id uuid REFERENCES tours(id) ON DELETE SET NULL,
+  note_date date NOT NULL,
+  content text NOT NULL DEFAULT '',
+  visibility text NOT NULL DEFAULT 'agent_only'
+    CHECK (visibility IN ('agent_only','band_admin','all_members')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX daily_notes_user_date_idx ON daily_notes (user_id, note_date);
+ALTER TABLE daily_notes ENABLE ROW LEVEL SECURITY;
+
+8.2 Expenses Table
+CREATE TABLE expenses (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  act_id uuid REFERENCES acts(id) ON DELETE SET NULL,
+  tour_id uuid REFERENCES tours(id) ON DELETE SET NULL,
+  booking_id uuid REFERENCES bookings(id) ON DELETE SET NULL,
+  expense_date date NOT NULL,
+  category text NOT NULL,
+  amount numeric NOT NULL,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
+
+9. IMMEDIATE NEXT STEPS — IN ORDER
+1. Run daily_notes migration in Supabase SQL Editor (Section 8.1)
+2. Run expenses migration in Supabase SQL Editor (Section 8.2)
+3. Paste expense tracking build prompt into Claude Code
+4. Run Phase 5 audit after expenses feature is built
+5. Install GStack in Codespaces and run /qa on the live site
+6. Install Taskmaster AI and feed it this document as the PRD
+7. Do a real live booking run for Better Than Nothin' — full workflow from discovery to settle
+8. Use the Platform Prompt Sheet to do a fresh walkthrough after all features are live
+9. Define Phase 6 based on what the real live run reveals
+
+Success Definition (6 Months)
+One complete workflow runs clean: Discovery → Outreach → Confirm → Advance → Settle → History
+Venue email discovery works reliably — booking contact email found for 60%+ of discovered venues
+Tour Day View is useful on mobile during an active tour
+Financial tracking shows accurate net income with real expense data
+Design feels professional enough to show to another band without apologizing
+At least one band besides Better Than Nothin' is actively using and paying for the platform
+Platform generating passive income while actively used for real bookings
