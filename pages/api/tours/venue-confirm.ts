@@ -285,7 +285,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
   const { tour_venue_id, show_date, fee, deal_type, agreed_amount, platforms } = req.body;
-  if (!tour_venue_id || !show_date) return res.status(400).json({ error: 'tour_venue_id and show_date required' });
+  if (!tour_venue_id) return res.status(400).json({ error: 'tour_venue_id required' });
 
   const selectedPlatforms: Platform[] = Array.isArray(platforms) && platforms.length > 0
     ? platforms.filter((p: string): p is Platform => ['instagram', 'facebook', 'youtube', 'tiktok', 'discord'].includes(p))
@@ -293,11 +293,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { data: tv } = await service
     .from('tour_venues')
-    .select('*, tour:tours(id, act_id, name, created_by), venue:venues(id, name, city, state, email)')
+    .select('*, tour:tours(id, act_id, name, created_by, start_date), venue:venues(id, name, city, state, email)')
     .eq('id', tour_venue_id)
     .single();
 
   if (!tv) return res.status(404).json({ error: 'Not found' });
+
+  // Fall back to tour start_date if no specific show_date was provided
+  const effectiveDate: string | null = show_date || (tv.tour as any).start_date || null;
+  if (!effectiveDate) return res.status(400).json({ error: 'show_date required — tour has no start date to use as fallback' });
 
   // Allow tour creator OR band admin whose act owns this tour
   const isCreator = (tv.tour as any).created_by === user.id;
@@ -339,7 +343,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       venue_id:        (tv.venue as any).id,
       tour_id:         (tv.tour as any).id,
       status:          'confirmed',
-      show_date,
+      show_date:       effectiveDate,
       fee:             fee ? parseFloat(fee) : null,
       deal_type:       deal_type || null,
       agreed_amount:   agreed_amount ? parseFloat(agreed_amount) : (fee ? parseFloat(fee) : null),
@@ -351,6 +355,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (bookingError) throw new Error(bookingError.message);
 
+    // Only mark confirmed after booking is successfully created
     await service.from('tour_venues').update({ status: 'confirmed' }).eq('id', tour_venue_id);
 
     // Send venue confirmation email (ITEM 3)
@@ -368,7 +373,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const { apiKey, from } = await getResendConfig(service);
         if (apiKey) {
           const resend = new Resend(apiKey);
-          const confDate = new Date(show_date + 'T00:00:00').toLocaleDateString('en-US', {
+          const confDate = new Date(effectiveDate + 'T00:00:00').toLocaleDateString('en-US', {
             weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
           });
           const dealLabels: Record<string, string> = {
@@ -414,10 +419,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } catch { /* email failures don't block */ }
     }
 
-    const dateFormatted = new Date(show_date + 'T00:00:00').toLocaleDateString('en-US', {
+    const dateFormatted = new Date(effectiveDate + 'T00:00:00').toLocaleDateString('en-US', {
       weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
     });
-    const dateFallback = new Date(show_date + 'T00:00:00').toLocaleDateString('en-US', {
+    const dateFallback = new Date(effectiveDate + 'T00:00:00').toLocaleDateString('en-US', {
       month: 'long', day: 'numeric', year: 'numeric',
     });
     const genre = (act as any).genre as string | undefined;
@@ -474,7 +479,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? (postResults[i] as PromiseFulfilledResult<string>).value
         : PLATFORM_FALLBACK[platform](fallbackCtx),
       status:    'pending',
-      show_date,
+      show_date: effectiveDate,
     }));
 
     await service.from('social_queue').insert(inserts);

@@ -288,11 +288,14 @@ export default function TourDetail() {
 
   const searchVenues = useCallback(async (q: string) => {
     if (q.length < 2) { setSearchResults([]); return; }
+    // Strip chars that break PostgREST or() filter parsing (commas, parens)
+    const safe = q.replace(/[(),]/g, ' ').trim();
+    if (safe.length < 2) { setSearchResults([]); return; }
     setSearching(true);
     const { data } = await supabase
       .from('venues')
       .select('id, name, city, state, capacity, venue_type')
-      .or(`name.ilike.%${q}%,city.ilike.%${q}%,state.ilike.%${q}%`)
+      .or(`name.ilike.%${safe}%,city.ilike.%${safe}%,state.ilike.%${safe}%`)
       .order('name')
       .limit(20);
     setSearchResults(data || []);

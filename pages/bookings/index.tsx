@@ -22,11 +22,16 @@ export default function BookingsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Load acts first so we can build an OR filter for bookings
-    const { data: agentActs } = await supabase
-      .from('acts').select('id, act_name').eq('agent_id', user.id).order('act_name');
-    const agentActIds = (agentActs || []).map((a: any) => a.id);
-    setActs(agentActs || []);
+    // Load acts directly managed + linked via agent_act_links
+    const [directRes, linkedRes] = await Promise.all([
+      supabase.from('acts').select('id, act_name').eq('agent_id', user.id).order('act_name'),
+      supabase.from('agent_act_links').select('act:acts(id, act_name)').eq('agent_id', user.id).eq('status', 'active'),
+    ]);
+    const directActs = directRes.data || [];
+    const linkedActs = (linkedRes.data || []).map((r: any) => r.act).filter(Boolean);
+    const allActs = [...directActs, ...linkedActs.filter((a: any) => !directActs.find((d: any) => d.id === a.id))];
+    const agentActIds = allActs.map((a: any) => a.id);
+    setActs(allActs);
 
     // Fetch bookings created by this user OR belonging to acts they agent for
     let q = supabase.from('bookings').select(`
