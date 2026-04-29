@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
+import { updateVenueStatus } from '../../../lib/statusSync';
 import Anthropic from '@anthropic-ai/sdk';
 import { Resend } from 'resend';
 
@@ -356,7 +357,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (bookingError) throw new Error(bookingError.message);
 
     // Only mark confirmed after booking is successfully created
-    await service.from('tour_venues').update({ status: 'confirmed' }).eq('id', tour_venue_id);
+    await updateVenueStatus(service, tour_venue_id, 'confirmed', user.id);
 
     // Send venue confirmation email (ITEM 3)
     const venueEmail = (tv.venue as any).email as string | undefined;

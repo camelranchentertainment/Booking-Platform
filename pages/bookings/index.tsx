@@ -42,7 +42,15 @@ export default function BookingsPage() {
   };
 
   const moveStatus = async (bookingId: string, newStatus: BookingStatus) => {
-    await supabase.from('bookings').update({ status: newStatus }).eq('id', bookingId);
+    const { data: { session } } = await supabase.auth.getSession();
+    await fetch('/api/bookings/move-status', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session?.access_token}`,
+      },
+      body: JSON.stringify({ bookingId, status: newStatus }),
+    });
     setBookings(bs => bs.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
   };
 

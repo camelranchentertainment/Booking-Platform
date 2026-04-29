@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
+import { STATUS_COLORS } from '../../lib/statusSync';
 import { buildIcal, downloadIcal } from '../../lib/ical';
 import EmailComposer from '../../components/email/EmailComposer';
 import Link from 'next/link';
@@ -9,10 +10,6 @@ import Link from 'next/link';
 const DAYS   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-const STATUS_DOT: Record<string, string> = {
-  confirmed: '#34d399', advancing: '#60a5fa', completed: '#64748b',
-  pitch: '#fbbf24', contract: '#a78bfa', hold: '#f97316',
-};
 
 export default function BandCalendar() {
   const [shows, setShows]   = useState<any[]>([]);
@@ -158,12 +155,12 @@ export default function BandCalendar() {
                   {dayShows.slice(0, 2).map((s: any) => (
                     <div key={s.id} style={{
                       fontSize: '0.72rem', padding: '0.1rem 0.25rem', borderRadius: '2px',
-                      background: `${STATUS_DOT[s.status] || '#64748b'}22`,
-                      color: STATUS_DOT[s.status] || '#64748b',
+                      background: `${STATUS_COLORS[s.status] || '#64748b'}22`,
+                      color: STATUS_COLORS[s.status] || '#64748b',
                       fontFamily: 'var(--font-body)', fontWeight: 500, marginBottom: '0.1rem',
                       display: 'flex', alignItems: 'center', gap: '0.25rem',
                     }}>
-                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS_DOT[s.status] || '#64748b', flexShrink: 0, display: 'inline-block' }} />
+                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS_COLORS[s.status] || '#64748b', flexShrink: 0, display: 'inline-block' }} />
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.venue?.name || 'TBD'}</span>
                     </div>
                   ))}
@@ -186,7 +183,7 @@ export default function BandCalendar() {
                 </span>
               </div>
               {selectedShows.map((s: any) => (
-                <div key={s.id} onClick={() => setDetailBooking(s)} style={{ display: 'block', cursor: 'pointer', padding: '0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', marginBottom: '0.5rem', borderLeft: `3px solid ${STATUS_DOT[s.status] || 'var(--accent)'}` }}>
+                <div key={s.id} onClick={() => setDetailBooking(s)} style={{ display: 'block', cursor: 'pointer', padding: '0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', marginBottom: '0.5rem', borderLeft: `3px solid ${STATUS_COLORS[s.status] || 'var(--accent)'}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{s.venue?.name || 'TBD'}</div>
                     <span className={`badge badge-${s.status}`}>{BOOKING_STATUS_LABELS[s.status as keyof typeof BOOKING_STATUS_LABELS]}</span>
@@ -227,7 +224,7 @@ export default function BandCalendar() {
                   <div style={{ color: 'var(--text-primary)', fontSize: '0.84rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.venue?.name || 'TBD'}</div>
                   <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontFamily: 'var(--font-body)' }}>{s.venue?.city || ''}</div>
                 </div>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_DOT[s.status] || '#64748b', flexShrink: 0 }} />
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_COLORS[s.status] || '#64748b', flexShrink: 0 }} />
               </div>
             ))}
           </div>

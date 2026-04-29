@@ -3,6 +3,7 @@ import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { getAgentActIds, getAgentActs } from '../lib/bookingQueries';
 import { BOOKING_STATUS_LABELS } from '../lib/types';
+import { STATUS_COLORS } from '../lib/statusSync';
 import { buildIcal, downloadIcal } from '../lib/ical';
 import Link from 'next/link';
 
@@ -13,16 +14,6 @@ const ACT_COLORS = [
   '#C8921A','#BF5FFF','#FF3CAC','#34d399','#60a5fa','#f97316','#e879f9','#22d3ee',
 ];
 
-const STATUS_DOT: Record<string, string> = {
-  confirmed:   '#34d399',
-  advancing:   '#60a5fa',
-  completed:   '#6b7280',
-  contract:    '#a78bfa',
-  hold:        '#f97316',
-  negotiation: '#fbbf24',
-  pitch:       '#94a3b8',
-  followup:    '#c084fc',
-};
 
 export default function AgentCalendar() {
   const [shows, setShows]     = useState<any[]>([]);
@@ -206,7 +197,7 @@ export default function AgentCalendar() {
                       borderLeft: `2px solid ${actColorMap[s.act_id] || 'var(--accent)'}`,
                       display: 'flex', alignItems: 'center', gap: '0.25rem',
                     }}>
-                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS_DOT[s.status] || '#64748b', flexShrink: 0, display: 'inline-block' }} />
+                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS_COLORS[s.status] || '#64748b', flexShrink: 0, display: 'inline-block' }} />
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.venue?.name || actName(s.act_id) || 'TBD'}</span>
                     </div>
                   ))}
@@ -270,7 +261,7 @@ export default function AgentCalendar() {
                   <div style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.venue?.name || 'TBD'}</div>
                   <div style={{ color: 'var(--text-muted)', fontSize: '0.84rem', fontFamily: 'var(--font-body)' }}>{s.venue?.city || ''}</div>
                 </div>
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: STATUS_DOT[s.status] || '#64748b', flexShrink: 0 }} />
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: STATUS_COLORS[s.status] || '#64748b', flexShrink: 0 }} />
               </Link>
             ))}
           </div>

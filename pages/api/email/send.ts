@@ -1,7 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { Resend } from 'resend';
 import { getServiceClient } from '../../../lib/supabase';
-import { syncTourVenueToBooking } from '../../../lib/bookingQueries';
+import { updateVenueStatus } from '../../../lib/statusSync';
+import type { OutreachStatus } from '../../../lib/types';
 
 async function getResendConfig(service: ReturnType<typeof getServiceClient>) {
   if (process.env.RESEND_API_KEY) {
@@ -79,24 +80,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const isColdPitch = ['target', 'cold_pitch'].includes(category);
       const isFollowUp  = ['follow_up_1', 'follow_up_2', 'follow_up'].includes(category);
 
-      const tvUpdate: Record<string, any> = {
-        last_contacted_at: now,
-        updated_at:        now,
-      };
+      let newTvStatus: OutreachStatus | null = null;
+      const tvExtra: Record<string, any> = { last_contacted_at: now };
+
       if (isColdPitch) {
-        tvUpdate.status     = 'pitched';
-        tvUpdate.pitched_at = now;
+        newTvStatus = 'pitched';
+        tvExtra.pitched_at = now;
       } else if (isFollowUp) {
-        tvUpdate.status      = 'follow_up';
-        tvUpdate.followup_at = now;
+        newTvStatus = 'followup';
+        tvExtra.followup_at = now;
       } else if (category === 'confirmation') {
-        tvUpdate.status = 'confirmed';
+        newTvStatus = 'confirmed';
       }
 
-      if (tvUpdate.status) {
-        await service.from('tour_venues').update(tvUpdate).eq('id', tourVenueId);
-        // Keep booking pipeline in sync with the new outreach status
-        await syncTourVenueToBooking(service, tourVenueId, agentId);
+      if (newTvStatus) {
+        await updateVenueStatus(service, tourVenueId, newTvStatus, agentId, tvExtra);
       } else {
         // Still track contact date even if status doesn't change
         await service.from('tour_venues')

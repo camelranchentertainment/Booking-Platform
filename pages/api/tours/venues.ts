@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
-import { syncTourVenueToBooking } from '../../../lib/bookingQueries';
+import { syncBooking } from '../../../lib/statusSync';
 
 async function getUser(req: NextApiRequest) {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -52,7 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Mirror outreach entry into the bookings pipeline
-    await syncTourVenueToBooking(service, data.id, user.id);
+    await syncBooking(service, data.id, user.id);
 
     return res.status(201).json(data);
   }
@@ -74,7 +74,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (error) return res.status(500).json({ error: error.message });
 
     // Keep booking pipeline in sync whenever outreach status changes
-    if (status !== undefined) await syncTourVenueToBooking(service, id as string, user.id);
+    if (status !== undefined) await syncBooking(service, id as string, user.id);
 
     return res.status(200).json(data);
   }

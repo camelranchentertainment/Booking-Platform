@@ -2,11 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
-import { BOOKING_STATUS_LABELS } from '../../lib/types';
+import { BOOKING_STATUS_LABELS, OutreachStatus } from '../../lib/types';
+import { STATUS_LABELS } from '../../lib/statusSync';
 import EmailComposer from '../../components/email/EmailComposer';
 import Link from 'next/link';
 
-type OutreachStatus = 'target' | 'pitched' | 'followup' | 'negotiating' | 'confirmed' | 'declined';
 type Platform = 'instagram' | 'facebook' | 'youtube' | 'tiktok' | 'discord';
 
 const PLATFORM_INFO: Record<Platform, { label: string; color: string; icon: string }> = {
@@ -15,15 +15,6 @@ const PLATFORM_INFO: Record<Platform, { label: string; color: string; icon: stri
   youtube:   { label: 'YouTube',   color: '#ff0000', icon: '▶' },
   tiktok:    { label: 'TikTok',   color: '#69c9d0', icon: '♪' },
   discord:   { label: 'Discord',   color: '#5865f2', icon: '◈' },
-};
-
-const STATUS_LABELS: Record<OutreachStatus, string> = {
-  target:      'Target',
-  pitched:     'Pitched',
-  followup:    'Follow-up',
-  negotiating: 'Negotiating',
-  confirmed:   'Confirmed',
-  declined:    'Declined',
 };
 
 const STATUS_COLOR: Record<OutreachStatus, string> = {
