@@ -23,7 +23,21 @@ Output: Return ONLY a valid JSON object with these exact keys:
   "preview": "one sentence summary of the email"
 }`;
 
-type Category = 'target' | 'follow_up_1' | 'follow_up_2' | 'confirmation' | 'decline' | 'advance' | 'thank_you';
+type Category = 'target' | 'follow_up_1' | 'follow_up_2' | 'confirmation' | 'decline' | 'advance' | 'thank_you' | 'reply';
+
+const TYPE_TO_CATEGORY: Record<string, Category> = {
+  cold_pitch:       'target',
+  followup:         'follow_up_1',
+  reply_suggestion: 'reply',
+  target:           'target',
+  follow_up_1:      'follow_up_1',
+  follow_up_2:      'follow_up_2',
+  confirmation:     'confirmation',
+  decline:          'decline',
+  advance:          'advance',
+  thank_you:        'thank_you',
+  reply:            'reply',
+};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -38,8 +52,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: { user }, error: authErr } = await anonClient.auth.getUser(token);
   if (authErr || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { category, bookingId, actId: bodyActId, venueId: bodyVenueId, contactId, agentName, agencyName } = req.body;
-  if (!category) return res.status(400).json({ error: 'category required' });
+  const { category: rawCategory, type: rawType, bookingId, actId: bodyActId, venueId: bodyVenueId, contactId, agentName, agencyName } = req.body;
+  const rawInput = rawCategory || rawType;
+  if (!rawInput) return res.status(400).json({ error: 'category required' });
+  const category = TYPE_TO_CATEGORY[rawInput] ?? (rawInput as Category);
 
   const service = getServiceClient();
 
@@ -220,6 +236,16 @@ ${from}
 ${venueInfo}
 
 Thank them for the hospitality. Keep it warm but brief. Mention you'd love to bring ${act.act_name} back and will be in touch when routing through again. Under 100 words.`;
+
+    case 'reply':
+      return `Write a professional reply email to ${contactName} at ${venue?.name || 'this venue'}, responding to their message about booking ${act.act_name}.
+
+${from}
+${actInfo}
+${venueInfo}
+${availableDates}
+
+Keep the momentum going. If they're interested, propose next steps (confirm the date, send contract). If they asked questions, answer clearly. Professional, warm, and brief. Under 120 words.`;
 
     default:
       return `Write a professional booking email for ${act.act_name} to ${venue?.name || 'this venue'}.\n\n${from}\n${actInfo}\n${venueInfo}`;

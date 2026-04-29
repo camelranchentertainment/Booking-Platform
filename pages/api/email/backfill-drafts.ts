@@ -7,7 +7,8 @@ const SYSTEM_PROMPT = `You are an expert music booking agent assistant for Camel
 Draft a professional cold pitch email to a venue on behalf of a booking agent.
 Style: professional but human, music industry voice, concise, clear call-to-action.
 Never open with "I hope this email finds you well". No em dashes or bullet points in body.
-Subject lines under 60 characters.
+Subject line format MUST be: [Band Name] — Booking Inquiry — [Venue Name], [City]
+Example: Jake Stringer — Booking Inquiry — Off Broadway, St. Louis
 Output ONLY valid JSON: { "subject": "...", "body": "...", "preview": "..." }`;
 
 async function getTourDateRange(service: any, tourId: string): Promise<string> {
@@ -45,7 +46,8 @@ ${actInfo}
 ${venueInfo}
 ${tourDateRange ? `Available dates: ${tourDateRange}` : 'Available dates: [AGENT: add specific dates here]'}
 
-Introduce the act in 2 sentences. Ask them to hold a date. Under 150 words. Include website link if available.`;
+Introduce the act in 2 sentences. Ask them to hold a date. Under 150 words. Include website link if available.
+Subject line format: [Act Name] — Booking Inquiry — [Venue Name], [City]`;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -61,7 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const anthropicKey = await getSetting('anthropic_api_key');
   if (!anthropicKey) return res.status(500).json({ error: 'Anthropic API key not configured' });
 
-  // Find the user's act (owner first, then profile linkage)
+  // Find the user's acts (owner or agent)
   let actId: string | null = null;
   const { data: owned } = await service.from('acts').select('id').eq('owner_id', user.id).eq('is_active', true).limit(1);
   if (owned?.length) {
@@ -70,8 +72,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data: prof } = await service.from('user_profiles').select('act_id').eq('id', user.id).maybeSingle();
     actId = prof?.act_id || null;
   }
-
-  // Also collect acts where user is the booking agent
   const { data: agentActs } = await service.from('acts').select('id').eq('agent_id', user.id).eq('is_active', true);
   const actIds = [...new Set([actId, ...(agentActs || []).map((a: any) => a.id)].filter(Boolean))] as string[];
 
@@ -82,11 +82,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: profile } = await service.from('user_profiles').select('display_name, agency_name').eq('id', user.id).single();
   const agentFrom = `${profile?.display_name || 'the booking agent'}${profile?.agency_name ? ` at ${profile.agency_name}` : ' at Camel Ranch Booking'}`;
 
-  const client = new Anthropic({ apiKey: anthropicKey });
-  let created = 0;
-  const errors: string[] = [];
+  // Fetch tours first (needed for cleanup + generation)
+  const { data: tours, error: toursErr } = await service.from('tours')
+    .select('id, act_id, act:acts(act_name, genre, bio, website)')
+    .in('act_id', actIds);
+  if (toursErr) return res.status(500).json({ error: `Tours query: ${toursErr.message}` });
 
-  // Find which items already have drafts from this user
+  const tourIds = (tours || []).map((t: any) => t.id);
+
+  // Cleanup: delete stale drafts for tour_venues that are now confirmed/completed/declined
+  if (tourIds.length > 0) {
+    const { data: staleTVs } = await service
+      .from('tour_venues')
+      .select('id')
+      .in('tour_id', tourIds)
+      .in('status', ['confirmed', 'negotiating', 'advancing', 'declined', 'completed']);
+    const staleIds = (staleTVs || []).map((tv: any) => tv.id);
+    if (staleIds.length > 0) {
+      await service.from('email_drafts')
+        .delete()
+        .eq('agent_id', user.id)
+        .in('tour_venue_id', staleIds);
+    }
+  }
+
+  // Also cleanup: delete stale drafts for confirmed/advancing bookings
+  const { data: confirmedBks } = await service
+    .from('bookings')
+    .select('id')
+    .in('act_id', actIds)
+    .in('status', ['confirmed', 'advancing', 'completed', 'hold', 'contract']);
+  const confirmedBkIds = (confirmedBks || []).map((b: any) => b.id);
+  if (confirmedBkIds.length > 0) {
+    await service.from('email_drafts')
+      .delete()
+      .eq('agent_id', user.id)
+      .in('booking_id', confirmedBkIds);
+  }
+
+  // Get existing drafts (after cleanup) to avoid duplicates
   const { data: existingDrafts } = await service.from('email_drafts')
     .select('booking_id, tour_venue_id')
     .eq('agent_id', user.id)
@@ -94,31 +128,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const draftedBookings   = new Set((existingDrafts || []).filter((d: any) => d.booking_id).map((d: any) => d.booking_id));
   const draftedTourVenues = new Set((existingDrafts || []).filter((d: any) => d.tour_venue_id).map((d: any) => d.tour_venue_id));
 
-  // --- 1. Bookings with a venue ---
+  // Get confirmed booking pairs (venue_id:act_id) to exclude from tour venue drafts
+  const { data: confirmedPairs } = await service
+    .from('bookings')
+    .select('venue_id, act_id')
+    .in('act_id', actIds)
+    .in('status', ['confirmed', 'advancing', 'completed', 'hold', 'contract']);
+  const confirmedPairSet = new Set(
+    (confirmedPairs || []).map((b: any) => `${b.act_id}:${b.venue_id}`)
+  );
+
+  const client = new Anthropic({ apiKey: anthropicKey });
+  let created = 0;
+  const errors: string[] = [];
+  const skipped: string[] = [];
+
+  // --- 1. Bookings in early stages only (never pitch confirmed venues) ---
   const { data: bookings, error: bookingsErr } = await service.from('bookings')
     .select(`id, act_id, venue_id, tour_id, show_date,
       act:acts(act_name, genre, bio, website),
-      venue:venues(name, city, state, capacity)`)
+      venue:venues(name, city, state, capacity, email, secondary_emails)`)
     .in('act_id', actIds)
     .not('venue_id', 'is', null)
-    .neq('status', 'cancelled')
-    .neq('status', 'completed')
+    .in('status', ['pitch', 'followup', 'negotiation'])
     .limit(20);
 
   if (bookingsErr) errors.push(`Bookings query: ${bookingsErr.message}`);
 
   for (const b of (bookings || []).filter((b: any) => !draftedBookings.has(b.id))) {
     try {
-      // Get primary contact for the venue
-      const { data: contacts } = await service.from('contacts').select('first_name, last_name, email').eq('venue_id', b.venue_id).limit(1);
+      const venue = b.venue as any;
+
+      // Email lookup: contacts → venue.email → secondary_emails[0]
+      const { data: contacts } = await service.from('contacts')
+        .select('first_name, last_name, email')
+        .eq('venue_id', b.venue_id)
+        .not('email', 'is', null)
+        .limit(1);
       const contact = contacts?.[0];
+      const contactEmail = contact?.email || venue?.email || (Array.isArray(venue?.secondary_emails) ? venue.secondary_emails[0] : null);
+
+      if (!contactEmail) {
+        skipped.push(`Booking ${b.id} (${venue?.name}): no email found`);
+        continue;
+      }
+
       const contactName = contact ? `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'the booking manager' : 'the booking manager';
       const tourDateRange = b.tour_id ? await getTourDateRange(service, b.tour_id) : '';
 
       const message = await client.messages.create({
         model: 'claude-sonnet-4-6', max_tokens: 1024,
         system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: buildPrompt(b.act, b.venue, contactName, agentFrom, tourDateRange) }],
+        messages: [{ role: 'user', content: buildPrompt(b.act, venue, contactName, agentFrom, tourDateRange) }],
       });
       const text = message.content.find((bl): bl is Anthropic.TextBlock => bl.type === 'text')?.text ?? '';
       const match = text.match(/\{[\s\S]*\}/);
@@ -135,20 +196,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // --- 2. Tour venues (outreach pool) ---
-  const { data: tours, error: toursErr } = await service.from('tours')
-    .select('id, act_id, act:acts(act_name, genre, bio, website)')
-    .in('act_id', actIds);
-  if (toursErr) errors.push(`Tours query: ${toursErr.message}`);
-
-  const tourIds = (tours || []).map((t: any) => t.id);
-
+  // --- 2. Tour venues — ONLY pitch-eligible statuses, NEVER confirmed venues ---
   if (tourIds.length > 0) {
     const { data: tourVenues, error: tvErr } = await service.from('tour_venues')
-      .select('id, venue_id, tour_id, venue:venues(name, city, state, capacity)')
+      .select('id, venue_id, tour_id, venue:venues(name, city, state, capacity, email, secondary_emails)')
       .in('tour_id', tourIds)
-      .neq('status', 'declined')
-      .limit(20);
+      .in('status', ['target', 'pitched', 'follow_up'])
+      .limit(30);
 
     if (tvErr) errors.push(`Tour venues query: ${tvErr.message}`);
 
@@ -156,17 +210,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         const tour = (tours || []).find((t: any) => t.id === tv.tour_id);
         const act  = (tour as any)?.act;
+        const venue = tv.venue as any;
 
-        // Get primary contact for the venue separately
-        const { data: contacts } = await service.from('contacts').select('first_name, last_name, email').eq('venue_id', tv.venue_id).limit(1);
+        // Skip venues that already have a confirmed/active booking for this act
+        if (confirmedPairSet.has(`${tour?.act_id}:${tv.venue_id}`)) {
+          skipped.push(`Tour venue ${tv.id} (${venue?.name}): confirmed booking exists`);
+          continue;
+        }
+
+        // Email lookup: contacts → venue.email → secondary_emails[0]
+        const { data: contacts } = await service.from('contacts')
+          .select('first_name, last_name, email')
+          .eq('venue_id', tv.venue_id)
+          .not('email', 'is', null)
+          .limit(1);
         const contact = contacts?.[0];
+        const contactEmail = contact?.email || venue?.email || (Array.isArray(venue?.secondary_emails) ? venue.secondary_emails[0] : null);
+
+        if (!contactEmail) {
+          skipped.push(`Tour venue ${tv.id} (${venue?.name}): no email found`);
+          continue;
+        }
+
         const contactName = contact ? `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'the booking manager' : 'the booking manager';
         const tourDateRange = await getTourDateRange(service, tv.tour_id);
 
         const message = await client.messages.create({
           model: 'claude-sonnet-4-6', max_tokens: 1024,
           system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-          messages: [{ role: 'user', content: buildPrompt(act, tv.venue, contactName, agentFrom, tourDateRange) }],
+          messages: [{ role: 'user', content: buildPrompt(act, venue, contactName, agentFrom, tourDateRange) }],
         });
         const text = message.content.find((bl): bl is Anthropic.TextBlock => bl.type === 'text')?.text ?? '';
         const match = text.match(/\{[\s\S]*\}/);
@@ -187,7 +259,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   return res.status(200).json({
     created,
+    skipped: skipped.length > 0 ? skipped : undefined,
     errors: errors.length > 0 ? errors : undefined,
-    message: created === 0 && errors.length === 0 ? 'All bookings and tour venues already have drafts.' : undefined,
+    message: created === 0 && errors.length === 0 ? 'No new drafts to generate (all venues have drafts, no email, or are already confirmed).' : undefined,
   });
 }

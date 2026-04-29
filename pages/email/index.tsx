@@ -162,12 +162,17 @@ export default function EmailPage() {
         contact:contacts(id, first_name, last_name, email)
       `).neq('status', 'cancelled').order('show_date', { ascending: true }),
       supabase.from('email_drafts').select(`
-        id, category, subject, body, created_at,
+        id, category, subject, body, created_at, tour_venue_id,
         booking:bookings(
           id, act_id, venue_id,
           act:acts(act_name),
           venue:venues(name, city, state, email),
           contact:contacts(id, first_name, last_name, email)
+        ),
+        tour_venue:tour_venues(
+          id, venue_id,
+          venue:venues(name, city, state, email),
+          tour:tours(id, act_id, act:acts(act_name))
         )
       `).eq('agent_id', user.id).order('created_at', { ascending: false }),
     ]);
@@ -186,6 +191,12 @@ export default function EmailPage() {
     setBookings(bs => bs.map(b => b.id === bookingId ? { ...b, status: newStatus } : b));
   };
 
+  const categoryMap: Record<EmailType, string> = {
+    cold_pitch:       'target',
+    followup:         'follow_up_1',
+    reply_suggestion: 'reply',
+  };
+
   const getDraft = async () => {
     if (!selAct) { setDraftErr('Select an act first'); return; }
     setDrafting(true);
@@ -197,15 +208,12 @@ export default function EmailPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          type: emailType,
+          category: categoryMap[emailType],
           actId: selAct,
           venueId: selVenue || undefined,
           contactId: selContact || undefined,
           agentName: profile?.display_name,
           agencyName: profile?.agency_name,
-          previousEmail: (emailType !== 'cold_pitch' && prevBody)
-            ? { subject: prevSubject, body: prevBody }
-            : undefined,
         }),
       });
       const data = await res.json();
@@ -252,6 +260,14 @@ export default function EmailPage() {
   const deleteDraft = async (id: string) => {
     await supabase.from('email_drafts').delete().eq('id', id);
     setPendingDrafts(prev => prev.filter(d => d.id !== id));
+  };
+
+  const clearAllDrafts = async () => {
+    if (!confirm(`Delete all ${pendingDrafts.length} draft${pendingDrafts.length !== 1 ? 's' : ''}?`)) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('email_drafts').delete().eq('agent_id', user.id);
+    setPendingDrafts([]);
   };
 
   const runBackfill = async () => {
@@ -410,21 +426,38 @@ export default function EmailPage() {
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} />
                 {pendingDrafts.length} draft{pendingDrafts.length > 1 ? 's' : ''} ready to review
+                <button
+                  onClick={clearAllDrafts}
+                  style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.06em', padding: '0.15rem 0.6rem', borderRadius: '3px', border: '1px solid rgba(248,113,113,0.4)', background: 'transparent', color: '#f87171', cursor: 'pointer' }}
+                >
+                  Clear All
+                </button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {pendingDrafts.map(d => {
-                  const bk = d.booking as any;
-                  const contact = bk?.contact as any;
+                  const bk = (d as any).booking;
+                  const tv = (d as any).tour_venue;
+                  const contact = bk?.contact;
+                  const venueName = bk?.venue?.name || tv?.venue?.name || '—';
+                  const venueCity = bk?.venue?.city || tv?.venue?.city || '';
+                  const venueState = bk?.venue?.state || tv?.venue?.state || '';
+                  const actName = bk?.act?.act_name || tv?.tour?.act?.act_name || '—';
+                  const contactEmail = contact?.email || bk?.venue?.email || tv?.venue?.email || '';
                   return (
                     <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--accent-glow)', border: '1px solid rgba(200,146,26,0.2)', borderRadius: 'var(--radius-sm)', padding: '0.75rem 1rem' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>
-                          {bk?.venue?.name || '—'}
-                          <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.5rem', fontSize: '0.82rem' }}>{bk?.venue?.city ? `${bk.venue.city}, ${bk.venue.state}` : ''}</span>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                          {venueName}
+                          {venueCity && <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.5rem', fontSize: '0.82rem' }}>{venueCity}, {venueState}</span>}
                         </div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-body)', marginTop: '0.15rem' }}>
-                          {bk?.act?.act_name || '—'} · {d.subject || '(no subject)'}
+                          {actName} · {d.subject || '(no subject)'}
                         </div>
+                        {contactEmail && (
+                          <div style={{ color: 'var(--accent)', fontSize: '0.74rem', fontFamily: 'var(--font-mono)', marginTop: '0.1rem', opacity: 0.8 }}>
+                            → {contactEmail}
+                          </div>
+                        )}
                       </div>
                       <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
                         <button
@@ -937,15 +970,17 @@ export default function EmailPage() {
       )}
 
       {draftComposer && (() => {
-        const bk = draftComposer.booking as any;
+        const bk = (draftComposer as any).booking;
+        const tv = (draftComposer as any).tour_venue;
         const contact = bk?.contact as any;
         return (
           <EmailComposer
             bookingId={bk?.id}
-            actId={bk?.act_id}
-            venueId={bk?.venue_id}
+            tourVenueId={tv?.id}
+            actId={bk?.act_id || tv?.tour?.act_id || ''}
+            venueId={bk?.venue_id || tv?.venue_id}
             contactId={contact?.id}
-            contactEmail={contact?.email || bk?.venue?.email || ''}
+            contactEmail={contact?.email || bk?.venue?.email || tv?.venue?.email || ''}
             defaultCategory={draftComposer.category || 'target'}
             initialSubject={draftComposer.subject || ''}
             initialBody={draftComposer.body || ''}
