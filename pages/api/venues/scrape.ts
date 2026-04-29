@@ -125,19 +125,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // --- Persist to DB if venueId provided — use service client to bypass RLS ---
     let updated = false;
     if (venueId) {
-      const patch: Record<string, any> = {};
-      if (extracted.booking_email)    patch.email      = extracted.booking_email;
-      else if (extracted.general_email) patch.email    = extracted.general_email;
-      if (extracted.booking_phone)    patch.phone      = extracted.booking_phone;
-      if (extracted.venue_name)       patch.name       = extracted.venue_name;
-      if (extracted.capacity)         patch.capacity   = extracted.capacity;
-      if (extracted.venue_type)       patch.venue_type = extracted.venue_type;
-      if (extracted.notes)            patch.notes      = extracted.notes;
+      const patch: Record<string, any> = {
+        last_enriched_at: new Date().toISOString(),
+      };
+      if (extracted.booking_email)      patch.email      = extracted.booking_email;
+      else if (extracted.general_email) patch.email      = extracted.general_email;
+      if (extracted.booking_phone)      patch.phone      = extracted.booking_phone;
+      if (extracted.venue_name)         patch.name       = extracted.venue_name;
+      if (extracted.capacity)           patch.capacity   = extracted.capacity;
+      if (extracted.venue_type)         patch.venue_type = extracted.venue_type;
+      if (extracted.notes)              patch.notes      = extracted.notes;
 
-      if (Object.keys(patch).length > 0) {
-        await service.from('venues').update(patch).eq('id', venueId);
-        updated = true;
+      const { error: patchErr } = await service.from('venues').update(patch).eq('id', venueId);
+
+      // If last_enriched_at column doesn't exist yet, retry without it
+      if (patchErr) {
+        const { last_enriched_at: _dropped, ...patchWithoutEnriched } = patch;
+        if (Object.keys(patchWithoutEnriched).length > 0) {
+          await service.from('venues').update(patchWithoutEnriched).eq('id', venueId);
+        }
       }
+
+      updated = true;
 
       if (extracted.booking_contact_name) {
         const parts = (extracted.booking_contact_name as string).trim().split(/\s+/);

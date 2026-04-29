@@ -100,6 +100,8 @@ export interface Venue {
   place_id?: string | null;
   rating?: number | null;
   google_maps_url?: string | null;
+  music_genres?: string[] | null;
+  last_enriched_at?: string | null;
   created_at: string;
   updated_at: string;
 }

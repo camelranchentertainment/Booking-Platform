@@ -4,6 +4,7 @@ import { getServiceClient } from '../../../lib/supabase';
 // Returns all venues accessible to the agent:
 // - venues they own directly (agent_id = user.id)
 // - venues linked to tours they created (via tour_venues)
+// - venues linked to tours for acts they manage (via acts.agent_id or acts.owner_id)
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -25,20 +26,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const owned = ownedVenues || [];
   const ownedIds = new Set(owned.map((v: any) => v.id));
 
-  // Get venue_ids from tours created by this agent
-  const { data: agentTours } = await service
-    .from('tours')
-    .select('id')
-    .eq('created_by', user.id);
+  // Get all tour IDs accessible to this agent:
+  // 1. Tours created by this agent
+  // 2. Tours for acts managed by this agent (agent_id or owner_id)
+  const [agentToursRes, managedActsRes] = await Promise.all([
+    service.from('tours').select('id').eq('created_by', user.id),
+    service.from('acts').select('id').or(`agent_id.eq.${user.id},owner_id.eq.${user.id}`),
+  ]);
 
-  const tourIds = (agentTours || []).map((t: any) => t.id);
+  const createdTourIds = (agentToursRes.data || []).map((t: any) => t.id);
+  const managedActIds  = (managedActsRes.data || []).map((a: any) => a.id);
+
+  let managedActTourIds: string[] = [];
+  if (managedActIds.length > 0) {
+    const { data: actTours } = await service
+      .from('tours')
+      .select('id')
+      .in('act_id', managedActIds);
+    managedActTourIds = (actTours || []).map((t: any) => t.id);
+  }
+
+  const allTourIds = [...new Set([...createdTourIds, ...managedActTourIds])];
 
   let extraVenues: any[] = [];
-  if (tourIds.length > 0) {
+  if (allTourIds.length > 0) {
     const { data: tvLinks } = await service
       .from('tour_venues')
       .select('venue_id')
-      .in('tour_id', tourIds);
+      .in('tour_id', allTourIds);
 
     const extraIds = [...new Set(
       (tvLinks || []).map((tv: any) => tv.venue_id).filter((id: string) => id && !ownedIds.has(id))

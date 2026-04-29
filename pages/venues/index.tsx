@@ -472,12 +472,12 @@ export default function VenuesPage() {
   };
 
   const states = [...new Set(venues.map(v => v.state).filter(Boolean))].sort();
-  const allGenres = [...new Set(venues.flatMap(v => (v as any).music_genres || []).filter(Boolean))].sort();
+  const allGenres = [...new Set(venues.flatMap(v => v.music_genres || []).filter(Boolean))].sort();
   const filtered = venues.filter(v => {
     const q = search.toLowerCase();
     const nameMatch = !q || v.name.toLowerCase().includes(q) || v.city?.toLowerCase().includes(q);
     const stateMatch = !filterState || v.state === filterState;
-    const genreMatch = !filterGenre || ((v as any).music_genres || []).includes(filterGenre);
+    const genreMatch = !filterGenre || (v.music_genres || []).includes(filterGenre);
     return nameMatch && stateMatch && genreMatch;
   });
 
@@ -654,7 +654,23 @@ export default function VenuesPage() {
                   <td style={{ cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.city}, {v.state}</td>
                   <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.venue_type || '—'}</td>
                   <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.capacity ? v.capacity.toLocaleString() : '—'}</td>
-                  <td style={{ color: 'var(--accent)', fontSize: '0.85rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.email || '—'}</td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>
+                    {v.email ? (
+                      <span style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>{v.email}</span>
+                    ) : enrichStatus[v.id] === 'scraping' ? (
+                      <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>✉ Scanning…</span>
+                    ) : enrichStatus[v.id]?.startsWith('found:') ? (
+                      <span style={{ color: '#34d399', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>✓ {enrichStatus[v.id].slice(6)}</span>
+                    ) : enrichStatus[v.id] === 'notfound' || (v.last_enriched_at && !v.email) ? (
+                      <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
+                        ✕ Not found{v.last_enriched_at ? ` · ${new Date(v.last_enriched_at).toLocaleDateString()}` : ''}
+                      </span>
+                    ) : !v.website ? (
+                      <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>No website</span>
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)' }}>—</span>
+                    )}
+                  </td>
                   <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.phone || '—'}</td>
                   <td>
                     <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
@@ -665,11 +681,13 @@ export default function VenuesPage() {
                           disabled={enrichStatus[v.id] === 'scraping'}
                           onClick={e => { e.stopPropagation(); enrichVenueEmail(v); }}
                         >
-                          {enrichStatus[v.id] === 'scraping' ? '✉ …' :
-                           enrichStatus[v.id]?.startsWith('found:') ? `✓ ${enrichStatus[v.id].slice(6)}` :
-                           enrichStatus[v.id] === 'notfound' ? '✕ none' :
-                           '✉ Find Email'}
+                          {enrichStatus[v.id] === 'scraping' ? '✉ …' : '✉ Find Email'}
                         </button>
+                      )}
+                      {!v.website && !v.email && (
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.2rem 0.4rem' }}>
+                          No website
+                        </span>
                       )}
                       <button
                         className="btn btn-ghost btn-sm"
