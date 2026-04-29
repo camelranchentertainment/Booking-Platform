@@ -196,6 +196,10 @@ export default function BookingDetail() {
 
   return (
     <AppShell requireRole="agent">
+      <Link href="/bookings" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'rgba(200,146,26,0.7)', textDecoration: 'none', marginBottom: '0.75rem' }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#C8921A')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,146,26,0.7)')}
+      >← Back to Bookings</Link>
       <div className="page-header">
         <div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
