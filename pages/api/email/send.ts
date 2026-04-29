@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { Resend } from 'resend';
 import { getServiceClient } from '../../../lib/supabase';
+import { syncTourVenueToBooking } from '../../../lib/bookingQueries';
 
 async function getResendConfig(service: ReturnType<typeof getServiceClient>) {
   if (process.env.RESEND_API_KEY) {
@@ -36,66 +37,165 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: 'Email not configured. Add your Resend API key in Settings.' });
   }
 
+  // Authenticate the agent
+  let agentId: string | null = null;
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (token) {
+      const { data: { user } } = await service.auth.getUser(token);
+      agentId = user?.id || null;
+    }
+  } catch {}
+
+  if (!agentId) return res.status(401).json({ error: 'Unauthorized' });
+
   const resend = new Resend(apiKey);
 
   try {
     const { data, error } = await resend.emails.send({ from, to, subject, html });
     if (error) return res.status(500).json({ error: error.message });
 
-    let agentId: string | null = null;
-    try {
-      const token = req.headers.authorization?.replace('Bearer ', '');
-      if (token) {
-        const { data: { user } } = await service.auth.getUser(token);
-        agentId = user?.id || null;
-      }
-    } catch {}
+    const now = new Date().toISOString();
 
+    // Step 1 — Log to email_log
     await service.from('email_log').insert({
-      sent_by:     agentId,
-      booking_id:  bookingId  || null,
-      venue_id:    venueId    || null,
-      contact_id:  contactId  || null,
-      act_id:      actId      || null,
-      template_id: templateId || null,
-      resend_id:   data?.id   || null,
+      sent_by:       agentId,
+      booking_id:    bookingId    || null,
+      tour_venue_id: tourVenueId  || null,
+      venue_id:      venueId      || null,
+      contact_id:    contactId    || null,
+      act_id:        actId        || null,
+      template_id:   templateId   || null,
+      category:      category     || null,
+      resend_id:     data?.id     || null,
       subject,
-      recipient:   to,
-      status:      'sent',
+      recipient:     to,
+      status:        'sent',
+      sent_at:       now,
     });
 
-    // Update booking email stage if category provided
-    if (bookingId && category) {
-      await service.from('bookings').update({
-        email_stage:       category,
-        last_contact_date: new Date().toISOString(),
-        follow_up_count:   category === 'follow_up_1' ? 1 : category === 'follow_up_2' ? 2 : undefined,
-      }).eq('id', bookingId);
-
-      await service.from('booking_emails').insert({
-        booking_id:        bookingId,
-        category,
-        sent_at:           new Date().toISOString(),
-        subject,
-        body_preview:      bodyPreview ? bodyPreview.substring(0, 300) : null,
-        resend_message_id: data?.id || null,
-        sent_by:           agentId,
-      });
-    }
-
-    // Update tour_venue status when emailing a prospect
+    // Step 2 — Update tour_venues status + timestamps
     if (tourVenueId && category) {
-      const statusMap: Record<string, string> = {
-        target:       'pitched',
-        follow_up_1:  'followup',
-        follow_up_2:  'followup',
-        confirmation: 'confirmed',
+      const isColdPitch = ['target', 'cold_pitch'].includes(category);
+      const isFollowUp  = ['follow_up_1', 'follow_up_2', 'follow_up'].includes(category);
+
+      const tvUpdate: Record<string, any> = {
+        last_contacted_at: now,
+        updated_at:        now,
       };
-      const newStatus = statusMap[category];
-      if (newStatus) {
-        await service.from('tour_venues').update({ status: newStatus }).eq('id', tourVenueId);
+      if (isColdPitch) {
+        tvUpdate.status     = 'pitched';
+        tvUpdate.pitched_at = now;
+      } else if (isFollowUp) {
+        tvUpdate.status      = 'follow_up';
+        tvUpdate.followup_at = now;
+      } else if (category === 'confirmation') {
+        tvUpdate.status = 'confirmed';
+      }
+
+      if (tvUpdate.status) {
+        await service.from('tour_venues').update(tvUpdate).eq('id', tourVenueId);
+        // Keep booking pipeline in sync with the new outreach status
+        await syncTourVenueToBooking(service, tourVenueId, agentId);
+      } else {
+        // Still track contact date even if status doesn't change
+        await service.from('tour_venues')
+          .update({ last_contacted_at: now, updated_at: now })
+          .eq('id', tourVenueId);
       }
     }
+
+    // Step 3 — Update or create booking record
+    if (actId && (venueId || bookingId)) {
+      const isColdPitch = ['target', 'cold_pitch'].includes(category || '');
+      const isFollowUp  = ['follow_up_1', 'follow_up_2', 'follow_up'].includes(category || '');
+
+      if (bookingId) {
+        // Update existing booking email tracking
+        const bkUpdate: Record<string, any> = {
+          email_stage:       category,
+          last_contact_date: now,
+          updated_at:        now,
+        };
+        if (category === 'follow_up_1') bkUpdate.follow_up_count = 1;
+        if (category === 'follow_up_2') bkUpdate.follow_up_count = 2;
+        if (isColdPitch)  { bkUpdate.status = 'pitch';    bkUpdate.pitched_at  = now; }
+        if (isFollowUp)   { bkUpdate.status = 'followup'; bkUpdate.followup_at = now; }
+
+        await service.from('bookings').update(bkUpdate).eq('id', bookingId);
+
+        // Log to booking_emails
+        await service.from('booking_emails').insert({
+          booking_id:        bookingId,
+          category,
+          sent_at:           now,
+          subject,
+          body_preview:      bodyPreview ? String(bodyPreview).substring(0, 300) : null,
+          resend_message_id: data?.id || null,
+          sent_by:           agentId,
+        });
+      } else if (venueId && isColdPitch) {
+        // No booking yet — check if one exists for this venue/act
+        const { data: existing } = await service.from('bookings')
+          .select('id')
+          .eq('act_id', actId)
+          .eq('venue_id', venueId)
+          .not('status', 'in', '("completed","cancelled")')
+          .maybeSingle();
+
+        if (!existing) {
+          // Create a pitch-stage booking so the pipeline picks it up
+          await service.from('bookings').insert({
+            created_by:        agentId,
+            act_id:            actId,
+            venue_id:          venueId,
+            contact_id:        contactId || null,
+            status:            'pitch',
+            email_stage:       'target',
+            last_contact_date: now,
+            pitched_at:        now,
+            source:            'email_pitch',
+            agent_id:          agentId,
+          });
+        }
+      }
+    }
+
+    // Step 4 — Fetch venue name for notification
+    let venueName = 'the venue';
+    let tourId: string | null = null;
+    if (venueId) {
+      const { data: v } = await service.from('venues').select('name').eq('id', venueId).single();
+      if (v?.name) venueName = v.name;
+    }
+    if (tourVenueId) {
+      const { data: tv } = await service.from('tour_venues')
+        .select('tour_id, venue:venues(name)')
+        .eq('id', tourVenueId).single();
+      if (tv) {
+        tourId = tv.tour_id || null;
+        const tvVenue = tv.venue as any;
+        if (tvVenue?.name) venueName = tvVenue.name;
+      }
+    }
+
+    // Step 5 — Create notification
+    const isColdPitch = ['target', 'cold_pitch'].includes(category || '');
+    const isFollowUp  = ['follow_up_1', 'follow_up_2', 'follow_up'].includes(category || '');
+    const notifMessage = isColdPitch
+      ? `Cold pitch sent to ${venueName}`
+      : isFollowUp
+        ? `Follow-up sent to ${venueName}`
+        : `Email sent to ${venueName}`;
+
+    await service.from('notifications').insert({
+      user_id:    agentId,
+      type:       'email_sent',
+      message:    notifMessage,
+      action_url: tourId ? `/tours/${tourId}` : tourVenueId ? '/email' : bookingId ? `/bookings/${bookingId}` : '/email',
+      related_id: tourVenueId || bookingId || null,
+      read:       false,
+    });
 
     return res.status(200).json({ ok: true, id: data?.id });
   } catch (err: any) {

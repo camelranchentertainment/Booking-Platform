@@ -104,6 +104,61 @@ export async function getBandBookings(
   return data || [];
 }
 
+// Maps tour_venue outreach status to bookings pipeline status
+const TV_TO_BOOKING: Record<string, string> = {
+  target:      'pitch',
+  pitched:     'pitch',
+  follow_up:   'followup',
+  followup:    'followup',
+  negotiating: 'negotiation',
+  confirmed:   'confirmed',
+  declined:    'cancelled',
+};
+
+// Creates or updates the bookings record that mirrors a tour_venue outreach entry.
+// Safe to call on every tour_venue insert/update — idempotent.
+export async function syncTourVenueToBooking(
+  sb: SupabaseClient,
+  tourVenueId: string,
+  userId: string
+): Promise<void> {
+  const { data: tv } = await sb
+    .from('tour_venues')
+    .select('id, venue_id, tour_id, status, tour:tours(id, act_id, end_date, created_by)')
+    .eq('id', tourVenueId)
+    .single();
+  if (!tv) return;
+
+  const tour = tv.tour as any;
+  if (!tour?.act_id) return;
+
+  const bookingStatus = TV_TO_BOOKING[tv.status] || 'pitch';
+
+  const { data: existing } = await sb
+    .from('bookings')
+    .select('id, status')
+    .eq('venue_id', tv.venue_id)
+    .eq('act_id', tour.act_id)
+    .eq('tour_id', tv.tour_id)
+    .not('status', 'in', '("completed","cancelled")')
+    .maybeSingle();
+
+  if (existing) {
+    await sb.from('bookings').update({ status: bookingStatus }).eq('id', existing.id);
+  } else if (bookingStatus !== 'cancelled') {
+    await sb.from('bookings').insert({
+      act_id:          tour.act_id,
+      venue_id:        tv.venue_id,
+      tour_id:         tv.tour_id,
+      status:          bookingStatus,
+      source:          'tour',
+      created_by:      userId,
+      show_date:       tour.end_date || null,
+      details_pending: true,
+    });
+  }
+}
+
 const ACTIVE_STATUSES = ['pitch', 'followup', 'negotiation', 'hold', 'contract', 'confirmed', 'advancing'];
 
 // Returns aggregated counts for the agent dashboard stat cards

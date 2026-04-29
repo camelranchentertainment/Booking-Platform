@@ -549,13 +549,13 @@ export default function TourDetail() {
           <div className="card-header">
             <span className="card-title">CONFIRMED SHOWS ({bookings.filter((b: any) => ['confirmed','advancing','completed'].includes(b.status)).length})</span>
           </div>
-          {bookings.length === 0 ? (
+          {bookings.filter((b: any) => ['confirmed','advancing','completed'].includes(b.status)).length === 0 ? (
             <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>
               No shows yet. Use the outreach pool below to target venues, then confirm a show.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              {bookings.map((b: any) => (
+              {bookings.filter((b: any) => ['confirmed','advancing','completed'].includes(b.status)).map((b: any) => (
                 <Link key={b.id} href={`/bookings/${b.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.6rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', textDecoration: 'none' }}>
                   <div>
                     <div style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 500 }}>{b.venue?.name || 'TBD'}</div>

@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
+import { syncTourVenueToBooking } from '../../../lib/bookingQueries';
 
 async function getUser(req: NextApiRequest) {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -49,6 +50,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (error.code === '23505') return res.status(409).json({ error: 'Venue already in pool' });
       return res.status(500).json({ error: error.message });
     }
+
+    // Mirror outreach entry into the bookings pipeline
+    await syncTourVenueToBooking(service, data.id, user.id);
+
     return res.status(201).json(data);
   }
 
@@ -67,6 +72,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data, error } = await service.from('tour_venues').update(update).eq('id', id)
       .select('*, venue:venues(id, name, city, state, capacity, venue_type, email, phone, website, address)').single();
     if (error) return res.status(500).json({ error: error.message });
+
+    // Keep booking pipeline in sync whenever outreach status changes
+    if (status !== undefined) await syncTourVenueToBooking(service, id as string, user.id);
+
     return res.status(200).json(data);
   }
 
