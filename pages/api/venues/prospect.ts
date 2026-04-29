@@ -38,11 +38,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const places = (gData.results || []).slice(0, 20);
 
-    // Get the agent's existing venues in this city to mark duplicates
+    // Get only THIS agent's venues in this city to mark duplicates
     const cityStr = String(city).toLowerCase();
     const { data: existing } = await service
       .from('venues')
       .select('id, name, place_id')
+      .eq('agent_id', user.id)
       .ilike('city', `%${cityStr}%`);
 
     const existingPlaceIds = new Set((existing || []).map((v: any) => v.place_id).filter(Boolean));

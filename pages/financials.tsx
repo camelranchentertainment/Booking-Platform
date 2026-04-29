@@ -65,11 +65,13 @@ export default function Financials() {
     const { data: { session: sess } } = await supabase.auth.getSession();
     const token = sess?.access_token ?? '';
     setSession(token);
+    const { data: { user } } = await supabase.auth.getUser();
     await loadBookings();
     if (token) loadExpenses(token);
     const { data: toursData } = await supabase
       .from('tours')
       .select('id, name')
+      .eq('created_by', user?.id)
       .order('created_at', { ascending: false })
       .limit(50);
     setTours((toursData as TourOption[]) || []);
@@ -135,17 +137,21 @@ export default function Financials() {
   const earned         = bookings.filter(b => b.status === 'completed')
     .reduce((s, b) => s + (Number(b.actual_amount_received ?? b.amount_paid) || 0), 0);
   const netIncome      = earned - totalExpenses;
-  const showCount      = bookings.filter(b => b.status === 'completed' || b.show_date).length;
+  const showCount      = bookings.filter(b => ['confirmed', 'advancing', 'completed'].includes(b.status)).length;
 
-  // Monthly breakdown
+  // Monthly breakdown — expenses bucketed from the expenses table by month+year
   const monthly = MONTHS.map((month, idx) => {
-    const mbs = bookings.filter(b => b.show_date && new Date(b.show_date).getMonth() === idx);
+    const mbs = bookings.filter(b => b.show_date && new Date(b.show_date + 'T00:00:00').getMonth() === idx);
+    const monthExpenses = expenses.filter(e => {
+      const d = new Date(e.expense_date + 'T00:00:00');
+      return d.getMonth() === idx && d.getFullYear() === year;
+    });
     return {
       month,
       shows:    mbs.length,
       fee:      mbs.reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0),
       paid:     mbs.reduce((s, b) => s + (Number(b.actual_amount_received ?? b.amount_paid) || 0), 0),
-      expenses: mbs.reduce((s, b) => s + (b.expenses ? Number(b.expenses) : 0), 0),
+      expenses: monthExpenses.reduce((s, e) => s + Number(e.amount), 0),
     };
   });
 
@@ -173,19 +179,22 @@ export default function Financials() {
 
   const downloadCSV = () => {
     const rows = [
-      ['Date', 'Act', 'Venue', 'City', 'State', 'Fee', 'Paid', 'Outstanding', 'Expenses', 'Status'],
-      ...bookings.map(b => [
-        b.show_date || '',
-        b.act?.act_name || '',
-        b.venue?.name || '',
-        b.venue?.city || '',
-        b.venue?.state || '',
-        b.fee || 0,
-        b.amount_paid || 0,
-        ((b.fee || 0) - (b.amount_paid || 0)).toString(),
-        b.expenses || 0,
-        b.status,
-      ]),
+      ['Date', 'Act', 'Venue', 'City', 'State', 'Contracted', 'Collected', 'Outstanding', 'Status'],
+      ...bookings.map(b => {
+        const contracted = Number(b.agreed_amount ?? b.fee) || 0;
+        const collected  = Number(b.actual_amount_received ?? b.amount_paid) || 0;
+        return [
+          b.show_date || '',
+          b.act?.act_name || '',
+          b.venue?.name || '',
+          b.venue?.city || '',
+          b.venue?.state || '',
+          contracted,
+          collected,
+          (contracted - collected).toString(),
+          b.status,
+        ];
+      }),
     ];
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -347,28 +356,32 @@ export default function Financials() {
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>Date</th><th>Act</th><th>Venue</th><th>Fee</th><th>Paid</th><th>Status</th></tr>
+                    <tr><th>Date</th><th>Act</th><th>Venue</th><th>Contracted</th><th>Collected</th><th>Status</th></tr>
                   </thead>
                   <tbody>
-                    {bookings.map(b => (
-                      <tr key={b.id}>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                          {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
-                        </td>
-                        <td style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 500 }}>{b.act?.act_name || '—'}</td>
-                        <td style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                          {b.venue?.name || '—'}
-                          {b.venue?.city ? <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}> · {b.venue.city}</span> : ''}
-                        </td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--accent)' }}>{b.fee ? fmt(Number(b.fee)) : '—'}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: b.amount_paid ? '#34d399' : 'var(--text-muted)' }}>
-                          {b.amount_paid ? fmt(Number(b.amount_paid)) : '—'}
-                        </td>
-                        <td>
-                          <span className={`badge badge-${b.status}`} style={{ fontSize: '0.68rem' }}>{b.status}</span>
-                        </td>
-                      </tr>
-                    ))}
+                    {bookings.map(b => {
+                      const collected = b.actual_amount_received ?? b.amount_paid;
+                      const contracted = b.agreed_amount ?? b.fee;
+                      return (
+                        <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => window.location.href = `/bookings/${b.id}`}>
+                          <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                            {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                          </td>
+                          <td style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 500 }}>{b.act?.act_name || '—'}</td>
+                          <td style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                            {b.venue?.name || '—'}
+                            {b.venue?.city ? <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}> · {b.venue.city}</span> : ''}
+                          </td>
+                          <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--accent)' }}>{contracted ? fmt(Number(contracted)) : '—'}</td>
+                          <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: collected ? '#34d399' : 'var(--text-muted)' }}>
+                            {collected ? fmt(Number(collected)) : '—'}
+                          </td>
+                          <td>
+                            <span className={`badge badge-${b.status}`} style={{ fontSize: '0.68rem' }}>{b.status}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

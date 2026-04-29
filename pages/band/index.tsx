@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BOOKING_STATUS_LABELS, AgentActLink } from '../../lib/types';
+import { getBandBookings } from '../../lib/bookingQueries';
 import Link from 'next/link';
 
 export default function BandPortal() {
@@ -68,12 +69,8 @@ export default function BandPortal() {
 
     if (!act) { setLoading(false); return; }
 
-    const [bookingsRes, linksRes, toursRes] = await Promise.all([
-      supabase.from('bookings')
-        .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, fee, agreed_amount, amount_paid, actual_amount_received, payment_status, venue:venues(name, city, state, address, phone)')
-        .eq('act_id', act.id)
-        .neq('status', 'cancelled')
-        .order('show_date', { ascending: true }),
+    const [bookingsData, linksRes, toursRes] = await Promise.all([
+      getBandBookings(supabase, act.id),
       supabase.from('agent_act_links')
         .select(`id, status, permissions, message, invited_at,
           agent:agent_id(id, display_name, agency_name, email)`)
@@ -82,7 +79,7 @@ export default function BandPortal() {
       supabase.from('tours').select('id, name, status, start_date, end_date').or(`act_id.eq.${act.id},created_by.eq.${user.id}`).neq('status', 'cancelled').order('start_date', { ascending: true }).limit(5),
     ]);
 
-    const all = bookingsRes.data || [];
+    const all = bookingsData;
     const _td = new Date();
     const today = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,'0')}-${String(_td.getDate()).padStart(2,'0')}`;
     setUpcoming(all.filter((b: any) => b.show_date && b.show_date >= today).slice(0, 5));

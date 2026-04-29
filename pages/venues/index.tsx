@@ -127,10 +127,12 @@ export default function VenuesPage() {
   }, [showNew, mapsReady]);
 
   const loadVenues = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data } = await supabase.from('venues').select('*').order('name').limit(500);
-    setVenues(data || []);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch('/api/venues/list', {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (res.ok) setVenues(await res.json());
   };
 
   const saveVenue = async (e: React.FormEvent) => {
