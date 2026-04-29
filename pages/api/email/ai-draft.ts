@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import Anthropic from '@anthropic-ai/sdk';
-import { supabase, getServiceClient } from '../../../lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
 
 const SYSTEM_PROMPT = `You are an expert music booking agent assistant for Camel Ranch Entertainment.
@@ -26,6 +27,16 @@ type Category = 'target' | 'follow_up_1' | 'follow_up_2' | 'confirmation' | 'dec
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
+
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+  const anonClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  );
+  const { data: { user }, error: authErr } = await anonClient.auth.getUser(token);
+  if (authErr || !user) return res.status(401).json({ error: 'Unauthorized' });
 
   const { category, bookingId, actId: bodyActId, venueId: bodyVenueId, contactId, agentName, agencyName } = req.body;
   if (!category) return res.status(400).json({ error: 'category required' });

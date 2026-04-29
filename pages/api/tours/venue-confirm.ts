@@ -405,7 +405,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               <p style="color:#999;font-size:0.85rem;margin-top:2rem">Camel Ranch Booking · camelranchbooking.com</p>
             </div>`,
           });
-          await service.from('email_logs').insert({
+          await service.from('email_log').insert({
             sent_by:    user.id,
             booking_id: (booking as any).id,
             venue_id:   (tv.venue as any).id,
