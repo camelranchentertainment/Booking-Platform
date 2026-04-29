@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
+import { getAgentActIds, getAgentActs } from '../lib/bookingQueries';
 import Link from 'next/link';
 
 const DEAL_LABELS: Record<string, string> = {
@@ -57,17 +58,27 @@ export default function HistoryPage() {
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const [bookingsRes, actsRes] = await Promise.all([
-      supabase.from('bookings').select(`
-        id, show_date, deal_type, agreed_amount, actual_amount_received,
-        payment_status, rebook_flag, post_show_notes,
-        act:acts(id, act_name),
-        venue:venues(name, city, state)
-      `).eq('status', 'completed').eq('created_by', user.id).order('show_date', { ascending: false }),
-      supabase.from('acts').select('id, act_name').eq('agent_id', user.id).order('act_name'),
+    const agentActIds = await getAgentActIds(supabase, user.id);
+
+    let q = supabase.from('bookings').select(`
+      id, show_date, deal_type, agreed_amount, actual_amount_received,
+      payment_status, rebook_flag, post_show_notes,
+      act:acts(id, act_name),
+      venue:venues(name, city, state)
+    `).eq('status', 'completed').order('show_date', { ascending: false });
+
+    if (agentActIds.length > 0) {
+      q = q.or(`act_id.in.(${agentActIds.join(',')}),created_by.eq.${user.id}`);
+    } else {
+      q = q.eq('created_by', user.id);
+    }
+
+    const [bookingsRes, allActs] = await Promise.all([
+      q,
+      getAgentActs(supabase, user.id),
     ]);
     setBookings(bookingsRes.data || []);
-    setActs(actsRes.data || []);
+    setActs(allActs);
     setLoading(false);
   };
 

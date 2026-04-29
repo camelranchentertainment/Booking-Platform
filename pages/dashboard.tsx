@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
+import { getAgentActIds, getAgentBookings } from '../lib/bookingQueries';
 import { Act, Booking, BOOKING_STATUS_LABELS } from '../lib/types';
 import Link from 'next/link';
 
@@ -23,21 +24,24 @@ export default function Dashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [actsRes, bookingsRes, toursRes] = await Promise.all([
-        supabase.from('acts').select('*').eq('agent_id', user.id).eq('is_active', true).order('act_name'),
-        supabase.from('bookings').select(`
-          id, status, show_date, fee, agreed_amount, amount_paid, actual_amount_received, payment_status, created_at,
-          act:acts(act_name),
-          venue:venues(name, city, state)
-        `).eq('created_by', user.id).order('created_at', { ascending: false }).limit(50),
+      const agentActIds = await getAgentActIds(supabase, user.id);
+
+      const [actsRes, bookings, toursRes] = await Promise.all([
+        agentActIds.length
+          ? supabase.from('acts').select('*').in('id', agentActIds).eq('is_active', true).order('act_name')
+          : Promise.resolve({ data: [] }),
+        getAgentBookings(supabase, user.id, {
+          select: 'id, status, show_date, fee, agreed_amount, amount_paid, actual_amount_received, payment_status, created_at, act:acts(act_name), venue:venues(name, city, state)',
+          actIds: agentActIds,
+          limit: 50,
+        }),
         supabase.from('tours').select('id, name, status, act:acts(act_name)').eq('created_by', user.id).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(5),
       ]);
 
-      const bookings = (bookingsRes.data || []) as any[];
       setActs(actsRes.data || []);
       setTours(toursRes.data || []);
 
-      // Pipeline counts
+      // Pipeline counts across ALL agent's acts
       const counts: Record<string, number> = {};
       for (const b of bookings) {
         counts[b.status] = (counts[b.status] || 0) + 1;

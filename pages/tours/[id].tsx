@@ -543,7 +543,7 @@ export default function TourDetail() {
         {/* Confirmed Shows */}
         <div className="card">
           <div className="card-header">
-            <span className="card-title">CONFIRMED SHOWS ({bookings.length})</span>
+            <span className="card-title">CONFIRMED SHOWS ({bookings.filter((b: any) => ['confirmed','advancing','completed'].includes(b.status)).length})</span>
           </div>
           {bookings.length === 0 ? (
             <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>

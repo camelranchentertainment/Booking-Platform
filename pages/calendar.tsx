@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
+import { getAgentActIds, getAgentActs } from '../lib/bookingQueries';
 import { BOOKING_STATUS_LABELS } from '../lib/types';
 import { buildIcal, downloadIcal } from '../lib/ical';
 import Link from 'next/link';
@@ -38,28 +39,24 @@ export default function AgentCalendar() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Load all acts managed by this agent (direct + via agent_act_links)
-    const [directRes, linkedRes] = await Promise.all([
-      supabase.from('acts').select('id, act_name').eq('agent_id', user.id).eq('is_active', true),
-      supabase.from('agent_act_links').select('act:acts(id, act_name)').eq('agent_id', user.id).eq('status', 'active'),
+    const [allActs, agentActIds] = await Promise.all([
+      getAgentActs(supabase, user.id),
+      getAgentActIds(supabase, user.id),
     ]);
-
-    const directActs = directRes.data || [];
-    const linkedActs = (linkedRes.data || []).map((r: any) => r.act).filter(Boolean);
-    const allActs = [...directActs, ...linkedActs.filter((a: any) => !directActs.find((d: any) => d.id === a.id))];
     setActs(allActs);
 
-    if (!allActs.length) { setLoading(false); return; }
+    if (!agentActIds.length) { setLoading(false); return; }
 
-    const actIds = allActs.map((a: any) => a.id);
-    const { data } = await supabase
+    let q = supabase
       .from('bookings')
       .select('id, status, show_date, set_time, fee, act_id, venue:venues(name, city, state)')
-      .in('act_id', actIds)
       .neq('status', 'cancelled')
       .not('show_date', 'is', null)
       .order('show_date');
 
+    q = q.or(`act_id.in.(${agentActIds.join(',')}),created_by.eq.${user.id}`);
+
+    const { data } = await q;
     setShows(data || []);
     setLoading(false);
   };

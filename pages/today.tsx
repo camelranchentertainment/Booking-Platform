@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
+import { getAgentActIds } from '../lib/bookingQueries';
 import Link from 'next/link';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -653,8 +654,7 @@ export default function TodayPage() {
     let resolvedActId: string | null = prof?.act_id ?? null;
 
     if (userRole === 'agent' || userRole === 'superadmin') {
-      const { data: agentActs } = await supabase.from('acts').select('id').eq('agent_id', user.id);
-      actIds = (agentActs || []).map((a: any) => a.id);
+      actIds = await getAgentActIds(supabase, user.id);
     } else {
       let aid = resolvedActId;
       if (!aid) {

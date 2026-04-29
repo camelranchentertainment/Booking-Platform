@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
+import { getAgentActIds } from '../lib/bookingQueries';
 
 type Booking = {
   id: string;
@@ -103,13 +104,23 @@ export default function Financials() {
     if (!user) return;
     const startDate = `${year}-01-01`;
     const endDate   = `${year}-12-31`;
-    const { data } = await supabase
+    const agentActIds = await getAgentActIds(supabase, user.id);
+
+    let q = supabase
       .from('bookings')
       .select('id, show_date, fee, agreed_amount, amount_paid, actual_amount_received, payment_status, expenses, status, act:acts(act_name), venue:venues(name, city, state)')
       .gte('show_date', startDate)
       .lte('show_date', endDate)
       .neq('status', 'cancelled')
       .order('show_date', { ascending: true });
+
+    if (agentActIds.length > 0) {
+      q = q.or(`act_id.in.(${agentActIds.join(',')}),created_by.eq.${user.id}`);
+    } else {
+      q = q.eq('created_by', user.id);
+    }
+
+    const { data } = await q;
     setBookings((data as any[]) || []);
     setLoading(false);
   };

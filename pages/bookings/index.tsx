@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
+import { getAgentActIds, getAgentActs, getAgentBookings } from '../../lib/bookingQueries';
 import { BookingStatus, BOOKING_STATUS_LABELS, BOOKING_STATUS_ORDER } from '../../lib/types';
 type ActPick = { id: string; act_name: string };
 import Link from 'next/link';
@@ -22,34 +23,21 @@ export default function BookingsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Load acts directly managed + linked via agent_act_links
-    const [directRes, linkedRes] = await Promise.all([
-      supabase.from('acts').select('id, act_name').eq('agent_id', user.id).order('act_name'),
-      supabase.from('agent_act_links').select('act:acts(id, act_name)').eq('agent_id', user.id).eq('status', 'active'),
+    const [agentActIds, allActs] = await Promise.all([
+      getAgentActIds(supabase, user.id),
+      getAgentActs(supabase, user.id),
     ]);
-    const directActs = directRes.data || [];
-    const linkedActs = (linkedRes.data || []).map((r: any) => r.act).filter(Boolean);
-    const allActs = [...directActs, ...linkedActs.filter((a: any) => !directActs.find((d: any) => d.id === a.id))];
-    const agentActIds = allActs.map((a: any) => a.id);
     setActs(allActs);
 
-    // Fetch bookings created by this user OR belonging to acts they agent for
-    let q = supabase.from('bookings').select(`
-      id, status, show_date, fee, deal_notes, internal_notes, created_at,
-      act:acts(id, act_name),
-      venue:venues(id, name, city, state),
-      tour:tours(id, name)
-    `).order('created_at', { ascending: false });
-
-    if (agentActIds.length > 0) {
-      q = q.or(`created_by.eq.${user.id},act_id.in.(${agentActIds.join(',')})`);
-    } else {
-      q = q.eq('created_by', user.id);
-    }
-    if (filterAct) q = q.eq('act_id', filterAct);
-
-    const { data: bookingsData } = await q;
-    setBookings(bookingsData || []);
+    const bookingsData = await getAgentBookings(supabase, user.id, {
+      select: `id, status, show_date, fee, deal_notes, internal_notes, created_at,
+        act:acts(id, act_name),
+        venue:venues(id, name, city, state),
+        tour:tours(id, name)`,
+      actIds: agentActIds,
+      actId: filterAct || undefined,
+    });
+    setBookings(bookingsData);
     setLoading(false);
   };
 
