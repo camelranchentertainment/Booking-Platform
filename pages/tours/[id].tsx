@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
+import EmailComposer from '../../components/email/EmailComposer';
 import Link from 'next/link';
 
 type OutreachStatus = 'target' | 'pitched' | 'followup' | 'negotiating' | 'confirmed' | 'declined';
@@ -102,6 +103,14 @@ export default function TourDetail() {
 
   // Pool filter
   const [poolFilter, setPoolFilter] = useState<OutreachStatus | 'all'>('all');
+
+  // Email composer for tour venues
+  const [composerTourVenue, setComposerTourVenue] = useState<any>(null);
+  const tvEmailCategory = (status: OutreachStatus): string => {
+    if (status === 'target') return 'target';
+    if (status === 'pitched' || status === 'followup') return 'follow_up_1';
+    return 'confirmation';
+  };
 
   // Notes inline edit
   const [editingNotes, setEditingNotes] = useState<string | null>(null);
@@ -769,6 +778,15 @@ export default function TourDetail() {
                       {tv.notes || 'Add notes...'}
                     </div>
                   )}
+                  {tv.status !== 'declined' && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setComposerTourVenue(tv)}
+                      style={{ marginTop: '0.35rem', fontSize: '0.7rem', color: '#60a5fa', borderColor: 'rgba(96,165,250,0.35)', padding: '0.15rem 0.5rem' }}
+                    >
+                      ✉ Email
+                    </button>
+                  )}
                 </div>
 
                 {/* Status selector */}
@@ -1256,6 +1274,18 @@ export default function TourDetail() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Email Composer for outreach pool venues */}
+      {composerTourVenue && tour && (
+        <EmailComposer
+          tourVenueId={composerTourVenue.id}
+          actId={tour.act_id || ''}
+          venueId={composerTourVenue.venue?.id}
+          contactEmail={composerTourVenue.venue?.email || ''}
+          defaultCategory={tvEmailCategory(composerTourVenue.status)}
+          onClose={() => { setComposerTourVenue(null); loadPool(); }}
+        />
       )}
 
       {/* Delete Tour Confirmation */}

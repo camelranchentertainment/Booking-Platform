@@ -202,11 +202,12 @@ export default function AgentCalendar() {
                       fontSize: '0.82rem', padding: '0.1rem 0.25rem', borderRadius: '2px',
                       background: `${actColorMap[s.act_id] || 'var(--accent)'}25`,
                       color: actColorMap[s.act_id] || 'var(--accent)',
-                      fontFamily: 'var(--font-body)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden',
-                      textOverflow: 'ellipsis', marginBottom: '0.1rem',
+                      fontFamily: 'var(--font-body)', fontWeight: 500, marginBottom: '0.1rem',
                       borderLeft: `2px solid ${actColorMap[s.act_id] || 'var(--accent)'}`,
+                      display: 'flex', alignItems: 'center', gap: '0.25rem',
                     }}>
-                      {s.venue?.name || actName(s.act_id) || 'TBD'}
+                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS_DOT[s.status] || '#64748b', flexShrink: 0, display: 'inline-block' }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.venue?.name || actName(s.act_id) || 'TBD'}</span>
                     </div>
                   ))}
                   {dayShows.length > 3 && (

@@ -4,10 +4,11 @@ import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { Act, Venue, Contact, BookingStatus } from '../../lib/types';
 import { useLookup } from '../../lib/hooks/useLookup';
+import { getAgentActIds } from '../../lib/bookingQueries';
 import Link from 'next/link';
 import EmailComposer from '../../components/email/EmailComposer';
 
-type EmailType = 'cold_pitch' | 'followup' | 'reply_suggestion';
+type EmailType = 'cold_pitch' | 'follow_up' | 'reply';
 type Draft = { subject: string; body: string; preview: string };
 type View = 'outbox' | 'pipeline' | 'tracker' | 'inbox';
 
@@ -90,8 +91,8 @@ const EMAIL_STATUS_COLOR: Record<string, string> = {
 
 const TYPE_LABELS: Record<EmailType, string> = {
   cold_pitch: 'Cold Pitch',
-  followup: 'Follow-up',
-  reply_suggestion: 'Reply to Venue',
+  follow_up:  'Follow-up',
+  reply:      'Reply to Venue',
 };
 
 export default function EmailPage() {
@@ -131,9 +132,12 @@ export default function EmailPage() {
 
   // Tracker state
   const [trackerFilter, setTrackerFilter] = useState<'active' | 'all'>('active');
+  const [pitchedTourVenues, setPitchedTourVenues] = useState<any[]>([]);
   const [composerBooking, setComposerBooking] = useState<any>(null);
+  const [composerTourVenue, setComposerTourVenue] = useState<any>(null);
   const [composerCategory, setComposerCategory] = useState('target');
   const [markingCold, setMarkingCold] = useState<string | null>(null);
+  const [markingReplied, setMarkingReplied] = useState<string | null>(null);
 
   // Inbox state
   const [inboxMessages, setInboxMessages] = useState<InboxMessage[]>([]);
@@ -148,19 +152,34 @@ export default function EmailPage() {
   const loadAll = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const [logRes, actsRes, venuesRes, contactsRes, profileRes, bookingsRes, draftsRes] = await Promise.all([
+
+    const [agentActIds, agentToursRes] = await Promise.all([
+      getAgentActIds(supabase, user.id),
+      supabase.from('tours').select('id').eq('created_by', user.id),
+    ]);
+    const tourIds = (agentToursRes.data || []).map((t: any) => t.id);
+
+    let bookingsQ = supabase.from('bookings').select(`
+      id, status, show_date, fee, created_at,
+      email_stage, last_contact_date, follow_up_count,
+      act:acts(id, act_name),
+      venue:venues(id, name, city, state, email),
+      contact:contacts(id, first_name, last_name, email)
+    `).neq('status', 'cancelled').order('show_date', { ascending: true });
+
+    if (agentActIds.length > 0) {
+      bookingsQ = bookingsQ.or(`act_id.in.(${agentActIds.join(',')}),created_by.eq.${user.id}`);
+    } else {
+      bookingsQ = bookingsQ.eq('created_by', user.id);
+    }
+
+    const [logRes, actsRes, venuesRes, contactsRes, profileRes, bookingsRes, draftsRes, tvRes] = await Promise.all([
       supabase.from('email_log').select('*, venue:venues(name)').eq('sent_by', user.id).order('sent_at', { ascending: false }).limit(100),
       supabase.from('acts').select('*').eq('agent_id', user.id).order('act_name'),
       supabase.from('venues').select('*').order('name'),
       supabase.from('contacts').select('*, venue:venues(name)').eq('agent_id', user.id).order('last_name'),
       supabase.from('user_profiles').select('display_name, agency_name').eq('id', user.id).single(),
-      supabase.from('bookings').select(`
-        id, status, show_date, fee, created_at,
-        email_stage, last_contact_date, follow_up_count,
-        act:acts(id, act_name),
-        venue:venues(id, name, city, state, email),
-        contact:contacts(id, first_name, last_name, email)
-      `).neq('status', 'cancelled').order('show_date', { ascending: true }),
+      bookingsQ,
       supabase.from('email_drafts').select(`
         id, category, subject, body, created_at, tour_venue_id,
         booking:bookings(
@@ -175,6 +194,13 @@ export default function EmailPage() {
           tour:tours(id, act_id, act:acts(act_name))
         )
       `).eq('agent_id', user.id).order('created_at', { ascending: false }),
+      tourIds.length > 0
+        ? supabase.from('tour_venues').select(`
+            id, status, tour_id, last_contacted_at, pitched_at, followup_at, updated_at,
+            venue:venues(id, name, city, state, email),
+            tour:tours(id, act_id, act:acts(id, act_name))
+          `).in('tour_id', tourIds).in('status', ['pitched', 'follow_up'])
+        : Promise.resolve({ data: [] as any[] }),
     ]);
     setLog(logRes.data || []);
     setActs(actsRes.data || []);
@@ -183,6 +209,7 @@ export default function EmailPage() {
     setProfile(profileRes.data);
     setBookings(bookingsRes.data || []);
     setPendingDrafts(draftsRes.data || []);
+    setPitchedTourVenues(tvRes.data || []);
     setLoading(false);
   };
 
@@ -192,9 +219,9 @@ export default function EmailPage() {
   };
 
   const categoryMap: Record<EmailType, string> = {
-    cold_pitch:       'target',
-    followup:         'follow_up_1',
-    reply_suggestion: 'reply',
+    cold_pitch: 'cold_pitch',
+    follow_up:  'follow_up',
+    reply:      'reply',
   };
 
   const getDraft = async () => {
@@ -295,6 +322,13 @@ export default function EmailPage() {
     setMarkingCold(null);
   };
 
+  const markReplied = async (tvId: string) => {
+    setMarkingReplied(tvId);
+    await supabase.from('tour_venues').update({ status: 'negotiating', updated_at: new Date().toISOString() }).eq('id', tvId);
+    setPitchedTourVenues(tvs => tvs.filter(tv => tv.id !== tvId));
+    setMarkingReplied(null);
+  };
+
   const loadInbox = async () => {
     setInboxLoading(true);
     setInboxError('');
@@ -337,7 +371,7 @@ export default function EmailPage() {
     e.template_id === 'cold_pitch' &&
     e.sent_at < sevenDaysAgo &&
     e.status !== 'bounced' &&
-    !log.some(f => f.venue_id === e.venue_id && f.template_id === 'followup' && f.sent_at > e.sent_at)
+    !log.some(f => f.venue_id === e.venue_id && ['followup', 'follow_up', 'follow_up_1'].includes(f.template_id) && f.sent_at > e.sent_at)
   );
 
   const pipelineBookings = filterAct
@@ -500,7 +534,7 @@ export default function EmailPage() {
                     className="btn btn-secondary btn-sm"
                     style={{ fontSize: '0.82rem' }}
                     onClick={() => {
-                      setEmailType('followup');
+                      setEmailType('follow_up');
                       if (e.venue_id) setSelVenue(e.venue_id);
                       setPrevSubject(e.subject || '');
                       setShowCompose(true);
@@ -527,7 +561,7 @@ export default function EmailPage() {
                 className="btn btn-secondary btn-sm"
                 style={{ fontSize: '0.82rem', borderColor: 'var(--accent)', color: 'var(--accent)' }}
                 onClick={() => {
-                  setEmailType('reply_suggestion');
+                  setEmailType('reply');
                   if (e.venue_id) setSelVenue(e.venue_id);
                   setPrevBody(e.subject || '');
                   setShowCompose(true);
@@ -607,11 +641,27 @@ export default function EmailPage() {
 
       {/* TRACKER TAB */}
       {view === 'tracker' && (() => {
+        // Tour venue outreach — primary tracker source
+        const tvWithDays = pitchedTourVenues.map(tv => {
+          const lastContactStr = tv.last_contacted_at || tv.pitched_at || tv.updated_at;
+          const days = lastContactStr ? Math.floor((Date.now() - new Date(lastContactStr).getTime()) / (1000 * 60 * 60 * 24)) : 999;
+          const tvUrgency: 'green' | 'yellow' | 'red' = days <= 3 ? 'green' : days <= 7 ? 'yellow' : 'red';
+          return { ...tv, days, tvUrgency };
+        }).sort((a, b) => b.days - a.days);
+
+        // Booking-based tracker (email_stage pipeline)
         const activeBookings = trackerFilter === 'active'
           ? bookings.filter(b => !['cold', 'decline', 'thank_you', 'cancelled', 'completed'].includes(b.email_stage) || !b.email_stage)
           : bookings;
-        const overdueItems = activeBookings.filter(b => getActionInfo(b).urgency === 'red');
-        const dueItems     = activeBookings.filter(b => getActionInfo(b).urgency === 'yellow');
+        const overdueItems = [
+          ...tvWithDays.filter(tv => tv.tvUrgency === 'red'),
+          ...activeBookings.filter(b => getActionInfo(b).urgency === 'red'),
+        ];
+        const dueItems = [
+          ...tvWithDays.filter(tv => tv.tvUrgency === 'yellow'),
+          ...activeBookings.filter(b => getActionInfo(b).urgency === 'yellow'),
+        ];
+        const totalActive = tvWithDays.length + activeBookings.filter(b => getActionInfo(b).urgency === 'green').length;
 
         return (
           <>
@@ -620,7 +670,7 @@ export default function EmailPage() {
               {[
                 { label: 'Overdue', count: overdueItems.length, color: '#f87171' },
                 { label: 'Due Soon', count: dueItems.length, color: '#fbbf24' },
-                { label: 'Active', count: activeBookings.filter(b => getActionInfo(b).urgency === 'green').length, color: '#34d399' },
+                { label: 'Active', count: totalActive, color: '#34d399' },
               ].map(({ label, count, color }) => (
                 <div key={label} className="card" style={{ padding: '0.9rem 1.1rem', textAlign: 'center' }}>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', color, lineHeight: 1 }}>{count}</div>
@@ -629,16 +679,98 @@ export default function EmailPage() {
               ))}
             </div>
 
-            {/* Filter toggle */}
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-              {(['active', 'all'] as const).map(f => (
-                <button key={f} onClick={() => setTrackerFilter(f)}
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0.25rem 0.75rem', borderRadius: '3px', border: `1px solid ${trackerFilter === f ? 'var(--accent)' : 'var(--border)'}`, background: trackerFilter === f ? 'var(--accent-glow)' : 'transparent', color: trackerFilter === f ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer' }}>
-                  {f === 'active' ? 'Active Only' : 'Show All'}
-                </button>
-              ))}
-            </div>
+            {/* Pitched venues tracker */}
+            {tvWithDays.length > 0 && (
+              <div style={{ marginBottom: '1.25rem' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.6rem' }}>
+                  ◈ Pitched Venues — {tvWithDays.length} active
+                </div>
+                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Venue</th>
+                          <th>Act</th>
+                          <th>Status</th>
+                          <th>Last Contact</th>
+                          <th>Days Since</th>
+                          <th style={{ width: 180 }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tvWithDays.map(tv => {
+                          const venue = tv.venue as any;
+                          const act   = (tv.tour as any)?.act;
+                          const lastContactStr = tv.last_contacted_at || tv.pitched_at || tv.updated_at;
+                          const urgencyColor = tv.tvUrgency === 'red' ? '#f87171' : tv.tvUrgency === 'yellow' ? '#fbbf24' : '#34d399';
+                          return (
+                            <tr key={tv.id}>
+                              <td>
+                                <div style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{venue?.name || '—'}</div>
+                                <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>{venue?.city ? `${venue.city}, ${venue.state}` : ''}</div>
+                              </td>
+                              <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{act?.act_name || '—'}</td>
+                              <td>
+                                <span style={{ background: tv.status === 'follow_up' ? 'rgba(251,191,36,0.12)' : 'rgba(96,165,250,0.12)', color: tv.status === 'follow_up' ? '#fbbf24' : '#60a5fa', fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0.15rem 0.45rem', borderRadius: '3px' }}>
+                                  {tv.status === 'follow_up' ? 'Follow-Up' : 'Pitched'}
+                                </span>
+                              </td>
+                              <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                                {lastContactStr ? new Date(lastContactStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: urgencyColor, flexShrink: 0 }} />
+                                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: urgencyColor }}>
+                                    {tv.days === 999 ? '—' : `${tv.days}d`}
+                                  </span>
+                                  {tv.tvUrgency === 'red' && (
+                                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.64rem', color: '#f87171', border: '1px solid rgba(248,113,113,0.4)', borderRadius: '3px', padding: '0.1rem 0.4rem', letterSpacing: '0.04em' }}>Follow up needed</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
+                                  <button
+                                    className="btn btn-ghost btn-sm"
+                                    style={{ fontSize: '0.72rem', color: '#fbbf24', borderColor: 'rgba(251,191,36,0.4)' }}
+                                    onClick={() => { setComposerTourVenue(tv); setComposerCategory('follow_up_1'); }}
+                                  >
+                                    ✉ Follow-Up
+                                  </button>
+                                  <button
+                                    className="btn btn-ghost btn-sm"
+                                    style={{ fontSize: '0.72rem', color: '#34d399', borderColor: 'rgba(52,211,153,0.4)' }}
+                                    disabled={markingReplied === tv.id}
+                                    onClick={() => markReplied(tv.id)}
+                                  >
+                                    {markingReplied === tv.id ? '…' : '✓ Replied'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
 
+            {/* Booking email pipeline tracker */}
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <span>Booking Pipeline — {activeBookings.length} active</span>
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                {(['active', 'all'] as const).map(f => (
+                  <button key={f} onClick={() => setTrackerFilter(f)}
+                    style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '0.15rem 0.55rem', borderRadius: '3px', border: `1px solid ${trackerFilter === f ? 'var(--accent)' : 'var(--border)'}`, background: trackerFilter === f ? 'var(--accent-glow)' : 'transparent', color: trackerFilter === f ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer' }}>
+                    {f === 'active' ? 'Active' : 'All'}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <div className="table-wrap">
                 <table>
@@ -654,11 +786,10 @@ export default function EmailPage() {
                   </thead>
                   <tbody>
                     {activeBookings.length === 0 && (
-                      <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>No active outreach.</td></tr>
+                      <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>No booking pipeline entries.</td></tr>
                     )}
                     {activeBookings.map(b => {
                       const { label, urgency, nextCategory } = getActionInfo(b);
-                      const contactEmail = b.contact?.email || b.venue?.email || '';
                       return (
                         <tr key={b.id}>
                           <td>
@@ -847,7 +978,7 @@ export default function EmailPage() {
               <div className="field">
                 <label className="field-label">Email Type</label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  {(['cold_pitch', 'followup', 'reply_suggestion'] as EmailType[]).map(t => (
+                  {(['cold_pitch', 'follow_up', 'reply'] as EmailType[]).map(t => (
                     <button
                       key={t}
                       onClick={() => setEmailType(t)}
@@ -898,7 +1029,7 @@ export default function EmailPage() {
               {emailType !== 'cold_pitch' && (
                 <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border)', borderRadius: '3px', padding: '0.75rem' }}>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                    {emailType === 'followup' ? 'Original pitch (optional context)' : "Venue's reply (paste their message)"}
+                    {emailType === 'follow_up' ? 'Original pitch (optional context)' : "Venue's reply (paste their message)"}
                   </div>
                   <input
                     className="input"
@@ -909,7 +1040,7 @@ export default function EmailPage() {
                   />
                   <textarea
                     className="input"
-                    placeholder={emailType === 'followup' ? 'Paste original email body…' : "Paste the venue's reply…"}
+                    placeholder={emailType === 'follow_up' ? 'Paste original email body…' : "Paste the venue's reply…"}
                     value={prevBody}
                     onChange={e => setPrevBody(e.target.value)}
                     rows={4}
@@ -1008,6 +1139,20 @@ export default function EmailPage() {
               .then(({ data }) => {
                 if (data) setBookings(bs => bs.map(b => b.id === data.id ? { ...b, ...data } : b));
               });
+          }}
+        />
+      )}
+
+      {composerTourVenue && (
+        <EmailComposer
+          tourVenueId={composerTourVenue.id}
+          actId={(composerTourVenue.tour as any)?.act_id || ''}
+          venueId={(composerTourVenue.venue as any)?.id}
+          contactEmail={(composerTourVenue.venue as any)?.email || ''}
+          defaultCategory={composerCategory}
+          onClose={() => {
+            setComposerTourVenue(null);
+            loadAll();
           }}
         />
       )}

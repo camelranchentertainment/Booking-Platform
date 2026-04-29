@@ -82,7 +82,7 @@ export default function BandPortal() {
     const all = bookingsData;
     const _td = new Date();
     const today = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,'0')}-${String(_td.getDate()).padStart(2,'0')}`;
-    setUpcoming(all.filter((b: any) => b.show_date && b.show_date >= today).slice(0, 5));
+    setUpcoming(all.filter((b: any) => b.show_date && b.show_date >= today && ['confirmed', 'advancing'].includes(b.status)).slice(0, 5));
     setShows(all);
     setPendingLinks(linksRes.data || []);
     setTours(toursRes.data || []);

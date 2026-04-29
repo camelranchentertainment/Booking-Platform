@@ -160,10 +160,11 @@ export default function BandCalendar() {
                       fontSize: '0.72rem', padding: '0.1rem 0.25rem', borderRadius: '2px',
                       background: `${STATUS_DOT[s.status] || '#64748b'}22`,
                       color: STATUS_DOT[s.status] || '#64748b',
-                      fontFamily: 'var(--font-body)', fontWeight: 500,
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: '0.1rem',
+                      fontFamily: 'var(--font-body)', fontWeight: 500, marginBottom: '0.1rem',
+                      display: 'flex', alignItems: 'center', gap: '0.25rem',
                     }}>
-                      {s.venue?.name || 'TBD'}
+                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS_DOT[s.status] || '#64748b', flexShrink: 0, display: 'inline-block' }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.venue?.name || 'TBD'}</span>
                     </div>
                   ))}
                   {dayShows.length > 2 && (
