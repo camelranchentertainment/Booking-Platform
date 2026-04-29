@@ -36,9 +36,8 @@ When asked to run /review:
 - Deploy: Vercel auto-deploys on push to main
 
 ## Design System
-- Background: #030d18
-- Steel blue: #4a85c8
-- Gold: #C8921A
+- Background: #0E0603
+- Warm amber: #C8921A
 - Display: Bebas Neue
 - Body: Nunito
 - Dark mode is default
