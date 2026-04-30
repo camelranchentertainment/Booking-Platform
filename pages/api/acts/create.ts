@@ -14,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const service = getServiceClient();
   const { data, error } = await service.from('acts').insert({
-    agent_id:  user.id,
+    owner_id:  user.id,
     act_name:  act_name.trim(),
     genre:     genre     || null,
     bio:       bio       || null,

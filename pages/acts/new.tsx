@@ -34,7 +34,7 @@ export default function NewBand() {
   };
 
   return (
-    <AppShell requireRole="agent">
+    <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">New Band</h1>

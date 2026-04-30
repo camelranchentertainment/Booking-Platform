@@ -92,7 +92,7 @@ function RenderNote({ text }: { text: string }) {
 // ── ShowCard ─────────────────────────────────────────────────────────────────
 
 function ShowCard({ booking, role, label, dimPast }: { booking: any; role: string; label: string; dimPast?: boolean }) {
-  const isAgent  = role === 'agent' || role === 'superadmin';
+  const isAgent  = role === 'act_admin' || role === 'superadmin';
   const isMember = role === 'member';
   const v = booking.venue;
   const pendingFields: string[] = [];
@@ -426,7 +426,7 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, role, session }
             cursor:       'pointer',
           }}
         >
-          <option value="agent_only">Only me (Agent)</option>
+          <option value="agent_only">Only me</option>
           <option value="band_admin">Band Admin can see</option>
           <option value="all_members">Whole band can see</option>
         </select>
@@ -653,7 +653,7 @@ export default function TodayPage() {
     let actIds: string[] = [];
     let resolvedActId: string | null = prof?.act_id ?? null;
 
-    if (userRole === 'agent' || userRole === 'superadmin') {
+    if (userRole === 'act_admin' || userRole === 'superadmin') {
       actIds = await getAgentActIds(supabase, user.id);
     } else {
       let aid = resolvedActId;
@@ -729,7 +729,7 @@ export default function TodayPage() {
     new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   return (
-    <AppShell requireRole={['agent', 'act_admin', 'member']}>
+    <AppShell requireRole={['act_admin', 'member']}>
       <div className="page-header">
         <div>
           <h1 className="page-title">Today</h1>

@@ -459,7 +459,7 @@ export default function TourDetail() {
   const pendingCount = pool.filter(v => !['confirmed', 'declined'].includes(v.status)).length;
 
   if (!tour) return (
-    <AppShell requireRole={['agent', 'act_admin']}>
+    <AppShell requireRole="act_admin">
       {loadError
         ? <div style={{ color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Tour not found or access denied. <Link href="/tours" style={{ color: 'var(--accent)' }}>← Back to Tours</Link></div>
         : <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div>
@@ -468,11 +468,7 @@ export default function TourDetail() {
   );
 
   return (
-    <AppShell requireRole={['agent', 'act_admin']}>
-      <Link href="/tours" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'rgba(200,146,26,0.7)', textDecoration: 'none', marginBottom: '0.75rem' }}
-        onMouseEnter={e => (e.currentTarget.style.color = '#C8921A')}
-        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,146,26,0.7)')}
-      >← Back to Tours</Link>
+    <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.2rem' }}>

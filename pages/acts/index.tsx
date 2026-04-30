@@ -23,8 +23,8 @@ export default function BandsPage() {
     if (!user) return;
 
     const [myBandsRes, linkedRes, allBandsRes] = await Promise.all([
-      // Bands where this user is agent
-      supabase.from('acts').select('*').eq('agent_id', user.id).order('act_name'),
+      // Bands where this user is owner
+      supabase.from('acts').select('*').eq('owner_id', user.id).order('act_name'),
       // All agent_act_links for this agent (active, pending, revoked)
       supabase.from('agent_act_links')
         .select('id, status, permissions, act:acts(id, act_name, genre, is_active, owner_id)')
@@ -116,7 +116,7 @@ export default function BandsPage() {
   ];
 
   return (
-    <AppShell requireRole="agent">
+    <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Bands</h1>

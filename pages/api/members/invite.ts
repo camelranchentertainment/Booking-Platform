@@ -13,7 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { actId, email, role } = req.body;
   if (!actId || !email || !role) return res.status(400).json({ error: 'actId, email, role required' });
-  if (!['act_admin', 'member', 'agent'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+  if (!['act_admin', 'member'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
 
   // Get act name, inviter display name, and current admin count
   const [actRes, profileRes, currentAdminsRes, pendingAdminsRes] = await Promise.all([
@@ -46,44 +46,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (inviteErr) return res.status(500).json({ error: inviteErr.message });
 
   const joinUrl   = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://camelranchbooking.com'}/join?token=${invite.token}`;
-  const roleLabel = role === 'act_admin' ? 'Band Admin' : role === 'agent' ? 'Booking Agent' : 'Band Member';
+  const roleLabel = role === 'act_admin' ? 'Band Admin' : 'Band Member';
+  const emailSubject = `You've been invited to join ${actName} on Camel Ranch Booking`;
 
-  const isAgent = role === 'agent';
-  const emailSubject = isAgent
-    ? `${inviterName} wants you to manage bookings for ${actName}`
-    : `You've been invited to join ${actName} on Camel Ranch Booking`;
-
-  const emailBody = isAgent ? `
-    <div style="padding: 32px; background: #ffffff;">
-      <h2 style="margin: 0 0 8px; font-size: 20px; color: #1a1a2e;">Booking Agent Invitation</h2>
-      <p style="color: #555; margin: 0 0 24px; font-size: 15px; line-height: 1.6;">
-        <strong>${inviterName}</strong> has invited you to become the <strong>Booking Agent</strong>
-        for <strong>${actName}</strong> on Camel Ranch Booking.
-      </p>
-      <p style="color: #555; margin: 0 0 24px; font-size: 15px; line-height: 1.6;">
-        As their booking agent you'll have full access to manage their shows, tours, venue outreach,
-        and email pipeline — all in one place.
-      </p>
-
-      <div style="background: #f8f6f0; border-radius: 8px; padding: 20px 24px; margin-bottom: 28px; text-align: center;">
-        <div style="font-size: 18px; font-weight: 700; color: #1a1a2e; letter-spacing: 0.05em;">${actName}</div>
-        <div style="font-size: 13px; color: #c8921a; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px;">Booking Agent</div>
-      </div>
-
-      <div style="text-align: center; margin-bottom: 28px;">
-        <a href="${joinUrl}"
-          style="display: inline-block; background: #f5a623; color: #000; font-weight: 700; font-size: 15px;
-                 padding: 14px 36px; border-radius: 6px; text-decoration: none; letter-spacing: 0.05em;">
-          Accept &amp; Start Booking →
-        </a>
-      </div>
-
-      <p style="color: #999; font-size: 13px; margin: 0; line-height: 1.6; text-align: center;">
-        Sign in with your existing agent account or create a new one.<br>
-        This invite expires in 7 days.
-      </p>
-    </div>
-  ` : `
+  const emailBody = `
     <div style="padding: 32px; background: #ffffff;">
       <h2 style="margin: 0 0 8px; font-size: 20px; color: #1a1a2e;">You've been invited!</h2>
       <p style="color: #555; margin: 0 0 24px; font-size: 15px; line-height: 1.6;">

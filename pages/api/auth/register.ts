@@ -9,11 +9,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!email || !password || !role || !displayName) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
-  if (!['agent', 'act_admin'].includes(role)) {
+  if (!['act_admin'].includes(role)) {
     return res.status(400).json({ error: 'Invalid role' });
   }
-  const VALID_TIERS = ['agent_t1', 'agent_t2', 'band_admin'];
-  if (planTier && !VALID_TIERS.includes(planTier)) {
+  if (planTier && planTier !== 'band_admin') {
     return res.status(400).json({ error: 'Invalid plan tier' });
   }
 
@@ -39,10 +38,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     email,
     display_name: displayName,
     subscription_status: 'trialing',
-    subscription_tier: planTier || (role === 'agent' ? 'agent_t1' : 'band_admin'),
+    subscription_tier: 'band_admin',
     trial_ends_at: trialEndsAt,
   };
-  if (role === 'agent' && agencyName) profileData.agency_name = agencyName;
 
   // upsert so the on_auth_user_created trigger row (if present) gets overwritten with correct data
   const { error: profileErr } = await admin.from('user_profiles').upsert(profileData, { onConflict: 'id' });

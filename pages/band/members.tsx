@@ -45,7 +45,7 @@ export default function BandMembers() {
   const [members, setMembers]   = useState<any[]>([]);
   const [invites, setInvites]   = useState<PendingInvite[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole]   = useState<'act_admin' | 'member' | 'agent'>('member');
+  const [inviteRole, setInviteRole]   = useState<'act_admin' | 'member'>('member');
   const [sending, setSending]   = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [inviteSent, setInviteSent]   = useState(false);
@@ -217,16 +217,10 @@ export default function BandMembers() {
                 <option value="act_admin" disabled={adminLimitReached}>
                   Admin{adminLimitReached ? ' (limit)' : ''}
                 </option>
-                <option value="agent">Booking Agent</option>
               </select>
             </div>
           </div>
 
-          {inviteRole === 'agent' && (
-            <div style={{ background: 'rgba(167,139,250,0.07)', border: '1px solid rgba(167,139,250,0.25)', padding: '0.65rem 0.9rem', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
-              ♟ Inviting as Booking Agent gives them full access to manage bookings and tours for {actName || 'your band'}.
-            </div>
-          )}
           {inviteRole === 'act_admin' && adminLimitReached && (
             <div style={{ color: '#f87171', fontSize: '0.82rem' }}>
               Maximum of 2 admins per band. Revoke a pending invite or remove a current admin first.

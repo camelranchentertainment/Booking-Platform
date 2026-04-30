@@ -1,28 +1,15 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 
-// Returns all act IDs managed by an agent: direct (acts.agent_id) + linked (agent_act_links)
+// Returns all act IDs owned by this band admin
 export async function getAgentActIds(sb: SupabaseClient, userId: string): Promise<string[]> {
-  const [directRes, linkedRes] = await Promise.all([
-    sb.from('acts').select('id').eq('agent_id', userId),
-    sb.from('agent_act_links').select('act_id').eq('agent_id', userId).eq('status', 'active'),
-  ]);
-  const direct = (directRes.data || []).map((r: any) => r.id as string);
-  const linked = (linkedRes.data || []).map((r: any) => r.act_id as string).filter(Boolean);
-  return [...new Set([...direct, ...linked])];
+  const { data } = await sb.from('acts').select('id').eq('owner_id', userId);
+  return (data || []).map((r: any) => r.id as string);
 }
 
-// Returns agent acts with full details (for act lists / dropdowns)
+// Returns acts owned by this band admin (for act lists / dropdowns)
 export async function getAgentActs(sb: SupabaseClient, userId: string): Promise<any[]> {
-  const [directRes, linkedRes] = await Promise.all([
-    sb.from('acts').select('id, act_name').eq('agent_id', userId).order('act_name'),
-    sb.from('agent_act_links')
-      .select('act:acts(id, act_name)')
-      .eq('agent_id', userId)
-      .eq('status', 'active'),
-  ]);
-  const direct = directRes.data || [];
-  const linked = (linkedRes.data || []).map((r: any) => r.act).filter(Boolean);
-  return [...direct, ...linked.filter((a: any) => !direct.find((d: any) => d.id === a.id))];
+  const { data } = await sb.from('acts').select('id, act_name').eq('owner_id', userId).order('act_name');
+  return data || [];
 }
 
 // Fetches bookings for all of an agent's acts (direct + linked) plus any they created directly.

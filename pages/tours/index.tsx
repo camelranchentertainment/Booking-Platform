@@ -19,19 +19,10 @@ export default function ToursPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Get all acts this agent manages: directly (agent_id) or via active links
-    const [directActsRes, linkedLinksRes] = await Promise.all([
-      supabase.from('acts').select('id, act_name').eq('agent_id', user.id).order('act_name'),
-      supabase.from('agent_act_links').select('act_id, act:acts(id, act_name)').eq('agent_id', user.id).eq('status', 'active'),
-    ]);
+    // Get all acts this user owns
+    const ownerActsRes = await supabase.from('acts').select('id, act_name').eq('owner_id', user.id).order('act_name');
 
-    const directActs = directActsRes.data || [];
-    const linkedActs = (linkedLinksRes.data || []).map((l: any) => l.act).filter(Boolean);
-
-    const actsMap = new Map<string, ActPick>();
-    for (const a of directActs) actsMap.set(a.id, a);
-    for (const a of linkedActs) if (!actsMap.has(a.id)) actsMap.set(a.id, a);
-    const allActs = Array.from(actsMap.values()).sort((a, b) => a.act_name.localeCompare(b.act_name));
+    const allActs = ownerActsRes.data || [];
     setActs(allActs);
 
     // Tours: created by this user + any tours for managed acts (two queries, merged)
@@ -79,7 +70,7 @@ export default function ToursPage() {
   };
 
   return (
-    <AppShell requireRole="agent">
+    <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Tours</h1>

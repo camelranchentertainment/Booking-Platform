@@ -107,7 +107,7 @@ export default function HistoryPage() {
   };
 
   return (
-    <AppShell requireRole="agent">
+    <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Show History</h1>

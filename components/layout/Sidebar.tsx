@@ -23,7 +23,7 @@ type SysNotif = {
   created_at: string;
 };
 
-const agentNav = [
+const bandAdminNav = [
   { label: 'Dashboard',  href: '/dashboard',  icon: '◈' },
   { label: 'Today',      href: '/today',      icon: '◉' },
   { label: 'Bands',      href: '/acts',       icon: '♪' },
@@ -58,8 +58,7 @@ const memberNav = [
 ];
 
 const portals = [
-  { label: 'Agent View',       href: '/dashboard', color: 'var(--accent)' },
-  { label: 'Band Admin View',  href: '/band',      color: '#a78bfa' },
+  { label: 'Band Admin View',  href: '/dashboard', color: '#a78bfa' },
   { label: 'Member View',      href: '/member',    color: '#34d399' },
 ];
 
@@ -179,10 +178,7 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
     document.documentElement.setAttribute('data-theme', next);
   };
 
-  const nav = isSuperAdmin ? agentNav :
-    profile?.role === 'agent'     ? agentNav  :
-    profile?.role === 'act_admin' ? bandNav   :
-    memberNav;
+  const nav = isSuperAdmin || profile?.role === 'act_admin' ? bandAdminNav : memberNav;
 
   const isActive = (href: string) => {
     // Root portal pages: exact match only to avoid lighting up for all sub-routes
@@ -238,8 +234,7 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
             ) : (
               <>
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                  {profile.role === 'agent' ? (profile.agency_name || 'Agent') :
-                   profile.role === 'act_admin' ? 'Band Admin' : 'Member'}
+                  {profile.role === 'act_admin' ? 'Band Admin' : 'Member'}
                 </div>
                 {profile.role === 'act_admin' && actName && (
                   <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--accent)', letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -269,7 +264,7 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
       )}
 
       <div className="sidebar-section" style={{ flex: 1 }}>
-        <div className="sidebar-label">{isSuperAdmin ? 'Agent Tools' : 'Navigation'}</div>
+        <div className="sidebar-label">Navigation</div>
         {nav.map(item => {
           const badge = item.href === '/email' && inboxCount > 0 ? inboxCount : 0;
           return (

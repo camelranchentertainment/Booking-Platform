@@ -61,7 +61,7 @@ export default function BookingsPage() {
   }));
 
   return (
-    <AppShell requireRole="agent">
+    <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Bookings</h1>

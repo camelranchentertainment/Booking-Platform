@@ -9,17 +9,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
-  const [stripeKey, agentPriceId, bandPriceId] = await Promise.all([
+  const [stripeKey, bandPriceId] = await Promise.all([
     getSetting('stripe_secret_key'),
-    getSetting('stripe_agent_price_id'),
     getSetting('stripe_band_price_id'),
   ]);
   if (!stripeKey) return res.status(500).json({ error: 'Payments not configured. Add your Stripe keys in Settings.' });
 
   const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' });
   const PRICE_IDS: Record<string, string> = {
-    agent:      agentPriceId || '',
-    band_admin: bandPriceId  || '',
+    band_admin: bandPriceId || '',
   };
 
   const service = getServiceClient();
@@ -34,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!profile) return res.status(404).json({ error: 'Profile not found' });
 
-  const tier = (req.body.tier as string) || profile.subscription_tier || 'agent';
+  const tier = (req.body.tier as string) || profile.subscription_tier || 'band_admin';
   const priceId = PRICE_IDS[tier];
   if (!priceId) return res.status(400).json({ error: `No price configured for tier: ${tier}. Add your Stripe price IDs in Settings.` });
 

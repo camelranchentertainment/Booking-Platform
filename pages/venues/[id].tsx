@@ -58,7 +58,7 @@ export default function VenueDetail() {
       supabase.from('bookings').select('id, status, show_date, fee, deal_type, amount_paid, payment_status, rebook, post_show_notes, act:acts(act_name)')
         .eq('venue_id', id).order('show_date', { ascending: false }).limit(50),
       supabase.from('contacts').select('*').eq('venue_id', id).order('last_name'),
-      user ? supabase.from('acts').select('id, act_name').eq('agent_id', user.id).eq('is_active', true).order('act_name') : Promise.resolve({ data: [] }),
+      user ? supabase.from('acts').select('id, act_name').eq('owner_id', user.id).eq('is_active', true).order('act_name') : Promise.resolve({ data: [] }),
     ]);
     if (venueRes.data) { setVenue(venueRes.data); setForm(venueRes.data); }
     setBookings(bookingsRes.data || []);
@@ -147,14 +147,10 @@ export default function VenueDetail() {
   const bookingLabel = (status: string) =>
     statusValues.find(lv => lv.value === status)?.label ?? BOOKING_STATUS_LABELS[status as keyof typeof BOOKING_STATUS_LABELS] ?? status;
 
-  if (!venue) return <AppShell requireRole={['agent', 'act_admin']}><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
+  if (!venue) return <AppShell requireRole="act_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
 
   return (
-    <AppShell requireRole={['agent', 'act_admin']}>
-      <Link href="/venues" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'rgba(200,146,26,0.7)', textDecoration: 'none', marginBottom: '0.75rem' }}
-        onMouseEnter={e => (e.currentTarget.style.color = '#C8921A')}
-        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,146,26,0.7)')}
-      >← Back to Venues</Link>
+    <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">{venue.name}</h1>

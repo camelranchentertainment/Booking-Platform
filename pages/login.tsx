@@ -10,9 +10,8 @@ const MUTED = 'rgba(200,146,26,0.55)';
 
 
 const TIERS = [
-  { role: 'agent',     label: 'Booking Agent', icon: '◈', color: '#C8921A', desc: '$30/mo · 14-day trial' },
-  { role: 'act_admin', label: 'Band Admin',    icon: '♪', color: '#a78bfa', desc: '$15/mo · 14-day trial' },
-  { role: 'member',    label: 'Band Member',   icon: '◉', color: '#34d399', desc: 'Free via invite'       },
+  { role: 'act_admin', label: 'Band Admin',  icon: '♪', color: '#a78bfa', desc: '$18/mo · 14-day trial' },
+  { role: 'member',    label: 'Band Member', icon: '◉', color: '#34d399', desc: 'Free via invite'       },
 ];
 
 export default function Login() {
@@ -39,10 +38,9 @@ export default function Login() {
     const { data: profile } = await supabase
       .from('user_profiles').select('role').eq('id', user.id).maybeSingle();
 
-    const role = profile?.role || 'agent';
+    const role = profile?.role || 'act_admin';
     if (role === 'superadmin') router.replace('/admin');
-    else if (role === 'agent') router.replace('/dashboard');
-    else if (role === 'act_admin') router.replace('/band');
+    else if (role === 'act_admin') router.replace('/dashboard');
     else router.replace('/member');
   };
 
@@ -233,7 +231,7 @@ export default function Login() {
         }}>
           New here? Create an account
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
           {TIERS.map(t => (
             <Link key={t.role} href={`/register?role=${t.role}`} style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem',

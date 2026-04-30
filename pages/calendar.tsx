@@ -74,7 +74,7 @@ export default function AgentCalendar() {
   const actName  = (id: string) => acts.find(a => a.id === id)?.act_name || '';
 
   return (
-    <AppShell requireRole="agent">
+    <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Calendar</h1>

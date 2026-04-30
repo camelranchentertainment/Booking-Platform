@@ -175,7 +175,7 @@ export default function EmailPage() {
 
     const [logRes, actsRes, venuesRes, contactsRes, profileRes, bookingsRes, draftsRes, tvRes] = await Promise.all([
       supabase.from('email_log').select('*, venue:venues(name)').eq('sent_by', user.id).order('sent_at', { ascending: false }).limit(100),
-      supabase.from('acts').select('*').eq('agent_id', user.id).order('act_name'),
+      supabase.from('acts').select('*').eq('owner_id', user.id).order('act_name'),
       supabase.from('venues').select('*').order('name'),
       supabase.from('contacts').select('*, venue:venues(name)').eq('agent_id', user.id).order('last_name'),
       supabase.from('user_profiles').select('display_name, agency_name').eq('id', user.id).single(),
@@ -387,7 +387,7 @@ export default function EmailPage() {
     }));
 
   return (
-    <AppShell requireRole="agent">
+    <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Email &amp; Pipeline</h1>

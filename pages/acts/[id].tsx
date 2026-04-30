@@ -28,7 +28,7 @@ export default function BandDetail() {
 
   const loadAll = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    const [actRes, membersRes, invitesRes, bookingsRes, linkRes] = await Promise.all([
+    const [actRes, membersRes, invitesRes, bookingsRes] = await Promise.all([
       supabase.from('acts').select('*').eq('id', id).single(),
       supabase.from('user_profiles').select('*').eq('act_id', id),
       supabase.from('act_invitations').select('*').eq('act_id', id).eq('status', 'pending'),
@@ -36,15 +36,12 @@ export default function BandDetail() {
         id, status, show_date, fee,
         venue:venues(name, city, state)
       `).eq('act_id', id).order('show_date', { ascending: true }).limit(10),
-      user ? supabase.from('agent_act_links').select('status').eq('act_id', id).eq('agent_id', user.id).maybeSingle() : Promise.resolve({ data: null }),
     ]);
     if (actRes.data) {
       setAct(actRes.data);
       setForm(actRes.data);
-      // Determine access level for this agent
-      if (user && actRes.data.agent_id === user.id) setLinkStatus('owned');
-      else if (linkRes.data?.status === 'active') setLinkStatus('active');
-      else if (linkRes.data?.status === 'revoked') setLinkStatus('revoked');
+      // Determine access level: owned if this user is the owner
+      if (user && actRes.data.owner_id === user.id) setLinkStatus('owned');
       else setLinkStatus(null);
     }
     setMembers(membersRes.data || []);
@@ -95,16 +92,12 @@ export default function BandDetail() {
     await loadAll();
   };
 
-  if (!act) return <AppShell requireRole="agent"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
+  if (!act) return <AppShell requireRole="act_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
 
   const isRevoked = linkStatus === 'revoked';
 
   return (
-    <AppShell requireRole="agent">
-      <Link href="/acts" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'rgba(200,146,26,0.7)', textDecoration: 'none', marginBottom: '0.75rem' }}
-        onMouseEnter={e => (e.currentTarget.style.color = '#C8921A')}
-        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,146,26,0.7)')}
-      >← Back to Bands</Link>
+    <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">{act.act_name}</h1>

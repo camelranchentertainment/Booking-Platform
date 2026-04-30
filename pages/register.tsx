@@ -3,36 +3,18 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 
-type Tier = 'agent' | 'agent_t2' | 'act_admin' | 'member';
+type Tier = 'act_admin' | 'member';
 
 const TIER_CONFIG: Record<Tier, {
   label: string; icon: string; color: string;
   price: string; desc: string; selfSignup: boolean; apiRole: string;
 }> = {
-  agent: {
-    label: 'Agent — Tier 1',
-    icon:  '◈',
-    color: '#C8921A',
-    price: '$30/mo · 14-day trial',
-    desc:  'Up to 5 acts — pipeline, tours, venues & confirmations.',
-    selfSignup: true,
-    apiRole: 'agent',
-  },
-  agent_t2: {
-    label: 'Agent — Tier 2',
-    icon:  '◈',
-    color: '#34d399',
-    price: '$50/mo · 14-day trial',
-    desc:  'Unlimited acts — everything in T1 plus advanced analytics.',
-    selfSignup: true,
-    apiRole: 'agent',
-  },
   act_admin: {
     label: 'Band Admin',
     icon:  '♪',
     color: '#a78bfa',
-    price: '$15/mo · 14-day trial',
-    desc:  'Manage your act, connect with booking agents, share calendars.',
+    price: '$18/mo · 14-day free trial',
+    desc:  'Full booking platform — pipeline, tours, venues, financials.',
     selfSignup: true,
     apiRole: 'act_admin',
   },
@@ -53,7 +35,7 @@ export default function Register() {
   const [tier, setTier]       = useState<Tier | null>(null);
   const [form, setForm]       = useState({
     email: '', password: '', confirmPassword: '',
-    displayName: '', agencyName: '',
+    displayName: '',
     actName: '',
     inviteCode: '',
   });
@@ -62,7 +44,7 @@ export default function Register() {
 
   useEffect(() => {
     const role = router.query.role as string;
-    if (role === 'act_admin' || role === 'member' || role === 'agent' || role === 'agent_t2') setTier(role as Tier);
+    if (role === 'act_admin' || role === 'member') setTier(role as Tier);
   }, [router.query.role]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -84,7 +66,6 @@ export default function Register() {
     if (form.password.length < 8) { setError('Password must be at least 8 characters'); return; }
     if (!form.displayName.trim()) { setError('Name is required'); return; }
     if (tier === 'act_admin' && !form.actName.trim()) { setError('Act / band name is required'); return; }
-    if ((tier === 'agent' || tier === 'agent_t2') && !form.displayName.trim()) { setError('Name is required'); return; }
 
     setLoading(true);
 
@@ -94,10 +75,7 @@ export default function Register() {
       role: cfg!.apiRole,
       displayName: form.displayName,
     };
-    if (tier === 'agent')    body.planTier = 'agent_t1';
-    if (tier === 'agent_t2') body.planTier = 'agent_t2';
-    if ((tier === 'agent' || tier === 'agent_t2') && form.agencyName) body.agencyName = form.agencyName;
-    if (tier === 'act_admin') body.actName = form.actName;
+    if (tier === 'act_admin') { body.planTier = 'band_admin'; body.actName = form.actName; }
 
     const apiRes = await fetch('/api/auth/register', {
       method: 'POST',
@@ -110,8 +88,7 @@ export default function Register() {
     const { error: signInErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
     if (signInErr) { setError(signInErr.message); setLoading(false); return; }
 
-    if (tier === 'agent' || tier === 'agent_t2') router.replace('/dashboard');
-    else if (tier === 'act_admin') router.replace('/band');
+    if (tier === 'act_admin') router.replace('/dashboard');
     else router.replace('/member');
   };
 
@@ -209,38 +186,6 @@ export default function Register() {
               </form>
             )}
 
-            {/* Booking Agent (T1 and T2) */}
-            {(tier === 'agent' || tier === 'agent_t2') && (
-              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div className="grid-2">
-                  <div className="field">
-                    <label className="field-label">Your Name *</label>
-                    <input className="input" value={form.displayName} onChange={set('displayName')} placeholder="Scott" required autoFocus />
-                  </div>
-                  <div className="field">
-                    <label className="field-label">Agency Name</label>
-                    <input className="input" value={form.agencyName} onChange={set('agencyName')} placeholder="Camel Ranch Entertainment" />
-                  </div>
-                </div>
-                <div className="field">
-                  <label className="field-label">Email *</label>
-                  <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="you@youragency.com" required />
-                </div>
-                <div className="field">
-                  <label className="field-label">Password *</label>
-                  <input className="input" type="password" value={form.password} onChange={set('password')} placeholder="Min. 8 characters" required />
-                </div>
-                <div className="field">
-                  <label className="field-label">Confirm Password *</label>
-                  <input className="input" type="password" value={form.confirmPassword} onChange={set('confirmPassword')} placeholder="Repeat password" required />
-                </div>
-                {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
-                <button className="btn btn-primary btn-lg" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center' }}>
-                  {loading ? 'Creating account...' : 'Create Agent Account'}
-                </button>
-              </form>
-            )}
-
             {/* Band Admin */}
             {tier === 'act_admin' && (
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -272,7 +217,7 @@ export default function Register() {
                   {loading ? 'Creating account...' : 'Create Band Account'}
                 </button>
                 <div style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  Invited by an agent?{' '}
+                  Band member?{' '}
                   <button type="button" onClick={() => setTier('member')} style={{ background: 'none', border: 'none', color: '#a78bfa', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>
                     Use invite code instead
                   </button>

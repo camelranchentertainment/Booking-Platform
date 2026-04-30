@@ -6,14 +6,11 @@ import Link from 'next/link';
 const GOLD  = '#C8921A';
 const ROLE_COLOR: Record<string, string> = {
   superadmin: '#C8921A',
-  agent:      '#60a5fa',
   act_admin:  '#a78bfa',
   member:     '#94a3b8',
 };
 const TIER_PRICE: Record<string, number> = {
-  agent_t1:   49,
-  agent_t2:   99,
-  band_admin: 19,
+  band_admin: 18,
 };
 
 type AdminUser = {
@@ -31,17 +28,15 @@ type AdminUser = {
   // enriched
   actName: string | null;
   resolvedActId: string | null;
-  agentName: string | null;
   bandsUsed: number;
   billing_date: string | null;
 };
 
-type Act = { id: string; act_name: string; owner_id: string | null; agent_id: string | null };
-type AgentProfile = { id: string; display_name: string | null; email: string | null; agency_name: string | null };
+type Act = { id: string; act_name: string; owner_id: string | null };
 type Booking30d = {
   id: string; show_date: string; deal_type: string | null; agreed_amount: number | null; fee: number | null;
   actName: string; bandAdminName: string; bandAdminEmail: string; venueName: string; venueCity: string;
-  agentName: string;
+  createdBy: string;
 };
 
 function dot(ok: boolean) {
@@ -81,7 +76,6 @@ export default function AdminPage() {
   // Data
   const [users, setUsers]         = useState<AdminUser[]>([]);
   const [acts, setActs]           = useState<Act[]>([]);
-  const [agents, setAgents]       = useState<AgentProfile[]>([]);
   const [bookings30d, setBookings30d] = useState<Booking30d[]>([]);
   const [analytics, setAnalytics] = useState<Record<string, number>>({});
   const [sysStatus, setSysStatus] = useState<Record<string, any> | null>(null);
@@ -95,8 +89,6 @@ export default function AdminPage() {
   const [fixRoleValue, setFixRoleValue]     = useState('');
   const [fixBandTarget, setFixBandTarget]   = useState<AdminUser | null>(null);
   const [fixBandActId, setFixBandActId]     = useState('');
-  const [fixAgentTarget, setFixAgentTarget] = useState<AdminUser | null>(null);
-  const [fixAgentId, setFixAgentId]         = useState('');
   const [deleteTarget, setDeleteTarget]     = useState<AdminUser | null>(null);
   const [cancelTarget, setCancelTarget]     = useState<AdminUser | null>(null);
   const [refundTarget, setRefundTarget]     = useState<AdminUser | null>(null);
@@ -158,39 +150,24 @@ export default function AdminPage() {
     setActs(rawActs);
 
     // Build lookup maps
-    const actByOwnerId: Record<string, Act>    = {};
-    const actByActId:   Record<string, Act>    = {};
-    const agentById:    Record<string, string> = {};
+    const actByOwnerId: Record<string, Act> = {};
+    const actByActId:   Record<string, Act> = {};
 
     for (const a of rawActs) {
       actByActId[a.id] = a;
       if (a.owner_id) actByOwnerId[a.owner_id] = a;
     }
-    for (const u of rawUsers) {
-      if (u.role === 'agent') agentById[u.id] = u.display_name || u.email || u.id;
-    }
-
-    const agentProfiles = rawUsers.filter((u: any) => u.role === 'agent').map((u: any) => ({
-      id: u.id,
-      display_name: u.display_name,
-      email: u.email,
-      agency_name: u.agency_name,
-    }));
-    setAgents(agentProfiles);
 
     // Enrich users
     const enriched: AdminUser[] = rawUsers.map((u: any) => {
       const ownedAct  = actByOwnerId[u.id];
       const linkedAct = u.act_id ? actByActId[u.act_id] : null;
       const act       = ownedAct || linkedAct || null;
-      const agentId   = act?.agent_id;
-      const bandsUsed = u.role === 'agent' ? rawActs.filter((a: Act) => a.agent_id === u.id).length : 0;
       return {
         ...u,
         actName:       act?.act_name || null,
         resolvedActId: act?.id       || null,
-        agentName:     agentId ? (agentById[agentId] || null) : null,
-        bandsUsed,
+        bandsUsed:     u.role === 'act_admin' ? rawActs.filter((a: Act) => a.owner_id === u.id).length : 0,
         billing_date:  billingDates[u.id] ?? null,
       } as AdminUser;
     });
@@ -218,21 +195,19 @@ export default function AdminPage() {
         bandAdminEmail: owner?.email        || '—',
         venueName:      venue?.name || '—',
         venueCity:      venue ? `${venue.city || ''}${venue.state ? ', ' + venue.state : ''}` : '',
-        agentName:      creator?.display_name || creator?.email || '—',
+        createdBy:      creator?.display_name || creator?.email || '—',
       };
     });
     setBookings30d(bk30);
 
     // Analytics
-    const paying    = enriched.filter(u => u.subscription_status === 'active').length;
-    const agentCnt  = enriched.filter(u => u.role === 'agent').length;
-    const bandAdm   = enriched.filter(u => u.role === 'act_admin').length;
-    const members   = enriched.filter(u => u.role === 'member').length;
-    const new30d    = enriched.filter(u => u.created_at >= thirtyDaysAgo).length;
+    const paying  = enriched.filter(u => u.subscription_status === 'active').length;
+    const bandAdm = enriched.filter(u => u.role === 'act_admin').length;
+    const members = enriched.filter(u => u.role === 'member').length;
+    const new30d  = enriched.filter(u => u.created_at >= thirtyDaysAgo).length;
     setAnalytics({
       totalUsers: enriched.length,
       payingUsers: paying,
-      agentCount: agentCnt,
       bandAdmins: bandAdm,
       members,
       new30d,
@@ -263,7 +238,6 @@ export default function AdminPage() {
     }
     switch (activeFilter) {
       case 'paying':    return list.filter(u => u.subscription_status === 'active');
-      case 'agents':    return list.filter(u => u.role === 'agent');
       case 'bandAdmins':return list.filter(u => u.role === 'act_admin');
       case 'members':   return list.filter(u => u.role === 'member');
       case 'new30d':    return list.filter(u => u.created_at >= thirtyDaysAgo);
@@ -315,15 +289,6 @@ export default function AdminPage() {
     setFixBandTarget(null);
   };
 
-  const doFixAgent = async () => {
-    if (!fixAgentTarget?.resolvedActId) return;
-    setSaving('fixAgent');
-    await callAdmin('fix-agent-link', { actId: fixAgentTarget.resolvedActId, agentId: fixAgentId || null });
-    await loadData();
-    setSaving('');
-    setFixAgentTarget(null);
-  };
-
   const doDelete = async () => {
     if (!deleteTarget) return;
     setSaving('delete');
@@ -370,7 +335,7 @@ export default function AdminPage() {
 
   const doViewAs = (u: AdminUser) => {
     localStorage.setItem('impersonate_user', JSON.stringify({ id: u.id, name: u.display_name || u.email, role: u.role }));
-    const dest = u.role === 'act_admin' ? '/band' : u.role === 'member' ? '/member' : '/dashboard';
+    const dest = u.role === 'member' ? '/member' : '/dashboard';
     router.push(dest);
   };
 
@@ -395,13 +360,12 @@ export default function AdminPage() {
   if (!authorized) return null;
 
   const statCards = [
-    { key: 'all',         label: 'Total Users',        value: analytics.totalUsers,   color: '#60a5fa' },
-    { key: 'paying',      label: 'Paying Users',        value: analytics.payingUsers,  color: '#34d399' },
-    { key: 'agents',      label: 'Agents',              value: analytics.agentCount,   color: GOLD },
-    { key: 'bandAdmins',  label: 'Band Admins',         value: analytics.bandAdmins,   color: '#a78bfa' },
-    { key: 'members',     label: 'Members',             value: analytics.members,      color: '#94a3b8' },
-    { key: 'new30d',      label: 'New (30d)',           value: analytics.new30d,       color: '#f59e0b' },
-    { key: 'confirmed30d',label: 'Confirmed Shows (30d)',value: analytics.confirmed30d, color: '#34d399' },
+    { key: 'all',         label: 'Total Users',         value: analytics.totalUsers,   color: '#60a5fa' },
+    { key: 'paying',      label: 'Paying Users',         value: analytics.payingUsers,  color: '#34d399' },
+    { key: 'bandAdmins',  label: 'Band Admins',          value: analytics.bandAdmins,   color: '#a78bfa' },
+    { key: 'members',     label: 'Members',              value: analytics.members,      color: '#94a3b8' },
+    { key: 'new30d',      label: 'New (30d)',            value: analytics.new30d,       color: '#f59e0b' },
+    { key: 'confirmed30d',label: 'Confirmed Shows (30d)', value: analytics.confirmed30d, color: '#34d399' },
   ];
 
   const isBusy = (key: string) => saving === key;
@@ -415,7 +379,7 @@ export default function AdminPage() {
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: GOLD, background: `${GOLD}18`, padding: '0.18rem 0.5rem', border: `1px solid ${GOLD}40` }}>SUPERADMIN</span>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <Link href="/dashboard" style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', textDecoration: 'none' }}>→ Agent View</Link>
+          <Link href="/dashboard" style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', textDecoration: 'none' }}>→ Dashboard</Link>
           <button onClick={async () => { await supabase.auth.signOut(); router.replace('/login'); }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
             Sign Out
@@ -508,7 +472,7 @@ export default function AdminPage() {
                         <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#34d399' }}>
                           {b.agreed_amount != null ? `$${Number(b.agreed_amount).toLocaleString()}` : b.fee != null ? `$${Number(b.fee).toLocaleString()}` : '—'}
                         </td>
-                        <td style={{ color: 'var(--text-muted)' }}>{b.agentName}</td>
+                        <td style={{ color: 'var(--text-muted)' }}>{b.createdBy}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -536,7 +500,6 @@ export default function AdminPage() {
                   <th>Email</th>
                   <th>Role</th>
                   <th>Band / Act</th>
-                  <th>Agent</th>
                   <th>Plan</th>
                   <th>Trial Ends</th>
                   <th>Status</th>
@@ -545,7 +508,7 @@ export default function AdminPage() {
               </thead>
               <tbody>
                 {filteredUsers.length === 0 && (
-                  <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>No users match this filter.</td></tr>
+                  <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>No users match this filter.</td></tr>
                 )}
                 {filteredUsers.map(u => (
                   <tr key={u.id}>
@@ -557,7 +520,6 @@ export default function AdminPage() {
                       </span>
                     </td>
                     <td style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{u.actName || '—'}</td>
-                    <td style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{u.agentName || '—'}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{u.subscription_tier || '—'}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', whiteSpace: 'nowrap', color: (() => {
                       if (!u.trial_ends_at) return 'var(--text-muted)';
@@ -590,11 +552,6 @@ export default function AdminPage() {
                         <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.68rem' }}
                           onClick={() => { setFixBandTarget(u); setFixBandActId(u.resolvedActId || ''); }}>
                           Fix Band
-                        </button>
-                        {/* Fix Agent Link */}
-                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.68rem' }}
-                          onClick={() => { setFixAgentTarget(u); setFixAgentId(u.resolvedActId ? (acts.find(a => a.id === u.resolvedActId)?.agent_id || '') : ''); }}>
-                          Fix Agent
                         </button>
                         {/* View As — superadmin only; don't show for superadmin targets */}
                         {u.role !== 'superadmin' && (
@@ -758,7 +715,6 @@ export default function AdminPage() {
               {fixRoleTarget.display_name || fixRoleTarget.email}
             </div>
             <select className="select" value={fixRoleValue} onChange={e => setFixRoleValue(e.target.value)} style={{ width: '100%', marginBottom: '1rem' }}>
-              <option value="agent">Agent</option>
               <option value="act_admin">Band Admin</option>
               <option value="member">Member</option>
             </select>
@@ -791,35 +747,6 @@ export default function AdminPage() {
                 {isBusy('fixBand') ? 'Saving…' : 'Save'}
               </button>
               <button className="btn btn-ghost" onClick={() => setFixBandTarget(null)}>Cancel</button>
-            </div>
-          </div>
-        </ModalWrap>
-      )}
-
-      {/* Fix Agent Link */}
-      {fixAgentTarget && (
-        <ModalWrap onClose={() => setFixAgentTarget(null)}>
-          <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', padding: '1.5rem', width: '100%', maxWidth: 400 }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--text-primary)', letterSpacing: '0.04em', marginBottom: '0.5rem' }}>FIX AGENT LINK</div>
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-              Assigning agent to <strong style={{ color: 'var(--text-primary)' }}>{fixAgentTarget.actName || 'this user\'s act'}</strong>
-            </div>
-            {!fixAgentTarget.resolvedActId && (
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#f87171', marginBottom: '0.75rem' }}>
-                No act linked to this user yet. Use Fix Band first.
-              </div>
-            )}
-            <select className="select" value={fixAgentId} onChange={e => setFixAgentId(e.target.value)} style={{ width: '100%', marginBottom: '1rem' }} disabled={!fixAgentTarget.resolvedActId}>
-              <option value="">— None —</option>
-              {agents.map(a => (
-                <option key={a.id} value={a.id}>{a.display_name || a.email}{a.agency_name ? ` (${a.agency_name})` : ''}</option>
-              ))}
-            </select>
-            <div style={{ display: 'flex', gap: '0.65rem' }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} disabled={isBusy('fixAgent') || !fixAgentTarget.resolvedActId} onClick={doFixAgent}>
-                {isBusy('fixAgent') ? 'Saving…' : 'Save'}
-              </button>
-              <button className="btn btn-ghost" onClick={() => setFixAgentTarget(null)}>Cancel</button>
             </div>
           </div>
         </ModalWrap>
@@ -921,9 +848,7 @@ export default function AdminPage() {
             </div>
             <select className="select" value={upgradeTier} onChange={e => setUpgradeTier(e.target.value)} style={{ width: '100%', marginBottom: '1rem' }}>
               <option value="">— Select tier —</option>
-              <option value="agent_t1">Agent T1 ($49/mo)</option>
-              <option value="agent_t2">Agent T2 ($99/mo)</option>
-              <option value="band_admin">Band Admin ($19/mo)</option>
+              <option value="band_admin">Band Admin ($18/mo)</option>
             </select>
             <div style={{ display: 'flex', gap: '0.65rem' }}>
               <button className="btn btn-primary" style={{ flex: 1 }} disabled={isBusy('upgrade') || !upgradeTier} onClick={doUpgrade}>

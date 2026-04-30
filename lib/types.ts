@@ -1,4 +1,4 @@
-export type UserRole = 'superadmin' | 'agent' | 'act_admin' | 'member';
+export type UserRole = 'superadmin' | 'act_admin' | 'member';
 
 export type BookingStatus =
   | 'pitch' | 'followup' | 'negotiation' | 'hold'
@@ -13,7 +13,7 @@ export type TourStatus = 'planning' | 'active' | 'completed' | 'cancelled';
 export type LinkStatus = 'pending' | 'active' | 'revoked' | 'declined';
 
 export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'cancelled' | 'inactive';
-export type SubscriptionTier   = 'agent' | 'band_admin' | 'member';
+export type SubscriptionTier   = 'band_admin' | 'member';
 
 export interface UserProfile {
   id: string;

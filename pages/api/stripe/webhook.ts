@@ -73,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           stripe_subscription_id: sub.id,
           subscription_status:    'active',
           subscription_tier:      tier || undefined,
-          role: tier === 'band_admin' ? 'act_admin' : 'agent',
+          role: 'act_admin',
         }).eq('id', userId);
       }
       break;

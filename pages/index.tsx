@@ -342,56 +342,21 @@ const PRICING_TIERS = [
   {
     id: 'band_admin',
     label: 'Band Admin',
-    price: '$15',
+    price: '$18',
     period: '/month',
-    desc: 'Run your act\'s full operation.',
+    desc: 'The full booking platform for your act.',
     color: '#a78bfa',
     role: 'act_admin',
-    recommended: false,
-    features: [
-      'Everything in Band Member',
-      'Add & manage shows',
-      'Connect with booking agents',
-      'Shared band calendar',
-      'Basic show history',
-    ],
-  },
-  {
-    id: 'agent_t1',
-    label: 'Agent — Tier 1',
-    price: '$30',
-    period: '/month',
-    desc: 'Manage up to 5 acts.',
-    color: '#C8921A',
-    role: 'agent',
     recommended: true,
     features: [
-      'Everything in Band Admin',
-      'Up to 5 acts in roster',
-      'Full pipeline & kanban board',
+      'Full booking pipeline & kanban',
       'Tour planning & routing',
-      'Venue database & history',
-      'Advance sheet automation',
-      'Confirmation emails via Resend',
-    ],
-  },
-  {
-    id: 'agent_t2',
-    label: 'Agent — Tier 2',
-    price: '$50',
-    period: '/month',
-    desc: 'Unlimited roster, priority support.',
-    color: '#34d399',
-    role: 'agent',
-    recommended: false,
-    features: [
-      'Everything in Agent Tier 1',
-      'Unlimited acts in roster',
-      'Bulk venue import',
-      'Advanced analytics & exports',
-      'Priority email support',
-      'Early access to new features',
-      'Custom agency branding (soon)',
+      'Venue CRM & contacts',
+      'AI email drafts (Resend)',
+      'Financials & payouts',
+      'Social scheduling',
+      'Member invitations',
+      'Google Calendar sync',
     ],
   },
 ];
@@ -809,10 +774,9 @@ export default function Home() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle().then(({ data }) => {
-          const role = data?.role || 'agent';
+          const role = data?.role || 'act_admin';
           if (role === 'superadmin') router.replace('/admin');
-          else if (role === 'agent') router.replace('/dashboard');
-          else if (role === 'act_admin') router.replace('/band');
+          else if (role === 'act_admin') router.replace('/dashboard');
           else router.replace('/member');
         });
       } else {

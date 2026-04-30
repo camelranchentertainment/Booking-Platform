@@ -24,7 +24,7 @@ export default function NewBooking() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const [actsRes, venuesRes, toursRes] = await Promise.all([
-        supabase.from('acts').select('id, act_name').eq('is_active', true).eq('agent_id', user.id).order('act_name'),
+        supabase.from('acts').select('id, act_name').eq('is_active', true).eq('owner_id', user.id).order('act_name'),
         supabase.from('venues').select('id, name, city, state').order('name'),
         supabase.from('tours').select('id, name, act_id').eq('status', 'active').order('name'),
       ]);
@@ -76,7 +76,7 @@ export default function NewBooking() {
   const filteredTours = form.act_id ? tours.filter(t => t.act_id === form.act_id) : tours;
 
   return (
-    <AppShell requireRole="agent">
+    <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">New Booking</h1>

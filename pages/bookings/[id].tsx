@@ -78,7 +78,7 @@ export default function BookingDetail() {
     if (!user) return;
     const [bookingRes, actsRes, venuesRes, toursRes] = await Promise.all([
       supabase.from('bookings').select(`*, act:acts(*), venue:venues(*), tour:tours(id, name), contact:contacts(*)`).eq('id', id).single(),
-      supabase.from('acts').select('id, act_name').eq('agent_id', user.id).order('act_name'),
+      supabase.from('acts').select('id, act_name').eq('owner_id', user.id).order('act_name'),
       supabase.from('venues').select('id, name, city, state').order('name'),
       supabase.from('tours').select('id, name, act_id').eq('created_by', user.id).order('name'),
     ]);
@@ -189,17 +189,13 @@ export default function BookingDetail() {
   const setDet = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setDetailsForm((f: any) => ({ ...f, [k]: e.target.value }));
   const setFin = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setFinancialForm((f: any) => ({ ...f, [k]: e.target.value }));
 
-  if (!booking) return <AppShell requireRole="agent"><div style={{ color: 'var(--text-muted)', padding: '2rem' }}>Loading...</div></AppShell>;
+  if (!booking) return <AppShell requireRole="act_admin"><div style={{ color: 'var(--text-muted)', padding: '2rem' }}>Loading...</div></AppShell>;
 
   const isPast     = booking.show_date && new Date(booking.show_date + 'T23:59:59') < new Date();
   const canSettle  = booking.status === 'confirmed' && isPast;
 
   return (
-    <AppShell requireRole="agent">
-      <Link href="/bookings" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'rgba(200,146,26,0.7)', textDecoration: 'none', marginBottom: '0.75rem' }}
-        onMouseEnter={e => (e.currentTarget.style.color = '#C8921A')}
-        onMouseLeave={e => (e.currentTarget.style.color = 'rgba(200,146,26,0.7)')}
-      >← Back to Bookings</Link>
+    <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.25rem' }}>

@@ -74,7 +74,7 @@ export default function SocialQueue() {
   const loadActs = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase.from('acts').select('id, act_name').eq('agent_id', user.id).order('act_name');
+    const { data } = await supabase.from('acts').select('id, act_name').eq('owner_id', user.id).order('act_name');
     setActs(data || []);
     if (data?.length) setSelAct(data[0].id);
   };
@@ -211,7 +211,7 @@ export default function SocialQueue() {
   const pendingCount = posts.filter(p => p.status === 'pending').length;
 
   return (
-    <AppShell requireRole="agent">
+    <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Social Queue</h1>

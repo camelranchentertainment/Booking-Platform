@@ -66,7 +66,7 @@ export default function Dashboard() {
   const totalConfirmed = pipeline.find(p => p.status === 'confirmed')?.count || 0;
 
   return (
-    <AppShell requireRole="agent">
+    <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Dashboard</h1>

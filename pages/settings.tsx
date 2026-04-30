@@ -6,8 +6,7 @@ import { UserProfile } from '../lib/types';
 import PlatformSetup from '../components/settings/PlatformSetup';
 
 const TIER_LABELS: Record<string, string> = {
-  agent:      'Booking Agent — $30 / month',
-  band_admin: 'Band Admin — $15 / month',
+  band_admin: 'Band Admin — $18 / month',
   member:     'Band Member — Free',
 };
 
@@ -148,7 +147,7 @@ export default function Settings() {
   };
 
   return (
-    <AppShell requireRole={['agent', 'superadmin', 'member']}>
+    <AppShell requireRole={['act_admin', 'superadmin', 'member']}>
       <div className="page-header">
         <div>
           <h1 className="page-title">Settings</h1>
@@ -216,12 +215,6 @@ export default function Settings() {
                     <label className="field-label">Your Name</label>
                     <input className="input" value={form.display_name} onChange={set('display_name')} placeholder="Your full name" />
                   </div>
-                  {profile?.role === 'agent' && (
-                    <div className="field">
-                      <label className="field-label">Agency Name</label>
-                      <input className="input" value={form.agency_name} onChange={set('agency_name')} placeholder="Your agency / booking company" />
-                    </div>
-                  )}
                   <div className="field">
                     <label className="field-label">Phone</label>
                     <input className="input" type="tel" value={form.phone} onChange={set('phone')} />
@@ -282,7 +275,7 @@ export default function Settings() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.88rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.4rem' }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Plan</span>
-                  <span style={{ color: 'var(--text-secondary)' }}>{TIER_LABELS[profile.subscription_tier || 'agent']}</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{TIER_LABELS[profile.subscription_tier || 'band_admin'] || '—'}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.4rem' }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Status</span>
@@ -314,7 +307,7 @@ export default function Settings() {
         )}
 
         {/* ── INTEGRATIONS ── */}
-        {profile?.role === 'agent' && (
+        {(profile?.role === 'act_admin' || profile?.role === 'superadmin') && (
           <div>
             <div style={sectionLabelStyle}>Integrations</div>
             <div className="card">

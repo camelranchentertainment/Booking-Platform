@@ -56,53 +56,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .eq('id', userId)
     .maybeSingle();
 
-  if (invite.role === 'agent') {
-    // Agents link to an act — they don't join as a band member.
-    // Only create the profile if it doesn't exist yet; never overwrite an existing role.
-    if (!existingProfile) {
-      const { error: profileErr } = await supabase.from('user_profiles').insert({
-        id:           userId,
-        role:         'agent',
-        email:        invite.email,
-        display_name: displayName || invite.email,
-      });
-      if (profileErr) return res.status(500).json({ error: profileErr.message });
-    }
-
-    // Set acts.agent_id so the band's act page knows their primary agent
-    await supabase.from('acts').update({ agent_id: userId }).eq('id', invite.act_id);
-
-    // Create the agent_act_links record (active, full manage permissions)
-    await supabase.from('agent_act_links').upsert({
-      agent_id:    userId,
-      act_id:      invite.act_id,
-      status:      'active',
-      permissions: 'manage',
-    }, { onConflict: 'agent_id,act_id' });
+  // Band members (act_admin, member) get linked via profile.act_id.
+  if (existingProfile) {
+    // Profile already exists — only update act_id, never touch role.
+    const { error: profileErr } = await supabase.from('user_profiles')
+      .update({ act_id: invite.act_id })
+      .eq('id', userId);
+    if (profileErr) return res.status(500).json({ error: profileErr.message });
   } else {
-    // Band members (act_admin, member) get linked via profile.act_id.
-    if (existingProfile) {
-      // Profile already exists — only update act_id, never touch role.
-      const { error: profileErr } = await supabase.from('user_profiles')
-        .update({ act_id: invite.act_id })
-        .eq('id', userId);
-      if (profileErr) return res.status(500).json({ error: profileErr.message });
-    } else {
-      // New user — create profile with correct role.
-      const { error: profileErr } = await supabase.from('user_profiles').insert({
-        id:           userId,
-        role:         invite.role,
-        email:        invite.email,
-        display_name: displayName || invite.email,
-        act_id:       invite.act_id,
-      });
-      if (profileErr) return res.status(500).json({ error: profileErr.message });
-    }
+    // New user — create profile with correct role.
+    const { error: profileErr } = await supabase.from('user_profiles').insert({
+      id:           userId,
+      role:         invite.role,
+      email:        invite.email,
+      display_name: displayName || invite.email,
+      act_id:       invite.act_id,
+    });
+    if (profileErr) return res.status(500).json({ error: profileErr.message });
+  }
 
-    // When a band admin accepts, claim ownership of the act so the band portal works
-    if (invite.role === 'act_admin') {
-      await supabase.from('acts').update({ owner_id: userId }).eq('id', invite.act_id);
-    }
+  // When a band admin accepts, claim ownership of the act so the band portal works
+  if (invite.role === 'act_admin') {
+    await supabase.from('acts').update({ owner_id: userId }).eq('id', invite.act_id);
   }
 
   // Mark invite accepted

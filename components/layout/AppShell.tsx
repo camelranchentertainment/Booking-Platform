@@ -6,7 +6,7 @@ import Sidebar from './Sidebar';
 
 interface Props {
   children: React.ReactNode;
-  requireRole?: 'agent' | 'act_admin' | 'member' | 'superadmin' | ('agent' | 'act_admin' | 'member' | 'superadmin')[] | null;
+  requireRole?: 'act_admin' | 'member' | 'superadmin' | ('act_admin' | 'member' | 'superadmin')[] | null;
 }
 
 function daysLeft(trialEndsAt: string | null | undefined): number {
@@ -51,8 +51,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
 
         const allowedRoles = Array.isArray(requireRole) ? requireRole : requireRole ? [requireRole] : null;
         if (data.role !== 'superadmin' && allowedRoles && !allowedRoles.includes(data.role as any)) {
-          if (data.role === 'agent') router.replace('/dashboard');
-          else if (data.role === 'act_admin') router.replace('/band');
+          if (data.role === 'act_admin') router.replace('/band');
           else router.replace('/member');
           return;
         }
@@ -103,7 +102,6 @@ export default function AppShell({ children, requireRole = null }: Props) {
     if (!profile) return null;
     switch (profile.role) {
       case 'superadmin': return { label: 'SUPERADMIN', color: '#C8921A' };
-      case 'agent':      return { label: 'AGENT', color: '#60a5fa' };
       case 'act_admin':  return { label: actName ? `BAND ADMIN — ${actName}` : 'BAND ADMIN', color: '#a78bfa' };
       case 'member':     return { label: actName ? `MEMBER — ${actName}` : 'MEMBER', color: '#94a3b8' };
       default:           return null;
@@ -141,7 +139,6 @@ export default function AppShell({ children, requireRole = null }: Props) {
             {profile?.display_name && (
               <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                 {profile.display_name}
-                {profile.role === 'agent' && profile.agency_name ? ` · ${profile.agency_name}` : ''}
               </span>
             )}
           </div>
