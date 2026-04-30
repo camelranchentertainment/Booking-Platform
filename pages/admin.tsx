@@ -6,8 +6,13 @@ import Link from 'next/link';
 const GOLD  = '#C8921A';
 const ROLE_COLOR: Record<string, string> = {
   superadmin: '#C8921A',
-  act_admin:  '#a78bfa',
+  act_admin:  '#f59e0b',
   member:     '#94a3b8',
+};
+const ROLE_LABEL: Record<string, string> = {
+  superadmin: 'Superadmin',
+  act_admin:  'Band Admin',
+  member:     'Member',
 };
 const TIER_PRICE: Record<string, number> = {
   band_admin: 18,
@@ -104,7 +109,7 @@ export default function AdminPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.replace('/login'); return; }
     const { data: prof } = await supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle();
-    if (prof?.role !== 'superadmin') { router.replace('/dashboard'); return; }
+    if (prof?.role !== 'superadmin') { router.replace('/band'); return; }
     setAuthorized(true);
     await loadData();
     await loadSysStatus();
@@ -129,7 +134,7 @@ export default function AdminPage() {
 
     const [profilesRes, actsRes, bookingsRes, billingRes] = await Promise.all([
       supabase.from('user_profiles').select('*').order('created_at', { ascending: false }).limit(500),
-      supabase.from('acts').select('id, act_name, owner_id, agent_id').eq('is_active', true),
+      supabase.from('acts').select('id, act_name, owner_id').eq('is_active', true),
       supabase.from('bookings').select(`
         id, show_date, deal_type, agreed_amount, fee,
         act:acts(act_name, owner_id),
@@ -333,12 +338,6 @@ export default function AdminPage() {
     setSaving('');
   };
 
-  const doViewAs = (u: AdminUser) => {
-    localStorage.setItem('impersonate_user', JSON.stringify({ id: u.id, name: u.display_name || u.email, role: u.role }));
-    const dest = u.role === 'member' ? '/member' : '/dashboard';
-    router.push(dest);
-  };
-
   // ── Subscription row highlight ──────────────────────────────────────────────
   const subRowStyle = (u: AdminUser): React.CSSProperties => {
     if (u.subscription_status === 'cancelled') return { opacity: 0.55 };
@@ -379,7 +378,7 @@ export default function AdminPage() {
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: GOLD, background: `${GOLD}18`, padding: '0.18rem 0.5rem', border: `1px solid ${GOLD}40` }}>SUPERADMIN</span>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <Link href="/dashboard" style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', textDecoration: 'none' }}>→ Dashboard</Link>
+          <Link href="/band" style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', textDecoration: 'none' }}>→ Band Dashboard</Link>
           <button onClick={async () => { await supabase.auth.signOut(); router.replace('/login'); }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
             Sign Out
@@ -515,9 +514,14 @@ export default function AdminPage() {
                     <td style={{ fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{u.display_name || '—'}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{u.email || '—'}</td>
                     <td>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: ROLE_COLOR[u.role] || 'var(--text-muted)' }}>
-                        {u.role}
-                      </span>
+                      {(() => {
+                        const c = ROLE_COLOR[u.role] || '#94a3b8';
+                        return (
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: c, background: `${c}18`, padding: '0.15rem 0.45rem', border: `1px solid ${c}40`, whiteSpace: 'nowrap' }}>
+                            {ROLE_LABEL[u.role] || u.role}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{u.actName || '—'}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{u.subscription_tier || '—'}</td>
@@ -553,13 +557,6 @@ export default function AdminPage() {
                           onClick={() => { setFixBandTarget(u); setFixBandActId(u.resolvedActId || ''); }}>
                           Fix Band
                         </button>
-                        {/* View As — superadmin only; don't show for superadmin targets */}
-                        {u.role !== 'superadmin' && (
-                          <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.68rem', color: '#a78bfa' }}
-                            onClick={() => doViewAs(u)}>
-                            View As
-                          </button>
-                        )}
                         {/* Delete */}
                         {u.role !== 'superadmin' && (
                           <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.68rem', color: '#f87171' }}
@@ -622,7 +619,11 @@ export default function AdminPage() {
                     <tr key={u.id} style={subRowStyle(u)}>
                       <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{u.display_name || '—'}</td>
                       <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{u.email || '—'}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>{u.subscription_tier || '—'}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>
+                        {u.subscription_tier === 'band_admin' ? 'Band Admin — $18/mo' :
+                         u.subscription_tier === 'member' || u.subscription_tier === 'free' ? 'Member — Free' :
+                         u.subscription_tier || '—'}
+                      </td>
                       <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', textAlign: 'center' }}>{u.bandsUsed || '—'}</td>
                       <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', whiteSpace: 'nowrap',
                         color: days != null ? (days < 0 ? '#f87171' : days <= 7 ? '#fbbf24' : 'var(--text-muted)') : 'var(--text-muted)' }}>

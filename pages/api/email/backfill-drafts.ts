@@ -3,8 +3,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
 
-const SYSTEM_PROMPT = `You are an expert music booking agent assistant for Camel Ranch Entertainment.
-Draft a professional cold pitch email to a venue on behalf of a booking agent.
+const SYSTEM_PROMPT = `You are an expert music booking assistant for Camel Ranch Booking.
+Draft a professional cold pitch email to a venue on behalf of a band and their management.
 Style: professional but human, music industry voice, concise, clear call-to-action.
 Never open with "I hope this email finds you well". No em dashes or bullet points in body.
 Subject line format MUST be: [Band Name] — Booking Inquiry — [Venue Name], [City]
@@ -24,7 +24,7 @@ async function getTourDateRange(service: any, tourId: string): Promise<string> {
   return range;
 }
 
-function buildPrompt(act: any, venue: any, contactName: string, agentFrom: string, tourDateRange: string): string {
+function buildPrompt(act: any, venue: any, contactName: string, senderFrom: string, tourDateRange: string): string {
   const actInfo = [
     `Act: ${act?.act_name || 'Unknown'}`,
     act?.genre   && `Genre: ${act.genre}`,
@@ -41,10 +41,10 @@ function buildPrompt(act: any, venue: any, contactName: string, agentFrom: strin
 
   return `Write a cold pitch booking email to ${contactName} at ${venue.name} about booking ${act?.act_name || 'this act'}.
 
-From: ${agentFrom}
+From: ${senderFrom}
 ${actInfo}
 ${venueInfo}
-${tourDateRange ? `Available dates: ${tourDateRange}` : 'Available dates: [AGENT: add specific dates here]'}
+${tourDateRange ? `Available dates: ${tourDateRange}` : 'Available dates: [add specific dates here]'}
 
 Introduce the act in 2 sentences. Ask them to hold a date. Under 150 words. Include website link if available.
 Subject line format: [Act Name] — Booking Inquiry — [Venue Name], [City]`;
@@ -79,8 +79,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ created: 0, message: 'No acts found for this account.' });
   }
 
-  const { data: profile } = await service.from('user_profiles').select('display_name, agency_name').eq('id', user.id).single();
-  const agentFrom = `${profile?.display_name || 'the booking agent'}${profile?.agency_name ? ` at ${profile.agency_name}` : ' at Camel Ranch Booking'}`;
+  const { data: profile } = await service.from('user_profiles').select('display_name').eq('id', user.id).single();
+  const senderFrom = profile?.display_name || 'Band Management';
 
   // Fetch tours first (needed for cleanup + generation)
   const { data: tours, error: toursErr } = await service.from('tours')
@@ -179,7 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const message = await client.messages.create({
         model: 'claude-sonnet-4-6', max_tokens: 1024,
         system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: buildPrompt(b.act, venue, contactName, agentFrom, tourDateRange) }],
+        messages: [{ role: 'user', content: buildPrompt(b.act, venue, contactName, senderFrom, tourDateRange) }],
       });
       const text = message.content.find((bl): bl is Anthropic.TextBlock => bl.type === 'text')?.text ?? '';
       const match = text.match(/\{[\s\S]*\}/);
@@ -238,7 +238,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const message = await client.messages.create({
           model: 'claude-sonnet-4-6', max_tokens: 1024,
           system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-          messages: [{ role: 'user', content: buildPrompt(act, venue, contactName, agentFrom, tourDateRange) }],
+          messages: [{ role: 'user', content: buildPrompt(act, venue, contactName, senderFrom, tourDateRange) }],
         });
         const text = message.content.find((bl): bl is Anthropic.TextBlock => bl.type === 'text')?.text ?? '';
         const match = text.match(/\{[\s\S]*\}/);

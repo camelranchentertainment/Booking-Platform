@@ -28,7 +28,6 @@ export default function AppShell({ children, requireRole = null }: Props) {
   const [actName, setActName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [navOpen, setNavOpen] = useState(false);
-  const [impersonating, setImpersonating] = useState<{ id: string; name: string; role: string } | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -57,11 +56,6 @@ export default function AppShell({ children, requireRole = null }: Props) {
         }
 
         setProfile(data as UserProfile);
-
-        try {
-          const imp = localStorage.getItem('impersonate_user');
-          if (imp) setImpersonating(JSON.parse(imp));
-        } catch {}
 
         if ((data.role === 'act_admin' || data.role === 'member') && data.act_id) {
           const { data: act } = await supabase.from('acts').select('act_name').eq('id', data.act_id).maybeSingle();
@@ -141,30 +135,6 @@ export default function AppShell({ children, requireRole = null }: Props) {
                 {profile.display_name}
               </span>
             )}
-          </div>
-        )}
-        {impersonating && (
-          <div style={{
-            margin: '-2rem -2rem 1.5rem',
-            padding: '0.5rem 1.5rem',
-            background: '#7c3aed',
-            borderBottom: '1px solid #6d28d9',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem',
-          }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', color: '#fff' }}>
-              VIEWING AS {impersonating.name?.toUpperCase() || impersonating.id} [{impersonating.role.toUpperCase()}]
-            </span>
-            <button
-              className="btn btn-sm"
-              style={{ fontSize: '0.72rem', padding: '0.25rem 0.75rem', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#fff', cursor: 'pointer' }}
-              onClick={() => {
-                localStorage.removeItem('impersonate_user');
-                setImpersonating(null);
-                router.push('/admin');
-              }}
-            >
-              Exit to Admin
-            </button>
           </div>
         )}
         {trialDays !== null && trialDays <= 7 && (

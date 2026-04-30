@@ -38,17 +38,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: 'Email not configured. Add your Resend API key in Settings.' });
   }
 
-  // Authenticate the agent
-  let agentId: string | null = null;
+  // Authenticate sender
+  let userId: string | null = null;
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
     if (token) {
       const { data: { user } } = await service.auth.getUser(token);
-      agentId = user?.id || null;
+      userId = user?.id || null;
     }
   } catch {}
 
-  if (!agentId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
   const resend = new Resend(apiKey);
 
@@ -60,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Step 1 — Log to email_log
     await service.from('email_log').insert({
-      sent_by:       agentId,
+      sent_by:       userId,
       booking_id:    bookingId    || null,
       tour_venue_id: tourVenueId  || null,
       venue_id:      venueId      || null,
@@ -94,7 +94,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       if (newTvStatus) {
-        await updateVenueStatus(service, tourVenueId, newTvStatus, agentId, tvExtra);
+        await updateVenueStatus(service, tourVenueId, newTvStatus, userId, tvExtra);
       } else {
         // Still track contact date even if status doesn't change
         await service.from('tour_venues')
@@ -130,7 +130,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           subject,
           body_preview:      bodyPreview ? String(bodyPreview).substring(0, 300) : null,
           resend_message_id: data?.id || null,
-          sent_by:           agentId,
+          sent_by:           userId,
         });
       } else if (venueId && isColdPitch) {
         // No booking yet — check if one exists for this venue/act
@@ -144,7 +144,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (!existing) {
           // Create a pitch-stage booking so the pipeline picks it up
           await service.from('bookings').insert({
-            created_by:        agentId,
+            created_by:        userId,
             act_id:            actId,
             venue_id:          venueId,
             contact_id:        contactId || null,
@@ -186,7 +186,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         : `Email sent to ${venueName}`;
 
     await service.from('notifications').insert({
-      user_id:    agentId,
+      user_id:    userId,
       type:       'email_sent',
       message:    notifMessage,
       action_url: tourId ? `/tours/${tourId}` : tourVenueId ? '/email' : bookingId ? `/bookings/${bookingId}` : '/email',

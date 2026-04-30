@@ -3,8 +3,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
 
-const SYSTEM_PROMPT = `You are an expert music booking agent assistant for Camel Ranch Entertainment.
-You draft professional, concise cold pitch emails to venues on behalf of booking agents.
+const SYSTEM_PROMPT = `You are an expert music booking assistant for Camel Ranch Booking.
+You draft professional, concise cold pitch emails to venues on behalf of bands and their management.
 
 Style:
 - Professional but human — not corporate
@@ -75,7 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ? `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'the booking manager'
     : 'the booking manager';
 
-  const from = `${profile?.display_name || 'the booking agent'}${profile?.agency_name ? ` at ${profile.agency_name}` : ' at Camel Ranch Booking'}`;
+  const from = profile?.display_name || (booking.act as any)?.act_name ? `${(booking.act as any)?.act_name} Management` : 'Camel Ranch Booking';
 
   const actInfo = [
     `Act: ${act?.act_name || 'Unknown'}`,
@@ -94,7 +94,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const availableDates = tourDateRange
     ? `Available dates: ${tourDateRange}`
-    : 'Available dates: [AGENT: add specific dates here]';
+    : 'Available dates: [add specific dates here]';
 
   const prompt = `Write a cold pitch booking email to ${contactName} at ${venue.name} about booking ${act?.act_name || 'this act'}.
 

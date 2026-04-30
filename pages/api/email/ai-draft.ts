@@ -171,7 +171,7 @@ function buildPrompt({ category, act, venue, contact, booking, tourDateRange, ag
 
   const availableDates = tourDateRange
     ? `Available dates: ${tourDateRange}`
-    : 'Available dates: [AGENT: add specific dates here]';
+    : 'Available dates: [add specific dates here]';
 
   switch (category) {
     case 'target':
