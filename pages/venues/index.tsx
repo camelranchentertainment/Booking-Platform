@@ -4,6 +4,7 @@ import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { Venue } from '../../lib/types';
 import { useLookup } from '../../lib/hooks/useLookup';
+import { getActId } from '../../lib/bookingQueries';
 
 declare global {
   interface Window { google: any; initGooglePlaces: () => void; }
@@ -307,21 +308,16 @@ export default function VenuesPage() {
     setAddTourDone(null);
     if (!toursLoaded) {
       const { data: { user } } = await supabase.auth.getUser();
-      // Fetch tours created by user + tours for acts they manage
-      const [createdRes, managedActsRes] = await Promise.all([
-        supabase.from('tours').select('id, name, act:acts(act_name), status').eq('created_by', user!.id).neq('status', 'cancelled').order('created_at', { ascending: false }),
-        supabase.from('acts').select('id').eq('owner_id', user!.id),
-      ]);
-      const actIds = (managedActsRes.data || []).map((a: any) => a.id);
-      const actToursRes = actIds.length > 0
-        ? await supabase.from('tours').select('id, name, act:acts(act_name), status').in('act_id', actIds).neq('status', 'cancelled').order('created_at', { ascending: false })
-        : { data: [] as any[] };
-      const seen = new Set<string>();
-      const merged: any[] = [];
-      for (const t of [...(createdRes.data || []), ...(actToursRes.data || [])]) {
-        if (!seen.has(t.id)) { seen.add(t.id); merged.push(t); }
+      const actId = await getActId(supabase, user!.id);
+      if (actId) {
+        const { data } = await supabase
+          .from('tours')
+          .select('id, name, act:acts(act_name), status')
+          .eq('act_id', actId)
+          .neq('status', 'cancelled')
+          .order('created_at', { ascending: false });
+        setTours(data || []);
       }
-      setTours(merged);
       setToursLoaded(true);
     }
   };

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
+import { getActId } from '../../lib/bookingQueries';
 type ActPick = { id: string; act_name: string };
 import Link from 'next/link';
 
@@ -18,27 +19,17 @@ export default function ToursPage() {
   const loadAll = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    // Get all acts this user owns
-    const ownerActsRes = await supabase.from('acts').select('id, act_name').eq('owner_id', user.id).order('act_name');
-
-    const allActs = ownerActsRes.data || [];
-    setActs(allActs);
-
-    // Tours: created by this user + any tours for managed acts (two queries, merged)
-    const managedIds = allActs.map(a => a.id);
-    const [createdRes, actToursRes] = await Promise.all([
-      supabase.from('tours').select('*, act:acts(act_name)').eq('created_by', user.id).order('created_at', { ascending: false }),
-      managedIds.length > 0
-        ? supabase.from('tours').select('*, act:acts(act_name)').in('act_id', managedIds).order('created_at', { ascending: false })
-        : Promise.resolve({ data: [] as any[] }),
+    const actId = await getActId(supabase, user.id);
+    if (!actId) return;
+    const [actRes, toursRes] = await Promise.all([
+      supabase.from('acts').select('id, act_name').eq('id', actId).single(),
+      supabase.from('tours').select('*, act:acts(act_name)').eq('act_id', actId).order('created_at', { ascending: false }),
     ]);
-    const seen = new Set<string>();
-    const merged: any[] = [];
-    for (const t of [...(createdRes.data || []), ...(actToursRes.data || [])]) {
-      if (!seen.has(t.id)) { seen.add(t.id); merged.push(t); }
+    if (actRes.data) {
+      setActs([actRes.data]);
+      setForm(f => ({ ...f, act_id: f.act_id || actId }));
     }
-    setTours(merged.sort((a, b) => b.created_at.localeCompare(a.created_at)));
+    setTours(toursRes.data || []);
   };
 
   const save = async (e: React.FormEvent) => {

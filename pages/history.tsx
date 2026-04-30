@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
-import { getAgentActIds, getAgentActs } from '../lib/bookingQueries';
+import { getActId, getBandBookings } from '../lib/bookingQueries';
 import Link from 'next/link';
 
 const DEAL_LABELS: Record<string, string> = {
@@ -43,9 +43,7 @@ function toCSV(rows: any[]): string {
 
 export default function HistoryPage() {
   const [bookings, setBookings]     = useState<any[]>([]);
-  const [acts, setActs]             = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
-  const [filterAct, setFilterAct]       = useState('');
   const [filterVenue, setFilterVenue]   = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterFrom, setFilterFrom]     = useState('');
@@ -58,40 +56,22 @@ export default function HistoryPage() {
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const agentActIds = await getAgentActIds(supabase, user.id);
-
-    let q = supabase.from('bookings').select(`
-      id, show_date, deal_type, agreed_amount, actual_amount_received,
-      payment_status, rebook_flag, post_show_notes,
-      act:acts(id, act_name),
-      venue:venues(name, city, state)
-    `).eq('status', 'completed').order('show_date', { ascending: false });
-
-    if (agentActIds.length > 0) {
-      q = q.or(`act_id.in.(${agentActIds.join(',')}),created_by.eq.${user.id}`);
-    } else {
-      q = q.eq('created_by', user.id);
-    }
-
-    const [bookingsRes, allActs] = await Promise.all([
-      q,
-      getAgentActs(supabase, user.id),
-    ]);
-    setBookings(bookingsRes.data || []);
-    setActs(allActs);
+    const actId = await getActId(supabase, user.id);
+    if (!actId) { setLoading(false); return; }
+    const data = await getBandBookings(supabase, actId, { status: ['completed'] });
+    setBookings([...data].reverse());
     setLoading(false);
   };
 
   const filtered = useMemo(() => {
     let list = bookings;
-    if (filterAct) list = list.filter(b => b.act?.id === filterAct);
     if (filterVenue) list = list.filter(b => b.venue?.name?.toLowerCase().includes(filterVenue.toLowerCase()));
     if (filterStatus) list = list.filter(b => b.payment_status === filterStatus);
     if (filterFrom) list = list.filter(b => b.show_date >= filterFrom);
     if (filterTo) list = list.filter(b => b.show_date <= filterTo);
     if (sortBy === 'amount') list = [...list].sort((a, b) => (Number(b.agreed_amount) || 0) - (Number(a.agreed_amount) || 0));
     return list;
-  }, [bookings, filterAct, filterVenue, filterStatus, filterFrom, filterTo, sortBy]);
+  }, [bookings, filterVenue, filterStatus, filterFrom, filterTo, sortBy]);
 
   const totalExpected  = filtered.reduce((s, b) => s + (Number(b.agreed_amount) || 0), 0);
   const totalReceived  = filtered.reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0);
@@ -119,13 +99,6 @@ export default function HistoryPage() {
       {/* Filters */}
       <div className="card mb-6" style={{ padding: '0.85rem 1.25rem' }}>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div className="field" style={{ margin: 0, minWidth: 160 }}>
-            <label className="field-label">Band</label>
-            <select className="select" value={filterAct} onChange={e => setFilterAct(e.target.value)}>
-              <option value="">All Bands</option>
-              {acts.map(a => <option key={a.id} value={a.id}>{a.act_name}</option>)}
-            </select>
-          </div>
           <div className="field" style={{ margin: 0, minWidth: 150 }}>
             <label className="field-label">Venue</label>
             <input className="input" placeholder="Search venue..." value={filterVenue} onChange={e => setFilterVenue(e.target.value)} />
@@ -155,8 +128,8 @@ export default function HistoryPage() {
               <option value="amount">Amount</option>
             </select>
           </div>
-          {(filterAct || filterVenue || filterStatus || filterFrom || filterTo) && (
-            <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-end' }} onClick={() => { setFilterAct(''); setFilterVenue(''); setFilterStatus(''); setFilterFrom(''); setFilterTo(''); }}>
+          {(filterVenue || filterStatus || filterFrom || filterTo) && (
+            <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-end' }} onClick={() => { setFilterVenue(''); setFilterStatus(''); setFilterFrom(''); setFilterTo(''); }}>
               Clear Filters
             </button>
           )}

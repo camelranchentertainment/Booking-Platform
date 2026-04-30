@@ -146,7 +146,7 @@ export default function TourDetail() {
       supabase.from('bookings').select(`
         id, status, show_date, fee,
         venue:venues(name, city, state)
-      `).eq('tour_id', id).order('show_date', { ascending: true }),
+      `).eq('tour_id', id).in('status', ['confirmed', 'advancing', 'completed']).order('show_date', { ascending: true }),
     ]);
     if (tourRes.data) {
       setTour(tourRes.data);

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
-import { getAgentActIds } from '../lib/bookingQueries';
+import { getActId } from '../lib/bookingQueries';
 
 type Booking = {
   id: string;
@@ -106,23 +106,16 @@ export default function Financials() {
     if (!user) return;
     const startDate = `${year}-01-01`;
     const endDate   = `${year}-12-31`;
-    const agentActIds = await getAgentActIds(supabase, user.id);
-
-    let q = supabase
+    const actId = await getActId(supabase, user.id);
+    if (!actId) { setLoading(false); return; }
+    const { data } = await supabase
       .from('bookings')
       .select('id, show_date, fee, agreed_amount, amount_paid, actual_amount_received, payment_status, expenses, status, act:acts(act_name), venue:venues(name, city, state)')
+      .eq('act_id', actId)
       .gte('show_date', startDate)
       .lte('show_date', endDate)
       .neq('status', 'cancelled')
       .order('show_date', { ascending: true });
-
-    if (agentActIds.length > 0) {
-      q = q.or(`act_id.in.(${agentActIds.join(',')}),created_by.eq.${user.id}`);
-    } else {
-      q = q.eq('created_by', user.id);
-    }
-
-    const { data } = await q;
     setBookings((data as any[]) || []);
     setLoading(false);
   };

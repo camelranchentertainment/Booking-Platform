@@ -2,42 +2,26 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
-import { getAgentActIds, getAgentActs, getAgentBookings } from '../../lib/bookingQueries';
+import { getActId, getBandBookings } from '../../lib/bookingQueries';
 import { BookingStatus, BOOKING_STATUS_LABELS, BOOKING_STATUS_ORDER } from '../../lib/types';
-type ActPick = { id: string; act_name: string };
 import Link from 'next/link';
 
 export default function BookingsPage() {
   const router = useRouter();
-  const actFilter = router.query.act as string | undefined;
   const [bookings, setBookings] = useState<any[]>([]);
-  const [acts, setActs]         = useState<ActPick[]>([]);
-  const [filterAct, setFilterAct] = useState(actFilter || '');
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
     loadAll();
-  }, [filterAct]);
+  }, []);
 
   const loadAll = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    const [agentActIds, allActs] = await Promise.all([
-      getAgentActIds(supabase, user.id),
-      getAgentActs(supabase, user.id),
-    ]);
-    setActs(allActs);
-
-    const bookingsData = await getAgentBookings(supabase, user.id, {
-      select: `id, status, show_date, fee, deal_notes, internal_notes, created_at,
-        act:acts(id, act_name),
-        venue:venues(id, name, city, state),
-        tour:tours(id, name)`,
-      actIds: agentActIds,
-      actId: filterAct || undefined,
-    });
-    setBookings(bookingsData);
+    const actId = await getActId(supabase, user.id);
+    if (!actId) { setLoading(false); return; }
+    const data = await getBandBookings(supabase, actId);
+    setBookings(data);
     setLoading(false);
   };
 
@@ -67,13 +51,7 @@ export default function BookingsPage() {
           <h1 className="page-title">Bookings</h1>
           <div className="page-sub">Pipeline · {bookings.length} total</div>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <select className="select" style={{ width: 200 }} value={filterAct} onChange={e => setFilterAct(e.target.value)}>
-            <option value="">All Acts</option>
-            {acts.map(a => <option key={a.id} value={a.id}>{a.act_name}</option>)}
-          </select>
-          <Link href="/bookings/new" className="btn btn-primary">+ New Booking</Link>
-        </div>
+        <Link href="/bookings/new" className="btn btn-primary">+ New Booking</Link>
       </div>
 
       <div className="kanban-board">

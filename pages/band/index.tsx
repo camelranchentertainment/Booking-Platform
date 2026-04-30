@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
-import { getBandBookings } from '../../lib/bookingQueries';
+import { getActId, getBandBookings } from '../../lib/bookingQueries';
 import Link from 'next/link';
 
 export default function BandPortal() {
@@ -53,23 +53,16 @@ export default function BandPortal() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Find the act: first by direct ownership, then by act_id on the profile (agent-created acts)
-    let { data: acts } = await supabase.from('acts').select('*').eq('owner_id', user.id).eq('is_active', true).limit(1);
-    if (!acts?.length) {
-      const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
-      if (prof?.act_id) {
-        const { data: linked } = await supabase.from('acts').select('*').eq('id', prof.act_id).eq('is_active', true).limit(1);
-        acts = linked;
-      }
-    }
-    const act = acts?.[0] || null;
-    setMyAct(act);
+    const actId = await getActId(supabase, user.id);
+    if (!actId) { setLoading(false); return; }
 
+    const { data: act } = await supabase.from('acts').select('*').eq('id', actId).eq('is_active', true).single();
+    setMyAct(act || null);
     if (!act) { setLoading(false); return; }
 
     const [bookingsData, toursRes] = await Promise.all([
-      getBandBookings(supabase, act.id),
-      supabase.from('tours').select('id, name, status, start_date, end_date').or(`act_id.eq.${act.id},created_by.eq.${user.id}`).neq('status', 'cancelled').order('start_date', { ascending: true }).limit(5),
+      getBandBookings(supabase, actId),
+      supabase.from('tours').select('id, name, status, start_date, end_date').eq('act_id', actId).neq('status', 'cancelled').order('start_date', { ascending: true }).limit(5),
     ]);
 
     const all = bookingsData;

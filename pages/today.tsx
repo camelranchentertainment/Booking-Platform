@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
-import { getAgentActIds } from '../lib/bookingQueries';
 import Link from 'next/link';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -649,26 +648,10 @@ export default function TodayPage() {
     const userRole = prof?.role || 'member';
     setRole(userRole);
 
-    // Resolve act IDs for booking queries
-    let actIds: string[] = [];
-    let resolvedActId: string | null = prof?.act_id ?? null;
+    const actId = prof?.act_id ?? null;
+    setUserActId(actId);
 
-    if (userRole === 'act_admin' || userRole === 'superadmin') {
-      actIds = await getAgentActIds(supabase, user.id);
-    } else {
-      let aid = resolvedActId;
-      if (!aid) {
-        const { data: owned } = await supabase.from('acts').select('id').eq('owner_id', user.id).limit(1);
-        if (owned?.length) { aid = owned[0].id; }
-      }
-      if (aid) {
-        actIds        = [aid];
-        resolvedActId = aid;
-      }
-    }
-    setUserActId(resolvedActId);
-
-    if (!actIds.length) { setLoading(false); return; }
+    if (!actId) { setLoading(false); return; }
 
     const bookingSelect = `
       id, show_date, load_in_time, soundcheck_time, set_time, end_time,
@@ -681,11 +664,11 @@ export default function TodayPage() {
 
     const [todayRes, tomorrowRes, upcomingRes] = await Promise.all([
       supabase.from('bookings').select(bookingSelect)
-        .in('act_id', actIds).in('status', ['confirmed', 'advancing']).eq('show_date', td).limit(1),
+        .eq('act_id', actId).in('status', ['confirmed', 'advancing']).eq('show_date', td).limit(1),
       supabase.from('bookings').select(bookingSelect)
-        .in('act_id', actIds).in('status', ['confirmed', 'advancing']).eq('show_date', tm).limit(1),
+        .eq('act_id', actId).in('status', ['confirmed', 'advancing']).eq('show_date', tm).limit(1),
       supabase.from('bookings').select('id, show_date, venue:venues(name, city, state)')
-        .in('act_id', actIds).in('status', ['confirmed', 'advancing']).gt('show_date', tm).order('show_date').limit(1),
+        .eq('act_id', actId).in('status', ['confirmed', 'advancing']).gt('show_date', tm).order('show_date').limit(1),
     ]);
 
     const todayBooking    = todayRes.data?.[0]    ?? null;
@@ -711,10 +694,10 @@ export default function TodayPage() {
       const tourAny = todayBooking.tour as any;
       const tourName: string = (Array.isArray(tourAny) ? tourAny[0]?.name : tourAny?.name) ?? '';
       setActiveTour({ id: todayBooking.tour_id as string, name: tourName });
-    } else if (actIds.length) {
+    } else {
       const { data: activeTours } = await supabase.from('tours')
         .select('id, name')
-        .in('act_id', actIds)
+        .eq('act_id', actId)
         .in('status', ['active', 'planning'])
         .order('start_date', { ascending: false })
         .limit(1);

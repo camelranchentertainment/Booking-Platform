@@ -4,7 +4,7 @@ import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { Act, Venue, Contact, BookingStatus } from '../../lib/types';
 import { useLookup } from '../../lib/hooks/useLookup';
-import { getAgentActIds } from '../../lib/bookingQueries';
+import { getActId } from '../../lib/bookingQueries';
 import Link from 'next/link';
 import EmailComposer from '../../components/email/EmailComposer';
 
@@ -153,33 +153,30 @@ export default function EmailPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [agentActIds, agentToursRes] = await Promise.all([
-      getAgentActIds(supabase, user.id),
-      supabase.from('tours').select('id').eq('created_by', user.id),
-    ]);
-    const tourIds = (agentToursRes.data || []).map((t: any) => t.id);
+    const actId = await getActId(supabase, user.id);
 
-    let bookingsQ = supabase.from('bookings').select(`
-      id, status, show_date, fee, created_at,
-      email_stage, last_contact_date, follow_up_count,
-      act:acts(id, act_name),
-      venue:venues(id, name, city, state, email),
-      contact:contacts(id, first_name, last_name, email)
-    `).neq('status', 'cancelled').order('show_date', { ascending: true });
+    const bookingsQ = actId
+      ? supabase.from('bookings').select(`
+          id, status, show_date, fee, created_at,
+          email_stage, last_contact_date, follow_up_count,
+          act:acts(id, act_name),
+          venue:venues(id, name, city, state, email),
+          contact:contacts(id, first_name, last_name, email)
+        `).eq('act_id', actId).neq('status', 'cancelled').order('show_date', { ascending: true })
+      : null;
 
-    if (agentActIds.length > 0) {
-      bookingsQ = bookingsQ.or(`act_id.in.(${agentActIds.join(',')}),created_by.eq.${user.id}`);
-    } else {
-      bookingsQ = bookingsQ.eq('created_by', user.id);
-    }
+    const toursQ = actId
+      ? supabase.from('tours').select('id').eq('act_id', actId)
+      : Promise.resolve({ data: [] as any[] });
 
-    const [logRes, actsRes, venuesRes, contactsRes, profileRes, bookingsRes, draftsRes, tvRes] = await Promise.all([
+    const [toursRes, logRes, actsRes, venuesRes, contactsRes, profileRes, bookingsRes, draftsRes] = await Promise.all([
+      toursQ,
       supabase.from('email_log').select('*, venue:venues(name)').eq('sent_by', user.id).order('sent_at', { ascending: false }).limit(100),
-      supabase.from('acts').select('*').eq('owner_id', user.id).order('act_name'),
+      actId ? supabase.from('acts').select('*').eq('id', actId) : Promise.resolve({ data: [] as any[] }),
       supabase.from('venues').select('*').order('name'),
       supabase.from('contacts').select('*, venue:venues(name)').eq('agent_id', user.id).order('last_name'),
       supabase.from('user_profiles').select('display_name, agency_name').eq('id', user.id).single(),
-      bookingsQ,
+      bookingsQ ?? Promise.resolve({ data: [] as any[] }),
       supabase.from('email_drafts').select(`
         id, category, subject, body, created_at, tour_venue_id,
         booking:bookings(
@@ -194,14 +191,17 @@ export default function EmailPage() {
           tour:tours(id, act_id, act:acts(act_name))
         )
       `).eq('agent_id', user.id).order('created_at', { ascending: false }),
-      tourIds.length > 0
-        ? supabase.from('tour_venues').select(`
-            id, status, tour_id, last_contacted_at, pitched_at, followup_at, updated_at,
-            venue:venues(id, name, city, state, email),
-            tour:tours(id, act_id, act:acts(id, act_name))
-          `).in('tour_id', tourIds).in('status', ['pitched', 'follow_up'])
-        : Promise.resolve({ data: [] as any[] }),
     ]);
+
+    const tourIds = (toursRes.data || []).map((t: any) => t.id);
+    const tvRes = tourIds.length > 0
+      ? await supabase.from('tour_venues').select(`
+          id, status, tour_id, last_contacted_at, pitched_at, followup_at, updated_at,
+          venue:venues(id, name, city, state, email),
+          tour:tours(id, act_id, act:acts(id, act_name))
+        `).in('tour_id', tourIds).in('status', ['pitched', 'follow_up'])
+      : { data: [] as any[] };
+
     setLog(logRes.data || []);
     setActs(actsRes.data || []);
     setVenues(venuesRes.data || []);

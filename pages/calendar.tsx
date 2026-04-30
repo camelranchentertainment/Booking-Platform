@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
-import { getAgentActIds, getAgentActs } from '../lib/bookingQueries';
+import { getActId, getBandBookings } from '../lib/bookingQueries';
 import { BOOKING_STATUS_LABELS } from '../lib/types';
 import { STATUS_COLORS } from '../lib/statusSync';
 import { buildIcal, downloadIcal } from '../lib/ical';
@@ -29,26 +29,14 @@ export default function AgentCalendar() {
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    const [allActs, agentActIds] = await Promise.all([
-      getAgentActs(supabase, user.id),
-      getAgentActIds(supabase, user.id),
+    const actId = await getActId(supabase, user.id);
+    if (!actId) { setLoading(false); return; }
+    const [data, actRes] = await Promise.all([
+      getBandBookings(supabase, actId),
+      supabase.from('acts').select('id, act_name').eq('id', actId).single(),
     ]);
-    setActs(allActs);
-
-    if (!agentActIds.length) { setLoading(false); return; }
-
-    let q = supabase
-      .from('bookings')
-      .select('id, status, show_date, set_time, fee, act_id, venue:venues(name, city, state)')
-      .neq('status', 'cancelled')
-      .not('show_date', 'is', null)
-      .order('show_date');
-
-    q = q.or(`act_id.in.(${agentActIds.join(',')}),created_by.eq.${user.id}`);
-
-    const { data } = await q;
-    setShows(data || []);
+    if (actRes.data) setActs([actRes.data]);
+    setShows(data.filter((b: any) => b.status !== 'cancelled' && b.show_date));
     setLoading(false);
   };
 
