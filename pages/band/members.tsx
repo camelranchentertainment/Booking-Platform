@@ -13,12 +13,10 @@ interface PendingInvite {
 const ROLE_LABELS: Record<string, string> = {
   act_admin: 'Admin',
   member:    'Member',
-  agent:     'Booking Agent',
 };
 
 const ROLE_COLOR: Record<string, string> = {
   act_admin: 'var(--accent)',
-  agent:     '#a78bfa',
   member:    'var(--text-muted)',
 };
 
@@ -58,22 +56,19 @@ export default function BandMembers() {
 
     let foundActId: string | null = null;
     let ownerId: string | null = null;
-    let agentId: string | null = null;
 
-    const { data: ownedActs } = await supabase.from('acts').select('id, act_name, owner_id, agent_id').eq('owner_id', user.id).eq('is_active', true).limit(1);
+    const { data: ownedActs } = await supabase.from('acts').select('id, act_name, owner_id').eq('owner_id', user.id).eq('is_active', true).limit(1);
     if (ownedActs?.length) {
       foundActId = ownedActs[0].id;
       ownerId    = ownedActs[0].owner_id || null;
-      agentId    = ownedActs[0].agent_id || null;
       setActName(ownedActs[0].act_name);
     } else {
       const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).maybeSingle();
       if (prof?.act_id) {
-        const { data: linkedAct } = await supabase.from('acts').select('id, act_name, owner_id, agent_id').eq('id', prof.act_id).maybeSingle();
+        const { data: linkedAct } = await supabase.from('acts').select('id, act_name, owner_id').eq('id', prof.act_id).maybeSingle();
         if (linkedAct) {
           foundActId = linkedAct.id;
           ownerId    = (linkedAct as any).owner_id || null;
-          agentId    = (linkedAct as any).agent_id || null;
           setActName(linkedAct.act_name);
         }
       }
@@ -81,32 +76,18 @@ export default function BandMembers() {
     if (!foundActId) return;
     setActId(foundActId);
 
-    // Load regular members, invites, and agent links in parallel
-    const [membersRes, invitesRes, agentLinksRes] = await Promise.all([
+    const [membersRes, invitesRes] = await Promise.all([
       supabase.from('user_profiles').select('id, display_name, email, role, created_at').eq('act_id', foundActId),
       supabase.from('act_invitations').select('id, email, role, invited_at').eq('act_id', foundActId).eq('status', 'pending'),
-      supabase.from('agent_act_links').select('agent_id').eq('act_id', foundActId).eq('status', 'active'),
     ]);
 
     const membersList: any[] = membersRes.data || [];
     const existingIds = new Set(membersList.map((m: any) => m.id));
 
-    // Add act owner if not already in member list
     if (ownerId && !existingIds.has(ownerId)) {
       const { data: ownerProf } = await supabase.from('user_profiles')
         .select('id, display_name, email, role, created_at').eq('id', ownerId).maybeSingle();
       if (ownerProf) { membersList.push(ownerProf as any); existingIds.add(ownerId); }
-    }
-
-    // Add linked agents if not already in member list
-    const agentIds = (agentLinksRes.data || []).map((l: any) => l.agent_id);
-    if (agentId && !agentIds.includes(agentId)) agentIds.push(agentId);
-    if (agentIds.length > 0) {
-      const { data: agentProfs } = await supabase.from('user_profiles')
-        .select('id, display_name, email, role, created_at').in('id', agentIds);
-      for (const ap of agentProfs || []) {
-        if (!existingIds.has(ap.id)) { membersList.push(ap as any); existingIds.add(ap.id); }
-      }
     }
 
     setMembers(membersList);

@@ -12,7 +12,6 @@ interface Props {
 }
 
 type Notif =
-  | { type: 'agent_link'; id: string; permissions: string; message: string | null; agent: { display_name: string | null; agency_name: string | null; email: string } }
   | { type: 'act_invitation'; id: string; role: string; token: string; act: { act_name: string } | null };
 
 type SysNotif = {
@@ -23,43 +22,28 @@ type SysNotif = {
   created_at: string;
 };
 
-const bandAdminNav = [
-  { label: 'Dashboard',  href: '/dashboard',  icon: '◈' },
-  { label: 'Today',      href: '/today',      icon: '◉' },
-  { label: 'Bands',      href: '/acts',       icon: '♪' },
-  { label: 'Bookings',   href: '/bookings',   icon: '⊞' },
-  { label: 'Tours',      href: '/tours',      icon: '⟴' },
-  { label: 'Venues',     href: '/venues',     icon: '⌂' },
-  { label: 'Calendar',   href: '/calendar',   icon: '◷' },
-  { label: 'Email',      href: '/email',      icon: '✉' },
-  { label: 'Social',     href: '/social',     icon: '✦' },
-  { label: 'Financials', href: '/financials', icon: '$' },
-  { label: 'History',    href: '/history',    icon: '◎' },
-  { label: 'Settings',   href: '/settings',   icon: '⚙' },
+const superadminNav = [
+  { label: 'Platform Admin', href: '/admin', icon: '◈' },
 ];
 
-const bandNav = [
-  { label: 'Dashboard', href: '/band',          icon: '◈' },
-  { label: 'Today',     href: '/today',         icon: '◉' },
-  { label: 'Members',   href: '/band/members',  icon: '♟' },
-  { label: 'Tours',     href: '/band/tours',    icon: '⟴' },
-  { label: 'Venues',    href: '/venues',        icon: '⌂' },
-  { label: 'Calendar',  href: '/band/calendar', icon: '◷' },
-  { label: 'Email',     href: '/band/email',    icon: '✉' },
-  { label: 'Social',    href: '/band/social',   icon: '✦' },
-  { label: 'Account',   href: '/band/settings', icon: '⚙' },
+const bandAdminNav = [
+  { label: 'Dashboard',  href: '/band',         icon: '◈' },
+  { label: 'Today',      href: '/today',        icon: '◉' },
+  { label: 'Tours',      href: '/tours',        icon: '⟴' },
+  { label: 'Venues',     href: '/venues',       icon: '⌂' },
+  { label: 'Email',      href: '/email',        icon: '✉' },
+  { label: 'Calendar',   href: '/calendar',     icon: '◷' },
+  { label: 'Social',     href: '/social',       icon: '✦' },
+  { label: 'Financials', href: '/financials',   icon: '$' },
+  { label: 'History',    href: '/history',      icon: '◎' },
+  { label: 'Members',    href: '/band/members', icon: '♟' },
+  { label: 'Settings',   href: '/settings',     icon: '⚙' },
 ];
 
 const memberNav = [
   { label: 'Dashboard', href: '/member',          icon: '◈' },
   { label: 'Today',     href: '/today',           icon: '◉' },
   { label: 'Calendar',  href: '/member/calendar', icon: '◷' },
-  { label: 'Account',   href: '/settings',        icon: '⚙' },
-];
-
-const portals = [
-  { label: 'Band Admin View',  href: '/dashboard', color: '#a78bfa' },
-  { label: 'Member View',      href: '/member',    color: '#34d399' },
 ];
 
 export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
@@ -70,7 +54,6 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
   const [sysNotifs, setSysNotifs]   = useState<SysNotif[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
   const [responding, setResponding] = useState('');
-  const [actName, setActName]       = useState<string | null>(null);
   const [inboxCount, setInboxCount] = useState(0);
 
   useEffect(() => {
@@ -86,31 +69,6 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
     if (!user) return;
 
     const collected: Notif[] = [];
-
-    // Agent link requests pending for this band admin's act
-    if (profile.role === 'act_admin' || isSuperAdmin) {
-      let actId: string | null = null;
-      const { data: acts } = await supabase.from('acts').select('id, act_name').eq('owner_id', user.id).eq('is_active', true).limit(1);
-      if (acts?.length) {
-        actId = acts[0].id;
-        setActName((acts[0] as any).act_name || null);
-      } else {
-        const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
-        actId = prof?.act_id || null;
-        if (actId) {
-          const { data: linkedAct } = await supabase.from('acts').select('act_name').eq('id', actId).maybeSingle();
-          setActName((linkedAct as any)?.act_name || null);
-        }
-      }
-      if (actId) {
-        const { data: links } = await supabase
-          .from('agent_act_links')
-          .select('id, permissions, message, agent:agent_id(display_name, agency_name, email)')
-          .eq('act_id', actId)
-          .eq('status', 'pending');
-        (links || []).forEach(l => collected.push({ type: 'agent_link', ...l, agent: l.agent as any }));
-      }
-    }
 
     // Act invitations for this user's email (any role)
     // Use the auth email as the primary source — profile.email may not be populated for newly signed-up users
@@ -135,21 +93,9 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
       .order('created_at', { ascending: false })
       .limit(10);
     setSysNotifs((sys || []) as SysNotif[]);
-  }, [profile, isSuperAdmin]);
+  }, [profile]);
 
   useEffect(() => { loadNotifs(); }, [loadNotifs]);
-
-  const respondLink = async (id: string, action: 'accept' | 'decline') => {
-    setResponding(id);
-    const { data: { session } } = await supabase.auth.getSession();
-    await fetch('/api/agent-link/respond', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ linkId: id, action }),
-    });
-    await loadNotifs();
-    setResponding('');
-  };
 
   const acceptInvite = async (n: Extract<Notif, { type: 'act_invitation' }>) => {
     setResponding(n.id);
@@ -178,7 +124,7 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
     document.documentElement.setAttribute('data-theme', next);
   };
 
-  const nav = isSuperAdmin || profile?.role === 'act_admin' ? bandAdminNav : memberNav;
+  const nav = isSuperAdmin ? superadminNav : profile?.role === 'act_admin' ? bandAdminNav : memberNav;
 
   const isActive = (href: string) => {
     // Root portal pages: exact match only to avoid lighting up for all sub-routes
@@ -236,30 +182,9 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                   {profile.role === 'act_admin' ? 'Band Admin' : 'Member'}
                 </div>
-                {profile.role === 'act_admin' && actName && (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--accent)', letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {actName}
-                  </div>
-                )}
               </>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Portal switcher — superadmin only */}
-      {isSuperAdmin && (
-        <div style={{ padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
-          <div className="sidebar-label">View As</div>
-          {portals.map(p => (
-            <Link key={p.href} href={p.href}
-              className={`sidebar-link${isActive(p.href) ? ' active' : ''}`}
-              style={isActive(p.href) ? { color: p.color, borderLeftColor: p.color } : { color: p.color, opacity: 0.7 }}
-            >
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: p.color, flexShrink: 0, boxShadow: `0 0 6px ${p.color}` }} />
-              {p.label}
-            </Link>
-          ))}
         </div>
       )}
 
@@ -289,23 +214,6 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
             </Link>
           );
         })}
-
-        {/* Admin — superadmin only */}
-        {isSuperAdmin && (
-          <div style={{ paddingTop: '0.5rem', marginTop: '0.25rem', borderTop: '1px solid var(--border)' }}>
-            <div className="sidebar-label">Admin</div>
-            <Link
-              href="/admin"
-              className={`sidebar-link${isActive('/admin') ? ' active' : ''}`}
-              onClick={onClose}
-            >
-              <span style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                <span style={{ width: '16px', textAlign: 'center' }}>◈</span>
-                Platform Admin
-              </span>
-            </Link>
-          </div>
-        )}
 
         {/* Notifications entry */}
         {(notifs.length > 0 || sysNotifs.length > 0) && (
@@ -378,36 +286,6 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
                 padding: '0.75rem',
                 fontSize: '0.8rem',
               }}>
-                {n.type === 'agent_link' && (
-                  <>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.3rem' }}>
-                      Agent Request
-                    </div>
-                    <div style={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.15rem' }}>
-                      {n.agent.agency_name || n.agent.display_name || n.agent.email}
-                    </div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: '0.4rem' }}>
-                      {n.permissions === 'manage' ? 'Full management access' : 'View access'}
-                    </div>
-                    {n.message && <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginBottom: '0.5rem', lineHeight: 1.4 }}>"{n.message}"</p>}
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
-                      <button
-                        className="btn btn-sm"
-                        disabled={!!responding}
-                        onClick={() => respondLink(n.id, 'decline')}
-                        style={{ flex: 1, justifyContent: 'center', fontSize: '0.72rem', color: '#f87171', borderColor: '#f87171', background: 'transparent' }}>
-                        {responding === n.id ? '…' : 'Decline'}
-                      </button>
-                      <button
-                        className="btn btn-sm btn-primary"
-                        disabled={!!responding}
-                        onClick={() => respondLink(n.id, 'accept')}
-                        style={{ flex: 1, justifyContent: 'center', fontSize: '0.72rem' }}>
-                        {responding === n.id ? '…' : 'Accept'}
-                      </button>
-                    </div>
-                  </>
-                )}
                 {n.type === 'act_invitation' && (
                   <>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#a78bfa', marginBottom: '0.3rem' }}>

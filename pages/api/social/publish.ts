@@ -43,14 +43,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Load post and verify ownership
   const { data: post } = await service
     .from('social_queue')
-    .select('*, act:acts(id, agent_id, owner_id)')
+    .select('*, act:acts(id, owner_id)')
     .eq('id', postId)
     .maybeSingle();
 
   if (!post) return res.status(404).json({ error: 'Post not found' });
 
   const act = post.act as any;
-  if (act.agent_id !== user.id && act.owner_id !== user.id)
+  if (act.owner_id !== user.id)
     return res.status(403).json({ error: 'Forbidden' });
 
   if (post.status !== 'approved')

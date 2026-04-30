@@ -12,7 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: acts } = await service
     .from('acts')
     .select('id')
-    .or(`agent_id.eq.${user.id},owner_id.eq.${user.id}`);
+    .eq('owner_id', user.id);
 
   const actIds = (acts || []).map((a: any) => a.id);
   if (actIds.length === 0) return res.status(200).json([]);

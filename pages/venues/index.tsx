@@ -310,7 +310,7 @@ export default function VenuesPage() {
       // Fetch tours created by user + tours for acts they manage
       const [createdRes, managedActsRes] = await Promise.all([
         supabase.from('tours').select('id, name, act:acts(act_name), status').eq('created_by', user!.id).neq('status', 'cancelled').order('created_at', { ascending: false }),
-        supabase.from('acts').select('id').or(`agent_id.eq.${user!.id},owner_id.eq.${user!.id}`),
+        supabase.from('acts').select('id').eq('owner_id', user!.id),
       ]);
       const actIds = (managedActsRes.data || []).map((a: any) => a.id);
       const actToursRes = actIds.length > 0

@@ -72,8 +72,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data: prof } = await service.from('user_profiles').select('act_id').eq('id', user.id).maybeSingle();
     actId = prof?.act_id || null;
   }
-  const { data: agentActs } = await service.from('acts').select('id').eq('agent_id', user.id).eq('is_active', true);
-  const actIds = [...new Set([actId, ...(agentActs || []).map((a: any) => a.id)].filter(Boolean))] as string[];
+  const { data: ownedActs } = await service.from('acts').select('id').eq('owner_id', user.id).eq('is_active', true);
+  const actIds = [...new Set([actId, ...(ownedActs || []).map((a: any) => a.id)].filter(Boolean))] as string[];
 
   if (actIds.length === 0) {
     return res.status(200).json({ created: 0, message: 'No acts found for this account.' });

@@ -130,7 +130,7 @@ Introduce the act in 2 sentences. Ask them to hold a date. Keep it under 150 wor
       category:   'target',
       subject:    draft.subject,
       body:       draft.body,
-      agent_id:   user.id,
+      agent_id: user.id,
     }, { onConflict: 'booking_id,category' });
 
     return res.status(200).json({ ok: true });

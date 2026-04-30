@@ -11,8 +11,6 @@ type BandForm = {
 };
 
 type PendingInvite = { id: string; role: string; token: string; act: { act_name: string } | null };
-type AgentLink = { id: string; permissions: string; agent: { display_name: string | null; agency_name: string | null; email: string } };
-
 const GENRES = ['Rock','Country','Americana','Folk','Blues','Jazz','Pop','Hip-Hop','R&B','Soul','Metal','Punk','Electronic','Singer-Songwriter','Other'];
 
 export default function BandSettings() {
@@ -50,10 +48,6 @@ export default function BandSettings() {
   // Pending invites (for users who haven't accepted yet)
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [accepting, setAccepting] = useState('');
-
-  // Active agent connections
-  const [agentLinks, setAgentLinks] = useState<AgentLink[]>([]);
-  const [revoking, setRevoking]     = useState('');
 
   useEffect(() => { load(); }, []);
 
@@ -96,18 +90,6 @@ export default function BandSettings() {
         .eq('email', authEmail)
         .eq('status', 'pending');
       setPendingInvites((invites || []) as unknown as PendingInvite[]);
-    }
-
-    // Load active agent links for this act (so band admin can revoke)
-    if (a?.id) {
-      const { data: links } = await supabase
-        .from('agent_act_links')
-        .select('id, permissions, agent:agent_id(display_name, agency_name, email)')
-        .eq('act_id', a.id)
-        .eq('status', 'active');
-      setAgentLinks((links || []) as unknown as AgentLink[]);
-    } else {
-      setAgentLinks([]);
     }
 
     setLoading(false);
@@ -194,19 +176,6 @@ export default function BandSettings() {
       router.reload();
     }
     setAccepting('');
-  };
-
-  const revokeAgent = async (linkId: string) => {
-    if (!confirm('Revoke this agent\'s access? They will lose write access but can still view booking history.')) return;
-    setRevoking(linkId);
-    const { data: { session } } = await supabase.auth.getSession();
-    await fetch('/api/agent-link/revoke', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ linkId }),
-    });
-    await load();
-    setRevoking('');
   };
 
   const uploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -303,42 +272,6 @@ export default function BandSettings() {
 
       <div style={{ maxWidth: 640, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
-        {/* ── Connected Agents ── */}
-        {agentLinks.length > 0 && (
-          <div className="card">
-            <div className="card-header"><span className="card-title">CONNECTED AGENTS</span></div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-              {agentLinks.map(link => (
-                <div key={link.id} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem',
-                  padding: '0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--border)',
-                }}>
-                  <div>
-                    <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>
-                      {link.agent.agency_name || link.agent.display_name || link.agent.email}
-                    </div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-                      {link.agent.email} · {link.permissions === 'manage' ? 'Full access' : 'View access'}
-                    </div>
-                  </div>
-                  <button
-                    className="btn btn-sm"
-                    disabled={revoking === link.id}
-                    onClick={() => revokeAgent(link.id)}
-                    style={{ color: '#f87171', borderColor: 'rgba(248,113,113,0.4)', background: 'transparent', flexShrink: 0 }}
-                  >
-                    {revoking === link.id ? 'Revoking…' : 'Revoke Access'}
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.75rem', lineHeight: 1.5 }}>
-              Revoking access removes write permission. The agent can still view your booking history.
-            </div>
-          </div>
-        )}
-
         {/* ── Personal Info ── */}
         <form onSubmit={saveProfile}>
           <div className="card">
@@ -406,19 +339,6 @@ export default function BandSettings() {
 
         {act && (
           <form onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-
-            {/* Agent-created notice */}
-            {act.agent_id && !act.owner_id && (
-              <div style={{
-                background: 'rgba(200,146,26,0.07)',
-                border: '1px solid rgba(200,146,26,0.25)',
-                borderRadius: 'var(--radius)',
-                padding: '0.75rem 1rem',
-                fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5,
-              }}>
-                ◈ This profile was set up by your booking agent. You can edit any details below.
-              </div>
-            )}
 
             {/* Band Identity */}
             <div className="card">

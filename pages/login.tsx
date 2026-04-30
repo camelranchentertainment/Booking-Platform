@@ -40,7 +40,7 @@ export default function Login() {
 
     const role = profile?.role || 'act_admin';
     if (role === 'superadmin') router.replace('/admin');
-    else if (role === 'act_admin') router.replace('/dashboard');
+    else if (role === 'act_admin') router.replace('/band');
     else router.replace('/member');
   };
 

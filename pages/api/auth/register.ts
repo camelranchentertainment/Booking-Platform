@@ -52,7 +52,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (role === 'act_admin' && actName) {
     const { error: actErr } = await admin.from('acts').insert({
       owner_id: userId,
-      agent_id: null,
       act_name: actName,
     });
     if (actErr) {

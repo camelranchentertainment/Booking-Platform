@@ -153,7 +153,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             last_contact_date: now,
             pitched_at:        now,
             source:            'email_pitch',
-            agent_id:          agentId,
           });
         }
       }

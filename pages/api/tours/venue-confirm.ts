@@ -349,7 +349,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       deal_type:       deal_type || null,
       agreed_amount:   agreed_amount ? parseFloat(agreed_amount) : (fee ? parseFloat(fee) : null),
       confirmed_by:    user.id,
-      agent_id:        user.id,
       source:          'tour',
       details_pending: true,
     }).select('id').single();

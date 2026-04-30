@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
-import { BOOKING_STATUS_LABELS, AgentActLink } from '../../lib/types';
+import { BOOKING_STATUS_LABELS } from '../../lib/types';
 import { getBandBookings } from '../../lib/bookingQueries';
 import Link from 'next/link';
 
@@ -9,10 +9,8 @@ export default function BandPortal() {
   const [myAct, setMyAct]         = useState<any>(null);
   const [shows, setShows]         = useState<any[]>([]);
   const [upcoming, setUpcoming]   = useState<any[]>([]);
-  const [pendingLinks, setPendingLinks] = useState<any[]>([]);
   const [tours, setTours]         = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);
-  const [responding, setResponding] = useState('');
 
   // Derived stats
   const today          = new Date().toISOString().split('T')[0];
@@ -69,13 +67,8 @@ export default function BandPortal() {
 
     if (!act) { setLoading(false); return; }
 
-    const [bookingsData, linksRes, toursRes] = await Promise.all([
+    const [bookingsData, toursRes] = await Promise.all([
       getBandBookings(supabase, act.id),
-      supabase.from('agent_act_links')
-        .select(`id, status, permissions, message, invited_at,
-          agent:agent_id(id, display_name, agency_name, email)`)
-        .eq('act_id', act.id)
-        .eq('status', 'pending'),
       supabase.from('tours').select('id, name, status, start_date, end_date').or(`act_id.eq.${act.id},created_by.eq.${user.id}`).neq('status', 'cancelled').order('start_date', { ascending: true }).limit(5),
     ]);
 
@@ -84,7 +77,6 @@ export default function BandPortal() {
     const today = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,'0')}-${String(_td.getDate()).padStart(2,'0')}`;
     setUpcoming(all.filter((b: any) => b.show_date && b.show_date >= today && ['confirmed', 'advancing'].includes(b.status)).slice(0, 5));
     setShows(all);
-    setPendingLinks(linksRes.data || []);
     setTours(toursRes.data || []);
     setLoading(false);
   };
@@ -103,10 +95,8 @@ export default function BandPortal() {
     if (q.length < 2) { setVenueSearch([]); return; }
     setVenueSearching(true);
     const { data: { user } } = await supabase.auth.getUser();
-    // Search agent's venues if act is agent-managed, otherwise user's own venues
-    const lookupId = myAct?.agent_id || user!.id;
     const { data } = await supabase.from('venues').select('id, name, city, state, address, phone, email')
-      .eq('agent_id', lookupId).ilike('name', `%${q}%`).order('name').limit(8);
+      .eq('agent_id', user!.id).ilike('name', `%${q}%`).order('name').limit(8);
     setVenueSearch(data || []);
     setVenueSearching(false);
   };
@@ -121,17 +111,14 @@ export default function BandPortal() {
     const { data: { user } } = await supabase.auth.getUser();
     let venueId: string | null = selectedVenue?.id || null;
 
-    // If no venue selected from search, find or create one under the appropriate owner
     if (!venueId && showForm.venueName.trim()) {
-      const ownerAgentId = myAct?.agent_id || user!.id;
       const city = showForm.city.trim() || '';
       const { data: existing } = await supabase.from('venues').select('id')
-        .eq('agent_id', ownerAgentId).ilike('name', showForm.venueName.trim())
+        .eq('agent_id', user!.id).ilike('name', showForm.venueName.trim())
         .maybeSingle();
       if (existing) {
         venueId = existing.id;
       } else {
-        // New venues created by band admins go under their own user id (RLS allows this)
         const { data: newV } = await supabase.from('venues').insert({
           agent_id: user!.id, name: showForm.venueName.trim(),
           city: city || 'Unknown', state: showForm.state.trim() || '',
@@ -168,28 +155,12 @@ export default function BandPortal() {
     setShowSaving(false);
   };
 
-  const respondToLink = async (linkId: string, action: 'accept' | 'decline') => {
-    setResponding(linkId);
-    const { data: { session } } = await supabase.auth.getSession();
-    await fetch('/api/agent-link/respond', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ linkId, action }),
-    });
-    await load();
-    setResponding('');
-  };
-
   return (
     <AppShell requireRole="act_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">{myAct?.act_name || 'My Band'}</h1>
-          <div className="page-sub">
-            {myAct?.agent_id
-              ? 'Agent-managed · Your booking agent has visibility'
-              : 'Self-managed · No agent connected'}
-          </div>
+          <div className="page-sub">Band Portal</div>
         </div>
         {myAct && (
           <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -240,46 +211,6 @@ export default function BandPortal() {
             <div className="stat-label">Active Tours</div>
             <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{tours.length} total</div>
           </Link>
-        </div>
-      )}
-
-      {/* Pending agent link requests */}
-      {pendingLinks.length > 0 && (
-        <div style={{ marginBottom: '1.5rem' }}>
-          {pendingLinks.map((link: any) => (
-            <div key={link.id} style={{ background: 'rgba(245,166,35,0.06)', border: '1px solid rgba(245,166,35,0.35)', borderRadius: 'var(--radius)', padding: '1rem 1.25rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem' }}>
-              <div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.3rem' }}>
-                  Agent Link Request
-                </div>
-                <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.95rem' }}>
-                  {(link.agent as any)?.agency_name || (link.agent as any)?.display_name} wants to represent your band
-                </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'var(--font-mono)', marginTop: '0.2rem' }}>
-                  {(link.agent as any)?.email} · {link.permissions === 'manage' ? 'Full management access' : 'View access only'}
-                </div>
-                {link.message && (
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.5rem', lineHeight: 1.5 }}>"{link.message}"</p>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  disabled={!!responding}
-                  onClick={() => respondToLink(link.id, 'decline')}
-                  style={{ color: '#f87171', borderColor: '#f87171' }}>
-                  {responding === link.id ? '...' : 'Decline'}
-                </button>
-                <button
-                  className="btn btn-primary btn-sm"
-                  disabled={!!responding}
-                  onClick={() => respondToLink(link.id, 'accept')}
-                  style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: '#000' }}>
-                  {responding === link.id ? '...' : 'Accept'}
-                </button>
-              </div>
-            </div>
-          ))}
         </div>
       )}
 

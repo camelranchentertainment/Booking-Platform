@@ -32,7 +32,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { data: act, error } = await service.from('acts').insert({
     owner_id: user.id,
-    agent_id: null,
     act_name: act_name.trim(),
   }).select().single();
 
