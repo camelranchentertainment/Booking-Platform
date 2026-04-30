@@ -9,7 +9,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
-  const [stripeKey, bandPriceId] = await Promise.all([
+  const [stripeKey, bandPriceIdSetting] = await Promise.all([
     getSetting('stripe_secret_key'),
     getSetting('stripe_band_price_id'),
   ]);
@@ -17,7 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' });
   const PRICE_IDS: Record<string, string> = {
-    band_admin: bandPriceId || '',
+    band_admin: bandPriceIdSetting || process.env.STRIPE_BAND_ADMIN_PRICE_ID || '',
   };
 
   const service = getServiceClient();
@@ -52,7 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     customer: customerId,
     mode: 'subscription',
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${baseUrl}/dashboard?subscribed=1`,
+    success_url: `${baseUrl}/band?subscribed=1`,
     cancel_url:  `${baseUrl}/pricing?cancelled=1`,
     metadata: { supabase_user_id: user.id, tier },
     subscription_data: { metadata: { supabase_user_id: user.id, tier } },

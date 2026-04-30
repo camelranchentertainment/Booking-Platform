@@ -168,30 +168,16 @@ function Hero() {
 
           <h1 style={{
             fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.88,
-            color: CREAM, textTransform: 'uppercase', margin: '0 0 0.25rem',
-            fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
-          }}>
-            Your Shows.
-          </h1>
-          <h1 style={{
-            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.92,
-            color: 'transparent', WebkitTextStroke: `1px ${GOLD}`,
-            textTransform: 'uppercase', margin: '0 0 0.25rem',
-            fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
-          }}>
-            Your Band.
-          </h1>
-          <h1 style={{
-            fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 0.88,
             color: CREAM, textTransform: 'uppercase', margin: '0 0 2.5rem',
             fontSize: 'clamp(3rem,11vw,8.5rem)', letterSpacing: '-0.02em',
           }}>
-            Organized.
+            Book More<br />
+            <span style={{ color: 'transparent', WebkitTextStroke: `1px ${GOLD}` }}>Shows.</span>
           </h1>
 
           <div className="cr-hero-bottom">
             <p style={{ maxWidth: '26rem', color: 'rgba(240,216,162,0.42)', fontSize: '0.88rem', lineHeight: 1.65 }}>
-              Stop losing gigs to missed follow-ups and disorganized schedules. One platform to track every booking, keep your whole band in the loop, and take your career further.
+              The complete booking platform for independent touring artists. Manage venues, run email campaigns, track every show from first pitch to final payment.
             </p>
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
               <Link href="/register" style={{
@@ -322,42 +308,49 @@ function Features() {
 }
 
 /* ── Pricing ──────────────────────────────────────────────── */
-const PRICING_TIERS = [
-  {
-    id: 'member',
-    label: 'Band Member',
-    price: 'Free',
-    period: 'forever',
-    desc: 'Stay in the loop with your band.',
-    color: '#94a3b8',
-    role: 'member',
-    recommended: false,
-    features: [
-      'View upcoming shows & calendar',
-      'Load-in, set time & logistics',
-      'Venue contact details',
-      'Tour schedule access',
-    ],
-  },
+type PricingTier = {
+  id: string; label: string; price: string; period: string;
+  desc: string; color: string; role: string; recommended: boolean;
+  features: string[]; note?: string;
+};
+const PRICING_TIERS: PricingTier[] = [
   {
     id: 'band_admin',
     label: 'Band Admin',
     price: '$18',
     period: '/month',
-    desc: 'The full booking platform for your act.',
-    color: '#a78bfa',
+    desc: 'For independent bands and touring artists of any genre',
+    color: GOLD,
     role: 'act_admin',
     recommended: true,
     features: [
-      'Full booking pipeline & kanban',
-      'Tour planning & routing',
-      'Venue CRM & contacts',
-      'AI email drafts (Resend)',
-      'Financials & payouts',
-      'Social scheduling',
-      'Member invitations',
-      'Google Calendar sync',
+      'Tour planning and management',
+      'Venue discovery and database',
+      'AI email outreach campaigns',
+      'Booking pipeline management',
+      'Calendar with iCal export',
+      'Financial tracking and history',
+      'Band member management',
+      'Social media tools',
+      'Show Day View for your crew',
     ],
+  },
+  {
+    id: 'member',
+    label: 'Member',
+    price: 'Free',
+    period: 'forever',
+    desc: 'For band members and crew',
+    color: '#94a3b8',
+    role: 'member',
+    recommended: false,
+    features: [
+      'Tour Day View',
+      'Show schedule and details',
+      'Load-in and logistics info',
+      'Band calendar access',
+    ],
+    note: 'Invited by your band manager',
   },
 ];
 
@@ -423,6 +416,11 @@ function Pricing() {
                   </div>
                 ))}
               </div>
+              {tier.note && (
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'rgba(240,216,162,0.35)', textAlign: 'center', marginBottom: '0.75rem', fontStyle: 'italic' }}>
+                  {tier.note}
+                </div>
+              )}
               <Link href={`/register?role=${tier.role}`} style={{
                 display: 'block', textAlign: 'center',
                 padding: '0.75rem 1rem',
@@ -439,7 +437,7 @@ function Pricing() {
                   (e.currentTarget as HTMLAnchorElement).style.color = tier.recommended ? BG : tier.color;
                 }}
               >
-                {tier.price === 'Free' ? 'Join Free' : 'Start Free Trial'}
+                {tier.price === 'Free' ? 'Join Your Band' : 'Start Free Trial'}
               </Link>
             </div>
           ))}
@@ -776,7 +774,7 @@ export default function Home() {
         supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle().then(({ data }) => {
           const role = data?.role || 'act_admin';
           if (role === 'superadmin') router.replace('/admin');
-          else if (role === 'act_admin') router.replace('/dashboard');
+          else if (role === 'act_admin') router.replace('/band');
           else router.replace('/member');
         });
       } else {

@@ -5,34 +5,55 @@ import { supabase } from '../lib/supabase';
 
 type Tier = 'act_admin' | 'member';
 
+const GOLD = '#C8921A';
+
 const TIER_CONFIG: Record<Tier, {
   label: string; icon: string; color: string;
   price: string; desc: string; selfSignup: boolean; apiRole: string;
+  features: string[]; badge?: string; note?: string;
 }> = {
   act_admin: {
     label: 'Band Admin',
     icon:  '♪',
-    color: '#a78bfa',
-    price: '$18/mo · 14-day free trial',
-    desc:  'Full booking platform — pipeline, tours, venues, financials.',
+    color: GOLD,
+    price: '$18/mo',
+    desc:  'For independent bands and touring artists of any genre',
     selfSignup: true,
     apiRole: 'act_admin',
+    badge: 'Recommended',
+    features: [
+      'Tour planning and management',
+      'Venue discovery and database',
+      'AI email outreach campaigns',
+      'Booking pipeline management',
+      'Calendar with iCal export',
+      'Financial tracking and history',
+      'Band member management',
+      'Social media tools',
+      'Show Day View for your crew',
+    ],
   },
   member: {
-    label: 'Band Member',
+    label: 'Member',
     icon:  '◉',
     color: '#94a3b8',
-    price: 'Free forever',
-    desc:  'View your band\'s upcoming shows and calendar. Join via invite.',
+    price: 'Free',
+    desc:  'For band members and crew',
     selfSignup: false,
     apiRole: 'member',
+    note: 'Requires invitation from band manager',
+    features: [
+      'Tour Day View',
+      'Show schedule and details',
+      'Load-in and logistics info',
+      'Band calendar access',
+    ],
   },
 };
 
 export default function Register() {
   const router = useRouter();
-  // No default — user must explicitly choose their tier
-  const [tier, setTier]       = useState<Tier | null>(null);
+  const [tier, setTier]       = useState<Tier | null>('act_admin');
   const [form, setForm]       = useState({
     email: '', password: '', confirmPassword: '',
     displayName: '',
@@ -88,7 +109,7 @@ export default function Register() {
     const { error: signInErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
     if (signInErr) { setError(signInErr.message); setLoading(false); return; }
 
-    if (tier === 'act_admin') router.replace('/dashboard');
+    if (tier === 'act_admin') router.replace('/band');
     else router.replace('/member');
   };
 
@@ -129,9 +150,20 @@ export default function Register() {
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem',
+                    position: 'relative',
+                    textAlign: 'left',
                   }}
                 >
-                  <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>{c.icon}</span>
+                  {c.badge && (
+                    <div style={{
+                      position: 'absolute', top: -1, left: '50%', transform: 'translateX(-50%)',
+                      background: c.color, color: '#000',
+                      fontFamily: 'var(--font-body)', fontSize: '0.58rem', fontWeight: 700,
+                      letterSpacing: '0.18em', textTransform: 'uppercase',
+                      padding: '0.15rem 0.55rem', whiteSpace: 'nowrap',
+                    }}>{c.badge}</div>
+                  )}
+                  <span style={{ fontSize: '1.5rem', lineHeight: 1, marginTop: c.badge ? '0.5rem' : 0 }}>{c.icon}</span>
                   <span style={{
                     fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700,
                     letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -141,18 +173,21 @@ export default function Register() {
                     color: selected ? `${c.color}cc` : 'var(--text-muted)',
                     letterSpacing: '0.03em',
                   }}>{c.price}</span>
+                  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.4rem' }}>
+                    {c.features.map(f => (
+                      <div key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.35rem', textAlign: 'left' }}>
+                        <span style={{ color: c.color, fontSize: '0.62rem', flexShrink: 0, marginTop: '0.1rem' }}>✓</span>
+                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', color: selected ? 'rgba(255,255,255,0.65)' : 'var(--text-muted)', lineHeight: 1.4 }}>{f}</span>
+                      </div>
+                    ))}
+                    {c.note && (
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.3rem', fontStyle: 'italic' }}>{c.note}</div>
+                    )}
+                  </div>
                 </button>
               );
             })}
           </div>
-          {!tier && (
-            <div style={{
-              marginTop: '0.65rem', textAlign: 'center',
-              fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)',
-            }}>
-              Select your account type above to continue
-            </div>
-          )}
         </div>
 
         {/* Step 2 — Form (only shown after tier is chosen) */}

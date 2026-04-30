@@ -4,41 +4,44 @@ import { supabase } from '../lib/supabase';
 
 type Plan = 'band_admin';
 
+const GOLD = '#C8921A';
+
 const PLANS = [
-  {
-    id:       'member' as const,
-    name:     'Band Member',
-    price:    'Free',
-    period:   '',
-    color:    '#34d399',
-    features: [
-      'View upcoming shows',
-      'Band calendar access',
-      'Set list & advance notes',
-      'Mobile-friendly',
-    ],
-    cta:   'Join via invite',
-    noBtn: true,
-  },
   {
     id:       'band_admin' as Plan,
     name:     'Band Admin',
     price:    '$18',
     period:   '/ month',
-    color:    '#a78bfa',
+    color:    GOLD,
     features: [
-      'Full booking pipeline',
-      'Tour planning & routing',
-      'Venue CRM & contacts',
-      'AI email drafts',
-      'Financials & payouts',
-      'Social scheduling',
-      'Member invitations',
-      'Google Calendar sync',
+      'Tour planning and management',
+      'Venue discovery and database',
+      'AI email outreach campaigns',
+      'Booking pipeline management',
+      'Calendar with iCal export',
+      'Financial tracking and history',
+      'Band member management',
+      'Social media tools',
+      'Show Day View for your crew',
     ],
     cta:      'Start 14-Day Free Trial',
     noBtn:    false,
     featured: true,
+  },
+  {
+    id:       'member' as const,
+    name:     'Band Member',
+    price:    'Free',
+    period:   '',
+    color:    '#94a3b8',
+    features: [
+      'Tour Day View',
+      'Show schedule and details',
+      'Load-in and logistics info',
+      'Band calendar access',
+    ],
+    cta:   'Join via invite',
+    noBtn: true,
   },
 ];
 
@@ -110,7 +113,7 @@ export default function PricingPage() {
               borderRadius: '6px',
               padding: '2rem 1.5rem',
               display: 'flex', flexDirection: 'column',
-              boxShadow: (plan as any).featured ? `0 0 32px rgba(167,139,250,0.1)` : 'none',
+              boxShadow: (plan as any).featured ? `0 0 32px rgba(200,146,26,0.15)` : 'none',
               position: 'relative',
             }}
           >
