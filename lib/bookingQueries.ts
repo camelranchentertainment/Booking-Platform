@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
+import { computeBookingCounts, BookingCounts } from './domain/booking'
 
 export async function getActId(
   supabase: SupabaseClient,
@@ -49,33 +50,13 @@ export async function getBandBookings(
 export async function getBookingCounts(
   supabase: SupabaseClient,
   actId: string
-) {
-  if (!actId) return {
-    confirmed: 0, upcoming: 0,
-    pipeline: 0, earned: 0, potential: 0
-  }
+): Promise<BookingCounts> {
+  if (!actId) return { confirmed: 0, upcoming: 0, pipeline: 0, earned: 0, potential: 0 }
   const today = new Date().toISOString().split('T')[0]
   const { data: bookings } = await supabase
     .from('bookings')
     .select('status, show_date, actual_amount_received, agreed_amount')
     .eq('act_id', actId)
     .not('status', 'eq', 'cancelled')
-  const all = bookings || []
-  return {
-    confirmed: all.filter((b: any) =>
-      ['confirmed', 'advancing'].includes(b.status)).length,
-    upcoming: all.filter((b: any) =>
-      ['confirmed', 'advancing'].includes(b.status) &&
-      b.show_date >= today).length,
-    pipeline: all.filter((b: any) =>
-      !['completed'].includes(b.status)).length,
-    earned: all.filter((b: any) =>
-      b.status === 'completed')
-      .reduce((s: number, b: any) =>
-        s + (Number(b.actual_amount_received) || 0), 0),
-    potential: all.filter((b: any) =>
-      b.status === 'confirmed' && b.show_date >= today)
-      .reduce((s: number, b: any) =>
-        s + (Number(b.agreed_amount) || 0), 0)
-  }
+  return computeBookingCounts(bookings || [], today)
 }

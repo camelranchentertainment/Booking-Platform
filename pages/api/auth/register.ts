@@ -1,19 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
+import { validateRegistration } from '../../../lib/domain/registration';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { email, password, role, displayName, agencyName, actName, planTier } = req.body;
+  const { email, password, role, displayName, actName, planTier } = req.body;
 
-  if (!email || !password || !role || !displayName) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-  if (!['act_admin'].includes(role)) {
-    return res.status(400).json({ error: 'Invalid role' });
-  }
-  if (planTier && planTier !== 'band_admin') {
-    return res.status(400).json({ error: 'Invalid plan tier' });
+  const validation = validateRegistration({ email, password, role, displayName, planTier });
+  if (!validation.valid) {
+    return res.status(400).json({ error: validation.error });
   }
 
   const admin = getServiceClient();
