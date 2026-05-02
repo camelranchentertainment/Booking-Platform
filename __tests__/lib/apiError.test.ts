@@ -1,3 +1,5 @@
+jest.mock('@sentry/nextjs', () => ({ captureException: jest.fn() }));
+
 import { AppError, withHandler } from '../../lib/apiError';
 import type { NextApiRequest, NextApiResponse } from 'next';
 

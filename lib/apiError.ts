@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import * as Sentry from '@sentry/nextjs';
 
 export class AppError extends Error {
   constructor(
@@ -22,6 +23,7 @@ export function withHandler(handler: ApiHandler): ApiHandler {
       if (err instanceof AppError && err.isOperational) {
         return res.status(err.statusCode).json({ error: err.message });
       }
+      Sentry.captureException(err);
       console.error('[API Error]', err);
       return res.status(500).json({ error: 'Internal server error' });
     }
