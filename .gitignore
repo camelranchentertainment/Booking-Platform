@@ -30,3 +30,4 @@ dev-debug.log
 # Task files
 # tasks.json
 # tasks/ 
+tsconfig.test.tsbuildinfo
