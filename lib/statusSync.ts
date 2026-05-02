@@ -1,7 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import type { BookingStatus, OutreachStatus } from './types';
 
-export const TOUR_VENUE_TO_BOOKING_STATUS: Record<OutreachStatus, BookingStatus> = {
+const TOUR_VENUE_TO_BOOKING_STATUS: Record<OutreachStatus, BookingStatus> = {
   target:      'pitch',
   pitched:     'pitch',
   followup:    'followup',
@@ -10,7 +10,7 @@ export const TOUR_VENUE_TO_BOOKING_STATUS: Record<OutreachStatus, BookingStatus>
   declined:    'cancelled',
 };
 
-export const BOOKING_TO_TOUR_VENUE_STATUS: Partial<Record<BookingStatus, OutreachStatus>> = {
+const BOOKING_TO_TOUR_VENUE_STATUS: Partial<Record<BookingStatus, OutreachStatus>> = {
   pitch:       'target',
   followup:    'followup',
   negotiation: 'negotiating',
