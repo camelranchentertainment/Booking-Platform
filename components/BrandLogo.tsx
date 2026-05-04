@@ -86,7 +86,7 @@ function BannerFallback({ height }: { height: number }) {
 export default function BrandLogo({ variant = 'square', height = 72, className, style }: Props) {
   const [imgError, setImgError] = useState(false);
 
-  const src = variant === 'banner' ? '/logo-banner.png' : '/logo-square.png';
+  const src = variant === 'banner' ? '/logo-banner.svg' : '/logo-square.svg';
 
   if (imgError) {
     return variant === 'banner'

@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 420" width="400" height="420">
+  <!-- Background -->
+  <rect width="400" height="420" fill="#0D1B2A"/>
+
+  <!-- Outer circle ring (cream) -->
+  <circle cx="200" cy="155" r="108" fill="none" stroke="#EFE0BD" stroke-width="5"/>
+
+  <!-- Bottom half circle fill (cream ground) -->
+  <path d="M 92 155 A 108 108 0 0 0 308 155 Z" fill="#EFE0BD"/>
+
+  <!-- Top half circle (orange sunset) -->
+  <path d="M 92 155 A 108 108 0 0 1 308 155 Z" fill="#E07820"/>
+
+  <!-- Stripe lines clipped to circle top half -->
+  <clipPath id="topclip">
+    <path d="M 92 155 A 108 108 0 0 1 308 155 Z"/>
+  </clipPath>
+  <g clip-path="url(#topclip)">
+    <rect x="92" y="160" width="216" height="9"  fill="#C05808"/>
+    <rect x="92" y="173" width="216" height="9"  fill="#C05808"/>
+    <rect x="92" y="186" width="216" height="9"  fill="#C05808"/>
+    <rect x="92" y="199" width="216" height="9"  fill="#C05808"/>
+    <rect x="92" y="212" width="216" height="9"  fill="#C05808"/>
+  </g>
+
+  <!-- Ground hill -->
+  <ellipse cx="200" cy="263" rx="95" ry="14" fill="#EFE0BD"/>
+
+  <!-- Cactus -->
+  <g fill="#EFE0BD">
+    <rect x="265" y="198" width="9" height="55" rx="3"/>
+    <rect x="256" y="210" width="9" height="7" rx="3"/>
+    <rect x="256" y="210" width="7" height="22" rx="3"/>
+    <rect x="274" y="222" width="9" height="7" rx="3"/>
+    <rect x="276" y="222" width="7" height="20" rx="3"/>
+  </g>
+
+  <!-- Camel silhouette -->
+  <path d="
+    M 118 262
+    L 118 238 L 122 230 L 126 218
+    L 128 210 L 132 204 L 138 198
+    L 143 193 L 148 192 L 152 196
+    L 155 200 L 157 198
+    L 160 190 L 164 185 L 169 183
+    L 174 185 L 176 192 L 178 196
+    L 183 193 L 187 192 L 192 196
+    L 194 204 L 196 210
+    L 202 218 L 208 228 L 212 238
+    L 214 262
+    L 208 262 L 207 240 L 203 232
+    L 200 242 L 199 262
+    L 178 262 L 177 240 L 173 232
+    L 170 242 L 169 262
+    L 148 262 L 147 240 L 143 232
+    L 140 242 L 139 262
+    Z
+  " fill="#EFE0BD"/>
+  <!-- Camel neck + head -->
+  <path d="
+    M 118 238 L 112 230 L 107 224
+    L 103 217 L 103 210 L 107 204
+    L 113 202 L 119 204 L 124 210
+    L 126 218
+  " fill="#EFE0BD"/>
+  <!-- Camel tail -->
+  <path d="M 214 240 Q 222 230 218 220 Q 224 228 220 240 Z" fill="#EFE0BD"/>
+
+  <!-- CAMEL RANCH -->
+  <text
+    x="200" y="313"
+    font-family="'Bebas Neue', Impact, 'Arial Narrow', sans-serif"
+    font-size="52" font-weight="900"
+    fill="#EFE0BD"
+    text-anchor="middle"
+    letter-spacing="5"
+  >CAMEL RANCH</text>
+
+  <!-- Left rule -->
+  <rect x="48"  y="328" width="68" height="2" fill="#E07820"/>
+  <!-- Right rule -->
+  <rect x="284" y="328" width="68" height="2" fill="#E07820"/>
+
+  <!-- BOOKING -->
+  <text
+    x="200" y="342"
+    font-family="'Bebas Neue', Impact, 'Arial Narrow', sans-serif"
+    font-size="30" font-weight="700"
+    fill="#E07820"
+    text-anchor="middle"
+    letter-spacing="14"
+  >BOOKING</text>
+
+  <!-- Tagline -->
+  <text
+    x="200" y="370"
+    font-family="'Nunito', 'Segoe UI', Arial, sans-serif"
+    font-size="10.5" font-weight="600"
+    fill="#6B8AA8"
+    text-anchor="middle"
+    letter-spacing="3.5"
+  >DIY BOOKING WORKFLOW FOR BANDS</text>
+</svg>
