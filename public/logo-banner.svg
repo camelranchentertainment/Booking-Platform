@@ -10,18 +10,6 @@
   <!-- Top half (orange sunset sky) -->
   <path d="M 20 108 A 90 90 0 0 1 200 108 Z" fill="#E07820"/>
 
-  <!-- Stripes in orange sky, clipped to top half -->
-  <clipPath id="banner-topclip">
-    <path d="M 20 108 A 90 90 0 0 1 200 108 Z"/>
-  </clipPath>
-  <g clip-path="url(#banner-topclip)">
-    <rect x="20" y="40" width="180" height="6" fill="#C05808"/>
-    <rect x="20" y="52" width="180" height="6" fill="#C05808"/>
-    <rect x="20" y="64" width="180" height="6" fill="#C05808"/>
-    <rect x="20" y="76" width="180" height="6" fill="#C05808"/>
-    <rect x="20" y="88" width="180" height="6" fill="#C05808"/>
-    <rect x="20" y="100" width="180" height="6" fill="#C05808"/>
-  </g>
 
   <!-- Ground hill -->
   <ellipse cx="110" cy="198" rx="80" ry="12" fill="#EFE0BD"/>

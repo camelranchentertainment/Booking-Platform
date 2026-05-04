@@ -60,10 +60,6 @@ export default function Login() {
     <div style={{
       minHeight: '100vh', background: BG, display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', padding: '2rem 1.25rem',
-      backgroundImage: `
-        radial-gradient(ellipse 120% 60% at 10% 0%, rgba(90,35,10,0.65) 0%, transparent 55%),
-        radial-gradient(ellipse 80% 50% at 90% 100%, rgba(60,20,5,0.50) 0%, transparent 50%)
-      `,
     }}>
 
       {/* Back to home */}
