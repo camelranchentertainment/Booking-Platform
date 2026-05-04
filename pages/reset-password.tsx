@@ -2,15 +2,15 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 
-const BG   = '#0A0502';
-const GOLD = '#C8921A';
-const MUTED = 'rgba(200,146,26,0.55)';
+const BG   = '#091725';
+const GOLD = '#E07820';
+const MUTED = 'rgba(224,120,32,0.55)';
 
 const INPUT: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box',
-  background: '#0A0502', border: '1px solid rgba(200,146,26,0.15)',
+  background: '#091725', border: '1px solid rgba(224,120,32,0.15)',
   borderRadius: 0, padding: '0.65rem 0.85rem',
-  color: '#F0D8A2', fontFamily: 'var(--font-body)', fontSize: '0.875rem', outline: 'none',
+  color: '#EFE0BD', fontFamily: 'var(--font-body)', fontSize: '0.875rem', outline: 'none',
 };
 
 export default function ResetPassword() {
@@ -81,7 +81,7 @@ export default function ResetPassword() {
         background: '#120703',
         backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'6\' height=\'6\'%3E%3Cpath d=\'M-1,1 l2,-2 M0,6 l6,-6 M5,7 l2,-2\' stroke=\'%23F0D8A2\' stroke-width=\'0.4\'/%3E%3C/svg%3E")',
         backgroundSize: '6px 6px',
-        border: '1px solid rgba(200,146,26,0.15)',
+        border: '1px solid rgba(224,120,32,0.15)',
         padding: '2rem',
       }}>
         {done ? (
@@ -93,7 +93,7 @@ export default function ResetPassword() {
 
         ) : !ready ? (
           <div style={{ textAlign: 'center', color: MUTED, fontFamily: 'var(--font-body)', fontSize: '0.875rem', lineHeight: 1.7 }}>
-            <div style={{ marginBottom: '0.75rem', fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 900, letterSpacing: '-0.02em', textTransform: 'uppercase', color: '#F0D8A2' }}>
+            <div style={{ marginBottom: '0.75rem', fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 900, letterSpacing: '-0.02em', textTransform: 'uppercase', color: '#EFE0BD' }}>
               Verifying Link
             </div>
             <div style={{ fontSize: '0.78rem' }}>
@@ -109,7 +109,7 @@ export default function ResetPassword() {
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div style={{ marginBottom: '0.5rem' }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 900, letterSpacing: '-0.02em', textTransform: 'uppercase', color: '#F0D8A2', lineHeight: 1 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 900, letterSpacing: '-0.02em', textTransform: 'uppercase', color: '#EFE0BD', lineHeight: 1 }}>
                 Set New Password
               </div>
               <div style={{ color: MUTED, fontFamily: 'var(--font-body)', fontSize: '0.78rem', marginTop: '0.35rem' }}>
@@ -126,7 +126,7 @@ export default function ResetPassword() {
             </div>
             {error && <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', padding: '0.6rem', color: '#f87171', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{error}</div>}
             <button type="submit" disabled={loading}
-              style={{ padding: '0.8rem', background: loading ? 'rgba(200,146,26,0.4)' : GOLD, color: '#0E0603', border: 'none', borderRadius: 0, fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 900, letterSpacing: '0.18em', textTransform: 'uppercase', cursor: loading ? 'not-allowed' : 'pointer' }}>
+              style={{ padding: '0.8rem', background: loading ? 'rgba(224,120,32,0.4)' : GOLD, color: '#0D1B2A', border: 'none', borderRadius: 0, fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 900, letterSpacing: '0.18em', textTransform: 'uppercase', cursor: loading ? 'not-allowed' : 'pointer' }}>
               {loading ? 'Saving…' : 'Update Password'}
             </button>
           </form>

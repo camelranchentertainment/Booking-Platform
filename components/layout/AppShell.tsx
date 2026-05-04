@@ -95,7 +95,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
   const roleBadge = (() => {
     if (!profile) return null;
     switch (profile.role) {
-      case 'superadmin': return { label: 'SUPERADMIN', color: '#C8921A' };
+      case 'superadmin': return { label: 'SUPERADMIN', color: '#E07820' };
       case 'act_admin':  return { label: actName ? `BAND ADMIN — ${actName}` : 'BAND ADMIN', color: '#a78bfa' };
       case 'member':     return { label: actName ? `MEMBER — ${actName}` : 'MEMBER', color: '#94a3b8' };
       default:           return null;

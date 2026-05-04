@@ -179,7 +179,7 @@ function ShowCard({ booking, role, label, dimPast }: { booking: any; role: strin
       </div>
 
       {!isMember && (booking.deal_type || booking.agreed_amount) && (
-        <div style={{ marginTop: '1rem', padding: '0.65rem 0.9rem', background: 'rgba(200,146,26,0.06)', border: '1px solid rgba(200,146,26,0.2)', borderRadius: 'var(--radius-sm)' }}>
+        <div style={{ marginTop: '1rem', padding: '0.65rem 0.9rem', background: 'rgba(224,120,32,0.06)', border: '1px solid rgba(224,120,32,0.2)', borderRadius: 'var(--radius-sm)' }}>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.66rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Deal</div>
           <div style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '0.9rem' }}>
             {DEAL_LABELS[booking.deal_type] || booking.deal_type || 'TBD'}
@@ -507,7 +507,7 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, role, session }
                           display:      'block',
                           width:        '100%',
                           textAlign:    'left',
-                          background:   selectedDate === d ? 'rgba(200,146,26,0.1)' : 'transparent',
+                          background:   selectedDate === d ? 'rgba(224,120,32,0.1)' : 'transparent',
                           border:       'none',
                           borderLeft:   selectedDate === d ? '2px solid var(--accent)' : '2px solid transparent',
                           color:        selectedDate === d ? 'var(--accent)' : 'var(--text-secondary)',

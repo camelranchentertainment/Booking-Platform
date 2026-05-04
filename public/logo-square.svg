@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 420" width="400" height="420">
-  <!-- Background -->
-  <rect width="400" height="420" fill="#0D1B2A"/>
+  <!-- Background transparent — inherits page navy -->
+  <rect width="400" height="420" fill="none"/>
 
   <!-- Outer circle ring (cream) -->
   <circle cx="200" cy="155" r="108" fill="none" stroke="#EFE0BD" stroke-width="5"/>

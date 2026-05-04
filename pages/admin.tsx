@@ -3,9 +3,9 @@ import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 import Link from 'next/link';
 
-const GOLD  = '#C8921A';
+const GOLD  = '#E07820';
 const ROLE_COLOR: Record<string, string> = {
-  superadmin: '#C8921A',
+  superadmin: '#E07820',
   act_admin:  '#f59e0b',
   member:     '#94a3b8',
 };

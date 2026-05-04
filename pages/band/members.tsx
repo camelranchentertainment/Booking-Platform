@@ -26,8 +26,8 @@ function Initials({ name, email }: { name?: string | null; email?: string | null
   return (
     <div style={{
       width: 36, height: 36, flexShrink: 0,
-      background: 'rgba(200,146,26,0.12)',
-      border: '1px solid rgba(200,146,26,0.25)',
+      background: 'rgba(224,120,32,0.12)',
+      border: '1px solid rgba(224,120,32,0.25)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontFamily: 'var(--font-display)', fontSize: '0.95rem', color: 'var(--accent)',
       letterSpacing: '0.05em',
@@ -232,7 +232,7 @@ export default function BandMembers() {
         <div className="card-header">
           <span className="card-title">PENDING INVITES</span>
           {invites.length > 0 && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent)', background: 'rgba(200,146,26,0.1)', border: '1px solid rgba(200,146,26,0.25)', padding: '0.15rem 0.5rem' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent)', background: 'rgba(224,120,32,0.1)', border: '1px solid rgba(224,120,32,0.25)', padding: '0.15rem 0.5rem' }}>
               {invites.length}
             </span>
           )}

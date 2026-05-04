@@ -7,8 +7,8 @@ interface Props {
   style?: React.CSSProperties;
 }
 
-const GOLD = '#C8921A';
-const CREAM = '#F0E4C0';
+const GOLD = '#E07820';
+const CREAM = '#EFE0BD';
 
 function SquareFallback({ size }: { size: number }) {
   return (
@@ -30,7 +30,7 @@ function SquareFallback({ size }: { size: number }) {
         letterSpacing: '0.5em',
         color: GOLD,
         textTransform: 'uppercase',
-        borderTop: `1px solid rgba(200,146,26,0.3)`,
+        borderTop: `1px solid rgba(224,120,32,0.3)`,
         paddingTop: '0.2rem',
         width: '100%',
         textAlign: 'center',
@@ -48,11 +48,11 @@ function BannerFallback({ height }: { height: number }) {
         width: height,
         height: height,
         borderRadius: '50%',
-        border: `2px solid rgba(200,146,26,0.4)`,
+        border: `2px solid rgba(224,120,32,0.4)`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'rgba(200,146,26,0.08)',
+        background: 'rgba(224,120,32,0.08)',
         flexShrink: 0,
       }}>
         <span style={{ fontSize: `${height * 0.5}px` }}>🐪</span>

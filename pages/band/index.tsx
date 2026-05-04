@@ -171,7 +171,7 @@ export default function BandPortal() {
             { label: 'Upcoming',    value: upcoming.length, sub: upcoming.length === 1 ? 'next show' : 'shows ahead', href: '/band/calendar', accent: '#f59e0b' },
           ] as { label: string; value: number; sub: string; href: string; accent: string }[]).map(({ label, value, sub, href, accent }) => (
             <Link key={label} href={href} className="stat-block" style={{ position: 'relative', overflow: 'hidden', textDecoration: 'none', cursor: 'pointer', borderTop: `3px solid ${accent}` }}>
-              <div style={{ position: 'absolute', top: 0, right: 0, width: 60, height: 60, background: 'radial-gradient(circle at top right, rgba(200,146,26,0.12), transparent 70%)', pointerEvents: 'none' }} />
+              <div style={{ position: 'absolute', top: 0, right: 0, width: 60, height: 60, background: 'radial-gradient(circle at top right, rgba(224,120,32,0.12), transparent 70%)', pointerEvents: 'none' }} />
               <div className="stat-value" style={{ fontSize: '2rem' }}>{value}</div>
               <div className="stat-label">{label}</div>
               <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{sub}</div>
@@ -180,7 +180,7 @@ export default function BandPortal() {
 
           {/* Earned / Potential — split by played vs upcoming */}
           <Link href="/bookings" className="stat-block" style={{ position: 'relative', overflow: 'hidden', textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #34d399' }}>
-            <div style={{ position: 'absolute', top: 0, right: 0, width: 60, height: 60, background: 'radial-gradient(circle at top right, rgba(200,146,26,0.12), transparent 70%)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', top: 0, right: 0, width: 60, height: 60, background: 'radial-gradient(circle at top right, rgba(224,120,32,0.12), transparent 70%)', pointerEvents: 'none' }} />
             <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', color: '#34d399', lineHeight: 1 }}>
               {earned > 0 ? `$${earned.toLocaleString()}` : '—'}
             </div>
@@ -198,8 +198,8 @@ export default function BandPortal() {
             )}
           </Link>
 
-          <Link href="/band/tours" className="stat-block" style={{ position: 'relative', overflow: 'hidden', textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #C8921A' }}>
-            <div style={{ position: 'absolute', top: 0, right: 0, width: 60, height: 60, background: 'radial-gradient(circle at top right, rgba(200,146,26,0.12), transparent 70%)', pointerEvents: 'none' }} />
+          <Link href="/band/tours" className="stat-block" style={{ position: 'relative', overflow: 'hidden', textDecoration: 'none', cursor: 'pointer', borderTop: '3px solid #E07820' }}>
+            <div style={{ position: 'absolute', top: 0, right: 0, width: 60, height: 60, background: 'radial-gradient(circle at top right, rgba(224,120,32,0.12), transparent 70%)', pointerEvents: 'none' }} />
             <div className="stat-value" style={{ fontSize: '2rem' }}>{activeTours || tours.length}</div>
             <div className="stat-label">Active Tours</div>
             <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{tours.length} total</div>

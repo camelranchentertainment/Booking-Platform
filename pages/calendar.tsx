@@ -11,7 +11,7 @@ const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 const ACT_COLORS = [
-  '#C8921A','#BF5FFF','#FF3CAC','#34d399','#60a5fa','#f97316','#e879f9','#22d3ee',
+  '#E07820','#BF5FFF','#FF3CAC','#34d399','#60a5fa','#f97316','#e879f9','#22d3ee',
 ];
 
 

@@ -6,7 +6,7 @@ import BrandLogo from '../components/BrandLogo';
 
 type Tier = 'act_admin' | 'member';
 
-const GOLD = '#C8921A';
+const GOLD = '#E07820';
 
 const TIER_CONFIG: Record<Tier, {
   label: string; icon: string; color: string;

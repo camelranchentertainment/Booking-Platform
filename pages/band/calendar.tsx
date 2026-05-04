@@ -209,7 +209,7 @@ export default function BandCalendar() {
                 key={s.id}
                 onClick={() => setDetailBooking(s)}
                 style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', padding: '0.5rem 0.4rem', borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.12s', borderRadius: 0 }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(200,146,26,0.05)')}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(224,120,32,0.05)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
               >
                 <div style={{ minWidth: 32, textAlign: 'center', flexShrink: 0 }}>

@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 
 type Plan = 'band_admin';
 
-const GOLD = '#C8921A';
+const GOLD = '#E07820';
 
 const PLANS = [
   {
@@ -113,7 +113,7 @@ export default function PricingPage() {
               borderRadius: '6px',
               padding: '2rem 1.5rem',
               display: 'flex', flexDirection: 'column',
-              boxShadow: (plan as any).featured ? `0 0 32px rgba(200,146,26,0.15)` : 'none',
+              boxShadow: (plan as any).featured ? `0 0 32px rgba(224,120,32,0.15)` : 'none',
               position: 'relative',
             }}
           >

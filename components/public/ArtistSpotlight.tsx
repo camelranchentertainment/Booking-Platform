@@ -1,14 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import type { PublicAct } from '../../pages/api/public/acts';
 
-const GOLD   = '#C8921A';
-const CREAM  = '#F0D8A2';
-const BG     = '#1C0C05';
-const SURF   = '#221008';
-const BORDER = 'rgba(200,146,26,0.18)';
+const GOLD   = '#E07820';
+const CREAM  = '#EFE0BD';
+const BG     = '#0D1B2A';
+const SURF   = '#102030';
+const BORDER = 'rgba(224,120,32,0.18)';
 
-const ACCENTS = ['#9B6230', '#7A5C2E'];
+const ACCENTS = ['#B85A10', '#8A6830'];
 
 
 
@@ -31,6 +31,10 @@ function GhostNum({ n, color = CREAM }: { n: string; color?: string }) {
 
 /* ── Featured (slot 0) ────────────────────────────────────── */
 function FeaturedCard({ act }: { act: PublicAct }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const onImgError = useCallback(() => setImgFailed(true), []);
+  const showImg = act.logo_url && !imgFailed;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', borderBottom: `1px solid ${BORDER}` }}
       className="cr-spot-featured">
@@ -41,8 +45,8 @@ function FeaturedCard({ act }: { act: PublicAct }) {
         overflow: 'hidden', borderRight: `1px solid ${BORDER}`,
         flexShrink: 0,
       }}>
-        {act.logo_url && (
-          <img src={act.logo_url} alt={act.act_name} style={{
+        {showImg && (
+          <img src={act.logo_url!} alt={act.act_name} onError={onImgError} style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             objectFit: 'cover', objectPosition: 'center top', opacity: 0.85,
           }} />
@@ -68,7 +72,7 @@ function FeaturedCard({ act }: { act: PublicAct }) {
             </p>
           </div>
         )}
-        {!act.logo_url && (
+        {!showImg && (
           <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
             <div style={{ height: 1, width: 48, background: GOLD }} />
             {act.genre && (
@@ -200,7 +204,7 @@ function SpotlightPlaceholder() {
 
       <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '3rem 2rem' }}>
         <div style={{ height: 1, width: 48, background: GOLD, margin: '0 auto 1.5rem' }} />
-        <p style={{ color: 'rgba(240,216,162,0.3)', fontSize: '0.78rem', letterSpacing: '0.25em', textTransform: 'uppercase' }}>
+        <p style={{ color: 'rgba(239,224,189,0.3)', fontSize: '0.78rem', letterSpacing: '0.25em', textTransform: 'uppercase' }}>
           Be the first success story on this platform
         </p>
         <Link href="/register" style={{
@@ -231,7 +235,7 @@ export default function ArtistSpotlight() {
   if (loading) {
     return (
       <div style={{ height: 200, background: SURF, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ color: 'rgba(240,216,162,0.25)', fontSize: '0.72rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+        <span style={{ color: 'rgba(239,224,189,0.25)', fontSize: '0.72rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
           Loading…
         </span>
       </div>

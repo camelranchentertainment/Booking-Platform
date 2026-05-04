@@ -478,7 +478,7 @@ export default function EmailPage() {
                   const actName = bk?.act?.act_name || tv?.tour?.act?.act_name || '—';
                   const contactEmail = contact?.email || bk?.venue?.email || tv?.venue?.email || '';
                   return (
-                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--accent-glow)', border: '1px solid rgba(200,146,26,0.2)', borderRadius: 'var(--radius-sm)', padding: '0.75rem 1rem' }}>
+                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--accent-glow)', border: '1px solid rgba(224,120,32,0.2)', borderRadius: 'var(--radius-sm)', padding: '0.75rem 1rem' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.9rem' }}>
                           {venueName}

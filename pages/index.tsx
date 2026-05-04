@@ -5,18 +5,18 @@ import { supabase } from '../lib/supabase';
 import ArtistSpotlight from '../components/public/ArtistSpotlight';
 import BrandLogo from '../components/BrandLogo';
 
-const GOLD   = '#C8921A';
-const CREAM  = '#F0D8A2';
-const BG     = '#0E0603';
-const DARK   = '#0A0502';
-const BORDER = 'rgba(200,146,26,0.13)';
+const GOLD   = '#E07820';
+const CREAM  = '#EFE0BD';
+const BG     = '#0D1B2A';
+const DARK   = '#091725';
+const BORDER = 'rgba(224,120,32,0.13)';
 
 const NAV_LINKS = ['Features', 'How It Works', 'Contact'];
 
 
 /* ── Wordmark ─────────────────────────────────────────────── */
 function Wordmark() {
-  return <BrandLogo variant="banner" height={36} />;
+  return <BrandLogo variant="banner" height={52} />;
 }
 
 /* ── Nav ──────────────────────────────────────────────────── */
@@ -28,8 +28,8 @@ function Nav() {
       position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '1.25rem 2rem',
-      background: 'rgba(14,6,3,0.95)', backdropFilter: 'blur(8px)',
-      borderBottom: `1px solid rgba(200,146,26,0.18)`,
+      background: 'rgba(13,27,42,0.95)', backdropFilter: 'blur(8px)',
+      borderBottom: `1px solid rgba(224,120,32,0.18)`,
     }}>
       <a href="#" style={{ textDecoration: 'none' }}><Wordmark /></a>
 
@@ -37,12 +37,12 @@ function Nav() {
       <div className="cr-nav-desktop" style={{ display: 'flex', alignItems: 'center', gap: '2.5rem' }}>
         {NAV_LINKS.map(l => (
           <a key={l} href={`#${l.toLowerCase()}`} style={{
-            color: 'rgba(240,216,162,0.55)', fontSize: '0.72rem',
+            color: 'rgba(239,224,189,0.55)', fontSize: '0.72rem',
             letterSpacing: '0.22em', textTransform: 'uppercase',
             textDecoration: 'none', transition: 'color 0.2s',
           }}
             onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
-            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(240,216,162,0.55)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(239,224,189,0.55)')}
           >
             {l}
           </a>
@@ -59,7 +59,7 @@ function Nav() {
           Get Started
         </Link>
         <Link href="/login" style={{
-          color: 'rgba(240,216,162,0.35)', fontSize: '0.68rem',
+          color: 'rgba(239,224,189,0.35)', fontSize: '0.68rem',
           letterSpacing: '0.2em', textTransform: 'uppercase', textDecoration: 'none',
         }}>
           Login
@@ -87,18 +87,18 @@ function Nav() {
           position: 'absolute', top: '100%', left: 0, right: 0,
           background: BG, padding: '1.5rem 2rem',
           display: 'flex', flexDirection: 'column', gap: '1.5rem',
-          borderTop: `1px solid rgba(200,146,26,0.15)`,
+          borderTop: `1px solid rgba(224,120,32,0.15)`,
         }}>
           {NAV_LINKS.map(l => (
             <a key={l} href={`#${l.toLowerCase()}`} onClick={() => setOpen(false)} style={{
-              color: 'rgba(240,216,162,0.55)', fontSize: '0.72rem',
+              color: 'rgba(239,224,189,0.55)', fontSize: '0.72rem',
               letterSpacing: '0.22em', textTransform: 'uppercase', textDecoration: 'none',
             }}>
               {l}
             </a>
           ))}
           <Link href="/login" onClick={() => setOpen(false)} style={{
-            color: 'rgba(240,216,162,0.35)', fontSize: '0.68rem',
+            color: 'rgba(239,224,189,0.35)', fontSize: '0.68rem',
             letterSpacing: '0.2em', textTransform: 'uppercase', textDecoration: 'none',
           }}>
             Platform Login
@@ -118,6 +118,7 @@ function Hero() {
         src="https://images.unsplash.com/photo-1501386761578-eee87e8fc6b7?w=1920&q=80"
         alt=""
         aria-hidden
+        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           objectFit: 'cover', objectPosition: 'center',
@@ -161,7 +162,7 @@ function Hero() {
           </h1>
 
           <div className="cr-hero-bottom">
-            <p style={{ maxWidth: '26rem', color: 'rgba(240,216,162,0.42)', fontSize: '0.88rem', lineHeight: 1.65 }}>
+            <p style={{ maxWidth: '26rem', color: 'rgba(239,224,189,0.42)', fontSize: '0.88rem', lineHeight: 1.65 }}>
               The complete booking platform for independent touring artists. Manage venues, run email campaigns, track every show from first pitch to final payment.
             </p>
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
@@ -180,10 +181,10 @@ function Hero() {
                 padding: '0.75rem 2rem', color: CREAM,
                 letterSpacing: '0.22em', fontSize: '0.72rem',
                 textTransform: 'uppercase', textDecoration: 'none',
-                border: `1px solid rgba(240,216,162,0.22)`, transition: 'border-color 0.2s, color 0.2s',
+                border: `1px solid rgba(239,224,189,0.22)`, transition: 'border-color 0.2s, color 0.2s',
               }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; e.currentTarget.style.color = GOLD; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(240,216,162,0.22)'; e.currentTarget.style.color = CREAM; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(239,224,189,0.22)'; e.currentTarget.style.color = CREAM; }}
               >
                 Sign In
               </Link>
@@ -246,7 +247,7 @@ function Features() {
           }}>
             Everything You Need<br />To Run Your Career.
           </h2>
-          <p style={{ color: 'rgba(240,216,162,0.38)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '32rem', margin: 0 }}>
+          <p style={{ color: 'rgba(239,224,189,0.38)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '32rem', margin: 0 }}>
             Built for working musicians — not spreadsheets, not email chains, not sticky notes.
           </p>
         </div>
@@ -257,7 +258,7 @@ function Features() {
           {FEATURES.map(f => (
             <div key={f.title} style={{
               borderTop: `2px solid ${GOLD}`,
-              border: `1px solid rgba(200,146,26,0.15)`,
+              border: `1px solid rgba(224,120,32,0.15)`,
               borderTopWidth: 2,
               borderTopColor: GOLD,
               padding: '2rem',
@@ -281,7 +282,7 @@ function Features() {
               }}>
                 {f.sub}
               </div>
-              <p style={{ fontSize: '0.88rem', color: 'rgba(240,216,162,0.55)', lineHeight: 1.65, margin: 0 }}>
+              <p style={{ fontSize: '0.88rem', color: 'rgba(239,224,189,0.55)', lineHeight: 1.65, margin: 0 }}>
                 {f.desc}
               </p>
             </div>
@@ -355,7 +356,7 @@ function Pricing() {
           }}>
             Simple, Honest Pricing.
           </h2>
-          <p style={{ color: 'rgba(240,216,162,0.38)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '32rem', margin: '0 0 0.5rem' }}>
+          <p style={{ color: 'rgba(239,224,189,0.38)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '32rem', margin: '0 0 0.5rem' }}>
             14-day free trial on paid plans. No credit card required to start.
           </p>
         </div>
@@ -365,7 +366,7 @@ function Pricing() {
         <div style={{ maxWidth: '68rem', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
           {PRICING_TIERS.map(tier => (
             <div key={tier.id} style={{
-              border: `1px solid ${tier.recommended ? tier.color : 'rgba(200,146,26,0.15)'}`,
+              border: `1px solid ${tier.recommended ? tier.color : 'rgba(224,120,32,0.15)'}`,
               borderTop: `3px solid ${tier.color}`,
               background: tier.recommended ? `${tier.color}0a` : BG,
               padding: '1.75rem 1.5rem',
@@ -388,21 +389,21 @@ function Pricing() {
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', marginBottom: '0.35rem' }}>
                 <span style={{ fontFamily: 'var(--font-display)', fontSize: '2.8rem', color: CREAM, lineHeight: 1 }}>{tier.price}</span>
-                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'rgba(240,216,162,0.4)' }}>{tier.period}</span>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'rgba(239,224,189,0.4)' }}>{tier.period}</span>
               </div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'rgba(240,216,162,0.45)', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'rgba(239,224,189,0.45)', marginBottom: '1.25rem', lineHeight: 1.5 }}>
                 {tier.desc}
               </div>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
                 {tier.features.map(f => (
                   <div key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
                     <span style={{ color: tier.color, fontSize: '0.7rem', marginTop: '0.1rem', flexShrink: 0 }}>✓</span>
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'rgba(240,216,162,0.6)', lineHeight: 1.45 }}>{f}</span>
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'rgba(239,224,189,0.6)', lineHeight: 1.45 }}>{f}</span>
                   </div>
                 ))}
               </div>
               {tier.note && (
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'rgba(240,216,162,0.35)', textAlign: 'center', marginBottom: '0.75rem', fontStyle: 'italic' }}>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'rgba(239,224,189,0.35)', textAlign: 'center', marginBottom: '0.75rem', fontStyle: 'italic' }}>
                   {tier.note}
                 </div>
               )}
@@ -460,7 +461,7 @@ function SignUpCTA() {
           </h2>
 
           <p style={{
-            color: 'rgba(240,216,162,0.45)', fontSize: '1rem',
+            color: 'rgba(239,224,189,0.45)', fontSize: '1rem',
             lineHeight: 1.7, maxWidth: '34rem', margin: '0 auto 2.5rem',
           }}>
             Free to start. Sign up as a band admin to manage your bookings, or join your band with an invite from your admin.
@@ -482,17 +483,17 @@ function SignUpCTA() {
               display: 'inline-block', padding: '0.9rem 2.5rem',
               color: CREAM, letterSpacing: '0.22em', fontSize: '0.78rem',
               textTransform: 'uppercase', textDecoration: 'none',
-              border: `1px solid rgba(240,216,162,0.22)`, transition: 'border-color 0.2s, color 0.2s',
+              border: `1px solid rgba(239,224,189,0.22)`, transition: 'border-color 0.2s, color 0.2s',
             }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = GOLD; e.currentTarget.style.color = GOLD; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(240,216,162,0.22)'; e.currentTarget.style.color = CREAM; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(239,224,189,0.22)'; e.currentTarget.style.color = CREAM; }}
             >
               Already Have an Account
             </Link>
           </div>
 
           <p style={{
-            marginTop: '2rem', color: 'rgba(240,216,162,0.22)',
+            marginTop: '2rem', color: 'rgba(239,224,189,0.22)',
             fontSize: '0.72rem', letterSpacing: '0.1em',
           }}>
             No credit card required · Free forever for band members
@@ -539,19 +540,19 @@ function BookingForm() {
   const inputStyle: React.CSSProperties = {
     width: '100%', background: 'transparent', color: CREAM,
     fontSize: '0.88rem', padding: '0.75rem 0',
-    border: 'none', borderBottom: `1px solid rgba(240,216,162,0.14)`,
+    border: 'none', borderBottom: `1px solid rgba(239,224,189,0.14)`,
     outline: 'none', fontFamily: 'var(--font-body)',
   };
 
   const labelStyle: React.CSSProperties = {
-    display: 'block', color: 'rgba(240,216,162,0.28)',
+    display: 'block', color: 'rgba(239,224,189,0.28)',
     fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '0.5rem',
   };
 
   const focusGold  = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     (e.currentTarget.style.borderBottomColor = GOLD);
   const blurNormal = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-    (e.currentTarget.style.borderBottomColor = 'rgba(240,216,162,0.14)');
+    (e.currentTarget.style.borderBottomColor = 'rgba(239,224,189,0.14)');
 
   const INFO_ROWS = [
     ['Response',    'Within 48 hours'],
@@ -585,7 +586,7 @@ function BookingForm() {
               <span style={{ color: 'transparent', WebkitTextStroke: `1px ${GOLD}` }}>Business</span>
             </h2>
 
-            <p style={{ color: 'rgba(240,216,162,0.4)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '20rem', marginBottom: '2.5rem' }}>
+            <p style={{ color: 'rgba(239,224,189,0.4)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '20rem', marginBottom: '2.5rem' }}>
               All inquiries are reviewed within 48 hours. We work to find the right fit for both artist and venue.
             </p>
 
@@ -593,10 +594,10 @@ function BookingForm() {
               {INFO_ROWS.map(([k, v]) => (
                 <div key={k} style={{
                   display: 'flex', gap: '1.5rem', alignItems: 'baseline',
-                  paddingBottom: '1rem', borderBottom: `1px solid rgba(240,216,162,0.07)`,
+                  paddingBottom: '1rem', borderBottom: `1px solid rgba(239,224,189,0.07)`,
                 }}>
-                  <span style={{ color: 'rgba(240,216,162,0.25)', letterSpacing: '0.3em', fontSize: '0.68rem', textTransform: 'uppercase', width: '6rem', flexShrink: 0 }}>{k}</span>
-                  <span style={{ color: 'rgba(240,216,162,0.55)', fontSize: '0.88rem' }}>{v}</span>
+                  <span style={{ color: 'rgba(239,224,189,0.25)', letterSpacing: '0.3em', fontSize: '0.68rem', textTransform: 'uppercase', width: '6rem', flexShrink: 0 }}>{k}</span>
+                  <span style={{ color: 'rgba(239,224,189,0.55)', fontSize: '0.88rem' }}>{v}</span>
                 </div>
               ))}
             </div>
@@ -613,7 +614,7 @@ function BookingForm() {
                 }}>
                   Inquiry Received
                 </h3>
-                <p style={{ color: 'rgba(240,216,162,0.42)', fontSize: '0.88rem', lineHeight: 1.65 }}>
+                <p style={{ color: 'rgba(239,224,189,0.42)', fontSize: '0.88rem', lineHeight: 1.65 }}>
                   We&rsquo;ll be in touch within 48 hours. Thanks for reaching out to Camel Ranch Booking.
                 </p>
                 <button onClick={() => setSent(false)} style={{
@@ -666,7 +667,7 @@ function BookingForm() {
                 {err && <div style={{ color: '#f87171', fontSize: '0.82rem', marginBottom: '1rem' }}>{err}</div>}
 
                 <button type="submit" disabled={sending} style={{
-                  width: '100%', padding: '1rem', background: sending ? 'rgba(200,146,26,0.5)' : GOLD,
+                  width: '100%', padding: '1rem', background: sending ? 'rgba(224,120,32,0.5)' : GOLD,
                   color: BG, fontSize: '0.72rem', fontWeight: 700,
                   letterSpacing: '0.3em', textTransform: 'uppercase',
                   border: 'none', cursor: sending ? 'wait' : 'pointer',
@@ -688,30 +689,30 @@ function BookingForm() {
 function Footer() {
   return (
     <footer id="contact" style={{
-      background: '#080401', padding: '2.5rem 2rem',
+      background: '#060F1A', padding: '2.5rem 2rem',
       borderTop: BORDER,
     }}>
       <div style={{ maxWidth: '72rem', margin: '0 auto' }}>
         <div className="cr-footer-grid" style={{ marginBottom: '2rem' }}>
           <div>
-            <div style={{ color: 'rgba(240,216,162,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Agency</div>
+            <div style={{ color: 'rgba(239,224,189,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Agency</div>
             <Wordmark />
           </div>
           <div>
-            <div style={{ color: 'rgba(240,216,162,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Contact</div>
+            <div style={{ color: 'rgba(239,224,189,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Contact</div>
             <a href="mailto:booking@camelranchbooking.com" style={{
-              color: 'rgba(240,216,162,0.52)', fontSize: '0.88rem',
+              color: 'rgba(239,224,189,0.52)', fontSize: '0.88rem',
               textDecoration: 'none', display: 'block', marginBottom: '0.5rem',
               transition: 'color 0.2s',
             }}
               onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
-              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(240,216,162,0.52)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(239,224,189,0.52)')}
             >
               booking@camelranchbooking.com
             </a>
           </div>
           <div>
-            <div style={{ color: 'rgba(240,216,162,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Platform</div>
+            <div style={{ color: 'rgba(239,224,189,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Platform</div>
             <Link href="/register" style={{
               color: GOLD, fontSize: '0.88rem', textDecoration: 'none',
               display: 'block', marginBottom: '0.5rem', transition: 'color 0.2s',
@@ -722,24 +723,24 @@ function Footer() {
               Create Free Account →
             </Link>
             <Link href="/login" style={{
-              color: 'rgba(240,216,162,0.35)', fontSize: '0.82rem',
+              color: 'rgba(239,224,189,0.35)', fontSize: '0.82rem',
               textDecoration: 'none', transition: 'color 0.2s',
             }}
               onMouseEnter={e => (e.currentTarget.style.color = CREAM)}
-              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(240,216,162,0.35)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(239,224,189,0.35)')}
             >
               Sign In
             </Link>
           </div>
         </div>
 
-        <div style={{ height: 1, background: 'rgba(240,216,162,0.06)', marginBottom: '2rem' }} />
+        <div style={{ height: 1, background: 'rgba(239,224,189,0.06)', marginBottom: '2rem' }} />
 
         <div className="cr-footer-bottom">
-          <div style={{ color: 'rgba(240,216,162,0.18)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase' }}>
+          <div style={{ color: 'rgba(239,224,189,0.18)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase' }}>
             © {new Date().getFullYear()} Camel Ranch Entertainment · All Rights Reserved
           </div>
-          <div style={{ color: 'rgba(240,216,162,0.18)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase' }}>
+          <div style={{ color: 'rgba(239,224,189,0.18)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase' }}>
             camelranchbooking.com
           </div>
         </div>
@@ -843,7 +844,7 @@ export default function Home() {
               }}>
                 Artists Growing<br />With This Platform
               </h2>
-              <p style={{ color: 'rgba(240,216,162,0.38)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '32rem', margin: 0 }}>
+              <p style={{ color: 'rgba(239,224,189,0.38)', fontSize: '0.88rem', lineHeight: 1.65, maxWidth: '32rem', margin: 0 }}>
                 These acts use Camel Ranch Booking to track every show, keep their band informed, and build their careers — one confirmed date at a time.
               </p>
             </div>

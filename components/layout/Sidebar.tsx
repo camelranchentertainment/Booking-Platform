@@ -273,7 +273,7 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
             {notifs.map(n => (
               <div key={n.id} style={{
                 background: 'var(--bg-overlay)',
-                border: '1px solid rgba(200,146,26,0.25)',
+                border: '1px solid rgba(224,120,32,0.25)',
                 borderRadius: 'var(--radius-sm)',
                 padding: '0.75rem',
                 fontSize: '0.8rem',

@@ -57,7 +57,7 @@ export default function BandsPage() {
           {bands.map(band => (
             <Link key={band.id} href={`/acts/${band.id}`} style={{ textDecoration: 'none' }}>
               <div className="card" style={{ cursor: 'pointer', transition: 'border-color 0.15s, box-shadow 0.15s', position: 'relative', borderLeft: '3px solid var(--accent)' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.boxShadow = '0 0 0 1px rgba(200,146,26,0.15)'; }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.boxShadow = '0 0 0 1px rgba(224,120,32,0.15)'; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.borderLeftColor = 'var(--accent)'; e.currentTarget.style.boxShadow = 'none'; }}>
 
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.4rem' }}>

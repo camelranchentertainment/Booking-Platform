@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const html = `
-    <h2 style="font-family:sans-serif;color:#C8921A">New Booking Inquiry</h2>
+    <h2 style="font-family:sans-serif;color:#E07820">New Booking Inquiry</h2>
     <table style="font-family:sans-serif;font-size:14px;border-collapse:collapse">
       <tr><td style="padding:6px 12px 6px 0;color:#888;white-space:nowrap">Name</td><td>${esc(body.name)}</td></tr>
       <tr><td style="padding:6px 12px 6px 0;color:#888;white-space:nowrap">Email</td><td><a href="mailto:${esc(body.email)}">${esc(body.email)}</a></td></tr>

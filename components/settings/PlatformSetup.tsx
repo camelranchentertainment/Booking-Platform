@@ -35,7 +35,7 @@ function Step({ num, title, body, link, code, note }: {
     <div style={{ display: 'flex', gap: '0.75rem' }}>
       <div style={{
         flexShrink: 0, width: 22, height: 22,
-        background: 'rgba(200,146,26,0.12)', border: '1px solid rgba(200,146,26,0.3)',
+        background: 'rgba(224,120,32,0.12)', border: '1px solid rgba(224,120,32,0.3)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--accent)',
       }}>{num}</div>
