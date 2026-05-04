@@ -128,9 +128,11 @@ h4 { font-size: 1.2rem; }
 
 /* ── Sidebar ───────────────────────────────────────────────── */
 .sidebar-logo {
-  padding: 1.5rem 1.1rem 1.2rem;
+  padding: 1.25rem 1rem 1.1rem;
   border-bottom: 1px solid var(--border);
-  font-family: var(--font-display);
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .sidebar-section {

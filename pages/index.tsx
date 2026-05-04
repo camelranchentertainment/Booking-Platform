@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import ArtistSpotlight from '../components/public/ArtistSpotlight';
+import BrandLogo from '../components/BrandLogo';
 
 const GOLD   = '#C8921A';
 const CREAM  = '#F0D8A2';
@@ -15,23 +16,7 @@ const NAV_LINKS = ['Features', 'How It Works', 'Contact'];
 
 /* ── Wordmark ─────────────────────────────────────────────── */
 function Wordmark() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <div style={{
-        fontFamily: 'var(--font-display)', fontWeight: 900,
-        color: CREAM, letterSpacing: '0.2em', textTransform: 'uppercase',
-        lineHeight: 1, fontSize: '1.35rem',
-      }}>
-        Camel Ranch
-      </div>
-      <div style={{
-        color: GOLD, letterSpacing: '0.55em', textTransform: 'uppercase',
-        fontSize: '0.6rem', marginTop: '0.2rem', fontWeight: 700,
-      }}>
-        Booking
-      </div>
-    </div>
-  );
+  return <BrandLogo variant="banner" height={36} />;
 }
 
 /* ── Nav ──────────────────────────────────────────────────── */

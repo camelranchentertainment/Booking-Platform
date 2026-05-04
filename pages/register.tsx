@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
+import BrandLogo from '../components/BrandLogo';
 
 type Tier = 'act_admin' | 'member';
 
@@ -98,8 +99,8 @@ export default function Register() {
     <div className="auth-wrap" style={{ alignItems: 'flex-start', paddingTop: '2.5rem' }}>
       <div style={{ width: '100%', maxWidth: 560 }}>
 
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div className="auth-logo">CAMEL RANCH</div>
+        <div style={{ textAlign: 'center', marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+          <BrandLogo variant="banner" height={52} />
           <div className="auth-sub">Create Account</div>
         </div>
 
