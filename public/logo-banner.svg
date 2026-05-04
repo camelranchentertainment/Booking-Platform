@@ -1,72 +1,69 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 220" width="900" height="220">
-  <!-- Background transparent — inherits page navy -->
-  <rect width="900" height="220" fill="none"/>
+  <!-- Background -->
+  <rect width="900" height="220" fill="#0D1B2A"/>
 
   <!-- ── Logo mark (left) ── -->
 
   <!-- Outer circle ring -->
   <circle cx="110" cy="108" r="90" fill="none" stroke="#EFE0BD" stroke-width="4"/>
 
-  <!-- Bottom half (cream) -->
+  <!-- Bottom half (cream ground) -->
   <path d="M 20 108 A 90 90 0 0 0 200 108 Z" fill="#EFE0BD"/>
 
-  <!-- Top half (orange) -->
+  <!-- Top half (orange sunset sky) -->
   <path d="M 20 108 A 90 90 0 0 1 200 108 Z" fill="#E07820"/>
 
-  <!-- Stripes clipped to top half -->
+  <!-- Stripes in orange sky, clipped to top half -->
   <clipPath id="banner-topclip">
     <path d="M 20 108 A 90 90 0 0 1 200 108 Z"/>
   </clipPath>
   <g clip-path="url(#banner-topclip)">
-    <rect x="20" y="114" width="180" height="7"  fill="#C05808"/>
-    <rect x="20" y="125" width="180" height="7"  fill="#C05808"/>
-    <rect x="20" y="136" width="180" height="7"  fill="#C05808"/>
-    <rect x="20" y="147" width="180" height="7"  fill="#C05808"/>
-    <rect x="20" y="158" width="180" height="7"  fill="#C05808"/>
+    <rect x="20" y="40" width="180" height="6" fill="#C05808"/>
+    <rect x="20" y="52" width="180" height="6" fill="#C05808"/>
+    <rect x="20" y="64" width="180" height="6" fill="#C05808"/>
+    <rect x="20" y="76" width="180" height="6" fill="#C05808"/>
+    <rect x="20" y="88" width="180" height="6" fill="#C05808"/>
+    <rect x="20" y="100" width="180" height="6" fill="#C05808"/>
   </g>
 
   <!-- Ground hill -->
   <ellipse cx="110" cy="198" rx="80" ry="12" fill="#EFE0BD"/>
 
-  <!-- Cactus -->
+  <!-- Cactus (extends from ground up into orange sky) -->
   <g fill="#EFE0BD">
-    <rect x="164" y="148" width="7" height="44" rx="2"/>
-    <rect x="157" y="158" width="7" height="6" rx="2"/>
-    <rect x="157" y="158" width="5" height="18" rx="2"/>
-    <rect x="171" y="167" width="7" height="6" rx="2"/>
-    <rect x="173" y="167" width="5" height="16" rx="2"/>
+    <rect x="163" y="72" width="7" height="36" rx="2"/>
+    <rect x="152" y="82" width="12" height="5" rx="2"/>
+    <rect x="152" y="76" width="7" height="9" rx="2"/>
+    <rect x="170" y="86" width="12" height="5" rx="2"/>
+    <rect x="176" y="80" width="7" height="9" rx="2"/>
   </g>
 
-  <!-- Camel silhouette -->
+  <!-- Camel body (humps in orange sky above equator) -->
   <path d="
-    M 38 196
-    L 38 178 L 42 170 L 46 160
-    L 49 153 L 53 147 L 58 143
-    L 63 139 L 68 138 L 72 142
-    L 74 145 L 76 143
-    L 79 136 L 83 132 L 87 130
-    L 92 132 L 94 138 L 96 143
-    L 100 140 L 104 139 L 108 142
-    L 110 149 L 112 155
-    L 117 163 L 122 172 L 125 180
-    L 126 196
-    L 121 196 L 120 178 L 116 171
-    L 113 180 L 112 196
-    L 95 196 L 94 178 L 90 171
-    L 87 180 L 86 196
-    L 69 196 L 68 178 L 64 171
-    L 61 180 L 60 196
+    M 62 108 L 61 98 L 60 90 L 57 82
+    L 62 88 L 68 92 L 75 94
+    L 82 92 L 88 87 L 94 80
+    L 98 73 L 102 66 L 107 61 L 112 60
+    L 116 65 L 119 71 L 120 76
+    L 122 70 L 126 64 L 131 62
+    L 135 67 L 137 74 L 137 83 L 135 94 L 133 108
+    L 127 108 L 126 100 L 122 108
+    L 109 108 L 108 100 L 104 108
+    L 78 108 L 77 100 L 73 108
+    L 65 108 L 64 100 L 62 108
     Z
   " fill="#EFE0BD"/>
-  <!-- Head/neck -->
+
+  <!-- Camel head and neck -->
   <path d="
-    M 38 178 L 33 170 L 28 164
-    L 24 158 L 24 151 L 28 145
-    L 34 143 L 40 145 L 44 151
-    L 46 160
+    M 57 82 L 51 73 L 45 65 L 41 58
+    L 40 53 L 43 49 L 48 48 L 53 49
+    L 56 54 L 57 61 L 56 69 L 56 77 L 58 82
+    Z
   " fill="#EFE0BD"/>
-  <!-- Tail -->
-  <path d="M 126 178 Q 133 168 130 158 Q 136 166 132 178 Z" fill="#EFE0BD"/>
+
+  <!-- Camel tail -->
+  <path d="M 137 80 Q 147 72 143 62 Q 149 72 144 82 Z" fill="#EFE0BD"/>
 
   <!-- ── Text (right) ── -->
 
