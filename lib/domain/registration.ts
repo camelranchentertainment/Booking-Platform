@@ -1,8 +1,3 @@
-export type RegistrationRole = 'act_admin';
-
-const VALID_ROLES: RegistrationRole[] = ['act_admin'];
-const VALID_PLAN_TIERS = ['band_admin'];
-
 export interface RegistrationInput {
   email?: string;
   password?: string;
@@ -16,16 +11,23 @@ export interface ValidationResult {
   error?: string;
 }
 
-// Pure validation — no framework or DB dependency
+const VALID_ROLES = ['act_admin'];
+const VALID_PLAN_TIERS = ['band_admin'];
+
 export function validateRegistration(input: RegistrationInput): ValidationResult {
-  if (!input.email || !input.password || !input.role || !input.displayName) {
+  const { email, password, role, displayName, planTier } = input;
+
+  if (!email || !password || !role || !displayName) {
     return { valid: false, error: 'Missing required fields' };
   }
-  if (!(VALID_ROLES as string[]).includes(input.role)) {
+
+  if (!VALID_ROLES.includes(role)) {
     return { valid: false, error: 'Invalid role' };
   }
-  if (input.planTier && !VALID_PLAN_TIERS.includes(input.planTier)) {
+
+  if (planTier !== undefined && !VALID_PLAN_TIERS.includes(planTier)) {
     return { valid: false, error: 'Invalid plan tier' };
   }
+
   return { valid: true };
 }

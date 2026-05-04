@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useState, useEffect, useCallback } from 'react';
 import { UserProfile } from '../../lib/types';
 import { supabase } from '../../lib/supabase';
+import BrandLogo from '../BrandLogo';
 
 interface Props {
   profile: UserProfile | null;
@@ -134,17 +135,8 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
 
   return (
     <nav className={`sidebar${open ? ' open' : ''}`}>
-      <div className="sidebar-logo">
-        <div style={{ fontSize: '2rem', letterSpacing: '0.1em', lineHeight: 1, color: 'var(--accent)', textShadow: 'var(--neon-glow-sm)' }}>
-          CAMEL RANCH
-        </div>
-        <div style={{
-          fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.72rem', letterSpacing: '0.5em', color: 'rgba(200,146,26,0.85)',
-          textTransform: 'uppercase', marginTop: '0.25rem',
-          borderTop: '1px solid rgba(200,146,26,0.20)', paddingTop: '0.3rem',
-        }}>
-          BOOKING
-        </div>
+      <div className="sidebar-logo" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <BrandLogo variant="square" height={72} />
       </div>
 
       {profile && (

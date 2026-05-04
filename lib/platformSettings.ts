@@ -29,6 +29,6 @@ export async function getSetting(key: string): Promise<string | null> {
   return envMap[key] || cache[key] || null;
 }
 
-export function invalidateCache() {
+function invalidateCache() {
   cache = null;
 }

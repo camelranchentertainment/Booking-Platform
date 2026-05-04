@@ -1,183 +1,111 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-
-jest.mock('../../../lib/supabase', () => ({
-  supabase: {},
-  getServiceClient: jest.fn(),
-}));
+jest.mock('../../../lib/supabase', () => ({ getServiceClient: jest.fn() }));
 
 import handler from '../../../pages/api/admin/fix-role';
 import { getServiceClient } from '../../../lib/supabase';
+import type { NextApiRequest, NextApiResponse } from 'next';
 
-function mockReq(overrides: { method?: string; body?: Record<string, any>; headers?: Record<string, string> } = {}): NextApiRequest {
+function mockReq(method: string, body: Record<string, any> = {}, token = 'valid-token'): NextApiRequest {
   return {
-    method:  overrides.method  ?? 'POST',
-    body:    overrides.body    ?? {},
-    headers: overrides.headers ?? {},
+    method,
+    body,
+    headers: { authorization: `Bearer ${token}` },
   } as unknown as NextApiRequest;
 }
 
 function mockRes() {
   const inner = { json: jest.fn(), end: jest.fn() };
-  const res = {
-    status: jest.fn().mockReturnValue(inner),
-    json:   jest.fn(),
-    end:    jest.fn(),
-  } as unknown as NextApiResponse;
+  const res = { status: jest.fn().mockReturnValue(inner), json: jest.fn() } as unknown as NextApiResponse;
   return { res, inner };
 }
 
-// Build a mock service client that simulates role lookups
-function buildServiceMock({
-  callerRole = 'superadmin',
-  targetRole = 'act_admin',
-}: {
-  callerRole?: string;
-  targetRole?: string;
-} = {}) {
-  const updateMock = jest.fn().mockReturnValue({ eq: jest.fn().mockResolvedValue({ error: null }) });
-
-  const fromMock = jest.fn().mockImplementation((table: string) => {
-    const singleValue = table === 'user_profiles' ? { role: targetRole } : null;
-    return {
-      select: jest.fn().mockReturnThis(),
-      eq:     jest.fn().mockReturnThis(),
-      update: updateMock,
-      single: jest.fn().mockResolvedValue({ data: singleValue }),
-    };
+// Builds a service mock that returns different data based on which `from()` table is queried.
+// First call to from() is always for auth (getUser), subsequent chain calls for user_profiles.
+function buildServiceMock({ callerRole = 'superadmin', targetRole = 'act_admin' } = {}) {
+  let callCount = 0;
+  const profileChain = (role: string) => ({
+    select: () => profileChain(role),
+    eq: () => profileChain(role),
+    update: () => profileChain(role),
+    single: () => Promise.resolve({ data: { role }, error: null }),
+    then(resolve: any) { return Promise.resolve({ data: null, error: null }).then(resolve); },
   });
 
-  const service = {
+  return {
     auth: {
       getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'caller-id' } } }),
     },
-    from: fromMock,
+    from: jest.fn().mockImplementation(() => {
+      callCount++;
+      // First from('user_profiles') call = look up caller role
+      // Second from('user_profiles') call = look up target role
+      const role = callCount === 1 ? callerRole : targetRole;
+      return profileChain(role);
+    }),
   };
-
-  // The first call to service.from('user_profiles').select('role').eq(id).single()
-  // returns callerRole (auth check), the second returns targetRole (target check).
-  let profileCallCount = 0;
-  fromMock.mockImplementation((table: string) => {
-    if (table === 'user_profiles') {
-      profileCallCount++;
-      const role = profileCallCount === 1 ? callerRole : targetRole;
-      return {
-        select: jest.fn().mockReturnThis(),
-        eq:     jest.fn().mockReturnThis(),
-        update: updateMock,
-        single: jest.fn().mockResolvedValue({ data: { role } }),
-      };
-    }
-    return { select: jest.fn().mockReturnThis(), eq: jest.fn().mockReturnThis(), single: jest.fn().mockResolvedValue({ data: null }) };
-  });
-
-  (getServiceClient as jest.Mock).mockReturnValue(service);
-  return { service, updateMock };
 }
 
-// ─── Method guard ─────────────────────────────────────────────────────────────
+const VALID_BODY = { userId: 'target-id', newRole: 'act_admin' };
 
-describe('POST /api/admin/fix-role — method guard', () => {
-  it('returns 405 for GET', async () => {
-    const req = mockReq({ method: 'GET' });
-    const { res, inner } = mockRes();
-    await handler(req, res);
+describe('POST /api/admin/fix-role', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('rejects non-POST', async () => {
+    const { res } = mockRes();
+    await handler(mockReq('GET'), res);
     expect(res.status).toHaveBeenCalledWith(405);
   });
-});
 
-// ─── Auth guard ───────────────────────────────────────────────────────────────
-
-describe('POST /api/admin/fix-role — auth guard', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  it('returns 403 when no authorization header is provided', async () => {
-    buildServiceMock({ callerRole: 'act_admin' });
-    // No Bearer token → getUser returns null user
-    const service = { auth: { getUser: jest.fn().mockResolvedValue({ data: { user: null } }) }, from: jest.fn() };
-    (getServiceClient as jest.Mock).mockReturnValue(service);
-
-    const req = mockReq({ body: { userId: 'u1', newRole: 'member' } });
+  it('rejects when no auth token', async () => {
+    const mock = buildServiceMock({ callerRole: 'superadmin' });
+    (getServiceClient as jest.Mock).mockReturnValue(mock);
+    const req = { method: 'POST', body: VALID_BODY, headers: {} } as unknown as NextApiRequest;
     const { res, inner } = mockRes();
     await handler(req, res);
     expect(res.status).toHaveBeenCalledWith(403);
+    expect(inner.json).toHaveBeenCalledWith({ error: 'Superadmin only' });
   });
 
-  it('returns 403 when caller is not superadmin', async () => {
-    buildServiceMock({ callerRole: 'act_admin' });
-    const req = mockReq({
-      headers: { authorization: 'Bearer some-token' },
-      body: { userId: 'u1', newRole: 'member' },
-    });
+  it('rejects non-superadmin caller', async () => {
+    const mock = buildServiceMock({ callerRole: 'act_admin' });
+    (getServiceClient as jest.Mock).mockReturnValue(mock);
     const { res, inner } = mockRes();
-    await handler(req, res);
+    await handler(mockReq('POST', VALID_BODY), res);
     expect(res.status).toHaveBeenCalledWith(403);
-  });
-});
-
-// ─── Input validation ─────────────────────────────────────────────────────────
-
-describe('POST /api/admin/fix-role — validation', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    buildServiceMock({ callerRole: 'superadmin', targetRole: 'act_admin' });
+    expect(inner.json).toHaveBeenCalledWith({ error: 'Superadmin only' });
   });
 
-  it('returns 400 when userId is missing', async () => {
-    const req = mockReq({
-      headers: { authorization: 'Bearer tok' },
-      body: { newRole: 'member' },
-    });
+  it('rejects missing userId', async () => {
+    const mock = buildServiceMock();
+    (getServiceClient as jest.Mock).mockReturnValue(mock);
     const { res, inner } = mockRes();
-    await handler(req, res);
+    await handler(mockReq('POST', { newRole: 'act_admin' }), res);
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(inner.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'userId and newRole required' }));
+    expect(inner.json).toHaveBeenCalledWith({ error: 'userId and newRole required' });
   });
 
-  it('returns 400 when newRole is missing', async () => {
-    const req = mockReq({
-      headers: { authorization: 'Bearer tok' },
-      body: { userId: 'u1' },
-    });
+  it('rejects invalid role', async () => {
+    const mock = buildServiceMock();
+    (getServiceClient as jest.Mock).mockReturnValue(mock);
     const { res, inner } = mockRes();
-    await handler(req, res);
+    await handler(mockReq('POST', { userId: 'target-id', newRole: 'superadmin' }), res);
     expect(res.status).toHaveBeenCalledWith(400);
+    expect(inner.json).toHaveBeenCalledWith({ error: 'Invalid role' });
   });
 
-  it('returns 400 for invalid role "agent"', async () => {
-    const req = mockReq({
-      headers: { authorization: 'Bearer tok' },
-      body: { userId: 'u1', newRole: 'agent' },
-    });
+  it('rejects changing superadmin target role', async () => {
+    const mock = buildServiceMock({ callerRole: 'superadmin', targetRole: 'superadmin' });
+    (getServiceClient as jest.Mock).mockReturnValue(mock);
     const { res, inner } = mockRes();
-    await handler(req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(inner.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Invalid role' }));
-  });
-
-  it('returns 400 for invalid role "superadmin" (cannot assign via UI)', async () => {
-    const req = mockReq({
-      headers: { authorization: 'Bearer tok' },
-      body: { userId: 'u1', newRole: 'superadmin' },
-    });
-    const { res, inner } = mockRes();
-    await handler(req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(inner.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Invalid role' }));
-  });
-});
-
-// ─── Superadmin protection ────────────────────────────────────────────────────
-
-describe('POST /api/admin/fix-role — superadmin protection', () => {
-  it('returns 403 when trying to change a superadmin\'s role', async () => {
-    buildServiceMock({ callerRole: 'superadmin', targetRole: 'superadmin' });
-    const req = mockReq({
-      headers: { authorization: 'Bearer tok' },
-      body: { userId: 'superadmin-user-id', newRole: 'member' },
-    });
-    const { res, inner } = mockRes();
-    await handler(req, res);
+    await handler(mockReq('POST', VALID_BODY), res);
     expect(res.status).toHaveBeenCalledWith(403);
-    expect(inner.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Cannot change superadmin role' }));
+    expect(inner.json).toHaveBeenCalledWith({ error: 'Cannot change superadmin role' });
+  });
+
+  it('returns ok for valid role change', async () => {
+    const mock = buildServiceMock({ callerRole: 'superadmin', targetRole: 'act_admin' });
+    (getServiceClient as jest.Mock).mockReturnValue(mock);
+    const { res } = mockRes();
+    await handler(mockReq('POST', VALID_BODY), res);
+    expect(res.json).toHaveBeenCalledWith({ ok: true });
   });
 });

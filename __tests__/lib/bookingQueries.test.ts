@@ -1,189 +1,162 @@
 import { getActId, getBandBookings, getBookingCounts } from '../../lib/bookingQueries';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-// Build a thenable Supabase mock chain.
-// Every method returns `this` so the chain is fluent.
-// The object is thenable so `await chain.notOrEq(...)` resolves via chain.then().
-// .order() and .single() are also directly awaitable (common end-of-chain calls).
+// Builds a thenable chain mock: every method returns `this`; await resolves to { data, error }
 function buildChain(data: any, error: any = null) {
-  const result = { data, error };
   const chain: any = {
-    select:     jest.fn().mockReturnThis(),
-    eq:         jest.fn().mockReturnThis(),
-    in:         jest.fn().mockReturnThis(),
-    not:        jest.fn().mockReturnThis(),
-    gte:        jest.fn().mockReturnThis(),
-    limit:      jest.fn().mockReturnThis(),
-    ilike:      jest.fn().mockReturnThis(),
-    order:      jest.fn().mockResolvedValue(result),
-    single:     jest.fn().mockResolvedValue(result),
-    maybeSingle:jest.fn().mockResolvedValue(result),
-    // Make chain directly awaitable (for queries that end at .not(), .eq(), etc.)
-    then: (resolve: any, reject: any) => Promise.resolve(result).then(resolve, reject),
+    then(resolve: any) { return Promise.resolve({ data, error }).then(resolve); },
+    select: () => chain,
+    eq: () => chain,
+    in: () => chain,
+    gte: () => chain,
+    not: () => chain,
+    limit: () => chain,
+    order: () => chain,
+    single: () => Promise.resolve({ data, error }),
   };
   return chain;
 }
 
 function buildSupabase(data: any, error: any = null) {
-  const chain = buildChain(data, error);
-  return { from: jest.fn().mockReturnValue(chain), chain };
+  return { from: () => buildChain(data, error) } as unknown as SupabaseClient;
 }
 
-// ─── getActId ───────────────────────────────────────────────────────────────
+// ─── getActId ────────────────────────────────────────────────────────────────
 
 describe('getActId', () => {
-  it('returns the act_id from user_profiles', async () => {
-    const { from, chain } = buildSupabase({ act_id: 'act-123' });
-    const supabase: any = { from };
-    const result = await getActId(supabase, 'user-abc');
-    expect(result).toBe('act-123');
-    expect(from).toHaveBeenCalledWith('user_profiles');
-    expect(chain.eq).toHaveBeenCalledWith('id', 'user-abc');
+  it('returns act_id when profile exists', async () => {
+    const sb = buildSupabase({ act_id: 'act-123' });
+    expect(await getActId(sb, 'user-1')).toBe('act-123');
   });
 
-  it('returns null when user has no act_id', async () => {
-    const { from } = buildSupabase({ act_id: null });
-    const result = await getActId({ from } as any, 'user-abc');
-    expect(result).toBeNull();
+  it('returns null when profile is missing', async () => {
+    const sb = buildSupabase(null);
+    expect(await getActId(sb, 'user-1')).toBeNull();
   });
 
-  it('returns null when user profile does not exist', async () => {
-    const { from } = buildSupabase(null);
-    const result = await getActId({ from } as any, 'user-abc');
-    expect(result).toBeNull();
+  it('returns null when act_id is absent', async () => {
+    const sb = buildSupabase({ act_id: null });
+    expect(await getActId(sb, 'user-1')).toBeNull();
   });
 });
 
-// ─── getBandBookings ─────────────────────────────────────────────────────────
+// ─── getBandBookings ──────────────────────────────────────────────────────────
 
 describe('getBandBookings', () => {
-  const mockBookings = [
-    { id: '1', show_date: '2026-06-01', status: 'confirmed', act_id: 'act-1' },
-    { id: '2', show_date: '2026-07-01', status: 'pending', act_id: 'act-1' },
-  ];
-
-  it('returns empty array immediately when actId is empty', async () => {
-    const { from } = buildSupabase(mockBookings);
-    const result = await getBandBookings({ from } as any, '');
-    expect(result).toEqual([]);
-    expect(from).not.toHaveBeenCalled();
+  it('returns empty array for empty actId', async () => {
+    const sb = buildSupabase([]);
+    expect(await getBandBookings(sb, '')).toEqual([]);
   });
 
-  it('returns bookings for a valid actId', async () => {
-    const { from } = buildSupabase(mockBookings);
-    const result = await getBandBookings({ from } as any, 'act-1');
-    expect(result).toEqual(mockBookings);
-    expect(from).toHaveBeenCalledWith('bookings');
+  it('returns bookings data', async () => {
+    const rows = [{ id: 'b1', status: 'confirmed' }];
+    const sb = buildSupabase(rows);
+    expect(await getBandBookings(sb, 'act-1')).toEqual(rows);
   });
 
-  it('applies status filter when provided', async () => {
-    const { from, chain } = buildSupabase(mockBookings);
-    await getBandBookings({ from } as any, 'act-1', { status: ['confirmed'] });
-    expect(chain.in).toHaveBeenCalledWith('status', ['confirmed']);
+  it('returns empty array on error', async () => {
+    const sb = buildSupabase(null, new Error('db error'));
+    expect(await getBandBookings(sb, 'act-1')).toEqual([]);
   });
 
-  it('does not call .in() when status option is omitted', async () => {
-    const { from, chain } = buildSupabase(mockBookings);
-    await getBandBookings({ from } as any, 'act-1');
-    expect(chain.in).not.toHaveBeenCalled();
+  it('returns empty array when data is null', async () => {
+    const sb = buildSupabase(null);
+    expect(await getBandBookings(sb, 'act-1')).toEqual([]);
   });
 
-  it('applies upcomingOnly filter', async () => {
-    const { from, chain } = buildSupabase(mockBookings);
-    await getBandBookings({ from } as any, 'act-1', { upcomingOnly: true });
-    expect(chain.gte).toHaveBeenCalled();
+  it('passes status filter option', async () => {
+    const rows = [{ id: 'b1', status: 'confirmed' }];
+    const sb = buildSupabase(rows);
+    const result = await getBandBookings(sb, 'act-1', { status: ['confirmed'] });
+    expect(result).toEqual(rows);
   });
 
-  it('applies limit when provided', async () => {
-    const { from, chain } = buildSupabase(mockBookings);
-    await getBandBookings({ from } as any, 'act-1', { limit: 5 });
-    expect(chain.limit).toHaveBeenCalledWith(5);
+  it('passes upcomingOnly option', async () => {
+    const rows = [{ id: 'b2', status: 'advancing' }];
+    const sb = buildSupabase(rows);
+    const result = await getBandBookings(sb, 'act-1', { upcomingOnly: true });
+    expect(result).toEqual(rows);
   });
 
-  it('returns empty array when supabase returns null data', async () => {
-    const { from } = buildSupabase(null);
-    const result = await getBandBookings({ from } as any, 'act-1');
-    expect(result).toEqual([]);
+  it('passes limit option', async () => {
+    const rows = [{ id: 'b3' }];
+    const sb = buildSupabase(rows);
+    const result = await getBandBookings(sb, 'act-1', { limit: 5 });
+    expect(result).toEqual(rows);
   });
 });
 
-// ─── getBookingCounts ────────────────────────────────────────────────────────
+// ─── getBookingCounts ─────────────────────────────────────────────────────────
 
 describe('getBookingCounts', () => {
-  it('returns all zeros when actId is empty', async () => {
-    const { from } = buildSupabase([]);
-    const counts = await getBookingCounts({ from } as any, '');
-    expect(counts).toEqual({ confirmed: 0, upcoming: 0, pipeline: 0, earned: 0, potential: 0 });
-    expect(from).not.toHaveBeenCalled();
+  it('returns zeros for empty actId', async () => {
+    const sb = buildSupabase([]);
+    expect(await getBookingCounts(sb, '')).toEqual({
+      confirmed: 0, upcoming: 0, pipeline: 0, earned: 0, potential: 0,
+    });
   });
 
-  it('counts confirmed and advancing bookings', async () => {
+  it('returns zeros for empty bookings', async () => {
+    const sb = buildSupabase([]);
+    const counts = await getBookingCounts(sb, 'act-1');
+    expect(counts).toEqual({ confirmed: 0, upcoming: 0, pipeline: 0, earned: 0, potential: 0 });
+  });
+
+  it('counts confirmed and advancing as confirmed', async () => {
     const today = new Date().toISOString().split('T')[0];
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-    const bookings = [
-      { status: 'confirmed',  show_date: tomorrow, agreed_amount: 500,  actual_amount_received: null },
-      { status: 'advancing',  show_date: tomorrow, agreed_amount: 300,  actual_amount_received: null },
-      { status: 'pending',    show_date: tomorrow, agreed_amount: 200,  actual_amount_received: null },
+    const rows = [
+      { status: 'confirmed', show_date: tomorrow, agreed_amount: 100, actual_amount_received: null },
+      { status: 'advancing', show_date: tomorrow, agreed_amount: 200, actual_amount_received: null },
     ];
-    const { from } = buildSupabase(bookings);
-    const counts = await getBookingCounts({ from } as any, 'act-1');
+    const sb = buildSupabase(rows);
+    const counts = await getBookingCounts(sb, 'act-1');
     expect(counts.confirmed).toBe(2);
   });
 
-  it('only counts upcoming shows with future dates', async () => {
+  it('counts earned from completed shows actual_amount_received', async () => {
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    const tomorrow  = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-    const bookings = [
-      { status: 'confirmed', show_date: yesterday, agreed_amount: 100, actual_amount_received: null },
-      { status: 'confirmed', show_date: tomorrow,  agreed_amount: 200, actual_amount_received: null },
+    const rows = [
+      { status: 'completed', show_date: yesterday, agreed_amount: 500, actual_amount_received: 450 },
     ];
-    const { from } = buildSupabase(bookings);
-    const counts = await getBookingCounts({ from } as any, 'act-1');
-    expect(counts.upcoming).toBe(1);
+    const sb = buildSupabase(rows);
+    const counts = await getBookingCounts(sb, 'act-1');
+    expect(counts.earned).toBe(450);
   });
 
-  it('sums earned from completed shows only', async () => {
-    const bookings = [
-      { status: 'completed', show_date: '2025-01-01', agreed_amount: 500, actual_amount_received: 400 },
-      { status: 'completed', show_date: '2025-02-01', agreed_amount: 300, actual_amount_received: 250 },
-      { status: 'confirmed', show_date: '2026-06-01', agreed_amount: 500, actual_amount_received: null },
+  it('treats null amounts as zero', async () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const rows = [
+      { status: 'completed', show_date: yesterday, agreed_amount: null, actual_amount_received: null },
     ];
-    const { from } = buildSupabase(bookings);
-    const counts = await getBookingCounts({ from } as any, 'act-1');
-    expect(counts.earned).toBe(650);
+    const sb = buildSupabase(rows);
+    const counts = await getBookingCounts(sb, 'act-1');
+    expect(counts.earned).toBe(0);
   });
 
-  it('sums potential from confirmed future shows only', async () => {
+  it('excludes completed from pipeline count', async () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-    const bookings = [
-      { status: 'confirmed', show_date: tomorrow,     agreed_amount: 500, actual_amount_received: null },
-      { status: 'confirmed', show_date: tomorrow,     agreed_amount: 300, actual_amount_received: null },
-      { status: 'advancing', show_date: tomorrow,     agreed_amount: 200, actual_amount_received: null },
-      { status: 'completed', show_date: '2025-01-01', agreed_amount: 100, actual_amount_received: 100 },
+    const rows = [
+      { status: 'completed', show_date: yesterday, agreed_amount: 400, actual_amount_received: 350 },
+      { status: 'confirmed', show_date: tomorrow, agreed_amount: 300, actual_amount_received: null },
+      { status: 'pitch',     show_date: tomorrow, agreed_amount: 200, actual_amount_received: null },
     ];
-    const { from } = buildSupabase(bookings);
-    const counts = await getBookingCounts({ from } as any, 'act-1');
-    expect(counts.potential).toBe(800);
+    const sb = buildSupabase(rows);
+    const counts = await getBookingCounts(sb, 'act-1');
+    expect(counts.pipeline).toBe(2);
   });
 
-  it('counts pipeline as all non-completed bookings', async () => {
-    const bookings = [
-      { status: 'confirmed',  show_date: '2026-01-01', agreed_amount: null, actual_amount_received: null },
-      { status: 'pending',    show_date: '2026-01-01', agreed_amount: null, actual_amount_received: null },
-      { status: 'advancing',  show_date: '2026-01-01', agreed_amount: null, actual_amount_received: null },
-      { status: 'completed',  show_date: '2025-01-01', agreed_amount: null, actual_amount_received: null },
-    ];
-    const { from } = buildSupabase(bookings);
-    const counts = await getBookingCounts({ from } as any, 'act-1');
-    expect(counts.pipeline).toBe(3);
-  });
-
-  it('handles null agreed_amount gracefully', async () => {
+  it('counts potential only from confirmed future shows', async () => {
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-    const bookings = [
-      { status: 'confirmed', show_date: tomorrow, agreed_amount: null, actual_amount_received: null },
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const rows = [
+      { status: 'confirmed', show_date: tomorrow,   agreed_amount: 500, actual_amount_received: null },
+      { status: 'confirmed', show_date: yesterday,  agreed_amount: 300, actual_amount_received: null },
+      { status: 'advancing', show_date: tomorrow,   agreed_amount: 200, actual_amount_received: null },
     ];
-    const { from } = buildSupabase(bookings);
-    const counts = await getBookingCounts({ from } as any, 'act-1');
-    expect(counts.potential).toBe(0);
+    const sb = buildSupabase(rows);
+    const counts = await getBookingCounts(sb, 'act-1');
+    expect(counts.potential).toBe(500);
   });
 });

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
+import BrandLogo from '../components/BrandLogo';
 
 const BG    = '#0A0502';
 const GOLD  = '#C8921A';
@@ -77,22 +78,11 @@ export default function Login() {
       </div>
 
       {/* Logo */}
-      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <div style={{
-          fontFamily: 'var(--font-display)', fontSize: '3.4rem', letterSpacing: '0.14em',
-          color: GOLD, lineHeight: 1,
-        }}>
-          CAMEL RANCH
-        </div>
-        <div style={{
-          fontFamily: 'var(--font-body)', fontSize: '0.7rem', letterSpacing: '0.45em',
-          textTransform: 'uppercase', color: MUTED, marginTop: '0.3rem',
-        }}>
-          BOOKING PLATFORM
-        </div>
+      <div style={{ textAlign: 'center', marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+        <BrandLogo variant="banner" height={52} />
         <div style={{
           fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'rgba(200,146,26,0.7)',
-          marginTop: '0.6rem', letterSpacing: '0.02em', lineHeight: 1.4,
+          letterSpacing: '0.02em', lineHeight: 1.4,
         }}>
           From first outreach to final payment — all in one place.
         </div>

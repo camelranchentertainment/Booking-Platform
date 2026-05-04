@@ -1,0 +1,4 @@
+{
+  "ignore": ["supabase/functions/**", "**/*.d.ts"],
+  "ignoreDependencies": ["autoprefixer", "postcss", "tailwindcss"]
+}

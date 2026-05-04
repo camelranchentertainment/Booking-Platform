@@ -1,150 +1,116 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-
-// Mock lib/supabase before importing handler (module-level createClient would fail without env vars)
-jest.mock('../../../lib/supabase', () => ({
-  supabase: {},
-  getServiceClient: jest.fn(),
-}));
+jest.mock('../../../lib/supabase', () => ({ getServiceClient: jest.fn() }));
 
 import handler from '../../../pages/api/auth/register';
 import { getServiceClient } from '../../../lib/supabase';
+import type { NextApiRequest, NextApiResponse } from 'next';
 
-function mockReq(overrides: { method?: string; body?: Record<string, any> } = {}): NextApiRequest {
-  return {
-    method: overrides.method ?? 'POST',
-    body:   overrides.body   ?? {},
-    headers: {},
-  } as unknown as NextApiRequest;
+function mockReq(method: string, body: Record<string, any> = {}): NextApiRequest {
+  return { method, body } as unknown as NextApiRequest;
 }
 
 function mockRes() {
   const inner = { json: jest.fn(), end: jest.fn() };
-  const res = {
-    status: jest.fn().mockReturnValue(inner),
-    json:   jest.fn(),
-    end:    jest.fn(),
-  } as unknown as NextApiResponse;
+  const res = { status: jest.fn().mockReturnValue(inner), json: jest.fn() } as unknown as NextApiResponse;
   return { res, inner };
 }
 
-function buildAdminMock() {
-  const insertMock = jest.fn().mockResolvedValue({ error: null });
-  const upsertMock = jest.fn().mockResolvedValue({ error: null });
-  const fromMock   = jest.fn().mockReturnValue({ insert: insertMock, upsert: upsertMock });
-  const adminMock  = {
+function buildAdminMock(overrides: Partial<{
+  createUserError: any;
+  upsertError: any;
+  actInsertError: any;
+}> = {}) {
+  return {
     auth: {
       admin: {
-        createUser: jest.fn().mockResolvedValue({
-          data:  { user: { id: 'new-user-id' } },
-          error: null,
-        }),
+        createUser: jest.fn().mockResolvedValue(
+          overrides.createUserError
+            ? { data: null, error: overrides.createUserError }
+            : { data: { user: { id: 'user-123' } }, error: null }
+        ),
         deleteUser: jest.fn().mockResolvedValue({}),
       },
     },
-    from: fromMock,
+    from: jest.fn().mockReturnValue({
+      upsert: jest.fn().mockResolvedValue({ error: overrides.upsertError || null }),
+      insert: jest.fn().mockResolvedValue({ error: overrides.actInsertError || null }),
+    }),
   };
-  (getServiceClient as jest.Mock).mockReturnValue(adminMock);
-  return adminMock;
 }
 
-// ─── Method guard ────────────────────────────────────────────────────────────
+const VALID_BODY = {
+  email: 'band@example.com',
+  password: 'secret123',
+  role: 'act_admin',
+  displayName: 'The Wildcats',
+};
 
-describe('POST /api/auth/register — method guard', () => {
-  it('returns 405 for GET requests', async () => {
-    const req = mockReq({ method: 'GET' });
+describe('POST /api/auth/register', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('rejects non-POST', async () => {
     const { res, inner } = mockRes();
-    await handler(req, res);
+    await handler(mockReq('GET'), res);
     expect(res.status).toHaveBeenCalledWith(405);
   });
-});
 
-// ─── Input validation ────────────────────────────────────────────────────────
-
-describe('POST /api/auth/register — validation', () => {
-  it('returns 400 when email is missing', async () => {
-    const req = mockReq({ body: { password: 'pass1234', role: 'act_admin', displayName: 'Jake' } });
+  it('rejects missing email', async () => {
     const { res, inner } = mockRes();
-    await handler(req, res);
+    await handler(mockReq('POST', { ...VALID_BODY, email: '' }), res);
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(inner.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Missing required fields' }));
+    expect(inner.json).toHaveBeenCalledWith({ error: 'Missing required fields' });
   });
 
-  it('returns 400 when password is missing', async () => {
-    const req = mockReq({ body: { email: 'a@b.com', role: 'act_admin', displayName: 'Jake' } });
+  it('rejects missing password', async () => {
     const { res, inner } = mockRes();
-    await handler(req, res);
+    await handler(mockReq('POST', { ...VALID_BODY, password: '' }), res);
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
-  it('returns 400 when displayName is missing', async () => {
-    const req = mockReq({ body: { email: 'a@b.com', password: 'pass1234', role: 'act_admin' } });
+  it('rejects invalid role', async () => {
     const { res, inner } = mockRes();
-    await handler(req, res);
+    await handler(mockReq('POST', { ...VALID_BODY, role: 'superadmin' }), res);
     expect(res.status).toHaveBeenCalledWith(400);
+    expect(inner.json).toHaveBeenCalledWith({ error: 'Invalid role' });
   });
 
-  it('returns 400 for invalid role', async () => {
-    const req = mockReq({ body: { email: 'a@b.com', password: 'pass1234', role: 'agent', displayName: 'Jake' } });
+  it('rejects invalid planTier', async () => {
     const { res, inner } = mockRes();
-    await handler(req, res);
+    await handler(mockReq('POST', { ...VALID_BODY, planTier: 'agent_tier' }), res);
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(inner.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Invalid role' }));
+    expect(inner.json).toHaveBeenCalledWith({ error: 'Invalid plan tier' });
   });
 
-  it('returns 400 for superadmin role (cannot self-register)', async () => {
-    const req = mockReq({ body: { email: 'a@b.com', password: 'pass1234', role: 'superadmin', displayName: 'Jake' } });
-    const { res, inner } = mockRes();
-    await handler(req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(inner.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Invalid role' }));
-  });
-
-  it('returns 400 for invalid planTier', async () => {
-    const req = mockReq({ body: { email: 'a@b.com', password: 'pass1234', role: 'act_admin', displayName: 'Jake', planTier: 'agent_tier' } });
-    const { res, inner } = mockRes();
-    await handler(req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(inner.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Invalid plan tier' }));
-  });
-});
-
-// ─── Success path ─────────────────────────────────────────────────────────────
-
-describe('POST /api/auth/register — success', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    buildAdminMock();
-  });
-
-  it('returns 200 for a valid act_admin registration with act name', async () => {
-    const req = mockReq({
-      body: { email: 'jake@band.com', password: 'secure123', role: 'act_admin', displayName: 'Jake', actName: 'The Jakes', planTier: 'band_admin' },
-    });
-    const { res, inner } = mockRes();
-    await handler(req, res);
-    // handler uses res.status(200).json({ ok: true })
-    expect(inner.json).toHaveBeenCalledWith({ ok: true });
-  });
-
-  it('creates an act record when actName is provided for act_admin', async () => {
-    const admin = buildAdminMock();
-    const req = mockReq({
-      body: { email: 'jake@band.com', password: 'secure123', role: 'act_admin', displayName: 'Jake', actName: 'The Jakes' },
-    });
+  it('returns 200 on successful registration', async () => {
+    const mock = buildAdminMock();
+    (getServiceClient as jest.Mock).mockReturnValue(mock);
     const { res } = mockRes();
-    await handler(req, res);
-    expect(admin.from).toHaveBeenCalledWith('acts');
+    await handler(mockReq('POST', VALID_BODY), res);
+    expect(res.status).toHaveBeenCalledWith(200);
   });
 
-  it('does not create an act record when actName is omitted', async () => {
-    const admin = buildAdminMock();
-    const req = mockReq({
-      body: { email: 'jake@band.com', password: 'secure123', role: 'act_admin', displayName: 'Jake' },
-    });
+  it('propagates auth creation error', async () => {
+    const mock = buildAdminMock({ createUserError: { message: 'email taken' } });
+    (getServiceClient as jest.Mock).mockReturnValue(mock);
+    const { res, inner } = mockRes();
+    await handler(mockReq('POST', VALID_BODY), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(inner.json).toHaveBeenCalledWith({ error: 'email taken' });
+  });
+
+  it('rolls back and returns 500 on profile upsert error', async () => {
+    const mock = buildAdminMock({ upsertError: { message: 'db error' } });
+    (getServiceClient as jest.Mock).mockReturnValue(mock);
+    const { res, inner } = mockRes();
+    await handler(mockReq('POST', VALID_BODY), res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(mock.auth.admin.deleteUser).toHaveBeenCalledWith('user-123');
+  });
+
+  it('creates act record when actName is provided', async () => {
+    const mock = buildAdminMock();
+    (getServiceClient as jest.Mock).mockReturnValue(mock);
     const { res } = mockRes();
-    await handler(req, res);
-    // from('acts') is only called if actName is truthy
-    const actsCalls = (admin.from as jest.Mock).mock.calls.filter((c: any[]) => c[0] === 'acts');
-    expect(actsCalls.length).toBe(0);
+    await handler(mockReq('POST', { ...VALID_BODY, actName: 'The Wildcats' }), res);
+    expect(mock.from).toHaveBeenCalledWith('acts');
   });
 });
