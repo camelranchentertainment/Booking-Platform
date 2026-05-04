@@ -86,7 +86,8 @@ function BannerFallback({ height }: { height: number }) {
 export default function BrandLogo({ variant = 'square', height = 72, className, style }: Props) {
   const [imgError, setImgError] = useState(false);
 
-  const src = variant === 'banner' ? '/images/logo-banner.png' : '/images/logo-square.png';
+  // SVG logos ship with the repo; PNGs are optional overrides in /images/
+  const src = variant === 'banner' ? '/logo-banner.svg' : '/logo-square.svg';
 
   if (imgError) {
     return variant === 'banner'
@@ -99,7 +100,7 @@ export default function BrandLogo({ variant = 'square', height = 72, className, 
       src={src}
       alt="Camel Ranch Booking"
       height={height}
-      width={variant === 'banner' ? height * 3.5 : height}
+      width={variant === 'banner' ? height * 4.1 : height}
       className={className}
       style={{
         objectFit: 'contain',
