@@ -86,8 +86,7 @@ function BannerFallback({ height }: { height: number }) {
 export default function BrandLogo({ variant = 'square', height = 72, className, style }: Props) {
   const [imgError, setImgError] = useState(false);
 
-  // SVG logos ship with the repo; PNGs are optional overrides in /images/
-  const src = variant === 'banner' ? '/logo-banner.svg' : '/logo-square.svg';
+  const src = variant === 'banner' ? '/banner.png' : '/logo.png';
 
   if (imgError) {
     return variant === 'banner'
