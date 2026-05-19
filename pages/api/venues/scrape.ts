@@ -163,7 +163,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         if (!existing?.length) {
           await service.from('contacts').insert({
-            agent_id:   user.id,
             venue_id:   venueId,
             first_name: first,
             last_name:  last,

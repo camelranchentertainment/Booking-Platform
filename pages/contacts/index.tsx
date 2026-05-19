@@ -8,7 +8,7 @@ const STATUS_LABELS: Record<ContactStatus, string> = {
   not_contacted: 'Not Contacted',
   pitched:       'Pitched',
   responded:     'Responded',
-  negotiating:   'Negotiating',
+  negotiate:   'negotiate',
   booked:        'Booked',
   declined:      'Declined',
   do_not_contact: 'DNC',
@@ -18,7 +18,7 @@ const STATUS_COLORS: Record<ContactStatus, string> = {
   not_contacted:  'var(--text-muted)',
   pitched:        '#818cf8',
   responded:      '#fbbf24',
-  negotiating:    '#f59e0b',
+  negotiate:    '#f59e0b',
   booked:         '#34d399',
   declined:       '#f87171',
   do_not_contact: '#6b7280',
@@ -39,8 +39,8 @@ export default function ContactsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const [contactsRes, venuesRes] = await Promise.all([
-      supabase.from('contacts').select('*, venue:venues(id, name, city, state)').eq('agent_id', user.id).order('last_name'),
-      supabase.from('venues').select('id, name, city, state').eq('agent_id', user.id).order('name'),
+      supabase.from('contacts').select('*, venue:venues(id, name, city, state)').order('last_name'),
+      supabase.from('venues').select('id, name, city, state').order('name'),
     ]);
     setContacts(contactsRes.data || []);
     setVenues(venuesRes.data || []);
@@ -51,7 +51,6 @@ export default function ContactsPage() {
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     await supabase.from('contacts').insert({
-      agent_id:   user!.id,
       first_name: form.first_name,
       last_name:  form.last_name,
       title:      form.title    || null,
@@ -82,7 +81,7 @@ export default function ContactsPage() {
   });
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Contacts</h1>

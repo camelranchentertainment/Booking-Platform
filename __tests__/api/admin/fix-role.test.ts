@@ -1,4 +1,4 @@
-jest.mock('../../../lib/supabase', () => ({ getServiceClient: jest.fn() }));
+﻿jest.mock('../../../lib/supabase', () => ({ getServiceClient: jest.fn() }));
 
 import handler from '../../../pages/api/admin/fix-role';
 import { getServiceClient } from '../../../lib/supabase';
@@ -20,7 +20,7 @@ function mockRes() {
 
 // Builds a service mock that returns different data based on which `from()` table is queried.
 // First call to from() is always for auth (getUser), subsequent chain calls for user_profiles.
-function buildServiceMock({ callerRole = 'superadmin', targetRole = 'act_admin' } = {}) {
+function buildServiceMock({ callerRole = 'superadmin', targetRole = 'band_admin' } = {}) {
   let callCount = 0;
   const profileChain = (role: string) => ({
     select: () => profileChain(role),
@@ -44,7 +44,7 @@ function buildServiceMock({ callerRole = 'superadmin', targetRole = 'act_admin' 
   };
 }
 
-const VALID_BODY = { userId: 'target-id', newRole: 'act_admin' };
+const VALID_BODY = { userId: 'target-id', newRole: 'band_admin' };
 
 describe('POST /api/admin/fix-role', () => {
   afterEach(() => jest.clearAllMocks());
@@ -66,7 +66,7 @@ describe('POST /api/admin/fix-role', () => {
   });
 
   it('rejects non-superadmin caller', async () => {
-    const mock = buildServiceMock({ callerRole: 'act_admin' });
+    const mock = buildServiceMock({ callerRole: 'band_admin' });
     (getServiceClient as jest.Mock).mockReturnValue(mock);
     const { res, inner } = mockRes();
     await handler(mockReq('POST', VALID_BODY), res);
@@ -78,7 +78,7 @@ describe('POST /api/admin/fix-role', () => {
     const mock = buildServiceMock();
     (getServiceClient as jest.Mock).mockReturnValue(mock);
     const { res, inner } = mockRes();
-    await handler(mockReq('POST', { newRole: 'act_admin' }), res);
+    await handler(mockReq('POST', { newRole: 'band_admin' }), res);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(inner.json).toHaveBeenCalledWith({ error: 'userId and newRole required' });
   });
@@ -102,7 +102,7 @@ describe('POST /api/admin/fix-role', () => {
   });
 
   it('returns ok for valid role change', async () => {
-    const mock = buildServiceMock({ callerRole: 'superadmin', targetRole: 'act_admin' });
+    const mock = buildServiceMock({ callerRole: 'superadmin', targetRole: 'band_admin' });
     (getServiceClient as jest.Mock).mockReturnValue(mock);
     const { res } = mockRes();
     await handler(mockReq('POST', VALID_BODY), res);

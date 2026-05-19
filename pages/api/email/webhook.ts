@@ -55,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (domain) {
       const { data: logs } = await supabase
         .from('email_log')
-        .select('id, agent_id, recipient, subject, venue_id, booking_id')
+        .select('id, sent_by, recipient, subject, venue_id, booking_id')
         .ilike('recipient', `%@${domain}`)
         .order('sent_at', { ascending: false })
         .limit(1);
@@ -65,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // Insert a "reply received" alert row so agent sees it in their feed
         await supabase.from('email_log').insert({
-          sent_by:    matched.agent_id,
+          sent_by:    matched.sent_by,
           venue_id:   matched.venue_id,
           booking_id: matched.booking_id,
           subject:    `REPLY: ${subject}`,

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+﻿import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 
@@ -15,7 +15,7 @@ export default function DashboardRedirect() {
 
       const role = profile?.role;
       if (role === 'superadmin') router.replace('/admin');
-      else if (role === 'act_admin') router.replace('/band');
+      else if (role === 'band_admin') router.replace('/band');
       else router.replace('/member');
     };
     redirect();

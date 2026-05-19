@@ -205,7 +205,7 @@ export default function Financials() {
   ];
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Financials</h1>

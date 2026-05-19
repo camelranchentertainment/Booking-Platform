@@ -1,11 +1,11 @@
-export type UserRole = 'superadmin' | 'act_admin' | 'member';
+export type UserRole = 'superadmin' | 'band_admin' | 'member';
 
 export type BookingStatus =
   | 'pitch' | 'followup' | 'negotiation' | 'hold'
   | 'contract' | 'confirmed' | 'advancing' | 'completed' | 'cancelled';
 
 export type ContactStatus =
-  | 'not_contacted' | 'pitched' | 'responded' | 'negotiating'
+  | 'not_contacted' | 'pitched' | 'responded' | 'negotiate'
   | 'booked' | 'declined' | 'do_not_contact';
 
 export type TourStatus = 'planning' | 'active' | 'completed' | 'cancelled';
@@ -64,7 +64,6 @@ export interface ActInvitation {
 
 export interface Venue {
   id: string;
-  agent_id?: string | null;
   name: string;
   address?: string | null;
   city: string;
@@ -91,7 +90,6 @@ export interface Venue {
 
 export interface Contact {
   id: string;
-  agent_id: string;
   venue_id?: string | null;
   first_name: string;
   last_name: string;
@@ -153,7 +151,6 @@ export interface Booking {
   confirmed_by?: string | null;
   settled_by?: string | null;
   details_pending?: boolean | null;
-  agent_id?: string | null;
   meals_provided?: boolean | null;
   drinks_provided?: boolean | null;
   hotel_booked?: boolean | null;
@@ -172,7 +169,6 @@ export interface Booking {
   internal_notes?: string | null;
   advance_notes?: string | null;
   pitched_at?: string | null;
-  followup_at?: string | null;
   responded_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -199,7 +195,6 @@ export interface EmailLogEntry {
 
 export interface RoutingRule {
   id: string;
-  agent_id: string;
   name: string;
   trigger_status: BookingStatus;
   delay_days: number;
@@ -208,7 +203,7 @@ export interface RoutingRule {
   created_at: string;
 }
 
-export type OutreachStatus = 'target' | 'pitched' | 'followup' | 'negotiating' | 'confirmed' | 'declined';
+export type OutreachStatus = 'target' | 'pitched' | 'followup' | 'negotiate' | 'confirmed' | 'declined';
 export type SocialPlatform = 'instagram' | 'facebook' | 'youtube' | 'tiktok' | 'discord';
 export type SocialStatus   = 'pending' | 'approved' | 'posted' | 'dismissed';
 

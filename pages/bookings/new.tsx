@@ -76,7 +76,7 @@ export default function NewBooking() {
   const filteredTours = form.act_id ? tours.filter(t => t.act_id === form.act_id) : tours;
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">New Booking</h1>

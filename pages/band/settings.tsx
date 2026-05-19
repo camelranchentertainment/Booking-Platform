@@ -198,7 +198,7 @@ export default function BandSettings() {
   };
 
   if (loading) return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header"><div><div className="skeleton" style={{ width: 200, height: 28 }} /></div></div>
       <div style={{ maxWidth: 640, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         {[100, 160, 320].map(h => <div key={h} className="skeleton" style={{ height: h }} />)}
@@ -207,7 +207,7 @@ export default function BandSettings() {
   );
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Account & Profile</h1>
@@ -232,7 +232,7 @@ export default function BandSettings() {
                   Band Invite
                 </div>
                 <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.93rem' }}>
-                  {invite.act?.act_name || 'A band'} has invited you as {invite.role === 'act_admin' ? 'Band Admin' : 'Band Member'}
+                  {invite.act?.act_name || 'A band'} has invited you as {invite.role === 'band_admin' ? 'Band Admin' : 'Band Member'}
                 </div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginTop: '0.2rem' }}>
                   Accept to link this band profile to your account, or decline and create your own below.

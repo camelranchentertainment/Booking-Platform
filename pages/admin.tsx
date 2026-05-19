@@ -6,12 +6,12 @@ import Link from 'next/link';
 const GOLD  = '#E07820';
 const ROLE_COLOR: Record<string, string> = {
   superadmin: '#E07820',
-  act_admin:  '#f59e0b',
+  band_admin:  '#f59e0b',
   member:     '#94a3b8',
 };
 const ROLE_LABEL: Record<string, string> = {
   superadmin: 'Superadmin',
-  act_admin:  'Band Admin',
+  band_admin:  'Band Admin',
   member:     'Member',
 };
 const TIER_PRICE: Record<string, number> = {
@@ -172,7 +172,7 @@ export default function AdminPage() {
         ...u,
         actName:       act?.act_name || null,
         resolvedActId: act?.id       || null,
-        bandsUsed:     u.role === 'act_admin' ? rawActs.filter((a: Act) => a.owner_id === u.id).length : 0,
+        bandsUsed:     u.role === 'band_admin' ? rawActs.filter((a: Act) => a.owner_id === u.id).length : 0,
         billing_date:  billingDates[u.id] ?? null,
       } as AdminUser;
     });
@@ -207,7 +207,7 @@ export default function AdminPage() {
 
     // Analytics
     const paying  = enriched.filter(u => u.subscription_status === 'active').length;
-    const bandAdm = enriched.filter(u => u.role === 'act_admin').length;
+    const bandAdm = enriched.filter(u => u.role === 'band_admin').length;
     const members = enriched.filter(u => u.role === 'member').length;
     const new30d  = enriched.filter(u => u.created_at >= thirtyDaysAgo).length;
     setAnalytics({
@@ -243,7 +243,7 @@ export default function AdminPage() {
     }
     switch (activeFilter) {
       case 'paying':    return list.filter(u => u.subscription_status === 'active');
-      case 'bandAdmins':return list.filter(u => u.role === 'act_admin');
+      case 'bandAdmins':return list.filter(u => u.role === 'band_admin');
       case 'members':   return list.filter(u => u.role === 'member');
       case 'new30d':    return list.filter(u => u.created_at >= thirtyDaysAgo);
       default:          return list;
@@ -716,7 +716,7 @@ export default function AdminPage() {
               {fixRoleTarget.display_name || fixRoleTarget.email}
             </div>
             <select className="select" value={fixRoleValue} onChange={e => setFixRoleValue(e.target.value)} style={{ width: '100%', marginBottom: '1rem' }}>
-              <option value="act_admin">Band Admin</option>
+              <option value="band_admin">Band Admin</option>
               <option value="member">Member</option>
             </select>
             <div style={{ display: 'flex', gap: '0.65rem' }}>

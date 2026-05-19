@@ -189,13 +189,13 @@ export default function BookingDetail() {
   const setDet = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setDetailsForm((f: any) => ({ ...f, [k]: e.target.value }));
   const setFin = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setFinancialForm((f: any) => ({ ...f, [k]: e.target.value }));
 
-  if (!booking) return <AppShell requireRole="act_admin"><div style={{ color: 'var(--text-muted)', padding: '2rem' }}>Loading...</div></AppShell>;
+  if (!booking) return <AppShell requireRole="band_admin"><div style={{ color: 'var(--text-muted)', padding: '2rem' }}>Loading...</div></AppShell>;
 
   const isPast     = booking.show_date && new Date(booking.show_date + 'T23:59:59') < new Date();
   const canSettle  = booking.status === 'confirmed' && isPast;
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.25rem' }}>

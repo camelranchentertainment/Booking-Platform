@@ -1,4 +1,4 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+﻿import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 import { validateRegistration } from '../../../lib/domain/registration';
 
@@ -45,7 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: profileErr.message });
   }
 
-  if (role === 'act_admin' && actName) {
+  if (role === 'band_admin' && actName) {
     const { error: actErr } = await admin.from('acts').insert({
       owner_id: userId,
       act_name: actName,

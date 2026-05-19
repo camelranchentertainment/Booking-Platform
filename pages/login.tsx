@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
@@ -11,7 +11,7 @@ const MUTED = 'rgba(224,120,32,0.55)';
 
 
 const TIERS = [
-  { role: 'act_admin', label: 'Band Admin',  icon: '♪', color: '#a78bfa', desc: '$18/mo · 14-day trial' },
+  { role: 'band_admin', label: 'Band Admin',  icon: '♪', color: '#a78bfa', desc: '$18/mo · 14-day trial' },
   { role: 'member',    label: 'Band Member', icon: '◉', color: '#34d399', desc: 'Free via invite'       },
 ];
 
@@ -39,9 +39,9 @@ export default function Login() {
     const { data: profile } = await supabase
       .from('user_profiles').select('role').eq('id', user.id).maybeSingle();
 
-    const role = profile?.role || 'act_admin';
+    const role = profile?.role || 'band_admin';
     if (role === 'superadmin') router.replace('/admin');
-    else if (role === 'act_admin') router.replace('/band');
+    else if (role === 'band_admin') router.replace('/band');
     else router.replace('/member');
   };
 

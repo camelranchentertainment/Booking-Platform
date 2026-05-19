@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import { Resend } from 'resend';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
@@ -13,20 +13,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { actId, email, role } = req.body;
   if (!actId || !email || !role) return res.status(400).json({ error: 'actId, email, role required' });
-  if (!['act_admin', 'member'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+  if (!['band_admin', 'member'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
 
   // Get act name, inviter display name, and current admin count
   const [actRes, profileRes, currentAdminsRes, pendingAdminsRes] = await Promise.all([
     service.from('acts').select('act_name').eq('id', actId).single(),
     service.from('user_profiles').select('display_name, agency_name').eq('id', user.id).maybeSingle(),
-    service.from('user_profiles').select('id', { count: 'exact', head: true }).eq('act_id', actId).eq('role', 'act_admin'),
-    service.from('act_invitations').select('id', { count: 'exact', head: true }).eq('act_id', actId).eq('role', 'act_admin').eq('status', 'pending'),
+    service.from('user_profiles').select('id', { count: 'exact', head: true }).eq('act_id', actId).eq('role', 'band_admin'),
+    service.from('act_invitations').select('id', { count: 'exact', head: true }).eq('act_id', actId).eq('role', 'band_admin').eq('status', 'pending'),
   ]);
   const actName     = actRes.data?.act_name || 'a band';
   const inviterName = profileRes.data?.agency_name || profileRes.data?.display_name || user.email || 'Someone';
 
   // Enforce 2-admin limit
-  if (role === 'act_admin') {
+  if (role === 'band_admin') {
     const adminCount = (currentAdminsRes.count || 0) + (pendingAdminsRes.count || 0);
     if (adminCount >= 2) return res.status(400).json({ error: 'Maximum of 2 admins allowed per band.' });
   }
@@ -46,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (inviteErr) return res.status(500).json({ error: inviteErr.message });
 
   const joinUrl   = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://camelranchbooking.com'}/join?token=${invite.token}`;
-  const roleLabel = role === 'act_admin' ? 'Band Admin' : 'Band Member';
+  const roleLabel = role === 'band_admin' ? 'Band Admin' : 'Band Member';
   const emailSubject = `You've been invited to join ${actName} on Camel Ranch Booking`;
 
   const emailBody = `

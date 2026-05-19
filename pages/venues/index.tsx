@@ -145,7 +145,6 @@ export default function VenuesPage() {
     const { data: { user } } = await supabase.auth.getUser();
     const genreArr = form.music_genres ? form.music_genres.split(',').map(g => g.trim()).filter(Boolean) : null;
     await supabase.from('venues').insert({
-      agent_id:       user!.id,
       name:           form.name,
       city:           form.city,
       state:          form.state,
@@ -237,7 +236,7 @@ export default function VenuesPage() {
     for (const row of importRows.filter(r => r._selected)) {
       // Check for existing venue (same name + city)
       const { data: existing } = await supabase
-        .from('venues').select('id').eq('agent_id', user.id)
+        .from('venues').select('id').eq('created_by', user.id)
         .ilike('name', row.name).ilike('city', row.city).maybeSingle();
 
       if (existing) {
@@ -254,7 +253,6 @@ export default function VenuesPage() {
         skipped++;
       } else {
         const { data: newV } = await supabase.from('venues').insert({
-          agent_id:   user.id,
           name:       row.name,
           city:       row.city,
           state:      row.state      || '',
@@ -272,7 +270,6 @@ export default function VenuesPage() {
         // Create contact if name provided
         if (newV?.id && (row.contact_first || row.contact_email)) {
           await supabase.from('contacts').insert({
-            agent_id:   user.id,
             venue_id:   newV.id,
             first_name: row.contact_first || '',
             last_name:  row.contact_last  || '',
@@ -432,7 +429,6 @@ export default function VenuesPage() {
     // Step 2: Insert venue with full details
     const { data: { user } } = await supabase.auth.getUser();
     const { data: newVenue } = await supabase.from('venues').insert({
-      agent_id:        user!.id,
       name:            p.name,
       city:            p.city,
       state:           p.state,
@@ -478,7 +474,7 @@ export default function VenuesPage() {
   });
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Venues</h1>

@@ -1,4 +1,4 @@
-jest.mock('../../../lib/supabase', () => ({ getServiceClient: jest.fn() }));
+﻿jest.mock('../../../lib/supabase', () => ({ getServiceClient: jest.fn() }));
 
 import handler from '../../../pages/api/auth/register';
 import { getServiceClient } from '../../../lib/supabase';
@@ -40,7 +40,7 @@ function buildAdminMock(overrides: Partial<{
 const VALID_BODY = {
   email: 'band@example.com',
   password: 'secret123',
-  role: 'act_admin',
+  role: 'band_admin',
   displayName: 'The Wildcats',
 };
 

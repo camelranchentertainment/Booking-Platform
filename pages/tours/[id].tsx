@@ -21,12 +21,12 @@ const STATUS_COLOR: Record<OutreachStatus, string> = {
   target:      'var(--text-muted)',
   pitched:     '#60a5fa',
   followup:    '#fbbf24',
-  negotiating: '#a78bfa',
+  negotiate: '#a78bfa',
   confirmed:   '#34d399',
   declined:    '#f87171',
 };
 
-const FILTER_TABS: (OutreachStatus | 'all')[] = ['all', 'target', 'pitched', 'followup', 'negotiating', 'confirmed', 'declined'];
+const FILTER_TABS: (OutreachStatus | 'all')[] = ['all', 'target', 'pitched', 'followup', 'negotiate', 'confirmed', 'declined'];
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -217,7 +217,6 @@ export default function TourDetail() {
       }).eq('id', contact.id);
     } else if (venueForm.contact_first || venueForm.contact_email) {
       await supabase.from('contacts').insert({
-        agent_id:   user!.id,
         venue_id:   venuePopout.id,
         first_name: venueForm.contact_first || '',
         last_name:  venueForm.contact_last  || '',
@@ -356,7 +355,7 @@ export default function TourDetail() {
       }
     } else {
       const { data: inserted } = await supabase.from('venues').insert({
-        agent_id: user!.id, name: p.name, city: p.city, state: p.state,
+        name: p.name, city: p.city, state: p.state,
         address: p.address || null, place_id: p.place_id, google_maps_url: p.google_maps_url,
       }).select('id').single();
       venueId = inserted?.id ?? null;
@@ -459,7 +458,7 @@ export default function TourDetail() {
   const pendingCount = pool.filter(v => !['confirmed', 'declined'].includes(v.status)).length;
 
   if (!tour) return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       {loadError
         ? <div style={{ color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Tour not found or access denied. <Link href="/tours" style={{ color: 'var(--accent)' }}>← Back to Tours</Link></div>
         : <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div>
@@ -468,7 +467,7 @@ export default function TourDetail() {
   );
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.2rem' }}>
@@ -788,7 +787,7 @@ export default function TourDetail() {
                   ))}
                 </select>
 
-                {/* Confirm button — shown when negotiating or any active stage */}
+                {/* Confirm button — shown when in negotiate or any active stage */}
                 {tv.status !== 'confirmed' && tv.status !== 'declined' && (
                   <button
                     className="btn btn-primary btn-sm"

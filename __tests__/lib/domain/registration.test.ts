@@ -1,9 +1,9 @@
-import { validateRegistration } from '../../../lib/domain/registration';
+﻿import { validateRegistration } from '../../../lib/domain/registration';
 
-const VALID = { email: 'a@b.com', password: 'pass1234', role: 'act_admin', displayName: 'Jake' };
+const VALID = { email: 'a@b.com', password: 'pass1234', role: 'band_admin', displayName: 'Jake' };
 
 describe('validateRegistration', () => {
-  it('returns valid for a correct act_admin registration', () => {
+  it('returns valid for a correct band_admin registration', () => {
     expect(validateRegistration(VALID)).toEqual({ valid: true });
   });
 

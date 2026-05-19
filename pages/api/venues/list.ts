@@ -14,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: ownedVenues } = await service
     .from('venues')
     .select('*')
-    .eq('agent_id', user.id)
+    .eq('created_by', user.id)
     .order('name')
     .limit(500);
 

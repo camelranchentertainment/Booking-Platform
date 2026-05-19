@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import BrandLogo from '../components/BrandLogo';
 
-type Tier = 'act_admin' | 'member';
+type Tier = 'band_admin' | 'member';
 
 const GOLD = '#E07820';
 
@@ -13,14 +13,14 @@ const TIER_CONFIG: Record<Tier, {
   price: string; desc: string; selfSignup: boolean; apiRole: string;
   features: string[]; badge?: string; note?: string;
 }> = {
-  act_admin: {
+  band_admin: {
     label: 'Band Admin',
     icon:  '♪',
     color: GOLD,
     price: '$18/mo',
     desc:  'For independent bands and touring artists of any genre',
     selfSignup: true,
-    apiRole: 'act_admin',
+    apiRole: 'band_admin',
     badge: 'Recommended',
     features: [
       'Tour planning and management',
@@ -54,7 +54,7 @@ const TIER_CONFIG: Record<Tier, {
 
 export default function Register() {
   const router = useRouter();
-  const [tier, setTier]       = useState<Tier | null>('act_admin');
+  const [tier, setTier]       = useState<Tier | null>('band_admin');
   const [form, setForm]       = useState({
     email: '', password: '', confirmPassword: '',
     displayName: '',
@@ -66,7 +66,7 @@ export default function Register() {
 
   useEffect(() => {
     const role = router.query.role as string;
-    if (role === 'act_admin' || role === 'member') setTier(role as Tier);
+    if (role === 'band_admin' || role === 'member') setTier(role as Tier);
   }, [router.query.role]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -87,7 +87,7 @@ export default function Register() {
     if (form.password !== form.confirmPassword) { setError('Passwords do not match'); return; }
     if (form.password.length < 8) { setError('Password must be at least 8 characters'); return; }
     if (!form.displayName.trim()) { setError('Name is required'); return; }
-    if (tier === 'act_admin' && !form.actName.trim()) { setError('Act / band name is required'); return; }
+    if (tier === 'band_admin' && !form.actName.trim()) { setError('Act / band name is required'); return; }
 
     setLoading(true);
 
@@ -97,7 +97,7 @@ export default function Register() {
       role: cfg!.apiRole,
       displayName: form.displayName,
     };
-    if (tier === 'act_admin') { body.planTier = 'band_admin'; body.actName = form.actName; }
+    if (tier === 'band_admin') { body.planTier = 'band_admin'; body.actName = form.actName; }
 
     const apiRes = await fetch('/api/auth/register', {
       method: 'POST',
@@ -110,7 +110,7 @@ export default function Register() {
     const { error: signInErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
     if (signInErr) { setError(signInErr.message); setLoading(false); return; }
 
-    if (tier === 'act_admin') router.replace('/band');
+    if (tier === 'band_admin') router.replace('/band');
     else router.replace('/member');
   };
 
@@ -223,7 +223,7 @@ export default function Register() {
             )}
 
             {/* Band Admin */}
-            {tier === 'act_admin' && (
+            {tier === 'band_admin' && (
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div className="grid-2">
                   <div className="field">

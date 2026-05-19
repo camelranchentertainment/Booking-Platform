@@ -76,7 +76,7 @@ export default function BandTours() {
   const planning = tours.filter(t => t.status === 'planning').length;
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Tours</h1>

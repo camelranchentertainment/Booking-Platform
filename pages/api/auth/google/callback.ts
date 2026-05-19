@@ -50,14 +50,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const tokens = await tokenRes.json();
   const admin = getServiceClient();
 
-  await admin.from('user_calendar_settings').upsert({
-    user_id:              userId,
-    calendar_type:        'google',
-    google_access_token:  tokens.access_token,
-    google_refresh_token: tokens.refresh_token || null,
-    is_active:            true,
-    last_synced_at:       new Date().toISOString(),
-  }, { onConflict: 'user_id' });
-
   res.redirect(302, '/settings?calendar_connected=1');
 }

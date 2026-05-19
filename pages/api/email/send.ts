@@ -88,7 +88,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         tvExtra.pitched_at = now;
       } else if (isFollowUp) {
         newTvStatus = 'followup';
-        tvExtra.followup_at = now;
+        tvExtra.responded_at = now;
       } else if (category === 'confirmation') {
         newTvStatus = 'confirmed';
       }
@@ -117,21 +117,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
         if (category === 'follow_up_1') bkUpdate.follow_up_count = 1;
         if (category === 'follow_up_2') bkUpdate.follow_up_count = 2;
-        if (isColdPitch)  { bkUpdate.status = 'pitch';    bkUpdate.pitched_at  = now; }
-        if (isFollowUp)   { bkUpdate.status = 'followup'; bkUpdate.followup_at = now; }
+        if (isColdPitch)  { bkUpdate.status = 'pitch';    bkUpdate.pitched_at   = now; }
+        if (isFollowUp)   { bkUpdate.status = 'followup'; bkUpdate.responded_at = now; }
 
         await service.from('bookings').update(bkUpdate).eq('id', bookingId);
-
-        // Log to booking_emails
-        await service.from('booking_emails').insert({
-          booking_id:        bookingId,
-          category,
-          sent_at:           now,
-          subject,
-          body_preview:      bodyPreview ? String(bodyPreview).substring(0, 300) : null,
-          resend_message_id: data?.id || null,
-          sent_by:           userId,
-        });
       } else if (venueId && isColdPitch) {
         // No booking yet — check if one exists for this venue/act
         const { data: existing } = await service.from('bookings')

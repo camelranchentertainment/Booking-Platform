@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
@@ -307,7 +307,7 @@ const PRICING_TIERS: PricingTier[] = [
     period: '/month',
     desc: 'For independent bands and touring artists of any genre',
     color: GOLD,
-    role: 'act_admin',
+    role: 'band_admin',
     recommended: true,
     features: [
       'Tour planning and management',
@@ -758,9 +758,9 @@ export default function Home() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle().then(({ data }) => {
-          const role = data?.role || 'act_admin';
+          const role = data?.role || 'band_admin';
           if (role === 'superadmin') router.replace('/admin');
-          else if (role === 'act_admin') router.replace('/band');
+          else if (role === 'band_admin') router.replace('/band');
           else router.replace('/member');
         });
       } else {

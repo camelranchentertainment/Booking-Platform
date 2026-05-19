@@ -1,4 +1,4 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+﻿import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 
 async function getAuthedSuperadmin(req: NextApiRequest) {
@@ -11,7 +11,7 @@ async function getAuthedSuperadmin(req: NextApiRequest) {
   return profile?.role === 'superadmin' ? user : null;
 }
 
-const VALID_ROLES = ['act_admin', 'member'];
+const VALID_ROLES = ['band_admin', 'member'];
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();

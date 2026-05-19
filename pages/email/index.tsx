@@ -174,7 +174,7 @@ export default function EmailPage() {
       supabase.from('email_log').select('*, venue:venues(name)').eq('sent_by', user.id).order('sent_at', { ascending: false }).limit(100),
       actId ? supabase.from('acts').select('*').eq('id', actId) : Promise.resolve({ data: [] as any[] }),
       supabase.from('venues').select('*').order('name'),
-      supabase.from('contacts').select('*, venue:venues(name)').eq('agent_id', user.id).order('last_name'),
+      supabase.from('contacts').select('*, venue:venues(name)').order('last_name'),
       supabase.from('user_profiles').select('display_name, agency_name').eq('id', user.id).single(),
       bookingsQ ?? Promise.resolve({ data: [] as any[] }),
       supabase.from('email_drafts').select(`
@@ -190,13 +190,13 @@ export default function EmailPage() {
           venue:venues(name, city, state, email),
           tour:tours(id, act_id, act:acts(act_name))
         )
-      `).eq('agent_id', user.id).order('created_at', { ascending: false }),
+      `).order('created_at', { ascending: false }),
     ]);
 
     const tourIds = (toursRes.data || []).map((t: any) => t.id);
     const tvRes = tourIds.length > 0
       ? await supabase.from('tour_venues').select(`
-          id, status, tour_id, last_contacted_at, pitched_at, followup_at, updated_at,
+          id, status, tour_id, last_contacted_at, pitched_at, responded_at, updated_at,
           venue:venues(id, name, city, state, email),
           tour:tours(id, act_id, act:acts(id, act_name))
         `).in('tour_id', tourIds).in('status', ['pitched', 'follow_up'])
@@ -293,7 +293,7 @@ export default function EmailPage() {
     if (!confirm(`Delete all ${pendingDrafts.length} draft${pendingDrafts.length !== 1 ? 's' : ''}?`)) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from('email_drafts').delete().eq('agent_id', user.id);
+    await supabase.from('email_drafts').delete().eq('created_by', user.id);
     setPendingDrafts([]);
   };
 
@@ -324,7 +324,7 @@ export default function EmailPage() {
 
   const markReplied = async (tvId: string) => {
     setMarkingReplied(tvId);
-    await supabase.from('tour_venues').update({ status: 'negotiating', updated_at: new Date().toISOString() }).eq('id', tvId);
+    await supabase.from('tour_venues').update({ status: 'negotiate', updated_at: new Date().toISOString() }).eq('id', tvId);
     setPitchedTourVenues(tvs => tvs.filter(tv => tv.id !== tvId));
     setMarkingReplied(null);
   };
@@ -387,7 +387,7 @@ export default function EmailPage() {
     }));
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Email &amp; Pipeline</h1>

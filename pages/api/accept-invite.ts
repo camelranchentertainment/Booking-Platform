@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../lib/supabase';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -36,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .eq('id', userId)
     .maybeSingle();
 
-  // Band members (act_admin, member) get linked via profile.act_id.
+  // Band members (band_admin, member) get linked via profile.act_id.
   if (existingProfile) {
     // Profile already exists — only update act_id, never touch role.
     const { error: profileErr } = await supabase.from('user_profiles')
@@ -56,7 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // When a band admin accepts, claim ownership of the act so the band portal works
-  if (invite.role === 'act_admin') {
+  if (invite.role === 'band_admin') {
     await supabase.from('acts').update({ owner_id: userId }).eq('id', invite.act_id);
   }
 

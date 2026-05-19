@@ -1,4 +1,4 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+﻿import type { NextApiRequest, NextApiResponse } from 'next';
 import Stripe from 'stripe';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
@@ -73,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           stripe_subscription_id: sub.id,
           subscription_status:    'active',
           subscription_tier:      tier || undefined,
-          role: 'act_admin',
+          role: 'band_admin',
         }).eq('id', userId);
       }
       break;

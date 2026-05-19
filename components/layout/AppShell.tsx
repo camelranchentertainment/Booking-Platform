@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabase';
 import { UserProfile } from '../../lib/types';
@@ -6,7 +6,7 @@ import Sidebar from './Sidebar';
 
 interface Props {
   children: React.ReactNode;
-  requireRole?: 'act_admin' | 'member' | 'superadmin' | ('act_admin' | 'member' | 'superadmin')[] | null;
+  requireRole?: 'band_admin' | 'member' | 'superadmin' | ('band_admin' | 'member' | 'superadmin')[] | null;
 }
 
 function daysLeft(trialEndsAt: string | null | undefined): number {
@@ -50,17 +50,17 @@ export default function AppShell({ children, requireRole = null }: Props) {
 
         const allowedRoles = Array.isArray(requireRole) ? requireRole : requireRole ? [requireRole] : null;
         if (data.role !== 'superadmin' && allowedRoles && !allowedRoles.includes(data.role as any)) {
-          if (data.role === 'act_admin') router.replace('/band');
+          if (data.role === 'band_admin') router.replace('/band');
           else router.replace('/member');
           return;
         }
 
         setProfile(data as UserProfile);
 
-        if ((data.role === 'act_admin' || data.role === 'member') && data.act_id) {
+        if ((data.role === 'band_admin' || data.role === 'member') && data.act_id) {
           const { data: act } = await supabase.from('acts').select('act_name').eq('id', data.act_id).maybeSingle();
           if (act?.act_name) setActName(act.act_name);
-        } else if (data.role === 'act_admin') {
+        } else if (data.role === 'band_admin') {
           const { data: ownedAct } = await supabase.from('acts').select('act_name').eq('owner_id', user.id).limit(1).maybeSingle();
           if (ownedAct?.act_name) setActName(ownedAct.act_name);
         }
@@ -96,7 +96,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
     if (!profile) return null;
     switch (profile.role) {
       case 'superadmin': return { label: 'SUPERADMIN', color: '#E07820' };
-      case 'act_admin':  return { label: actName ? `BAND ADMIN — ${actName}` : 'BAND ADMIN', color: '#a78bfa' };
+      case 'band_admin':  return { label: actName ? `BAND ADMIN — ${actName}` : 'BAND ADMIN', color: '#a78bfa' };
       case 'member':     return { label: actName ? `MEMBER — ${actName}` : 'MEMBER', color: '#94a3b8' };
       default:           return null;
     }

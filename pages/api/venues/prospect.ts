@@ -43,7 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data: existing } = await service
       .from('venues')
       .select('id, name, place_id')
-      .eq('agent_id', user.id)
+      .eq('created_by', user.id)
       .ilike('city', `%${cityStr}%`);
 
     const existingPlaceIds = new Set((existing || []).map((v: any) => v.place_id).filter(Boolean));

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import Link from 'next/link';
@@ -91,7 +91,7 @@ function RenderNote({ text }: { text: string }) {
 // ── ShowCard ─────────────────────────────────────────────────────────────────
 
 function ShowCard({ booking, role, label, dimPast }: { booking: any; role: string; label: string; dimPast?: boolean }) {
-  const isAgent  = role === 'act_admin' || role === 'superadmin';
+  const isAgent  = role === 'band_admin' || role === 'superadmin';
   const isMember = role === 'member';
   const v = booking.venue;
   const pendingFields: string[] = [];
@@ -712,7 +712,7 @@ export default function TodayPage() {
     new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   return (
-    <AppShell requireRole={['act_admin', 'member']}>
+    <AppShell requireRole={['band_admin', 'member']}>
       <div className="page-header">
         <div>
           <h1 className="page-title">Today</h1>

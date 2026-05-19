@@ -51,7 +51,7 @@ export default function BandEmail() {
     const bookingIds = (bookingIdsRes.data || []).map((b: any) => b.id);
 
     // Fetch drafts — booking-based (by act's booking IDs) and tour_venue-based
-    // For tour_venue drafts: query by agent_id = user.id directly, avoiding RLS on tours table
+    // For tour_venue drafts: query all, relying on RLS for access control
     const [bookingDraftsRes, tourVenueDraftsRes] = await Promise.all([
       bookingIds.length > 0
         ? supabase.from('email_drafts')
@@ -67,7 +67,6 @@ export default function BandEmail() {
         .select(`id, category, subject, body, created_at, tour_venue_id,
           tourVenue:tour_venues(id, tour_id, venue_id,
             venue:venues(name, city, state, email))`)
-        .eq('agent_id', user.id)
         .not('tour_venue_id', 'is', null)
         .eq('category', 'target')
         .order('created_at', { ascending: false }),
@@ -129,7 +128,7 @@ export default function BandEmail() {
   };
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Email</h1>

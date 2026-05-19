@@ -1,4 +1,4 @@
-import Link from 'next/link';
+﻿import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState, useEffect, useCallback } from 'react';
 import { UserProfile } from '../../lib/types';
@@ -125,7 +125,7 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
     document.documentElement.setAttribute('data-theme', next);
   };
 
-  const nav = isSuperAdmin ? superadminNav : profile?.role === 'act_admin' ? bandAdminNav : memberNav;
+  const nav = isSuperAdmin ? superadminNav : profile?.role === 'band_admin' ? bandAdminNav : memberNav;
 
   const isActive = (href: string) => {
     // Root portal pages: exact match only to avoid lighting up for all sub-routes
@@ -172,7 +172,7 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
             ) : (
               <>
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                  {profile.role === 'act_admin' ? 'Band Admin' : 'Member'}
+                  {profile.role === 'band_admin' ? 'Band Admin' : 'Member'}
                 </div>
               </>
             )}
@@ -287,7 +287,7 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
                       {n.act?.act_name || 'A band'}
                     </div>
                     <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: '0.5rem' }}>
-                      You've been invited as {n.role === 'act_admin' ? 'Band Admin' : 'Band Member'}
+                      You've been invited as {n.role === 'band_admin' ? 'Band Admin' : 'Band Member'}
                     </div>
                     <button
                       className="btn btn-sm btn-primary"

@@ -1,4 +1,4 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+﻿import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 
 type Visibility = 'agent_only' | 'band_admin' | 'all_members';
@@ -16,7 +16,7 @@ async function getAuthedUser(req: NextApiRequest) {
 function buildVisibilityOr(userId: string, role: string, actId: string | null): string {
   const parts: string[] = [`user_id.eq.${userId}`];
   if (actId) {
-    if (role === 'act_admin' || role === 'superadmin') {
+    if (role === 'band_admin' || role === 'superadmin') {
       parts.push(`and(visibility.eq.band_admin,act_id.eq.${actId})`);
       parts.push(`and(visibility.eq.all_members,act_id.eq.${actId})`);
     } else if (role === 'member') {
@@ -56,9 +56,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .maybeSingle();
   if (!profile) return res.status(401).json({ error: 'Profile not found' });
 
-  // Resolve act_id for act_admin users who own (not link) their act
+  // Resolve act_id for band_admin users who own (not link) their act
   let userActId: string | null = profile.act_id;
-  if (!userActId && (profile.role === 'act_admin' || profile.role === 'superadmin')) {
+  if (!userActId && (profile.role === 'band_admin' || profile.role === 'superadmin')) {
     const { data: owned } = await svc
       .from('acts')
       .select('id')

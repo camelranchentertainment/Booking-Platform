@@ -1,4 +1,4 @@
-export interface RegistrationInput {
+﻿export interface RegistrationInput {
   email?: string;
   password?: string;
   role?: string;
@@ -11,7 +11,7 @@ export interface ValidationResult {
   error?: string;
 }
 
-const VALID_ROLES = ['act_admin'];
+const VALID_ROLES = ['band_admin'];
 const VALID_PLAN_TIERS = ['band_admin'];
 
 export function validateRegistration(input: RegistrationInput): ValidationResult {

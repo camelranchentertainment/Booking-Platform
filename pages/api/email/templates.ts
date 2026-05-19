@@ -16,7 +16,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { data } = await service.from('email_templates')
       .select('id, subject, body, updated_at')
-      .eq('agent_id', user.id)
       .eq('act_id', actId as string)
       .eq('category', category as string)
       .maybeSingle();
@@ -30,13 +29,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { data, error } = await service.from('email_templates')
       .upsert({
-        agent_id:   user.id,
         act_id:     actId,
         category,
         subject:    subject || null,
         body,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'agent_id,act_id,category' })
+      }, { onConflict: 'act_id,category' })
       .select()
       .single();
 
@@ -48,7 +46,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { actId, category } = req.body;
     await service.from('email_templates')
       .delete()
-      .eq('agent_id', user.id)
       .eq('act_id', actId)
       .eq('category', category);
     return res.status(200).json({ ok: true });

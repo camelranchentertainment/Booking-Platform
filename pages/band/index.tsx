@@ -89,7 +89,7 @@ export default function BandPortal() {
     setVenueSearching(true);
     const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase.from('venues').select('id, name, city, state, address, phone, email')
-      .eq('agent_id', user!.id).ilike('name', `%${q}%`).order('name').limit(8);
+      .ilike('name', `%${q}%`).order('name').limit(8);
     setVenueSearch(data || []);
     setVenueSearching(false);
   };
@@ -107,13 +107,13 @@ export default function BandPortal() {
     if (!venueId && showForm.venueName.trim()) {
       const city = showForm.city.trim() || '';
       const { data: existing } = await supabase.from('venues').select('id')
-        .eq('agent_id', user!.id).ilike('name', showForm.venueName.trim())
+        .ilike('name', showForm.venueName.trim())
         .maybeSingle();
       if (existing) {
         venueId = existing.id;
       } else {
         const { data: newV } = await supabase.from('venues').insert({
-          agent_id: user!.id, name: showForm.venueName.trim(),
+          name: showForm.venueName.trim(),
           city: city || 'Unknown', state: showForm.state.trim() || '',
           source: 'manual', country: 'US',
         }).select('id').single();
@@ -149,7 +149,7 @@ export default function BandPortal() {
   };
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">{myAct?.act_name || 'My Band'}</h1>

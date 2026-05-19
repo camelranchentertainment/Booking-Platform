@@ -5,7 +5,7 @@ const TOUR_VENUE_TO_BOOKING_STATUS: Record<OutreachStatus, BookingStatus> = {
   target:      'pitch',
   pitched:     'pitch',
   followup:    'followup',
-  negotiating: 'negotiation',
+  negotiate: 'negotiation',
   confirmed:   'confirmed',
   declined:    'cancelled',
 };
@@ -13,9 +13,9 @@ const TOUR_VENUE_TO_BOOKING_STATUS: Record<OutreachStatus, BookingStatus> = {
 const BOOKING_TO_TOUR_VENUE_STATUS: Partial<Record<BookingStatus, OutreachStatus>> = {
   pitch:       'target',
   followup:    'followup',
-  negotiation: 'negotiating',
-  hold:        'negotiating',
-  contract:    'negotiating',
+  negotiation: 'negotiate',
+  hold:        'negotiate',
+  contract:    'negotiate',
   confirmed:   'confirmed',
   advancing:   'confirmed',
   completed:   'confirmed',
@@ -34,7 +34,7 @@ export const STATUS_LABELS: Record<string, string> = {
   cancelled:   'Cancelled',
   target:      'Target',
   pitched:     'Pitched',
-  negotiating: 'Negotiating',
+  negotiate: 'negotiate',
   declined:    'Declined',
 };
 
@@ -50,7 +50,7 @@ export const STATUS_COLORS: Record<string, string> = {
   cancelled:   '#ef4444',
   target:      '#94a3b8',
   pitched:     '#c084fc',
-  negotiating: '#fbbf24',
+  negotiate: '#fbbf24',
   declined:    '#ef4444',
 };
 

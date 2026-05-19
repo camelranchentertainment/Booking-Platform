@@ -64,7 +64,7 @@ export default function PricingPage() {
     setLoading(tier);
     try {
       if (!isAuthed) {
-        router.push(`/register?role=act_admin`);
+        router.push(`/register?role=band_admin`);
         return;
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token;

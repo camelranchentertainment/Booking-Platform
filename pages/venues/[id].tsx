@@ -15,11 +15,11 @@ type Contact = {
 
 const STATUS_COLORS: Record<string, string> = {
   not_contacted: 'var(--text-muted)', pitched: '#818cf8', responded: '#fbbf24',
-  negotiating: '#f59e0b', booked: '#34d399', declined: '#f87171', do_not_contact: '#6b7280',
+  negotiate: '#f59e0b', booked: '#34d399', declined: '#f87171', do_not_contact: '#6b7280',
 };
 const STATUS_LABELS: Record<string, string> = {
   not_contacted: 'Not Contacted', pitched: 'Pitched', responded: 'Responded',
-  negotiating: 'Negotiating', booked: 'Booked', declined: 'Declined', do_not_contact: 'DNC',
+  negotiate: 'negotiate', booked: 'Booked', declined: 'Declined', do_not_contact: 'DNC',
 };
 
 const BLANK_CONTACT = { first_name: '', last_name: '', title: '', email: '', phone: '', notes: '' };
@@ -92,7 +92,6 @@ export default function VenueDetail() {
     setSavingContact(true);
     const { data: { user } } = await supabase.auth.getUser();
     await supabase.from('contacts').insert({
-      agent_id:   user!.id,
       venue_id:   id,
       first_name: contactForm.first_name,
       last_name:  contactForm.last_name  || null,
@@ -147,10 +146,10 @@ export default function VenueDetail() {
   const bookingLabel = (status: string) =>
     statusValues.find(lv => lv.value === status)?.label ?? BOOKING_STATUS_LABELS[status as keyof typeof BOOKING_STATUS_LABELS] ?? status;
 
-  if (!venue) return <AppShell requireRole="act_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
+  if (!venue) return <AppShell requireRole="band_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">{venue.name}</h1>

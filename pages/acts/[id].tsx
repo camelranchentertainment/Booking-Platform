@@ -14,7 +14,7 @@ export default function BandDetail() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [tab, setTab]         = useState<'overview' | 'members' | 'invites'>('overview');
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole]   = useState<'act_admin' | 'member'>('member');
+  const [inviteRole, setInviteRole]   = useState<'band_admin' | 'member'>('member');
   const [saving, setSaving]   = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [edit, setEdit]       = useState(false);
@@ -92,12 +92,12 @@ export default function BandDetail() {
     await loadAll();
   };
 
-  if (!act) return <AppShell requireRole="act_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
+  if (!act) return <AppShell requireRole="band_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
 
   const isRevoked = linkStatus === 'revoked';
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">{act.act_name}</h1>
@@ -214,7 +214,7 @@ export default function BandDetail() {
                     <div style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '0.9rem' }}>{m.display_name || m.email}</div>
                     <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{m.email}</div>
                   </div>
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: m.role === 'act_admin' ? 'var(--accent)' : 'var(--text-muted)' }}>{m.role}</span>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: m.role === 'band_admin' ? 'var(--accent)' : 'var(--text-muted)' }}>{m.role}</span>
                 </div>
               ))}
             </div>
@@ -235,7 +235,7 @@ export default function BandDetail() {
                 <label className="field-label">Role</label>
                 <select className="select" value={inviteRole} onChange={e => setInviteRole(e.target.value as any)}>
                   <option value="member">Member</option>
-                  <option value="act_admin">Band Admin</option>
+                  <option value="band_admin">Band Admin</option>
                 </select>
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-end' }}>

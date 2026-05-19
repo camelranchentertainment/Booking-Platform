@@ -11,12 +11,12 @@ interface PendingInvite {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  act_admin: 'Admin',
+  band_admin: 'Admin',
   member:    'Member',
 };
 
 const ROLE_COLOR: Record<string, string> = {
-  act_admin: 'var(--accent)',
+  band_admin: 'var(--accent)',
   member:    'var(--text-muted)',
 };
 
@@ -43,7 +43,7 @@ export default function BandMembers() {
   const [members, setMembers]   = useState<any[]>([]);
   const [invites, setInvites]   = useState<PendingInvite[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole]   = useState<'act_admin' | 'member'>('member');
+  const [inviteRole, setInviteRole]   = useState<'band_admin' | 'member'>('member');
   const [sending, setSending]   = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [inviteSent, setInviteSent]   = useState(false);
@@ -95,13 +95,13 @@ export default function BandMembers() {
   };
 
   const adminCount =
-    members.filter(m => m.role === 'act_admin').length +
-    invites.filter(i => i.role === 'act_admin').length;
+    members.filter(m => m.role === 'band_admin').length +
+    invites.filter(i => i.role === 'band_admin').length;
   const adminLimitReached = adminCount >= 2;
 
   const sendInvite = async () => {
     if (!inviteEmail.trim() || !actId) return;
-    if (inviteRole === 'act_admin' && adminLimitReached) {
+    if (inviteRole === 'band_admin' && adminLimitReached) {
       setInviteError('Maximum of 2 admins allowed per band.');
       return;
     }
@@ -128,7 +128,7 @@ export default function BandMembers() {
   };
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Band Members</h1>
@@ -195,14 +195,14 @@ export default function BandMembers() {
               <label className="field-label">Role</label>
               <select className="input" value={inviteRole} onChange={e => setInviteRole(e.target.value as typeof inviteRole)}>
                 <option value="member">Member</option>
-                <option value="act_admin" disabled={adminLimitReached}>
+                <option value="band_admin" disabled={adminLimitReached}>
                   Admin{adminLimitReached ? ' (limit)' : ''}
                 </option>
               </select>
             </div>
           </div>
 
-          {inviteRole === 'act_admin' && adminLimitReached && (
+          {inviteRole === 'band_admin' && adminLimitReached && (
             <div style={{ color: '#f87171', fontSize: '0.82rem' }}>
               Maximum of 2 admins per band. Revoke a pending invite or remove a current admin first.
             </div>
@@ -219,7 +219,7 @@ export default function BandMembers() {
             <button
               className="btn btn-primary"
               onClick={sendInvite}
-              disabled={sending || !inviteEmail.trim() || (inviteRole === 'act_admin' && adminLimitReached)}
+              disabled={sending || !inviteEmail.trim() || (inviteRole === 'band_admin' && adminLimitReached)}
             >
               {sending ? 'Sending…' : 'Send Invite'}
             </button>

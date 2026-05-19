@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
@@ -52,8 +52,7 @@ export default function Settings() {
       setForm({ display_name: data.display_name || '', agency_name: data.agency_name || '', phone: data.phone || '', email: data.email || '', personal_gmail: (data as any).personal_gmail || '' });
       setIsSuperAdmin(data.role === 'superadmin');
 
-      const { data: calData } = await supabase.from('user_calendar_settings').select('*').eq('user_id', user.id).maybeSingle();
-      setCalSettings(calData);
+      setCalSettings(null);
 
       const params = new URLSearchParams(window.location.search);
       if (params.get('calendar_connected')) setCalMsg('Google Calendar connected!');
@@ -130,9 +129,6 @@ export default function Settings() {
   };
 
   const disconnectGoogleCalendar = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from('user_calendar_settings').upsert({ user_id: user.id, calendar_type: 'none', is_active: false, google_access_token: null, google_refresh_token: null }, { onConflict: 'user_id' });
     setCalSettings(null);
     setCalMsg('Google Calendar disconnected.');
   };
@@ -147,7 +143,7 @@ export default function Settings() {
   };
 
   return (
-    <AppShell requireRole={['act_admin', 'superadmin', 'member']}>
+    <AppShell requireRole={['band_admin', 'superadmin', 'member']}>
       <div className="page-header">
         <div>
           <h1 className="page-title">Settings</h1>
@@ -307,7 +303,7 @@ export default function Settings() {
         )}
 
         {/* ── INTEGRATIONS ── */}
-        {(profile?.role === 'act_admin' || profile?.role === 'superadmin') && (
+        {(profile?.role === 'band_admin' || profile?.role === 'superadmin') && (
           <div>
             <div style={sectionLabelStyle}>Integrations</div>
             <div className="card">

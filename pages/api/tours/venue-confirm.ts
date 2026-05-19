@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 import { updateVenueStatus } from '../../../lib/statusSync';
 import Anthropic from '@anthropic-ai/sdk';
@@ -312,7 +312,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .select('act_id, role')
       .eq('id', user.id)
       .maybeSingle();
-    const isBandAdmin = prof?.role === 'act_admin' && prof?.act_id === (tv.tour as any).act_id;
+    const isBandAdmin = prof?.role === 'band_admin' && prof?.act_id === (tv.tour as any).act_id;
     // Also check acts.owner_id for band admins who own the act directly
     const { data: ownedAct } = await service
       .from('acts')

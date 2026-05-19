@@ -1,4 +1,4 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+﻿import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabase, getServiceClient } from '../../../lib/supabase';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -16,7 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .eq('id', user.id)
     .single();
 
-  if (profile?.role !== 'act_admin') {
+  if (profile?.role !== 'band_admin') {
     return res.status(403).json({ error: 'Only band admins can use this endpoint' });
   }
 

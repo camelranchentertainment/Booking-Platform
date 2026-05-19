@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 
@@ -59,7 +59,7 @@ export default function Join() {
     if (!res.ok) { setError(result.error || 'Failed to accept invite'); setSaving(false); return; }
 
     const role = invite?.role;
-    if (role === 'act_admin') router.replace('/band');
+    if (role === 'band_admin') router.replace('/band');
     else router.replace('/member');
   };
 

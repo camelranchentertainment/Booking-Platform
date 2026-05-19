@@ -1,4 +1,4 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+﻿import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 
 export type Expense = {
@@ -46,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!profile) return res.status(401).json({ error: 'Profile not found' });
 
   let userActId: string | null = profile.act_id;
-  if (!userActId && (profile.role === 'act_admin' || profile.role === 'superadmin')) {
+  if (!userActId && (profile.role === 'band_admin' || profile.role === 'superadmin')) {
     const { data: owned } = await svc
       .from('acts')
       .select('id')

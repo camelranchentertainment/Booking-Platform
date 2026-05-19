@@ -221,7 +221,7 @@ export default function BandSocial() {
   const pendingCount = posts.filter(p => p.status === 'pending').length;
 
   return (
-    <AppShell requireRole="act_admin">
+    <AppShell requireRole="band_admin">
       <div className="page-header">
         <div>
           <h1 className="page-title">Social Posts</h1>
