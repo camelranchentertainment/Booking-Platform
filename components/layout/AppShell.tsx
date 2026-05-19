@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { supabase } from '../../lib/supabase';
 import { UserProfile } from '../../lib/types';
 import Sidebar from './Sidebar';
+import BrandLogo from '../BrandLogo';
 
 interface Props {
   children: React.ReactNode;
@@ -112,9 +113,27 @@ export default function AppShell({ children, requireRole = null }: Props) {
 
       <Sidebar profile={profile} onSignOut={handleSignOut} open={navOpen} onClose={() => setNavOpen(false)} />
       <main className="main-content">
+        <div style={{
+          margin: '-2rem -2rem 1.75rem',
+          padding: '0.7rem 2rem',
+          background: 'linear-gradient(90deg, rgba(13,27,42,0.98) 0%, rgba(20,42,68,0.92) 40%, rgba(20,42,68,0.92) 60%, rgba(13,27,42,0.98) 100%)',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(90deg, transparent 0%, rgba(224,120,32,0.04) 50%, transparent 100%)',
+            pointerEvents: 'none',
+          }} />
+          <BrandLogo variant="banner" height={40} style={{ opacity: 0.72, position: 'relative' }} />
+        </div>
         {roleBadge && (
           <div style={{
-            margin: '-2rem -2rem 1.5rem',
+            margin: '-1.75rem -2rem 1.5rem',
             padding: '0.38rem 1.5rem',
             background: 'rgba(0,0,0,0.22)',
             borderBottom: '1px solid var(--border)',
@@ -139,7 +158,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
         )}
         {trialDays !== null && trialDays <= 7 && (
           <div style={{
-            margin: '-2rem -2rem 1.5rem',
+            margin: '-1.75rem -2rem 1.5rem',
             padding: '0.6rem 2rem',
             background: trialDays <= 3 ? 'rgba(248,113,113,0.08)' : 'rgba(251,191,36,0.07)',
             borderBottom: `1px solid ${trialDays <= 3 ? 'rgba(248,113,113,0.2)' : 'rgba(251,191,36,0.2)'}`,
