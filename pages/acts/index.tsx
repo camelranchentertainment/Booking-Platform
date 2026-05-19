@@ -24,7 +24,7 @@ export default function BandsPage() {
         .from('bookings')
         .select('act_id')
         .in('act_id', ids)
-        .in('status', ['pitch', 'followup', 'negotiation', 'hold', 'contract', 'confirmed', 'advancing']);
+        .in('status', ['pitch', 'negotiation', 'hold', 'contract', 'confirmed', 'advancing']);
       const map: Record<string, number> = {};
       for (const row of counts || []) map[row.act_id] = (map[row.act_id] || 0) + 1;
       setBookingCounts(map);

@@ -371,7 +371,7 @@ export default function EmailPage() {
     e.template_id === 'cold_pitch' &&
     e.sent_at < sevenDaysAgo &&
     e.status !== 'bounced' &&
-    !log.some(f => f.venue_id === e.venue_id && ['followup', 'follow_up', 'follow_up_1'].includes(f.template_id) && f.sent_at > e.sent_at)
+    !log.some(f => f.venue_id === e.venue_id && ['follow_up', 'follow_up_1'].includes(f.template_id) && f.sent_at > e.sent_at)
   );
 
   const pipelineBookings = filterAct

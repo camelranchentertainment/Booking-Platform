@@ -87,7 +87,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         newTvStatus = 'pitched';
         tvExtra.pitched_at = now;
       } else if (isFollowUp) {
-        newTvStatus = 'followup';
+        newTvStatus = 'pitched';
         tvExtra.responded_at = now;
       } else if (category === 'confirmation') {
         newTvStatus = 'confirmed';
@@ -118,7 +118,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (category === 'follow_up_1') bkUpdate.follow_up_count = 1;
         if (category === 'follow_up_2') bkUpdate.follow_up_count = 2;
         if (isColdPitch)  { bkUpdate.status = 'pitch';    bkUpdate.pitched_at   = now; }
-        if (isFollowUp)   { bkUpdate.status = 'followup'; bkUpdate.responded_at = now; }
+        if (isFollowUp)   { bkUpdate.status = 'pitch';    bkUpdate.responded_at = now; }
 
         await service.from('bookings').update(bkUpdate).eq('id', bookingId);
       } else if (venueId && isColdPitch) {

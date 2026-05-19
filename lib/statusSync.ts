@@ -2,17 +2,15 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import type { BookingStatus, OutreachStatus } from './types';
 
 const TOUR_VENUE_TO_BOOKING_STATUS: Record<OutreachStatus, BookingStatus> = {
-  target:      'pitch',
-  pitched:     'pitch',
-  followup:    'followup',
+  target:    'pitch',
+  pitched:   'pitch',
   negotiate: 'negotiation',
-  confirmed:   'confirmed',
-  declined:    'cancelled',
+  confirmed: 'confirmed',
+  declined:  'cancelled',
 };
 
 const BOOKING_TO_TOUR_VENUE_STATUS: Partial<Record<BookingStatus, OutreachStatus>> = {
   pitch:       'target',
-  followup:    'followup',
   negotiation: 'negotiate',
   hold:        'negotiate',
   contract:    'negotiate',
@@ -24,7 +22,6 @@ const BOOKING_TO_TOUR_VENUE_STATUS: Partial<Record<BookingStatus, OutreachStatus
 
 export const STATUS_LABELS: Record<string, string> = {
   pitch:       'Pitch',
-  followup:    'Follow-up',
   negotiation: 'Negotiation',
   hold:        'Hold',
   contract:    'Contract',
@@ -34,13 +31,12 @@ export const STATUS_LABELS: Record<string, string> = {
   cancelled:   'Cancelled',
   target:      'Target',
   pitched:     'Pitched',
-  negotiate: 'negotiate',
+  negotiate:   'Negotiate',
   declined:    'Declined',
 };
 
 export const STATUS_COLORS: Record<string, string> = {
   pitch:       '#94a3b8',
-  followup:    '#c084fc',
   negotiation: '#fbbf24',
   hold:        '#f97316',
   contract:    '#a78bfa',
@@ -50,7 +46,7 @@ export const STATUS_COLORS: Record<string, string> = {
   cancelled:   '#ef4444',
   target:      '#94a3b8',
   pitched:     '#c084fc',
-  negotiate: '#fbbf24',
+  negotiate:   '#fbbf24',
   declined:    '#ef4444',
 };
 

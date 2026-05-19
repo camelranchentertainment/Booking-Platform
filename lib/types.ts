@@ -1,7 +1,7 @@
 export type UserRole = 'superadmin' | 'band_admin' | 'member';
 
 export type BookingStatus =
-  | 'pitch' | 'followup' | 'negotiation' | 'hold'
+  | 'pitch' | 'negotiation' | 'hold'
   | 'contract' | 'confirmed' | 'advancing' | 'completed' | 'cancelled';
 
 export type ContactStatus =
@@ -203,7 +203,7 @@ export interface RoutingRule {
   created_at: string;
 }
 
-export type OutreachStatus = 'target' | 'pitched' | 'followup' | 'negotiate' | 'confirmed' | 'declined';
+export type OutreachStatus = 'target' | 'pitched' | 'negotiate' | 'confirmed' | 'declined';
 export type SocialPlatform = 'instagram' | 'facebook' | 'youtube' | 'tiktok' | 'discord';
 export type SocialStatus   = 'pending' | 'approved' | 'posted' | 'dismissed';
 
@@ -247,6 +247,6 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
 };
 
 export const BOOKING_STATUS_ORDER: BookingStatus[] = [
-  'pitch', 'followup', 'negotiation', 'hold',
+  'pitch', 'negotiation', 'hold',
   'contract', 'confirmed', 'advancing', 'completed',
 ];

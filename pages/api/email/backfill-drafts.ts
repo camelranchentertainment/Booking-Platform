@@ -147,7 +147,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       venue:venues(name, city, state, capacity, email, secondary_emails)`)
     .in('act_id', actIds)
     .not('venue_id', 'is', null)
-    .in('status', ['pitch', 'followup', 'negotiation'])
+    .in('status', ['pitch', 'negotiation'])
     .limit(20);
 
   if (bookingsErr) errors.push(`Bookings query: ${bookingsErr.message}`);

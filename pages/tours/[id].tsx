@@ -26,7 +26,7 @@ const STATUS_COLOR: Record<OutreachStatus, string> = {
   declined:    '#f87171',
 };
 
-const FILTER_TABS: (OutreachStatus | 'all')[] = ['all', 'target', 'pitched', 'followup', 'negotiate', 'confirmed', 'declined'];
+const FILTER_TABS: (OutreachStatus | 'all')[] = ['all', 'target', 'pitched', 'negotiate', 'confirmed', 'declined'];
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -99,7 +99,7 @@ export default function TourDetail() {
   const [composerTourVenue, setComposerTourVenue] = useState<any>(null);
   const tvEmailCategory = (status: OutreachStatus): string => {
     if (status === 'target') return 'target';
-    if (status === 'pitched' || status === 'followup') return 'follow_up_1';
+    if (status === 'pitched') return 'follow_up_1';
     return 'confirmation';
   };
 
