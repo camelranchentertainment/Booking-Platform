@@ -27,7 +27,6 @@ type Category = 'target' | 'follow_up_1' | 'follow_up_2' | 'confirmation' | 'dec
 
 const TYPE_TO_CATEGORY: Record<string, Category> = {
   cold_pitch:       'target',
-  followup:         'follow_up_1',
   reply_suggestion: 'reply',
   target:           'target',
   follow_up_1:      'follow_up_1',

@@ -18,12 +18,11 @@ const PLATFORM_INFO: Record<Platform, { label: string; color: string; icon: stri
 };
 
 const STATUS_COLOR: Record<OutreachStatus, string> = {
-  target:      'var(--text-muted)',
-  pitched:     '#60a5fa',
-  followup:    '#fbbf24',
+  target:    'var(--text-muted)',
+  pitched:   '#60a5fa',
   negotiate: '#a78bfa',
-  confirmed:   '#34d399',
-  declined:    '#f87171',
+  confirmed: '#34d399',
+  declined:  '#f87171',
 };
 
 const FILTER_TABS: (OutreachStatus | 'all')[] = ['all', 'target', 'pitched', 'negotiate', 'confirmed', 'declined'];

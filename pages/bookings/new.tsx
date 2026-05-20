@@ -101,7 +101,6 @@ export default function NewBooking() {
                   <label className="field-label">Status</label>
                   <select className="select" value={form.status} onChange={set('status')}>
                     <option value="pitch">Pitch</option>
-                    <option value="followup">Follow-up</option>
                     <option value="negotiation">Negotiation</option>
                     <option value="hold">Hold</option>
                     <option value="contract">Contract</option>
