@@ -129,7 +129,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
             background: 'linear-gradient(90deg, transparent 0%, rgba(224,120,32,0.06) 50%, transparent 100%)',
             pointerEvents: 'none',
           }} />
-          <BrandLogo variant="banner" height={64} style={{ opacity: 0.82, position: 'relative' }} />
+          <BrandLogo variant="banner" height={56} style={{ position: 'relative' }} />
         </div>
         {roleBadge && (
           <div style={{

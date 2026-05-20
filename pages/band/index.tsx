@@ -4,36 +4,30 @@ import { supabase } from '../../lib/supabase';
 import { getActId, getBandBookings } from '../../lib/bookingQueries';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
 import Link from 'next/link';
-import { useRouter } from 'next/router';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
-const QUICK_CHIPS = [
-  { label: 'View Targets',     href: '/tours' },
-  { label: 'Confirmed Shows',  href: '/bookings?filter=confirmed' },
-  { label: 'Draft outreach',   prompt: 'What venues should I prioritize for outreach this week?' },
-  { label: 'Plan a tour',      prompt: 'Help me think through routing for an upcoming tour.' },
+const QUICK_CHIPS: { label: string; href?: string; prompt?: string }[] = [
+  { label: '→ View Targets',    href: '/tours' },
+  { label: '→ Confirmed Shows', href: '/bookings?filter=confirmed' },
+  { label: 'Draft outreach',    prompt: 'What venues should I prioritize for outreach this week based on my pipeline?' },
+  { label: 'Plan a tour',       prompt: 'Help me think through routing for an upcoming tour. What should I consider?' },
 ];
 
 export default function BandDashboard() {
-  const router = useRouter();
-
-  // ── Data ────────────────────────────────────────────────────────────────────
-  const [myAct, setMyAct]         = useState<any>(null);
+  const [myAct, setMyAct]           = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [shows, setShows]         = useState<any[]>([]);
-  const [tours, setTours]         = useState<any[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const [shows, setShows]           = useState<any[]>([]);
+  const [tours, setTours]           = useState<any[]>([]);
+  const [loading, setLoading]       = useState(true);
 
-  // ── Agent panel ──────────────────────────────────────────────────────────────
-  const [messages, setMessages]   = useState<Message[]>([]);
-  const [agentInput, setAgentInput] = useState('');
+  const [messages, setMessages]       = useState<Message[]>([]);
+  const [agentInput, setAgentInput]   = useState('');
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentError, setAgentError]   = useState('');
   const [noteSaved, setNoteSaved]     = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
 
-  // ── Derived stats ────────────────────────────────────────────────────────────
   const today = new Date().toISOString().split('T')[0];
   const upcoming = shows
     .filter((b: any) => b.show_date && b.show_date >= today && ['confirmed', 'advancing', 'contract'].includes(b.status))
@@ -45,15 +39,12 @@ export default function BandDashboard() {
   useEffect(() => { load(); }, []);
 
   useEffect(() => {
-    if (threadRef.current) {
-      threadRef.current.scrollTop = threadRef.current.scrollHeight;
-    }
+    if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
   }, [messages]);
 
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
     const actId = await getActId(supabase, user.id);
     if (!actId) { setLoading(false); return; }
 
@@ -79,6 +70,7 @@ export default function BandDashboard() {
     setAgentInput('');
     setAgentLoading(true);
     setAgentError('');
+    setNoteSaved(false);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -101,21 +93,15 @@ export default function BandDashboard() {
   };
 
   const saveConversation = async () => {
-    if (messages.length === 0) return;
-    const last = messages[messages.length - 1];
-    if (last.role === 'assistant') {
-      await sendMessage('Summarize our conversation above as brief notes.', true);
-    } else {
-      setNoteSaved(false);
-      const { data: { session } } = await supabase.auth.getSession();
-      const noteContent = messages.map(m => `${m.role === 'user' ? 'Q' : 'A'}: ${m.content}`).join('\n');
-      await fetch('/api/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ content: noteContent, note_date: today, visibility: 'agent_only' }),
-      });
-      setNoteSaved(true);
-    }
+    if (messages.length === 0 || agentLoading) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    const noteContent = messages.map(m => `${m.role === 'user' ? 'Q' : 'A'}: ${m.content}`).join('\n\n');
+    await fetch('/api/notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ content: noteContent, note_date: today, visibility: 'agent_only' }),
+    });
+    setNoteSaved(true);
   };
 
   const userInitials = userProfile?.display_name
@@ -125,31 +111,40 @@ export default function BandDashboard() {
   return (
     <AppShell requireRole="band_admin">
 
-      {/* ── Header bar ──────────────────────────────────────────────────────── */}
+      {/* ── Header bar — 80px ──────────────────────────────────────────────── */}
       {myAct && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: '1rem',
-          padding: '0.85rem 1.25rem', background: 'var(--bg-panel)',
-          border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-          marginBottom: '1.25rem',
+          height: 80, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 1.25rem', background: 'var(--bg-panel)',
+          border: '1px solid var(--border)', marginBottom: '1.25rem',
         }}>
-          {myAct.profile_photo_url && (
-            <img src={myAct.profile_photo_url} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)', flexShrink: 0 }} />
-          )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', color: 'var(--text-primary)', letterSpacing: '0.04em', lineHeight: 1 }}>{myAct.act_name}</div>
-            {myAct.genre && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.15rem', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{myAct.genre}</div>}
+          {/* Left: act photo + name + genre */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
+            {myAct.profile_photo_url
+              ? <img src={myAct.profile_photo_url} alt="" style={{ height: 56, width: 56, objectFit: 'cover', border: '2px solid var(--accent)', flexShrink: 0 }} />
+              : <div style={{ height: 56, width: 56, background: 'rgba(224,120,32,0.12)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', color: 'var(--accent)' }}>{myAct.act_name?.[0] || '?'}</span>
+                </div>
+            }
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 900, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '0.03em' }}>{myAct.act_name}</div>
+              {myAct.genre && <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-muted)', marginTop: 3, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{myAct.genre}</div>}
+            </div>
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.66rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)', border: '1px solid rgba(224,120,32,0.35)', borderRadius: 'var(--radius-sm)', padding: '0.25rem 0.6rem', flexShrink: 0 }}>
-            CAMEL RANCH BOOKING
-          </div>
-          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(224,120,32,0.15)', border: '1px solid rgba(224,120,32,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: '0.9rem', color: 'var(--accent)', flexShrink: 0 }}>
-            {userInitials}
+
+          {/* Right: badge + avatar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.66rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)', border: '1px solid rgba(224,120,32,0.4)', padding: '0.25rem 0.7rem' }}>
+              CAMEL RANCH BOOKING
+            </div>
+            <div style={{ width: 36, height: 36, background: 'rgba(224,120,32,0.15)', border: '1px solid rgba(224,120,32,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: '1rem', color: 'var(--accent)', flexShrink: 0 }}>
+              {userInitials}
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── No act state ────────────────────────────────────────────────────── */}
+      {/* ── No act state ─────────────────────────────────────────────────────── */}
       {!loading && !myAct && (
         <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--accent)', marginBottom: '1rem' }}>GET STARTED</div>
@@ -162,198 +157,184 @@ export default function BandDashboard() {
 
       {myAct && (
         <>
-          {/* ── Stat cards ────────────────────────────────────────────────────── */}
+          {/* ── Stat cards ──────────────────────────────────────────────────── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
-            <Link href="/tours" className="stat-block" style={{ textDecoration: 'none', borderTop: '3px solid #f59e0b', position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at top right, rgba(245,158,11,0.08), transparent 70%)', pointerEvents: 'none' }} />
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#f59e0b', lineHeight: 1 }}>{pipelineCount}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.3rem' }}>TARGETS</div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>in pipeline</div>
+
+            <Link href="/tours" style={{ textDecoration: 'none', display: 'block', padding: '1.25rem 1.5rem', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderTop: '3px solid #f59e0b', position: 'relative', overflow: 'hidden' }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = '#f59e0b')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
+              <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at top right, rgba(245,158,11,0.07), transparent 65%)', pointerEvents: 'none' }} />
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 80, color: '#f59e0b', lineHeight: 0.9 }}>{pipelineCount}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.5rem' }}>TARGETS</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: '0.2rem' }}>in pipeline</div>
             </Link>
 
-            <Link href="/bookings?filter=confirmed" className="stat-block" style={{ textDecoration: 'none', borderTop: '3px solid #34d399', position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at top right, rgba(52,211,153,0.08), transparent 70%)', pointerEvents: 'none' }} />
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#34d399', lineHeight: 1 }}>{confirmedCount}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.3rem' }}>CONFIRMED</div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>upcoming shows</div>
+            <Link href="/bookings?filter=confirmed" style={{ textDecoration: 'none', display: 'block', padding: '1.25rem 1.5rem', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderTop: '3px solid #34d399', position: 'relative', overflow: 'hidden' }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = '#34d399')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
+              <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at top right, rgba(52,211,153,0.07), transparent 65%)', pointerEvents: 'none' }} />
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 80, color: '#34d399', lineHeight: 0.9 }}>{confirmedCount}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.5rem' }}>CONFIRMED</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: '0.2rem' }}>upcoming shows</div>
             </Link>
 
-            <Link href="/tours" className="stat-block" style={{ textDecoration: 'none', borderTop: '3px solid #60a5fa', position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at top right, rgba(96,165,250,0.08), transparent 70%)', pointerEvents: 'none' }} />
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#60a5fa', lineHeight: 1 }}>{activeToursCount}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.3rem' }}>TOURS</div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{tours.length} total</div>
+            <Link href="/tours" style={{ textDecoration: 'none', display: 'block', padding: '1.25rem 1.5rem', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderTop: '3px solid #60a5fa', position: 'relative', overflow: 'hidden' }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = '#60a5fa')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
+              <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at top right, rgba(96,165,250,0.07), transparent 65%)', pointerEvents: 'none' }} />
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 80, color: '#60a5fa', lineHeight: 0.9 }}>{activeToursCount}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.5rem' }}>TOURS</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: '0.2rem' }}>{tours.length} total</div>
             </Link>
           </div>
 
-          {/* ── Middle row ─────────────────────────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem', alignItems: 'start' }}>
+          {/* ── Mid section — equal height columns ─────────────────────────── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: '1rem', alignItems: 'stretch', marginBottom: '1.25rem' }}>
 
             {/* Upcoming shows */}
-            <div className="card">
-              <div className="card-header">
-                <span className="card-title">UPCOMING SHOWS</span>
-                <Link href="/bookings/new" className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>+ Add Show</Link>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="card-header" style={{ flexShrink: 0 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>UPCOMING SHOWS</span>
+                <Link href="/bookings/new" className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>+ ADD SHOW</Link>
               </div>
-              {loading ? (
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.84rem', padding: '0.5rem 0' }}>Loading…</div>
-              ) : upcoming.length === 0 ? (
-                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>
-                  No upcoming confirmed shows.{' '}
-                  <Link href="/bookings/new" style={{ color: 'var(--accent)', fontWeight: 600 }}>Add one →</Link>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {upcoming.map((b: any) => (
-                    <Link key={b.id} href={`/bookings/${b.id}`} style={{ display: 'flex', gap: '0.85rem', alignItems: 'center', padding: '0.6rem 0.75rem', background: 'var(--bg-overlay)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', textDecoration: 'none', transition: 'border-color 0.15s' }}
-                      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
-                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
-                      <div style={{ minWidth: 40, textAlign: 'center', flexShrink: 0 }}>
-                        <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: 'var(--accent)', lineHeight: 1 }}>
-                          {new Date(b.show_date + 'T00:00:00').getDate()}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {loading ? (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Loading…</div>
+                ) : upcoming.length === 0 ? (
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '0.5rem', color: 'var(--text-muted)', fontSize: 14 }}>
+                    <div>No upcoming confirmed shows.</div>
+                    <Link href="/bookings/new" style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 14 }}>Add a show →</Link>
+                  </div>
+                ) : (
+                  <>
+                    {upcoming.map((b: any) => (
+                      <Link key={b.id} href={`/bookings/${b.id}`} style={{ display: 'flex', gap: '0.85rem', alignItems: 'center', padding: '0.65rem 0.75rem', background: 'var(--bg-overlay)', border: '1px solid var(--border)', textDecoration: 'none', transition: 'border-color 0.15s' }}
+                        onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                        onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
+                        <div style={{ minWidth: 44, textAlign: 'center', borderRight: '1px solid var(--border)', paddingRight: '0.75rem', flexShrink: 0 }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, color: 'var(--accent)', lineHeight: 1 }}>
+                            {new Date(b.show_date + 'T00:00:00').getDate()}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            {new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
+                          </div>
                         </div>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                          {new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' })}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.venue?.name || 'TBD'}</div>
+                          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
+                            {b.venue?.city ? `${b.venue.city}, ${b.venue.state}` : ''}
+                          </div>
                         </div>
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.venue?.name || 'TBD'}</div>
-                        <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontFamily: 'var(--font-body)' }}>
-                          {b.venue?.city ? `${b.venue.city}, ${b.venue.state}` : ''}
-                        </div>
-                      </div>
-                      <span className={`badge badge-${b.status}`} style={{ flexShrink: 0 }}>
-                        {BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              )}
+                        <span className={`badge badge-${b.status}`} style={{ flexShrink: 0, fontSize: 11, fontWeight: 700 }}>
+                          {BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}
+                        </span>
+                      </Link>
+                    ))}
+                    <div style={{ flex: 1, minHeight: 0 }} />
+                  </>
+                )}
+              </div>
             </div>
 
-            {/* AI Booking Agent */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 460 }}>
-              <div className="card-header" style={{ flexShrink: 0 }}>
-                <span className="card-title">AI BOOKING AGENT</span>
+            {/* AI Booking Agent — stretches full height */}
+            <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem 1rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-primary)' }}>AI BOOKING AGENT</span>
                 {messages.length > 0 && (
-                  <button
-                    onClick={saveConversation}
-                    className="btn btn-ghost btn-sm"
-                    style={{ color: noteSaved ? '#34d399' : 'var(--text-muted)' }}
-                    disabled={agentLoading}
-                  >
+                  <button onClick={saveConversation} className="btn btn-ghost btn-sm" style={{ color: noteSaved ? '#34d399' : 'var(--text-muted)' }} disabled={agentLoading}>
                     {noteSaved ? '✓ Saved' : '↓ Save Note'}
                   </button>
                 )}
               </div>
 
-              {/* Thread */}
-              <div
-                ref={threadRef}
-                style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.65rem', marginBottom: '0.75rem', minHeight: 200, maxHeight: 280 }}
-              >
+              {/* Thread — flex:1 to fill all available height */}
+              <div ref={threadRef} style={{ flex: 1, overflowY: 'auto', padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem', minHeight: 0 }}>
                 {messages.length === 0 && (
-                  <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem', lineHeight: 1.6, padding: '0.5rem 0' }}>
-                    Ask anything about your pipeline, upcoming dates, or get help drafting outreach.
+                  <div style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.6 }}>
+                    Ask about your pipeline, upcoming dates, or get help drafting outreach.
                   </div>
                 )}
                 {messages.map((m, i) => (
                   <div key={i} style={{
                     alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                    maxWidth: '88%',
+                    maxWidth: '90%',
                     padding: '0.5rem 0.75rem',
-                    borderRadius: 'var(--radius-sm)',
-                    background: m.role === 'user' ? 'rgba(224,120,32,0.15)' : 'var(--bg-overlay)',
+                    background: m.role === 'user' ? 'rgba(224,120,32,0.14)' : 'var(--bg-overlay)',
                     border: `1px solid ${m.role === 'user' ? 'rgba(224,120,32,0.3)' : 'var(--border)'}`,
+                    fontSize: 14,
+                    lineHeight: 1.55,
                     color: 'var(--text-primary)',
-                    fontSize: '0.84rem',
-                    fontFamily: 'var(--font-body)',
-                    lineHeight: 1.5,
                     whiteSpace: 'pre-wrap',
                   }}>
                     {m.content}
                   </div>
                 ))}
                 {agentLoading && (
-                  <div style={{ alignSelf: 'flex-start', color: 'var(--text-muted)', fontSize: '0.8rem', fontFamily: 'var(--font-mono)', padding: '0.25rem 0' }}>
-                    thinking…
-                  </div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 13, fontFamily: 'var(--font-mono)' }}>thinking…</div>
                 )}
               </div>
 
               {/* Quick chips */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.65rem', flexShrink: 0 }}>
-                {QUICK_CHIPS.map(chip => (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', padding: '0.6rem 1rem 0', flexShrink: 0 }}>
+                {QUICK_CHIPS.map(chip =>
                   chip.href ? (
-                    <Link key={chip.label} href={chip.href} style={{
-                      fontFamily: 'var(--font-body)', fontSize: '0.74rem', fontWeight: 500,
-                      padding: '0.22rem 0.6rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',
-                      color: 'var(--text-muted)', textDecoration: 'none', transition: 'all 0.15s',
-                    }}
+                    <Link key={chip.label} href={chip.href} style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 500, padding: '0.2rem 0.55rem', border: '1px solid var(--border)', color: 'var(--text-muted)', textDecoration: 'none', transition: 'all 0.15s' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
-                    >→ {chip.label}</Link>
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}>
+                      {chip.label}
+                    </Link>
                   ) : (
-                    <button key={chip.label} onClick={() => sendMessage(chip.prompt!)} disabled={agentLoading} style={{
-                      fontFamily: 'var(--font-body)', fontSize: '0.74rem', fontWeight: 500,
-                      padding: '0.22rem 0.6rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',
-                      color: 'var(--text-muted)', background: 'transparent', cursor: 'pointer', transition: 'all 0.15s',
-                    }}
+                    <button key={chip.label} onClick={() => sendMessage(chip.prompt!)} disabled={agentLoading} style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 500, padding: '0.2rem 0.55rem', border: '1px solid var(--border)', color: 'var(--text-muted)', background: 'transparent', cursor: 'pointer', transition: 'all 0.15s' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
-                    >{chip.label}</button>
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}>
+                      {chip.label}
+                    </button>
                   )
-                ))}
+                )}
               </div>
 
               {agentError && (
-                <div style={{ fontSize: '0.76rem', color: '#f87171', marginBottom: '0.5rem', fontFamily: 'var(--font-body)' }}>{agentError}</div>
+                <div style={{ margin: '0.4rem 1rem 0', fontSize: 13, color: '#f87171' }}>{agentError}</div>
               )}
 
-              {/* Input */}
-              <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+              {/* Input — pinned to bottom */}
+              <div style={{ display: 'flex', gap: '0.5rem', padding: '0.75rem 1rem', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
                 <input
                   className="input"
-                  style={{ flex: 1, fontSize: '0.84rem' }}
+                  style={{ flex: 1, fontSize: 14 }}
                   placeholder="Ask about your pipeline…"
                   value={agentInput}
                   onChange={e => setAgentInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(agentInput); } }}
                   disabled={agentLoading}
                 />
-                <button
-                  className="btn btn-primary"
-                  style={{ flexShrink: 0 }}
-                  onClick={() => sendMessage(agentInput)}
-                  disabled={agentLoading || !agentInput.trim()}
-                >
+                <button className="btn btn-primary" style={{ flexShrink: 0 }} onClick={() => sendMessage(agentInput)} disabled={agentLoading || !agentInput.trim()}>
                   {agentLoading ? '…' : '→'}
                 </button>
               </div>
             </div>
           </div>
 
-          {/* ── Bottom tiles ──────────────────────────────────────────────────── */}
+          {/* ── Bottom tiles ─────────────────────────────────────────────────── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
             {([
-              { label: 'SOCIALS',    sub: 'Social post queue',       href: '/social',   accent: '#e879f9', icon: '◈' },
-              { label: 'CALENDAR',   sub: 'View all shows',          href: '/calendar', accent: '#60a5fa', icon: '◷' },
-              { label: 'FINANCIALS', sub: 'Track payments & fees',   href: '/bookings', accent: '#34d399', icon: '$' },
-              { label: 'NOTES',      sub: 'Daily notes & journal',   href: '/notes',    accent: '#f59e0b', icon: '◎' },
+              { label: 'SOCIALS',    sub: 'Social post queue',     href: '/social',     accent: '#e879f9', icon: '✦' },
+              { label: 'CALENDAR',   sub: 'View all shows',        href: '/calendar',   accent: '#60a5fa', icon: '◷' },
+              { label: 'FINANCIALS', sub: 'Track payments & fees', href: '/financials', accent: '#34d399', icon: '$' },
+              { label: 'NOTES',      sub: 'Daily notes & journal', href: '/notes',      accent: '#f59e0b', icon: '◎' },
             ] as { label: string; sub: string; href: string; accent: string; icon: string }[]).map(tile => (
               <Link key={tile.label} href={tile.href} style={{
-                display: 'block', padding: '1.1rem 1.25rem', textDecoration: 'none',
+                display: 'block', height: 90, padding: '1rem 1.25rem', textDecoration: 'none',
                 background: 'var(--bg-panel)', border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)', borderTop: `3px solid ${tile.accent}`,
-                transition: 'border-color 0.15s, background 0.15s',
-                position: 'relative', overflow: 'hidden',
+                borderTop: `3px solid ${tile.accent}`, position: 'relative', overflow: 'hidden',
+                transition: 'border-color 0.15s',
               }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = tile.accent; (e.currentTarget as HTMLElement).style.background = `color-mix(in srgb, ${tile.accent} 6%, var(--bg-panel))`; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.background = 'var(--bg-panel)'; }}
-              >
-                <div style={{ position: 'absolute', top: '0.75rem', right: '0.9rem', fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: tile.accent, opacity: 0.25 }}>{tile.icon}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: tile.accent, marginBottom: '0.35rem' }}>{tile.label}</div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{tile.sub}</div>
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = tile.accent; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}>
+                <div style={{ position: 'absolute', top: '0.75rem', right: '0.9rem', fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: tile.accent, opacity: 0.2 }}>{tile.icon}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: tile.accent }}>{tile.label}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: '0.3rem' }}>{tile.sub}</div>
               </Link>
             ))}
           </div>
