@@ -120,7 +120,7 @@ export default function AgentCalendar() {
           ['#a78bfa', 'Contract'],
           ['#f97316', 'Hold'],
           ['#94a3b8', 'Pitch'],
-          ['#c084fc', 'Follow-up'],
+          ['#c084fc', 'Pitched'],
           ['#6b7280', 'Completed'],
         ].map(([color, label]) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>

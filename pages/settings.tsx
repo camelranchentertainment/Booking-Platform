@@ -40,6 +40,15 @@ export default function Settings() {
   const [calConnecting, setCalConnecting]   = useState(false);
   const [calMsg, setCalMsg]                 = useState('');
 
+  const [myAct, setMyAct]       = useState<any>(null);
+  const [actForm, setActForm]   = useState({
+    act_name: '', genre: '', bio: '', website: '',
+    instagram: '', facebook: '', spotify: '', contact_email: '',
+    contact_phone: '', home_city: '', home_state: '', username: '', epk_link: '',
+  });
+  const [actSaving, setActSaving] = useState(false);
+  const [actSaved, setActSaved]   = useState(false);
+
   useEffect(() => { load(); }, []);
 
   const load = async () => {
@@ -52,11 +61,43 @@ export default function Settings() {
       setForm({ display_name: data.display_name || '', agency_name: data.agency_name || '', phone: data.phone || '', email: data.email || '', personal_gmail: (data as any).personal_gmail || '' });
       setIsSuperAdmin(data.role === 'superadmin');
 
-      setCalSettings(null);
-
       const params = new URLSearchParams(window.location.search);
       if (params.get('calendar_connected')) setCalMsg('Google Calendar connected!');
       if (params.get('calendar_error')) setCalMsg(`Connection error: ${params.get('calendar_error')}`);
+
+      if (data.role === 'band_admin' || data.role === 'superadmin') {
+        let act: any = null;
+        const { data: owned } = await supabase.from('acts').select('*').eq('owner_id', user.id).eq('is_active', true).limit(1).maybeSingle();
+        if (owned) {
+          act = owned;
+        } else if (data.act_id) {
+          const { data: linked } = await supabase.from('acts').select('*').eq('id', data.act_id).maybeSingle();
+          act = linked;
+        }
+        if (act) {
+          setMyAct(act);
+          setActForm({
+            act_name:      act.act_name      || '',
+            genre:         act.genre         || '',
+            bio:           act.bio           || '',
+            website:       act.website       || '',
+            instagram:     act.instagram     || '',
+            facebook:      act.facebook      || '',
+            spotify:       act.spotify       || '',
+            contact_email: act.contact_email || '',
+            contact_phone: act.contact_phone || '',
+            home_city:     act.home_city     || '',
+            home_state:    act.home_state    || '',
+            username:      act.username      || '',
+            epk_link:      act.epk_link      || '',
+          });
+          setCalSettings(act.google_refresh_token ? {
+            calendar_type: act.calendar_type || 'google',
+            is_active:     act.sync_enabled !== false,
+            last_synced_at: act.last_synced_at,
+          } : null);
+        }
+      }
     }
   };
 
@@ -122,6 +163,33 @@ export default function Settings() {
     setTimeout(() => setSaved(false), 3000);
   };
 
+  const saveAct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!myAct) return;
+    setActSaving(true);
+    await supabase.from('acts').update({
+      act_name:      actForm.act_name      || null,
+      genre:         actForm.genre         || null,
+      bio:           actForm.bio           || null,
+      website:       actForm.website       || null,
+      instagram:     actForm.instagram     || null,
+      facebook:      actForm.facebook      || null,
+      spotify:       actForm.spotify       || null,
+      contact_email: actForm.contact_email || null,
+      contact_phone: actForm.contact_phone || null,
+      home_city:     actForm.home_city     || null,
+      home_state:    actForm.home_state    || null,
+      username:      actForm.username      || null,
+      epk_link:      actForm.epk_link      || null,
+    }).eq('id', myAct.id);
+    setActSaving(false);
+    setActSaved(true);
+    setTimeout(() => setActSaved(false), 3000);
+  };
+
+  const setAct = (k: keyof typeof actForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setActForm(f => ({ ...f, [k]: e.target.value }));
+
   const connectGoogleCalendar = async () => {
     setCalConnecting(true);
     const { data: { session } } = await supabase.auth.getSession();
@@ -129,6 +197,13 @@ export default function Settings() {
   };
 
   const disconnectGoogleCalendar = async () => {
+    if (myAct) {
+      await supabase.from('acts').update({
+        google_refresh_token: null,
+        google_access_token:  null,
+        sync_enabled:         false,
+      }).eq('id', myAct.id);
+    }
     setCalSettings(null);
     setCalMsg('Google Calendar disconnected.');
   };
@@ -261,6 +336,80 @@ export default function Settings() {
 
           </div>
         </div>
+
+        {/* ── BAND PROFILE ── */}
+        {myAct && (
+          <div>
+            <div style={sectionLabelStyle}>Band Profile</div>
+            <form onSubmit={saveAct}>
+              <div className="card">
+                <div className="card-header"><span className="card-title">ACT DETAILS</span></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                    <div className="field">
+                      <label className="field-label">Act Name</label>
+                      <input className="input" value={actForm.act_name} onChange={setAct('act_name')} placeholder="Your act name" />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Genre</label>
+                      <input className="input" value={actForm.genre} onChange={setAct('genre')} placeholder="e.g. Country, Rock" />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Home City</label>
+                      <input className="input" value={actForm.home_city} onChange={setAct('home_city')} placeholder="Nashville" />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Home State</label>
+                      <input className="input" value={actForm.home_state} onChange={setAct('home_state')} placeholder="TN" maxLength={2} />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Contact Email</label>
+                      <input className="input" type="email" value={actForm.contact_email} onChange={setAct('contact_email')} placeholder="booking@yourband.com" />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Contact Phone</label>
+                      <input className="input" type="tel" value={actForm.contact_phone} onChange={setAct('contact_phone')} />
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Bio</label>
+                    <textarea className="input" value={actForm.bio} onChange={setAct('bio')} placeholder="Short act bio for email pitches…" rows={3} style={{ resize: 'vertical', minHeight: 72 }} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                    <div className="field">
+                      <label className="field-label">Website</label>
+                      <input className="input" value={actForm.website} onChange={setAct('website')} placeholder="https://yourband.com" />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">EPK Link</label>
+                      <input className="input" value={actForm.epk_link} onChange={setAct('epk_link')} placeholder="Electronic press kit URL" />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Instagram</label>
+                      <input className="input" value={actForm.instagram} onChange={setAct('instagram')} placeholder="@handle" />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Facebook</label>
+                      <input className="input" value={actForm.facebook} onChange={setAct('facebook')} placeholder="facebook.com/yourpage" />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Spotify</label>
+                      <input className="input" value={actForm.spotify} onChange={setAct('spotify')} placeholder="Spotify artist URL" />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Username / Slug</label>
+                      <input className="input" value={actForm.username} onChange={setAct('username')} placeholder="your-act-slug" />
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
+                  <button type="submit" className="btn btn-primary" disabled={actSaving}>{actSaving ? 'Saving...' : 'Save Band Profile'}</button>
+                  {actSaved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>✓ Saved</span>}
+                </div>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* ── PLAN & BILLING ── */}
         {profile && profile.role !== 'superadmin' && profile.role !== 'member' && (

@@ -50,5 +50,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const tokens = await tokenRes.json();
   const admin = getServiceClient();
 
+  // Save tokens to the act owned by this user
+  const { data: act } = await admin
+    .from('acts')
+    .select('id')
+    .eq('owner_id', userId)
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+
+  if (act?.id) {
+    await admin.from('acts').update({
+      google_access_token:  tokens.access_token  || null,
+      google_refresh_token: tokens.refresh_token || null,
+      calendar_type:        'google',
+      sync_enabled:         true,
+      last_synced_at:       new Date().toISOString(),
+    }).eq('id', act.id);
+  }
+
   res.redirect(302, '/settings?calendar_connected=1');
 }
