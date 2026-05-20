@@ -29,16 +29,15 @@ const superadminNav = [
 
 const bandAdminNav = [
   { label: 'Dashboard',  href: '/band',         icon: '◈' },
-  { label: 'Today',      href: '/today',        icon: '◉' },
-  { label: 'Tours',      href: '/tours',        icon: '⟴' },
-  { label: 'Venues',     href: '/venues',       icon: '⌂' },
-  { label: 'Email',      href: '/email',        icon: '✉' },
   { label: 'Calendar',   href: '/calendar',     icon: '◷' },
-  { label: 'Social',     href: '/social',       icon: '✦' },
+  { label: 'Email',      href: '/email',        icon: '✉' },
+  { label: 'Tours',      href: '/tours',        icon: '⟴' },
+  { label: 'Socials',    href: '/social',       icon: '✦' },
+  { label: 'Venues',     href: '/venues',       icon: '⌂' },
   { label: 'Financials', href: '/financials',   icon: '$' },
-  { label: 'History',    href: '/history',      icon: '◎' },
   { label: 'Members',    href: '/band/members', icon: '♟' },
   { label: 'Settings',   href: '/settings',     icon: '⚙' },
+  { label: 'History',    href: '/history',      icon: '◎' },
 ];
 
 const memberNav = [
@@ -136,7 +135,7 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
   return (
     <nav className={`sidebar${open ? ' open' : ''}`}>
       <div className="sidebar-logo" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <BrandLogo variant="square" height={72} />
+        <BrandLogo variant="square" height={100} />
       </div>
 
       {profile && (

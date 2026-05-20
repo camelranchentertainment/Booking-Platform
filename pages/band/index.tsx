@@ -187,7 +187,7 @@ export default function BandDashboard() {
           </div>
 
           {/* ── Middle row ─────────────────────────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '1rem', marginBottom: '1.25rem', alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem', alignItems: 'start' }}>
 
             {/* Upcoming shows */}
             <div className="card">
@@ -232,7 +232,7 @@ export default function BandDashboard() {
             </div>
 
             {/* AI Booking Agent */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 400 }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 460 }}>
               <div className="card-header" style={{ flexShrink: 0 }}>
                 <span className="card-title">AI BOOKING AGENT</span>
                 {messages.length > 0 && (

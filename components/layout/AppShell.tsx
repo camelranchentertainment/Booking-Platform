@@ -115,7 +115,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
       <main className="main-content">
         <div style={{
           margin: '-2rem -2rem 1.75rem',
-          padding: '0.7rem 2rem',
+          padding: '1rem 2rem',
           background: 'linear-gradient(90deg, rgba(13,27,42,0.98) 0%, rgba(20,42,68,0.92) 40%, rgba(20,42,68,0.92) 60%, rgba(13,27,42,0.98) 100%)',
           borderBottom: '1px solid var(--border)',
           display: 'flex',
@@ -126,10 +126,10 @@ export default function AppShell({ children, requireRole = null }: Props) {
         }}>
           <div style={{
             position: 'absolute', inset: 0,
-            background: 'linear-gradient(90deg, transparent 0%, rgba(224,120,32,0.04) 50%, transparent 100%)',
+            background: 'linear-gradient(90deg, transparent 0%, rgba(224,120,32,0.06) 50%, transparent 100%)',
             pointerEvents: 'none',
           }} />
-          <BrandLogo variant="banner" height={40} style={{ opacity: 0.72, position: 'relative' }} />
+          <BrandLogo variant="banner" height={64} style={{ opacity: 0.82, position: 'relative' }} />
         </div>
         {roleBadge && (
           <div style={{
