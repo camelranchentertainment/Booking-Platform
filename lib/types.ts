@@ -236,7 +236,6 @@ export interface SocialQueueItem {
 
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   pitch:       'Pitch',
-  followup:    'Follow-up',
   negotiation: 'Negotiation',
   hold:        'Hold',
   contract:    'Contract',
