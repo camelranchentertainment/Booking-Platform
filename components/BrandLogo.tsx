@@ -55,7 +55,7 @@ function BannerFallback({ height }: { height: number }) {
         background: 'rgba(224,120,32,0.08)',
         flexShrink: 0,
       }}>
-        <span style={{ fontSize: `${height * 0.5}px` }}>🐪</span>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: `${height * 0.38}px`, color: GOLD, lineHeight: 1 }}>CR</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <div style={{
@@ -86,7 +86,7 @@ function BannerFallback({ height }: { height: number }) {
 export default function BrandLogo({ variant = 'square', height = 72, className, style }: Props) {
   const [imgError, setImgError] = useState(false);
 
-  const src = variant === 'banner' ? '/banner.svg' : '/logo.svg';
+  const src = variant === 'banner' ? '/camel-ranch-booking-horizontal.svg' : '/camel-ranch-booking-square.svg';
 
   if (imgError) {
     return variant === 'banner'

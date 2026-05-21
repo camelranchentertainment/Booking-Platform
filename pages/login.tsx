@@ -96,7 +96,6 @@ export default function Login() {
         {showForgot ? (
           forgotSent ? (
             <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ fontSize: '2rem' }}>✉️</div>
               <div style={{ color: '#EFE0BD', fontFamily: 'var(--font-body)', fontSize: '0.95rem' }}>
                 Check your email
               </div>
