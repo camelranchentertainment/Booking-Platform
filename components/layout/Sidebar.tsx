@@ -1,4 +1,4 @@
-﻿import Link from 'next/link';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState, useEffect, useCallback } from 'react';
 import { UserProfile } from '../../lib/types';
@@ -50,10 +50,8 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
   const router = useRouter();
   const isSuperAdmin = profile?.role === 'superadmin';
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [notifs, setNotifs]         = useState<Notif[]>([]);
-  const [sysNotifs, setSysNotifs]   = useState<SysNotif[]>([]);
-  const [showNotifs, setShowNotifs] = useState(false);
-  const [responding, setResponding] = useState('');
+  const [notifs, setNotifs]       = useState<Notif[]>([]);
+  const [sysNotifs, setSysNotifs] = useState<SysNotif[]>([]);
   const [inboxCount, setInboxCount] = useState(0);
 
   useEffect(() => {
@@ -69,9 +67,6 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
     if (!user) return;
 
     const collected: Notif[] = [];
-
-    // Act invitations for this user's email (any role)
-    // Use the auth email as the primary source — profile.email may not be populated for newly signed-up users
     const authEmail = user.email || profile?.email || null;
     if (authEmail) {
       const { data: invites } = await supabase
@@ -81,10 +76,8 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
         .eq('status', 'pending');
       (invites || []).forEach(i => collected.push({ type: 'act_invitation', ...i, act: i.act as any }));
     }
-
     setNotifs(collected);
 
-    // System notifications (advance due, thank-you due, etc.)
     const { data: sys } = await supabase
       .from('notifications')
       .select('id, type, message, action_url, created_at')
@@ -97,26 +90,6 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
 
   useEffect(() => { loadNotifs(); }, [loadNotifs]);
 
-  const acceptInvite = async (n: Extract<Notif, { type: 'act_invitation' }>) => {
-    setResponding(n.id);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setResponding(''); return; }
-    const { data: prof } = await supabase.from('user_profiles').select('display_name').eq('id', user.id).single();
-    await fetch('/api/accept-invite', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: n.token, userId: user.id, displayName: prof?.display_name || '' }),
-    });
-    await loadNotifs();
-    setResponding('');
-    router.reload();
-  };
-
-  const markSysRead = async (id: string) => {
-    await supabase.from('notifications').update({ read: true }).eq('id', id);
-    setSysNotifs(prev => prev.filter(n => n.id !== id));
-  };
-
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
     setTheme(next);
@@ -127,10 +100,11 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
   const nav = isSuperAdmin ? superadminNav : profile?.role === 'band_admin' ? bandAdminNav : memberNav;
 
   const isActive = (href: string) => {
-    // Root portal pages: exact match only to avoid lighting up for all sub-routes
     if (['/dashboard', '/band', '/member'].includes(href)) return router.pathname === href;
     return router.pathname.startsWith(href);
   };
+
+  const totalNotifs = notifs.length + sysNotifs.length;
 
   return (
     <nav className={`sidebar${open ? ' open' : ''}`}>
@@ -166,14 +140,12 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
                 padding: '0.1rem 0.35rem', borderRadius: '2px',
                 boxShadow: 'var(--neon-glow-sm)',
               }}>
-                ◈ SUPERADMIN
+                &#x25C8; SUPERADMIN
               </div>
             ) : (
-              <>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                  {profile.role === 'band_admin' ? 'Band Admin' : 'Member'}
-                </div>
-              </>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                {profile.role === 'band_admin' ? 'Band Admin' : 'Member'}
+              </div>
             )}
           </div>
         </div>
@@ -206,99 +178,20 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
           );
         })}
 
-        {/* Notifications entry */}
-        {(notifs.length > 0 || sysNotifs.length > 0) && (
-          <button
-            onClick={() => setShowNotifs(v => !v)}
-            className="sidebar-link"
-            style={{ width: '100%', justifyContent: 'space-between', marginTop: '0.25rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}
-          >
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-              <span style={{ width: '16px', textAlign: 'center' }}>🔔</span>
-              Notifications
+        {/* Notification hint — full panel lives in the bell (top banner) */}
+        {totalNotifs > 0 && (
+          <div style={{
+            marginTop: '0.5rem', padding: '0.4rem 0.75rem',
+            borderTop: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', gap: '0.4rem',
+          }}>
+            <span style={{ fontSize: '0.8rem' }}>&#x1F514;</span>
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#fbbf24' }}>
+              {totalNotifs} unread
             </span>
-            <span style={{
-              background: '#ef4444', color: '#fff', borderRadius: '999px',
-              fontSize: '0.65rem', fontWeight: 700, minWidth: '18px', height: '18px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
-            }}>{notifs.length + sysNotifs.length}</span>
-          </button>
-        )}
-
-        {/* Inline notifications panel */}
-        {showNotifs && (notifs.length > 0 || sysNotifs.length > 0) && (
-          <div style={{ margin: '0.5rem 0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {/* System notifications (advance due, thank-you due, etc.) */}
-            {sysNotifs.map(n => {
-              const typeColor: Record<string, string> = {
-                advance_due:   '#f97316',
-                thank_you_due: '#a78bfa',
-                follow_up_due: '#fbbf24',
-                system:        'var(--accent)',
-              };
-              const typeLabel: Record<string, string> = {
-                advance_due:   'Advance Due',
-                thank_you_due: 'Thank You Due',
-                follow_up_due: 'Follow Up',
-                system:        'Notice',
-              };
-              return (
-                <div key={n.id} style={{
-                  background: 'var(--bg-overlay)',
-                  border: `1px solid ${typeColor[n.type] || 'var(--accent)'}40`,
-                  borderRadius: 'var(--radius-sm)', padding: '0.75rem', fontSize: '0.8rem',
-                }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: typeColor[n.type] || 'var(--accent)', marginBottom: '0.3rem' }}>
-                    {typeLabel[n.type] || n.type}
-                  </div>
-                  <div style={{ color: 'var(--text-primary)', lineHeight: 1.45, marginBottom: '0.5rem' }}>{n.message}</div>
-                  <div style={{ display: 'flex', gap: '0.4rem' }}>
-                    {n.action_url && (
-                      <Link href={n.action_url} onClick={() => { markSysRead(n.id); onClose?.(); }}
-                        className="btn btn-sm btn-primary"
-                        style={{ flex: 1, justifyContent: 'center', fontSize: '0.72rem' }}>
-                        Open
-                      </Link>
-                    )}
-                    <button onClick={() => markSysRead(n.id)}
-                      className="btn btn-sm"
-                      style={{ flex: n.action_url ? 0 : 1, justifyContent: 'center', fontSize: '0.72rem', color: 'var(--text-muted)', borderColor: 'var(--border)', background: 'transparent' }}>
-                      Dismiss
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            {notifs.map(n => (
-              <div key={n.id} style={{
-                background: 'var(--bg-overlay)',
-                border: '1px solid rgba(224,120,32,0.25)',
-                borderRadius: 'var(--radius-sm)',
-                padding: '0.75rem',
-                fontSize: '0.8rem',
-              }}>
-                {n.type === 'act_invitation' && (
-                  <>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#a78bfa', marginBottom: '0.3rem' }}>
-                      Band Invite
-                    </div>
-                    <div style={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.15rem' }}>
-                      {n.act?.act_name || 'A band'}
-                    </div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: '0.5rem' }}>
-                      You've been invited as {n.role === 'band_admin' ? 'Band Admin' : 'Band Member'}
-                    </div>
-                    <button
-                      className="btn btn-sm btn-primary"
-                      disabled={!!responding}
-                      onClick={() => acceptInvite(n)}
-                      style={{ width: '100%', justifyContent: 'center', fontSize: '0.72rem', background: '#a78bfa', borderColor: '#a78bfa', color: '#000' }}>
-                      {responding === n.id ? '…' : 'Accept Invite'}
-                    </button>
-                  </>
-                )}
-              </div>
-            ))}
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+              &uarr; bell
+            </span>
           </div>
         )}
       </div>
@@ -325,7 +218,7 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
         </button>
 
         <button className="sidebar-link" onClick={onSignOut} style={{ width: '100%' }}>
-          <span style={{ width: '16px', textAlign: 'center' }}>⏻</span>
+          <span style={{ width: '16px', textAlign: 'center' }}>&#x23FB;</span>
           Sign Out
         </button>
       </div>
