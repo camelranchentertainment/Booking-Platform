@@ -46,8 +46,12 @@ export default function Settings() {
     instagram: '', facebook: '', spotify: '', contact_email: '',
     contact_phone: '', home_city: '', home_state: '', username: '', epk_link: '',
   });
-  const [actSaving, setActSaving] = useState(false);
-  const [actSaved, setActSaved]   = useState(false);
+  const [actSaving, setActSaving]           = useState(false);
+  const [actSaved, setActSaved]             = useState(false);
+  const [actPhotoUrl, setActPhotoUrl]       = useState<string | null>(null);
+  const [actPhotoUploading, setActPhotoUploading] = useState(false);
+  const [actPhotoError, setActPhotoError]   = useState('');
+  const actPhotoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -76,6 +80,7 @@ export default function Settings() {
         }
         if (act) {
           setMyAct(act);
+          setActPhotoUrl(act.profile_photo_url || null);
           setActForm({
             act_name:      act.act_name      || '',
             genre:         act.genre         || '',
@@ -146,6 +151,26 @@ export default function Settings() {
     await supabase.from('user_profiles').update({ avatar_url: url }).eq('id', profile.id);
     setAvatarUrl(url);
     setAvatarUploading(false);
+  };
+
+  const uploadActPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !myAct) return;
+    if (!file.type.startsWith('image/')) { setActPhotoError('Please choose an image file'); return; }
+    if (file.size > 5 * 1024 * 1024) { setActPhotoError('Image must be under 5 MB'); return; }
+    setActPhotoError('');
+    setActPhotoUploading(true);
+    const ext  = file.name.split('.').pop() || 'jpg';
+    const path = `acts/${myAct.id}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
+    if (upErr) { setActPhotoError(upErr.message); setActPhotoUploading(false); return; }
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+    const url = `${publicUrl}?t=${Date.now()}`;
+    await supabase.from('acts').update({ profile_photo_url: url }).eq('id', myAct.id);
+    setActPhotoUrl(url);
+    setActPhotoUploading(false);
+    // Reset file input so same file can be re-uploaded
+    if (actPhotoRef.current) actPhotoRef.current.value = '';
   };
 
   const save = async (e: React.FormEvent) => {
@@ -345,6 +370,53 @@ export default function Settings() {
               <div className="card">
                 <div className="card-header"><span className="card-title">ACT DETAILS</span></div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+
+                  {/* Act photo upload */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border)' }}>
+                    <div
+                      onClick={() => !actPhotoUploading && actPhotoRef.current?.click()}
+                      style={{
+                        width: 88, height: 88, flexShrink: 0,
+                        background: actPhotoUrl ? 'transparent' : 'rgba(224,120,32,0.1)',
+                        border: '2px solid var(--border)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: actPhotoUploading ? 'wait' : 'pointer',
+                        overflow: 'hidden', position: 'relative', transition: 'border-color 0.15s',
+                      }}
+                      title="Click to upload band photo"
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                    >
+                      {actPhotoUrl
+                        ? <img src={actPhotoUrl} alt="Band photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <span style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: 'var(--accent)', lineHeight: 1 }}>
+                            {(actForm.act_name || '?')[0].toUpperCase()}
+                          </span>
+                      }
+                      {actPhotoUploading && (
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ color: '#fff', fontSize: '0.72rem', fontFamily: 'var(--font-body)' }}>Uploading…</span>
+                        </div>
+                      )}
+                      {!actPhotoUploading && !actPhotoUrl && (
+                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(224,120,32,0.7)', padding: '2px 0', textAlign: 'center', fontSize: '0.6rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', color: '#000', textTransform: 'uppercase' }}>Upload</div>
+                      )}
+                    </div>
+                    <input ref={actPhotoRef} type="file" accept="image/*" onChange={uploadActPhoto} style={{ display: 'none' }} />
+                    <div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.2rem' }}>Band Photo</div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                        Shown in your dashboard header.<br />PNG or JPG · max 5 MB · square crop recommended
+                      </div>
+                      {actPhotoUrl && (
+                        <button type="button" onClick={() => actPhotoRef.current?.click()} className="btn btn-ghost btn-sm" style={{ marginTop: '0.35rem', fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}>
+                          Replace photo
+                        </button>
+                      )}
+                      {actPhotoError && <div style={{ color: '#f87171', fontSize: '0.75rem', fontFamily: 'var(--font-body)', marginTop: '0.25rem' }}>{actPhotoError}</div>}
+                    </div>
+                  </div>
+
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                     <div className="field">
                       <label className="field-label">Act Name</label>
