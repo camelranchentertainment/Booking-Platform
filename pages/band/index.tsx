@@ -416,7 +416,7 @@ export default function BandDashboard() {
               { label: 'SOCIALS',    sub: 'Social post queue',     href: '/social',     accent: '#e879f9', icon: '✦' },
               { label: 'CALENDAR',   sub: 'View all shows',        href: '/calendar',   accent: '#60a5fa', icon: '◷' },
               { label: 'FINANCIALS', sub: 'Track payments & fees', href: '/financials', accent: '#34d399', icon: '$' },
-              { label: 'NOTES',      sub: 'Daily notes & journal', href: '/notes',      accent: '#f59e0b', icon: '◎' },
+              { label: 'HISTORY',    sub: 'Past shows & notes',    href: '/history',   accent: '#f59e0b', icon: '◎' },
             ] as any[]).map(tile => (
               <Link key={tile.label} href={tile.href} style={{ display: 'block', height: 90, padding: '1rem 1.25rem', textDecoration: 'none', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderTop: `3px solid ${tile.accent}`, position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s' }}
                 onMouseEnter={e => (e.currentTarget.style.borderColor = tile.accent)}
