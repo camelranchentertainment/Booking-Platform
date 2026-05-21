@@ -3,6 +3,7 @@ import { useState } from 'react';
 interface Props {
   variant?: 'square' | 'banner';
   height?: number;
+  width?: number;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -83,7 +84,7 @@ function BannerFallback({ height }: { height: number }) {
   );
 }
 
-export default function BrandLogo({ variant = 'square', height = 72, className, style }: Props) {
+export default function BrandLogo({ variant = 'square', height = 72, width: widthProp, className, style }: Props) {
   const [imgError, setImgError] = useState(false);
 
   const src = variant === 'banner' ? '/camel-ranch-booking-horizontal.svg' : '/camel-ranch-booking-square.svg';
@@ -91,19 +92,24 @@ export default function BrandLogo({ variant = 'square', height = 72, className, 
   if (imgError) {
     return variant === 'banner'
       ? <BannerFallback height={height} />
-      : <SquareFallback size={height} />;
+      : <SquareFallback size={widthProp ?? height} />;
   }
+
+  // When a width prop is provided, use it with height:auto so the SVG scales naturally.
+  // Otherwise fall back to the height-driven sizing.
+  const cssWidth  = widthProp ?? (variant === 'banner' ? height * 4.1 : height);
+  const cssHeight = widthProp ? 'auto' : height;
 
   return (
     <img
       src={src}
       alt="Camel Ranch Booking"
-      height={height}
-      width={variant === 'banner' ? height * 4.1 : height}
       className={className}
       style={{
         objectFit: 'contain',
         display: 'block',
+        width: cssWidth,
+        height: cssHeight,
         ...style,
       }}
       onError={() => setImgError(true)}

@@ -70,7 +70,7 @@ body {
   color: var(--text-primary);
   font-family: var(--font-body);
   font-size: 0.875rem;
-  font-weight: 400;
+  font-weight: 600;
   line-height: 1.625;
   -webkit-font-smoothing: antialiased;
 }
@@ -157,9 +157,9 @@ h4 { font-size: 1.2rem; }
   padding: 0.6rem 1rem;
   color: var(--text-secondary);
   font-family: var(--font-body);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.22em;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   transition: color 0.15s, background 0.15s, padding-left 0.15s;
   cursor: pointer;
@@ -455,6 +455,7 @@ td {
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
   font-size: 0.875rem;
+  font-weight: 600;
   transition: background 0.12s, color 0.12s;
 }
 
@@ -663,7 +664,7 @@ tr:hover td { background: rgba(224,120,32,0.06); color: var(--text-primary); }
 
 .modal-row-value {
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: 600;
   flex: 1;
 }
 

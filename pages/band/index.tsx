@@ -237,7 +237,7 @@ export default function BandDashboard() {
     <AppShell requireRole="band_admin">
       <style>{`
         .dash-act-header  { display:flex; align-items:center; justify-content:space-between; min-height:70px; padding:0.75rem 1rem; background:var(--bg-panel); border:1px solid var(--border); margin-bottom:1.25rem; }
-        .dash-act-name    { font-family:var(--font-display); font-size:20px; font-weight:900; color:var(--text-primary); line-height:1; letter-spacing:0.03em; }
+        .dash-act-name    { font-family:var(--font-display); font-size:28px; font-weight:900; color:var(--text-primary); line-height:1; letter-spacing:0.03em; }
         .dash-crb-badge   { display:none; }
         .dash-stats-grid  { display:grid; grid-template-columns:1fr; gap:0.75rem; margin-bottom:1.25rem; }
         .dash-tiles-grid  { display:grid; grid-template-columns:repeat(2,1fr); gap:0.75rem; }
@@ -247,7 +247,7 @@ export default function BandDashboard() {
         .dash-msg-user    { max-width:88%; }
         @media(min-width:640px){
           .dash-act-header  { height:80px; padding:0 1.25rem; }
-          .dash-act-name    { font-size:28px; }
+          .dash-act-name    { font-size:32px; }
           .dash-crb-badge   { display:flex; }
           .dash-stats-grid  { grid-template-columns:repeat(3,1fr); }
           .dash-tiles-grid  { grid-template-columns:repeat(4,1fr); }
@@ -303,11 +303,11 @@ export default function BandDashboard() {
                 onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
                 <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse at top right, ${card.color}11, transparent 65%)`, pointerEvents: 'none' }} />
                 {loading
-                  ? <div style={{ height: 72, background: 'rgba(255,255,255,0.05)', marginBottom: 8 }} />
-                  : <div style={{ fontFamily: 'var(--font-display)', fontSize: 80, color: card.color, lineHeight: 0.9 }}>{card.value}</div>
+                  ? <div style={{ height: 68, background: 'rgba(255,255,255,0.05)', marginBottom: 8 }} />
+                  : <div style={{ fontFamily: 'var(--font-display)', fontSize: 72, fontWeight: 700, color: card.color, lineHeight: 0.9 }}>{card.value}</div>
                 }
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.5rem' }}>{card.label}</div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: '0.2rem' }}>{card.sub}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.5rem' }}>{card.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginTop: '0.2rem' }}>{card.sub}</div>
               </Link>
             ))}
           </div>
@@ -403,15 +403,15 @@ export default function BandDashboard() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', padding: '0.6rem 1.25rem 0', flexShrink: 0 }}>
               {QUICK_CHIPS.map(chip =>
                 chip.href ? (
-                  <Link key={chip.label} href={chip.href} style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 500, padding: '0.22rem 0.65rem', border: '1px solid var(--border)', color: 'var(--text-muted)', textDecoration: 'none', transition: 'all 0.15s' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}>
+                  <Link key={chip.label} href={chip.href} style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, padding: '0.3rem 0.75rem', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', background: 'rgba(255,255,255,0.08)', textDecoration: 'none', transition: 'all 0.15s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.background = 'rgba(224,120,32,0.15)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}>
                     {chip.label}
                   </Link>
                 ) : (
-                  <button key={chip.label} onClick={() => sendMessage(chip.prompt!)} disabled={agentLoading} style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 500, padding: '0.22rem 0.65rem', border: '1px solid var(--border)', color: 'var(--text-muted)', background: 'transparent', cursor: 'pointer', transition: 'all 0.15s' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}>
+                  <button key={chip.label} onClick={() => sendMessage(chip.prompt!)} disabled={agentLoading} style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, padding: '0.3rem 0.75rem', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', background: 'rgba(255,255,255,0.08)', cursor: 'pointer', transition: 'all 0.15s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.background = 'rgba(224,120,32,0.15)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}>
                     {chip.label}
                   </button>
                 )

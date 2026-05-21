@@ -137,20 +137,20 @@ function NotifBell({ userId, email }: { userId: string; email: string }) {
 
   return (
     <div ref={panelRef} style={{ position: 'relative' }}>
-      {/* Bell button */}
+      {/* Bell button — icon only, no box */}
       <button
         onClick={() => setOpen(v => !v)}
         style={{
           position: 'relative',
-          background: open ? 'rgba(255,255,255,0.08)' : 'transparent',
-          border: '1px solid ' + (open ? 'var(--border)' : 'transparent'),
-          borderRadius: 'var(--radius-sm)',
-          color: total > 0 ? '#fbbf24' : 'var(--text-muted)',
+          background: 'transparent',
+          border: 'none',
+          color: total > 0 ? '#fbbf24' : 'rgba(239,224,189,0.5)',
           cursor: 'pointer',
-          width: 36, height: 36,
+          padding: '0.2rem',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '1.1rem',
-          transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+          fontSize: '1.3rem',
+          transition: 'color 0.15s',
+          lineHeight: 1,
         }}
         aria-label={`Notifications${total > 0 ? ` (${total} unread)` : ''}`}
         title="Notifications"
