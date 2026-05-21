@@ -235,25 +235,47 @@ export default function BandDashboard() {
 
   return (
     <AppShell requireRole="band_admin">
+      <style>{`
+        .dash-act-header  { display:flex; align-items:center; justify-content:space-between; min-height:70px; padding:0.75rem 1rem; background:var(--bg-panel); border:1px solid var(--border); margin-bottom:1.25rem; }
+        .dash-act-name    { font-family:var(--font-display); font-size:20px; font-weight:900; color:var(--text-primary); line-height:1; letter-spacing:0.03em; }
+        .dash-crb-badge   { display:none; }
+        .dash-stats-grid  { display:grid; grid-template-columns:1fr; gap:0.75rem; margin-bottom:1.25rem; }
+        .dash-tiles-grid  { display:grid; grid-template-columns:repeat(2,1fr); gap:0.75rem; }
+        .dash-appr-grid   { display:grid; grid-template-columns:1fr; gap:0.25rem; max-height:160px; overflow-y:auto; }
+        .dash-draft-grid  { display:grid; grid-template-columns:1fr; gap:0.5rem; align-items:start; }
+        .dash-msg-ai      { max-width:90%; }
+        .dash-msg-user    { max-width:88%; }
+        @media(min-width:640px){
+          .dash-act-header  { height:80px; padding:0 1.25rem; }
+          .dash-act-name    { font-size:28px; }
+          .dash-crb-badge   { display:flex; }
+          .dash-stats-grid  { grid-template-columns:repeat(3,1fr); }
+          .dash-tiles-grid  { grid-template-columns:repeat(4,1fr); }
+          .dash-appr-grid   { grid-template-columns:repeat(2,1fr); gap:0.25rem 1.5rem; }
+          .dash-draft-grid  { grid-template-columns:1fr 2fr; }
+          .dash-msg-ai      { max-width:75%; }
+          .dash-msg-user    { max-width:60%; }
+        }
+      `}</style>
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       {myAct && (
-        <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 1.25rem', background: 'var(--bg-panel)', border: '1px solid var(--border)', marginBottom: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
+        <div className="dash-act-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', minWidth: 0 }}>
             {myAct.profile_photo_url
-              ? <img src={myAct.profile_photo_url} alt="" style={{ height: 56, width: 56, objectFit: 'cover', border: '2px solid var(--accent)', flexShrink: 0 }} />
-              : <div style={{ height: 56, width: 56, background: 'rgba(224,120,32,0.12)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', color: 'var(--accent)' }}>{myAct.act_name?.[0] || '?'}</span>
+              ? <img src={myAct.profile_photo_url} alt="" style={{ height: 52, width: 52, objectFit: 'cover', border: '2px solid var(--accent)', flexShrink: 0 }} />
+              : <div style={{ height: 52, width: 52, background: 'rgba(224,120,32,0.12)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--accent)' }}>{myAct.act_name?.[0] || '?'}</span>
                 </div>
             }
-            <div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 900, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '0.03em' }}>{myAct.act_name}</div>
-              {tagline && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{tagline}</div>}
+            <div style={{ minWidth: 0 }}>
+              <div className="dash-act-name">{myAct.act_name}</div>
+              {tagline && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 3, textTransform: 'uppercase', letterSpacing: '0.1em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tagline}</div>}
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.66rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)', border: '1px solid rgba(224,120,32,0.4)', padding: '0.25rem 0.7rem' }}>CAMEL RANCH BOOKING</div>
-            <div style={{ width: 36, height: 36, background: 'rgba(224,120,32,0.15)', border: '1px solid rgba(224,120,32,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: '1rem', color: 'var(--accent)', flexShrink: 0 }}>{userInitials}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexShrink: 0 }}>
+            <div className="dash-crb-badge" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)', border: '1px solid rgba(224,120,32,0.4)', padding: '0.2rem 0.6rem', alignItems: 'center' }}>CAMEL RANCH BOOKING</div>
+            <div style={{ width: 34, height: 34, background: 'rgba(224,120,32,0.15)', border: '1px solid rgba(224,120,32,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: '1rem', color: 'var(--accent)', flexShrink: 0 }}>{userInitials}</div>
           </div>
         </div>
       )}
@@ -270,7 +292,7 @@ export default function BandDashboard() {
       {myAct && (
         <>
           {/* ── Stat cards ──────────────────────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          <div className="dash-stats-grid">
             {([
               { label: 'TARGETS',   value: targetsCount,   sub: 'venues in target list',   href: '/tours',                    color: '#f59e0b' },
               { label: 'CONFIRMED', value: confirmedCount, sub: 'upcoming confirmed shows', href: '/bookings?filter=confirmed', color: '#34d399' },
@@ -305,9 +327,8 @@ export default function BandDashboard() {
             {/* Thread */}
             <div ref={threadRef} style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.65rem', minHeight: 0 }}>
               {messages.map((m, i) => (
-                <div key={i} style={{
+                <div key={i} className={m.role === 'user' ? 'dash-msg-user' : 'dash-msg-ai'} style={{
                   alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                  maxWidth: m.role === 'assistant' ? '75%' : '60%',
                   padding: '0.6rem 0.85rem',
                   background: m.role === 'user' ? 'rgba(224,120,32,0.14)' : 'var(--bg-overlay)',
                   border: `1px solid ${m.role === 'user' ? 'rgba(224,120,32,0.3)' : 'var(--border)'}`,
@@ -316,7 +337,11 @@ export default function BandDashboard() {
                   color: 'var(--text-primary)',
                   whiteSpace: 'pre-wrap',
                 }}>
-                  {m.content.replace(/\*\*(.*?)\*\*/g, '$1')}
+                  {m.content.split(/\*\*(.*?)\*\*/g).map((chunk, ci) =>
+                    ci % 2 === 1
+                      ? <strong key={ci} style={{ color: 'var(--accent)', fontWeight: 700 }}>{chunk}</strong>
+                      : chunk
+                  )}
                 </div>
               ))}
               {agentLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontFamily: 'var(--font-mono)', alignSelf: 'flex-start' }}>thinking…</div>}
@@ -330,8 +355,8 @@ export default function BandDashboard() {
                       : `${pendingAction.venues.length} VENUES — ${pendingAction.city.toUpperCase()}, ${pendingAction.state}`}
                   </div>
 
-                  {/* Venue checklist — 2-column grid for full-width panel */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.25rem 1.5rem', maxHeight: 160, overflowY: 'auto' }}>
+                  {/* Venue checklist */}
+                  <div className="dash-appr-grid">
                     {(pendingAction.type === 'tour_outreach' ? pendingAction.venues : pendingAction.venues).map((v: any) => {
                       const id = pendingAction.type === 'tour_outreach' ? v.tourVenueId : v.id;
                       const hasEmail = !!v.email;
@@ -347,9 +372,9 @@ export default function BandDashboard() {
                     })}
                   </div>
 
-                  {/* Email draft editor — row layout for full-width */}
+                  {/* Email draft editor */}
                   {pendingAction.type === 'tour_outreach' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '0.5rem', alignItems: 'start' }}>
+                    <div className="dash-draft-grid">
                       <input className="input" style={{ fontSize: 13 }} placeholder="Subject" value={draftSubject} onChange={e => setDraftSubject(e.target.value)} />
                       <textarea className="input" style={{ fontSize: 13, minHeight: 80, resize: 'vertical' }} value={draftBody} onChange={e => setDraftBody(e.target.value)} />
                     </div>
@@ -411,7 +436,7 @@ export default function BandDashboard() {
           </div>
 
           {/* ── Bottom tiles ─────────────────────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
+          <div className="dash-tiles-grid">
             {([
               { label: 'SOCIALS',    sub: 'Social post queue',     href: '/social',     accent: '#e879f9', icon: '✦' },
               { label: 'CALENDAR',   sub: 'View all shows',        href: '/calendar',   accent: '#60a5fa', icon: '◷' },

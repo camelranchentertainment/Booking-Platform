@@ -7,10 +7,12 @@ CREATE TABLE IF NOT EXISTS tour_venues (
   venue_id   UUID NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
   status     TEXT NOT NULL DEFAULT 'target'
                CHECK (status IN ('target','pitched','followup','negotiating','confirmed','declined')),
-  notes      TEXT,
-  added_by   UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  notes             TEXT,
+  pitched_at        TIMESTAMPTZ,
+  last_contacted_at TIMESTAMPTZ,
+  added_by          UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(tour_id, venue_id)
 );
 
