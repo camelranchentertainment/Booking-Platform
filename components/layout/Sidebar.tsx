@@ -109,7 +109,7 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
   return (
     <nav className={`sidebar${open ? ' open' : ''}`}>
       <div className="sidebar-logo" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <BrandLogo variant="square" width={160} />
+        <BrandLogo variant="banner" width={160} />
       </div>
 
       {profile && (

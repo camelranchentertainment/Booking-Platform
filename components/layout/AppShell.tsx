@@ -144,7 +144,9 @@ function NotifBell({ userId, email }: { userId: string; email: string }) {
           position: 'relative',
           background: 'transparent',
           border: 'none',
-          color: total > 0 ? '#fbbf24' : 'rgba(239,224,189,0.5)',
+          boxShadow: 'none',
+          outline: 'none',
+          color: total > 0 ? '#fbbf24' : 'rgba(255,255,255,0.6)',
           cursor: 'pointer',
           padding: '0.2rem',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -399,7 +401,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
           }} />
           {/* Left spacer to keep logo centred */}
           <div style={{ width: 36, flexShrink: 0 }} />
-          <BrandLogo variant="banner" height={56} style={{ position: 'relative' }} />
+          <BrandLogo variant="square" height={52} style={{ position: 'relative' }} />
           {/* Bell — only when logged in */}
           {authUser ? (
             <div style={{ position: 'relative', zIndex: 201 }}>

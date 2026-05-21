@@ -422,14 +422,36 @@ export default function BandDashboard() {
 
             {/* Input */}
             <div style={{ display: 'flex', gap: '0.5rem', padding: '0.75rem 1.25rem', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-              <input className="input" style={{ flex: 1, fontSize: 14 }}
+              <input
+                className="input"
+                style={{
+                  flex: 1, fontSize: 14,
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  color: '#fff',
+                  opacity: 1,
+                }}
                 placeholder={`Ask about ${myAct?.act_name || 'your pipeline'}, or say "send outreach to all targets on [tour name]"…`}
                 value={agentInput}
                 onChange={e => setAgentInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(agentInput); } }}
                 disabled={agentLoading}
               />
-              <button className="btn btn-primary" style={{ flexShrink: 0 }} onClick={() => sendMessage(agentInput)} disabled={agentLoading || !agentInput.trim()}>
+              <button
+                className="btn"
+                style={{
+                  flexShrink: 0,
+                  background: '#c47b2b',
+                  border: 'none',
+                  color: '#fff',
+                  opacity: 1,
+                  cursor: agentLoading ? 'wait' : 'pointer',
+                  fontWeight: 700,
+                  fontSize: 16,
+                }}
+                onClick={() => sendMessage(agentInput)}
+                disabled={agentLoading}
+              >
                 {agentLoading ? '…' : '→'}
               </button>
             </div>
