@@ -36,9 +36,7 @@ export default function Settings() {
 
   const [portalLoading, setPortalLoading]   = useState(false);
   const [isSuperAdmin, setIsSuperAdmin]     = useState(false);
-  const [calSettings, setCalSettings]       = useState<any>(null);
-  const [calConnecting, setCalConnecting]   = useState(false);
-  const [calMsg, setCalMsg]                 = useState('');
+  const [icsCopied, setIcsCopied]           = useState(false);
 
   const [myAct, setMyAct]       = useState<any>(null);
   const [actForm, setActForm]   = useState({
@@ -64,10 +62,6 @@ export default function Settings() {
       setAvatarUrl(data.avatar_url || null);
       setForm({ display_name: data.display_name || '', agency_name: data.agency_name || '', phone: data.phone || '', email: data.email || '', personal_gmail: (data as any).personal_gmail || '' });
       setIsSuperAdmin(data.role === 'superadmin');
-
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('calendar_connected')) setCalMsg('Google Calendar connected!');
-      if (params.get('calendar_error')) setCalMsg(`Connection error: ${params.get('calendar_error')}`);
 
       if (data.role === 'band_admin' || data.role === 'superadmin') {
         let act: any = null;
@@ -96,11 +90,6 @@ export default function Settings() {
             username:      act.username      || '',
             epk_link:      act.epk_link      || '',
           });
-          setCalSettings(act.google_refresh_token ? {
-            calendar_type: act.calendar_type || 'google',
-            is_active:     act.sync_enabled !== false,
-            last_synced_at: act.last_synced_at,
-          } : null);
         }
       }
     }
@@ -214,24 +203,6 @@ export default function Settings() {
 
   const setAct = (k: keyof typeof actForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setActForm(f => ({ ...f, [k]: e.target.value }));
-
-  const connectGoogleCalendar = async () => {
-    setCalConnecting(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    window.location.href = `/api/auth/google/connect?token=${session?.access_token}`;
-  };
-
-  const disconnectGoogleCalendar = async () => {
-    if (myAct) {
-      await supabase.from('acts').update({
-        google_refresh_token: null,
-        google_access_token:  null,
-        sync_enabled:         false,
-      }).eq('id', myAct.id);
-    }
-    setCalSettings(null);
-    setCalMsg('Google Calendar disconnected.');
-  };
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
@@ -523,49 +494,49 @@ export default function Settings() {
           </div>
         )}
 
-        {/* ── INTEGRATIONS ── */}
-        {(profile?.role === 'band_admin' || profile?.role === 'superadmin') && (
+        {/* ── CALENDAR FEED ── */}
+        {(profile?.role === 'band_admin' || profile?.role === 'superadmin') && myAct && (
           <div>
-            <div style={sectionLabelStyle}>Integrations</div>
+            <div style={sectionLabelStyle}>Calendar</div>
             <div className="card">
-              <div className="card-header"><span className="card-title">GOOGLE CALENDAR</span></div>
-              {calMsg && (
-                <div style={{
-                  marginBottom: '0.75rem', padding: '0.5rem 0.75rem',
-                  background: calMsg.includes('error') ? 'rgba(248,113,113,0.1)' : 'rgba(52,211,153,0.1)',
-                  border: `1px solid ${calMsg.includes('error') ? 'rgba(248,113,113,0.3)' : 'rgba(52,211,153,0.3)'}`,
-                  borderRadius: 'var(--radius-sm)', fontSize: '0.82rem',
-                  color: calMsg.includes('error') ? '#f87171' : '#34d399',
-                  fontFamily: 'var(--font-body)',
-                }}>
-                  {calMsg}
+              <div className="card-header"><span className="card-title">SUBSCRIBE FEED</span></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                  Your shows are available as a live calendar feed. Paste the link below into Google Calendar, Apple Calendar, or Outlook to keep your shows in sync automatically.
                 </div>
-              )}
-              {calSettings?.calendar_type === 'google' && calSettings?.is_active ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#34d399', flexShrink: 0 }} />
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: '#34d399' }}>Connected</span>
-                    {calSettings.last_synced_at && (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                        · synced {new Date(calSettings.last_synced_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </span>
-                    )}
-                  </div>
-                  <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start', color: '#f87171' }} onClick={disconnectGoogleCalendar}>
-                    Disconnect Google Calendar
+
+                {/* URL row */}
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    readOnly
+                    className="input"
+                    value={`https://camelranchbooking.com/api/calendar/${myAct.id}.ics`}
+                    style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', cursor: 'text' }}
+                    onFocus={e => e.target.select()}
+                  />
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ whiteSpace: 'nowrap', minWidth: 96 }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://camelranchbooking.com/api/calendar/${myAct.id}.ics`);
+                      setIcsCopied(true);
+                      setTimeout(() => setIcsCopied(false), 2500);
+                    }}
+                  >
+                    {icsCopied ? '✓ Copied' : 'Copy Link'}
                   </button>
                 </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-                    Connect Google Calendar to sync your booked shows and see them alongside personal events.
+
+                {/* Instructions */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.04em' }}>How to subscribe:</div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.7 }}>
+                    <span style={{ color: 'var(--accent)', fontWeight: 700 }}>Google Calendar</span> → Other calendars → From URL → paste link → Add Calendar<br />
+                    <span style={{ color: 'var(--accent)', fontWeight: 700 }}>Apple Calendar</span> → File → New Calendar Subscription → paste link<br />
+                    <span style={{ color: 'var(--accent)', fontWeight: 700 }}>Outlook</span> → Add calendar → Subscribe from web → paste link
                   </div>
-                  <button className="btn btn-primary" style={{ alignSelf: 'flex-start' }} onClick={connectGoogleCalendar} disabled={calConnecting}>
-                    {calConnecting ? 'Redirecting…' : 'Connect Google Calendar'}
-                  </button>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         )}
