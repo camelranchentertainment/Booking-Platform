@@ -385,7 +385,8 @@ export default function AppShell({ children, requireRole = null }: Props) {
         {/* Banner strip with logo + bell */}
         <div style={{
           margin: '-2rem -2rem 1.75rem',
-          padding: '1rem 1.25rem 1rem 2rem',
+          padding: '0.6rem 1.25rem 0.6rem 2rem',
+          minHeight: 100,
           background: 'linear-gradient(90deg, rgba(13,27,42,0.98) 0%, rgba(20,42,68,0.92) 40%, rgba(20,42,68,0.92) 60%, rgba(13,27,42,0.98) 100%)',
           borderBottom: '1px solid var(--border)',
           display: 'flex',
@@ -401,7 +402,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
           }} />
           {/* Left spacer to keep logo centred */}
           <div style={{ width: 36, flexShrink: 0 }} />
-          <BrandLogo variant="square" height={52} style={{ position: 'relative' }} />
+          <BrandLogo variant="square" height={88} style={{ position: 'relative' }} />
           {/* Bell — only when logged in */}
           {authUser ? (
             <div style={{ position: 'relative', zIndex: 201 }}>
