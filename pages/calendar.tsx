@@ -292,6 +292,8 @@ export default function AgentCalendar() {
                           background: isSelected ? 'rgba(196,154,60,0.1)' : 'transparent',
                           cursor: 'pointer',
                           transition: 'background 0.12s',
+                          display: 'flex', flexDirection: 'column', alignItems: 'stretch',
+                          overflow: 'hidden', minWidth: 0,
                         }}
                         onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)'; }}
                         onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
@@ -301,7 +303,7 @@ export default function AgentCalendar() {
                           color: isToday ? 'var(--accent)' : 'var(--text-secondary)',
                           width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
                           borderRadius: '50%', background: isToday ? 'var(--accent-glow)' : 'transparent',
-                          marginBottom: '0.2rem',
+                          marginBottom: '0.2rem', flexShrink: 0,
                         }}>{day}</div>
                         {dayShows.slice(0, 3).map((s: any) => (
                           <div key={s.id} style={{
@@ -311,6 +313,7 @@ export default function AgentCalendar() {
                             color: '#fff', fontWeight: 700,
                             fontFamily: 'var(--font-body)',
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            width: '100%', minWidth: 0, boxSizing: 'border-box',
                           }}>
                             {s.venue?.name || actName(s.act_id) || 'TBD'}
                           </div>
@@ -436,17 +439,19 @@ export default function AgentCalendar() {
                     style={{
                       borderRight: i < 6 ? '1px solid var(--border)' : 'none',
                       padding: '0.4rem 0.3rem', cursor: dayShows.length ? 'default' : 'pointer',
-                      minHeight: 140,
+                      minHeight: 140, display: 'flex', flexDirection: 'column',
+                      overflow: 'hidden', minWidth: 0,
                     }}
                   >
                     {dayShows.map((s: any) => (
-                      <Link key={s.id} href={`/bookings/${s.id}`} style={{ display: 'block', textDecoration: 'none', marginBottom: '0.25rem' }}
+                      <Link key={s.id} href={`/bookings/${s.id}`} style={{ display: 'block', textDecoration: 'none', marginBottom: '0.25rem', minWidth: 0 }}
                         onClick={e => e.stopPropagation()}>
                         <div style={{
                           background: tileColor(s.status), color: '#fff',
                           fontWeight: 700, fontSize: '0.72rem',
                           padding: '0.25rem 0.4rem', borderRadius: 3,
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          width: '100%', boxSizing: 'border-box',
                         }}>
                           {s.venue?.name || 'TBD'}
                         </div>
