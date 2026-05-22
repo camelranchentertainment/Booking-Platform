@@ -161,7 +161,7 @@ export default function Settings() {
     setActPhotoError('');
     setActPhotoUploading(true);
     const ext  = file.name.split('.').pop() || 'jpg';
-    const path = `acts/${myAct.id}.${ext}`;
+    const path = `act-${myAct.id}.${ext}`;
     const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
     if (upErr) { setActPhotoError(upErr.message); setActPhotoUploading(false); return; }
     const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
