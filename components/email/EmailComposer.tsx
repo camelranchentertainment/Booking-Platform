@@ -193,7 +193,7 @@ export default function EmailComposer({ bookingId, tourVenueId, actId, venueId, 
                 </div>
               )}
             </div>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }}>✕</button>
+            <button onClick={() => onClose()} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }}>✕</button>
           </div>
 
           {/* Category selector */}
