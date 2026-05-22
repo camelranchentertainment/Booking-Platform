@@ -41,7 +41,6 @@ export default function AgentCalendar() {
   const [filterAct, setFilterAct] = useState<string>('all');
   const [view, setView]           = useState<ViewMode>('month');
 
-  // Quick-add show modal
   const [addDate, setAddDate]     = useState<string | null>(null);
   const [quickForm, setQuickForm] = useState({ venue_id: '', status: 'pitch', set_time: '', fee: '', notes: '' });
   const [saving, setSaving]       = useState(false);
@@ -149,9 +148,9 @@ export default function AgentCalendar() {
                 key={v}
                 onClick={() => setView(v)}
                 style={{
-                  fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700,
+                  fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: 700,
                   letterSpacing: '0.08em', textTransform: 'uppercase',
-                  padding: '0.35rem 0.85rem', border: 'none', cursor: 'pointer',
+                  padding: '0.4rem 1rem', border: 'none', cursor: 'pointer',
                   background: view === v ? 'var(--accent)' : 'transparent',
                   color: view === v ? '#000' : 'var(--text-muted)',
                   transition: 'background 0.15s',
@@ -189,11 +188,11 @@ export default function AgentCalendar() {
       )}
 
       {/* Status legend */}
-      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem', alignItems: 'center', padding: '0.5rem 0.75rem', background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center', padding: '0.6rem 1rem', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
         {STATUS_LEGEND.map(([color, label]) => (
-          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <div style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} />
-            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>{label}</span>
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <div style={{ width: 12, height: 12, borderRadius: 3, background: color, flexShrink: 0, boxShadow: `0 0 6px ${color}88` }} />
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.04em' }}>{label}</span>
           </div>
         ))}
       </div>
@@ -226,13 +225,14 @@ export default function AgentCalendar() {
                     <td>
                       <span style={{
                         display: 'inline-block', background: tileColor(s.status),
-                        color: '#fff', borderRadius: 3, padding: '0.15rem 0.5rem',
+                        color: '#fff', borderRadius: 4, padding: '0.2rem 0.55rem',
                         fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                        boxShadow: `0 1px 4px ${tileColor(s.status)}66`,
                       }}>
                         {BOOKING_STATUS_LABELS[s.status as keyof typeof BOOKING_STATUS_LABELS] || s.status}
                       </span>
                     </td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent)' }}>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent)', fontWeight: 700 }}>
                       {s.fee ? `$${Number(s.fee).toLocaleString()}` : '—'}
                     </td>
                     <td><Link href={`/bookings/${s.id}`} style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>View →</Link></td>
@@ -248,31 +248,51 @@ export default function AgentCalendar() {
       {view === 'month' && (
         <div className="calendar-layout">
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
-              <button className="btn btn-ghost btn-sm" onClick={prevPeriod}>←</button>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', letterSpacing: '0.06em', color: 'var(--text-primary)' }}>
+            {/* Month nav */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.1rem 1.5rem', borderBottom: '1px solid var(--border)' }}>
+              <button
+                className="btn btn-ghost"
+                onClick={prevPeriod}
+                style={{ fontSize: '1.1rem', padding: '0.4rem 0.9rem', fontWeight: 700 }}
+              >←</button>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', letterSpacing: '0.06em', color: 'var(--text-primary)', userSelect: 'none' }}>
                 {MONTHS[current.month]} {current.year}
               </div>
-              <button className="btn btn-ghost btn-sm" onClick={nextPeriod}>→</button>
+              <button
+                className="btn btn-ghost"
+                onClick={nextPeriod}
+                style={{ fontSize: '1.1rem', padding: '0.4rem 0.9rem', fontWeight: 700 }}
+              >→</button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)' }}>
+            {/* Day headers */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)', background: 'var(--bg-overlay)' }}>
               {DAYS.map(d => (
-                <div key={d} style={{ padding: '0.5rem', textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{d}</div>
+                <div key={d} style={{
+                  padding: '0.6rem 0.4rem', textAlign: 'center',
+                  fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: 700,
+                  letterSpacing: '0.1em', textTransform: 'uppercase',
+                  color: 'var(--text-secondary)',
+                }}>{d}</div>
               ))}
             </div>
 
+            {/* Day grid */}
             {(() => {
               const firstDay    = new Date(current.year, current.month, 1).getDay();
               const daysInMonth = new Date(current.year, current.month + 1, 0).getDate();
               return (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
                   {Array.from({ length: firstDay }).map((_, i) => (
-                    <div key={`e${i}`} style={{ minHeight: 96, borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)', background: 'rgba(0,0,0,0.12)' }} />
+                    <div key={`e${i}`} style={{
+                      minHeight: 130,
+                      borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
+                      background: 'rgba(0,0,0,0.25)',
+                    }} />
                   ))}
                   {Array.from({ length: daysInMonth }).map((_, i) => {
-                    const day     = i + 1;
-                    const dateStr = `${current.year}-${String(current.month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                    const day      = i + 1;
+                    const dateStr  = `${current.year}-${String(current.month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
                     const dayShows = showsByDate[dateStr] || [];
                     const isToday    = dateStr === todayStr;
                     const isSelected = dateStr === selected;
@@ -287,39 +307,49 @@ export default function AgentCalendar() {
                           }
                         }}
                         style={{
-                          minHeight: 96, padding: '0.35rem 0.3rem',
+                          minHeight: 130,
+                          padding: '0.45rem 0.4rem',
                           borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
-                          background: isSelected ? 'rgba(196,154,60,0.1)' : 'transparent',
+                          background: isSelected ? 'rgba(224,120,32,0.18)' : 'transparent',
                           cursor: 'pointer',
                           transition: 'background 0.12s',
                           display: 'flex', flexDirection: 'column', alignItems: 'stretch',
                           overflow: 'hidden', minWidth: 0,
                         }}
-                        onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)'; }}
+                        onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'rgba(224,120,32,0.06)'; }}
                         onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
                       >
+                        {/* Date number */}
                         <div style={{
-                          fontFamily: 'var(--font-body)', fontSize: '0.84rem', fontWeight: isToday ? 700 : 600,
-                          color: isToday ? 'var(--accent)' : 'var(--text-secondary)',
-                          width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          borderRadius: '50%', background: isToday ? 'var(--accent-glow)' : 'transparent',
-                          marginBottom: '0.2rem', flexShrink: 0,
+                          fontFamily: 'var(--font-body)', fontSize: '1rem', fontWeight: isToday ? 900 : 600,
+                          color: isToday ? '#000' : isSelected ? 'var(--accent)' : 'var(--text-secondary)',
+                          width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          borderRadius: '50%',
+                          background: isToday ? 'var(--accent)' : 'transparent',
+                          marginBottom: '0.3rem', flexShrink: 0,
                         }}>{day}</div>
+
+                        {/* Event tiles */}
                         {dayShows.slice(0, 3).map((s: any) => (
                           <div key={s.id} style={{
-                            fontSize: '0.72rem', padding: '0.18rem 0.3rem',
-                            borderRadius: 3, marginBottom: '0.15rem',
+                            fontSize: '0.78rem', padding: '0.3rem 0.45rem',
+                            borderRadius: 5, marginBottom: '0.2rem',
                             background: tileColor(s.status),
                             color: '#fff', fontWeight: 700,
                             fontFamily: 'var(--font-body)',
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                             width: '100%', minWidth: 0, boxSizing: 'border-box',
+                            boxShadow: `0 2px 4px rgba(0,0,0,0.35)`,
+                            letterSpacing: '0.01em',
                           }}>
                             {s.venue?.name || actName(s.act_id) || 'TBD'}
                           </div>
                         ))}
                         {dayShows.length > 3 && (
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', paddingLeft: '0.2rem' }}>
+                          <div style={{
+                            fontSize: '0.74rem', color: 'var(--accent)', fontFamily: 'var(--font-body)',
+                            fontWeight: 700, paddingLeft: '0.25rem',
+                          }}>
                             +{dayShows.length - 3} more
                           </div>
                         )}
@@ -342,27 +372,36 @@ export default function AgentCalendar() {
                   <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>✕</button>
                 </div>
                 {selectedShows.map((s: any) => (
-                  <Link key={s.id} href={`/bookings/${s.id}`} style={{ display: 'block', textDecoration: 'none', padding: '0.65rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', marginBottom: '0.5rem', borderLeft: `3px solid ${tileColor(s.status)}` }}>
-                    <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{s.venue?.name || 'TBD'}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.3rem' }}>
+                  <Link key={s.id} href={`/bookings/${s.id}`} style={{
+                    display: 'block', textDecoration: 'none',
+                    padding: '0.75rem 0.85rem',
+                    background: 'var(--bg-overlay)',
+                    borderRadius: 'var(--radius-sm)',
+                    marginBottom: '0.5rem',
+                    borderLeft: `4px solid ${tileColor(s.status)}`,
+                    transition: 'background 0.12s',
+                  }}>
+                    <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.92rem' }}>{s.venue?.name || 'TBD'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.35rem' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-body)' }}>
                         {s.venue?.city ? `${s.venue.city}, ${s.venue.state}` : ''}
                         {s.set_time ? ` · ${s.set_time}` : ''}
                       </span>
                       <span style={{
                         background: tileColor(s.status), color: '#fff',
-                        borderRadius: 3, padding: '0.1rem 0.4rem',
+                        borderRadius: 4, padding: '0.12rem 0.45rem',
                         fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                        boxShadow: `0 1px 4px ${tileColor(s.status)}66`,
                       }}>
                         {BOOKING_STATUS_LABELS[s.status as keyof typeof BOOKING_STATUS_LABELS] || s.status}
                       </span>
                     </div>
-                    {s.fee && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, color: 'var(--accent)', marginTop: '0.2rem' }}>${Number(s.fee).toLocaleString()}</div>}
+                    {s.fee && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent)', marginTop: '0.25rem' }}>${Number(s.fee).toLocaleString()}</div>}
                   </Link>
                 ))}
                 <button
                   className="btn btn-ghost btn-sm"
-                  style={{ marginTop: '0.25rem', fontSize: '0.78rem', color: 'var(--accent)' }}
+                  style={{ marginTop: '0.25rem', fontSize: '0.78rem', color: 'var(--accent)', fontWeight: 700 }}
                   onClick={() => openAddModal(selected)}
                 >+ Add show on this date</button>
               </div>
@@ -373,20 +412,27 @@ export default function AgentCalendar() {
               {loading && <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>Loading...</div>}
               {!loading && upcoming.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>No upcoming shows.</div>}
               {upcoming.map((s: any) => (
-                <Link key={s.id} href={`/bookings/${s.id}`} style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', padding: '0.45rem 0', borderBottom: '1px solid var(--border)', textDecoration: 'none' }}>
-                  <div style={{ minWidth: 32, textAlign: 'center', flexShrink: 0 }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', color: tileColor(s.status), lineHeight: 1 }}>
+                <Link key={s.id} href={`/bookings/${s.id}`} style={{
+                  display: 'flex', gap: '0.75rem', alignItems: 'center',
+                  padding: '0.6rem 0', borderBottom: '1px solid var(--border)',
+                  textDecoration: 'none',
+                  borderLeft: `3px solid ${tileColor(s.status)}`,
+                  paddingLeft: '0.65rem', marginLeft: '-0.75rem',
+                  transition: 'background 0.1s',
+                }}>
+                  <div style={{ minWidth: 36, textAlign: 'center', flexShrink: 0 }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', color: tileColor(s.status), lineHeight: 1, fontWeight: 700 }}>
                       {new Date(s.show_date + 'T12:00:00').getDate()}
                     </div>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       {new Date(s.show_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })}
                     </div>
                   </div>
                   <div style={{ flex: 1, overflow: 'hidden' }}>
-                    <div style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.venue?.name || 'TBD'}</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-body)' }}>{s.venue?.city || ''}</div>
+                    <div style={{ color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.venue?.name || 'TBD'}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-body)', marginTop: '0.1rem' }}>{s.venue?.city || ''}</div>
                   </div>
-                  <div style={{ width: 8, height: 8, borderRadius: 2, background: tileColor(s.status), flexShrink: 0 }} />
+                  <div style={{ width: 10, height: 10, borderRadius: 3, background: tileColor(s.status), flexShrink: 0, boxShadow: `0 0 6px ${tileColor(s.status)}88` }} />
                 </Link>
               ))}
             </div>
@@ -400,25 +446,32 @@ export default function AgentCalendar() {
         const weekLabel = `${weekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${weekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
         return (
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
-              <button className="btn btn-ghost btn-sm" onClick={prevPeriod}>←</button>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', letterSpacing: '0.06em', color: 'var(--text-primary)' }}>{weekLabel}</div>
-              <button className="btn btn-ghost btn-sm" onClick={nextPeriod}>→</button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.1rem 1.5rem', borderBottom: '1px solid var(--border)' }}>
+              <button className="btn btn-ghost" onClick={prevPeriod} style={{ fontSize: '1.1rem', padding: '0.4rem 0.9rem', fontWeight: 700 }}>←</button>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.35rem', letterSpacing: '0.06em', color: 'var(--text-primary)', userSelect: 'none' }}>{weekLabel}</div>
+              <button className="btn btn-ghost" onClick={nextPeriod} style={{ fontSize: '1.1rem', padding: '0.4rem 0.9rem', fontWeight: 700 }}>→</button>
             </div>
 
             {/* Day headers */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)', background: 'var(--bg-overlay)' }}>
               {weekDays.map((d, i) => {
                 const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                 const isToday = dateStr === todayStr;
                 return (
-                  <div key={i} style={{ padding: '0.75rem 0.4rem', borderRight: i < 6 ? '1px solid var(--border)' : 'none', textAlign: 'center' }}>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
+                  <div key={i} style={{
+                    padding: '0.85rem 0.4rem',
+                    borderRight: i < 6 ? '1px solid var(--border)' : 'none',
+                    textAlign: 'center',
+                  }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>
                       {DAYS[d.getDay()]}
                     </div>
                     <div style={{
-                      fontFamily: 'var(--font-display)', fontSize: '1.5rem', lineHeight: 1.2,
-                      color: isToday ? 'var(--accent)' : 'var(--text-primary)', marginTop: '0.15rem',
+                      fontFamily: 'var(--font-display)', fontSize: '1.6rem', lineHeight: 1.2, fontWeight: 700,
+                      color: isToday ? '#000' : 'var(--text-primary)', marginTop: '0.2rem',
+                      width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      borderRadius: '50%', background: isToday ? 'var(--accent)' : 'transparent',
+                      margin: '0.2rem auto 0',
                     }}>
                       {d.getDate()}
                     </div>
@@ -428,7 +481,7 @@ export default function AgentCalendar() {
             </div>
 
             {/* Day content */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', minHeight: 180 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', minHeight: 200 }}>
               {weekDays.map((d, i) => {
                 const dateStr  = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                 const dayShows = showsByDate[dateStr] || [];
@@ -438,32 +491,37 @@ export default function AgentCalendar() {
                     onClick={() => { if (!dayShows.length) openAddModal(dateStr); }}
                     style={{
                       borderRight: i < 6 ? '1px solid var(--border)' : 'none',
-                      padding: '0.4rem 0.3rem', cursor: dayShows.length ? 'default' : 'pointer',
-                      minHeight: 140, display: 'flex', flexDirection: 'column',
+                      padding: '0.5rem 0.4rem', cursor: dayShows.length ? 'default' : 'pointer',
+                      minHeight: 160, display: 'flex', flexDirection: 'column',
                       overflow: 'hidden', minWidth: 0,
+                      transition: 'background 0.12s',
                     }}
+                    onMouseEnter={e => { if (!dayShows.length) (e.currentTarget as HTMLDivElement).style.background = 'rgba(224,120,32,0.05)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
                   >
                     {dayShows.map((s: any) => (
-                      <Link key={s.id} href={`/bookings/${s.id}`} style={{ display: 'block', textDecoration: 'none', marginBottom: '0.25rem', minWidth: 0 }}
+                      <Link key={s.id} href={`/bookings/${s.id}`}
+                        style={{ display: 'block', textDecoration: 'none', marginBottom: '0.3rem', minWidth: 0 }}
                         onClick={e => e.stopPropagation()}>
                         <div style={{
                           background: tileColor(s.status), color: '#fff',
-                          fontWeight: 700, fontSize: '0.72rem',
-                          padding: '0.25rem 0.4rem', borderRadius: 3,
+                          fontWeight: 700, fontSize: '0.78rem',
+                          padding: '0.3rem 0.45rem', borderRadius: 5,
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           width: '100%', boxSizing: 'border-box',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.35)',
                         }}>
                           {s.venue?.name || 'TBD'}
                         </div>
                         {s.set_time && (
-                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.1rem', paddingLeft: '0.1rem' }}>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem', paddingLeft: '0.15rem' }}>
                             {s.set_time}
                           </div>
                         )}
                       </Link>
                     ))}
                     {dayShows.length === 0 && (
-                      <div style={{ color: 'rgba(255,255,255,0.08)', fontSize: '1.2rem', textAlign: 'center', marginTop: '0.75rem', lineHeight: 1, userSelect: 'none' }}>+</div>
+                      <div style={{ color: 'rgba(224,120,32,0.2)', fontSize: '1.4rem', textAlign: 'center', marginTop: '1rem', lineHeight: 1, userSelect: 'none', fontWeight: 700 }}>+</div>
                     )}
                   </div>
                 );
@@ -481,7 +539,7 @@ export default function AgentCalendar() {
               <h3 className="modal-title">ADD SHOW</h3>
               <button className="btn btn-ghost btn-sm" onClick={() => setAddDate(null)}>✕</button>
             </div>
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '1.25rem', fontWeight: 700 }}>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.92rem', color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '1.25rem', fontWeight: 700 }}>
               {new Date(addDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
             </div>
             <form onSubmit={saveShow} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
