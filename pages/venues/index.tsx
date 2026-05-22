@@ -64,6 +64,10 @@ export default function VenuesPage() {
   // Genre filter
   const [filterGenre, setFilterGenre] = useState('');
 
+  // View mode: table vs by-state drill-down
+  const [venueView, setVenueView] = useState<'table' | 'state'>('state');
+  const [expandedStates, setExpandedStates] = useState<Set<string>>(new Set());
+
   // Email enrichment
   const [enrichStatus, setEnrichStatus] = useState<Record<string, string>>({});
   const [bulkEnriching, setBulkEnriching] = useState(false);
@@ -480,7 +484,24 @@ export default function VenuesPage() {
           <h1 className="page-title">Venues</h1>
           <div className="page-sub">{venues.length} in database</div>
         </div>
-        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* View toggle */}
+          <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+            {(['state', 'table'] as const).map(v => (
+              <button
+                key={v}
+                onClick={() => setVenueView(v)}
+                style={{
+                  fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700,
+                  letterSpacing: '0.08em', textTransform: 'uppercase',
+                  padding: '0.3rem 0.75rem', border: 'none', cursor: 'pointer',
+                  background: venueView === v ? 'var(--accent)' : 'transparent',
+                  color: venueView === v ? '#000' : 'var(--text-muted)',
+                  transition: 'background 0.15s',
+                }}
+              >{v === 'state' ? 'By State' : 'Table'}</button>
+            ))}
+          </div>
           {venues.filter(v => !v.email && v.website).length > 0 && (
             <button
               className="btn btn-secondary"
@@ -630,6 +651,143 @@ export default function VenuesPage() {
         )}
       </div>
 
+      {/* ── STATE DRILL-DOWN VIEW ── */}
+      {venueView === 'state' && (() => {
+        const byState: Record<string, Venue[]> = {};
+        filtered.forEach(v => {
+          const s = v.state || '—';
+          byState[s] = byState[s] || [];
+          byState[s].push(v);
+        });
+        const sortedStates = Object.keys(byState).sort();
+
+        if (filtered.length === 0) return (
+          <div className="card" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
+            {venues.length === 0 ? 'No venues yet — add your first.' : 'No matches.'}
+          </div>
+        );
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {sortedStates.map(state => {
+              const stateVenues = byState[state];
+              const isOpen = expandedStates.has(state);
+              const emailCount = stateVenues.filter(v => v.email).length;
+              const toggle = () => setExpandedStates(prev => {
+                const next = new Set(prev);
+                if (next.has(state)) next.delete(state); else next.add(state);
+                return next;
+              });
+              return (
+                <div key={state} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                  {/* State header row */}
+                  <div
+                    onClick={toggle}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '0.85rem 1.25rem', cursor: 'pointer',
+                      borderBottom: isOpen ? '1px solid var(--border)' : 'none',
+                      background: isOpen ? 'var(--bg-overlay)' : 'transparent',
+                      transition: 'background 0.15s',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', letterSpacing: '0.08em', color: 'var(--accent)' }}>
+                        {state}
+                      </span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                        {stateVenues.length} venue{stateVenues.length !== 1 ? 's' : ''}
+                      </span>
+                      {emailCount > 0 && (
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>
+                          ✉ {emailCount} with email
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.9rem', color: 'var(--text-muted)', transition: 'transform 0.15s', display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none' }}>›</span>
+                  </div>
+
+                  {/* Venue list */}
+                  {isOpen && (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {stateVenues.map((v, idx) => (
+                        <div
+                          key={v.id}
+                          style={{
+                            display: 'grid', gridTemplateColumns: '1fr auto',
+                            gap: '0.75rem', alignItems: 'center',
+                            padding: '0.7rem 1.25rem',
+                            borderBottom: idx < stateVenues.length - 1 ? '1px solid var(--border)' : 'none',
+                            cursor: 'pointer',
+                            transition: 'background 0.1s',
+                          }}
+                          onClick={() => router.push(`/venues/${v.id}`)}
+                          onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-overlay)'}
+                          onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
+                        >
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{v.name}</span>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)' }}>{v.city}</span>
+                              {v.venue_type && (
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-muted)', background: 'var(--bg-surface)', padding: '0.1rem 0.35rem', borderRadius: 2 }}>
+                                  {v.venue_type.replace(/_/g, ' ')}
+                                </span>
+                              )}
+                              {v.capacity && (
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                  cap {v.capacity.toLocaleString()}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ marginTop: '0.2rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                              {v.email ? (
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--accent)' }}>✉ {v.email}</span>
+                              ) : enrichStatus[v.id]?.startsWith('found:') ? (
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#34d399' }}>✓ {enrichStatus[v.id].slice(6)}</span>
+                              ) : enrichStatus[v.id] === 'scraping' ? (
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>✉ Scanning…</span>
+                              ) : null}
+                              {v.phone && (
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)' }}>{v.phone}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.4rem' }} onClick={e => e.stopPropagation()}>
+                            {v.website && !v.email && (
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: '#60a5fa', whiteSpace: 'nowrap' }}
+                                disabled={enrichStatus[v.id] === 'scraping'}
+                                onClick={() => enrichVenueEmail(v)}
+                              >
+                                {enrichStatus[v.id] === 'scraping' ? '…' : '✉'}
+                              </button>
+                            )}
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent)', whiteSpace: 'nowrap' }}
+                              onClick={() => openAddToTour(v)}
+                            >+ Tour</button>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#f87171', whiteSpace: 'nowrap' }}
+                              onClick={() => setDeleteTarget(v)}
+                            >✕</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {/* ── TABLE VIEW ── */}
+      {venueView === 'table' && (
       <div className="card">
         <div className="table-wrap">
           <table>
@@ -708,6 +866,7 @@ export default function VenuesPage() {
           )}
         </div>
       </div>
+      )}
 
 
       {/* Add Venue Modal */}

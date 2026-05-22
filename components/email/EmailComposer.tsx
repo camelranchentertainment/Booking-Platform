@@ -35,7 +35,7 @@ interface Props {
   initialSubject?: string;
   initialBody?: string;
   draftId?: string;
-  onClose: () => void;
+  onClose: (didSend?: boolean) => void;
 }
 
 export default function EmailComposer({ bookingId, tourVenueId, actId, venueId, contactId, contactEmail, defaultCategory, agentName, initialSubject, initialBody, draftId, onClose }: Props) {
@@ -224,7 +224,7 @@ export default function EmailComposer({ bookingId, tourVenueId, actId, venueId, 
               <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>✓</div>
               <div style={{ color: '#1a1a2e', fontFamily: 'var(--font-display)', fontSize: '1.1rem', marginBottom: '0.5rem' }}>Email Sent</div>
               <div style={{ color: '#888', fontFamily: 'var(--font-body)', fontSize: '0.84rem', marginBottom: '1.5rem' }}>to {to}</div>
-              <button className="btn btn-primary" onClick={onClose} style={{ background: '#1a1a2e', borderColor: '#1a1a2e', color: '#f5f3ee' }}>Done</button>
+              <button className="btn btn-primary" onClick={() => onClose(true)} style={{ background: '#1a1a2e', borderColor: '#1a1a2e', color: '#f5f3ee' }}>Done</button>
             </div>
           )}
 

@@ -7,15 +7,6 @@ import { STATUS_LABELS } from '../../lib/statusSync';
 import EmailComposer from '../../components/email/EmailComposer';
 import Link from 'next/link';
 
-type Platform = 'instagram' | 'facebook' | 'youtube' | 'tiktok' | 'discord';
-
-const PLATFORM_INFO: Record<Platform, { label: string; color: string; icon: string }> = {
-  instagram: { label: 'Instagram', color: '#e1306c', icon: '📸' },
-  facebook:  { label: 'Facebook',  color: '#1877f2', icon: '👥' },
-  youtube:   { label: 'YouTube',   color: '#ff0000', icon: '▶' },
-  tiktok:    { label: 'TikTok',   color: '#69c9d0', icon: '♪' },
-  discord:   { label: 'Discord',   color: '#5865f2', icon: '◈' },
-};
 
 const STATUS_COLOR: Record<OutreachStatus, string> = {
   target:    'var(--text-muted)',
@@ -83,12 +74,6 @@ export default function TourDetail() {
   const [discoverErr, setDiscoverErr]         = useState('');
   const [discoverAdding, setDiscoverAdding]   = useState<string | null>(null);
 
-  // Confirm show modal
-  const [confirmTarget, setConfirmTarget]     = useState<any>(null);
-  const [confirmForm, setConfirmForm]         = useState({ show_date: '', agreed_amount: '', deal_type: '' });
-  const [confirmPlatforms, setConfirmPlatforms] = useState<Platform[]>(['instagram', 'facebook']);
-  const [confirming, setConfirming]           = useState(false);
-  const [confirmError, setConfirmError]       = useState('');
   const [confirmSuccess, setConfirmSuccess]   = useState('');
 
   // Pool filter
@@ -414,40 +399,6 @@ export default function TourDetail() {
     setPool(p => p.filter(v => v.id !== tvId));
   };
 
-  const confirmShow = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!confirmTarget) return;
-    setConfirming(true);
-    setConfirmError('');
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/tours/venue-confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({
-          tour_venue_id: confirmTarget.id,
-          show_date:     confirmForm.show_date,
-          deal_type:     confirmForm.deal_type || null,
-          agreed_amount: confirmForm.agreed_amount || null,
-          platforms:     confirmPlatforms,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to confirm show');
-      setPool(p => p.map(v => v.id === confirmTarget.id ? { ...v, status: 'confirmed' } : v));
-      const venueName = confirmTarget.venue?.name || 'Show';
-      setConfirmTarget(null);
-      setConfirmForm({ show_date: '', agreed_amount: '', deal_type: '' });
-      setConfirmPlatforms(['instagram', 'facebook']);
-      setConfirmSuccess(`${venueName} confirmed and added to bookings.`);
-      setTimeout(() => setConfirmSuccess(''), 5000);
-      loadAll();
-    } catch (err: any) {
-      setConfirmError(err.message);
-    } finally {
-      setConfirming(false);
-    }
-  };
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f: any) => ({ ...f, [k]: e.target.value }));
@@ -786,19 +737,15 @@ export default function TourDetail() {
                   ))}
                 </select>
 
-                {/* Confirm button — shown when in negotiate or any active stage */}
-                {tv.status !== 'confirmed' && tv.status !== 'declined' && (
-                  <button
+                {/* Confirm: only show when status is 'confirmed' or 'negotiate' — use booking directly */}
+                {tv.status === 'negotiate' && (
+                  <Link
+                    href={`/bookings/new?venue=${tv.venue?.id || ''}&tour=${tour.id}&act=${tour.act_id}`}
                     className="btn btn-primary btn-sm"
-                    onClick={() => {
-                      setConfirmTarget(tv);
-                      setConfirmForm({ show_date: '', agreed_amount: '', deal_type: '' });
-                      setConfirmPlatforms(['instagram', 'facebook']);
-                      setConfirmError('');
-                    }}
+                    style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}
                   >
-                    Confirm Show
-                  </button>
+                    + Book Show
+                  </Link>
                 )}
 
                 {/* Remove */}
@@ -1087,97 +1034,6 @@ export default function TourDetail() {
         </div>
       )}
 
-      {/* Confirm Show Modal */}
-      {confirmTarget && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-          <form onSubmit={confirmShow}>
-            <div className="card" style={{ width: '100%', maxWidth: 440 }}>
-              <div className="card-header" style={{ marginBottom: '0.75rem' }}>
-                <span className="card-title">CONFIRM SHOW</span>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirmTarget(null)}>✕</button>
-              </div>
-
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-                {confirmTarget.venue?.name} · {confirmTarget.venue?.city}, {confirmTarget.venue?.state}
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <div className="field">
-                  <label className="field-label">Show Date <span style={{ color: '#f87171' }}>*</span></label>
-                  <input
-                    className="input"
-                    type="date"
-                    required
-                    value={confirmForm.show_date}
-                    onChange={e => setConfirmForm(f => ({ ...f, show_date: e.target.value }))}
-                  />
-                </div>
-                <div className="field">
-                  <label className="field-label">Deal Type (optional)</label>
-                  <select
-                    className="select"
-                    value={confirmForm.deal_type}
-                    onChange={e => setConfirmForm(f => ({ ...f, deal_type: e.target.value }))}
-                  >
-                    <option value="">Select deal type...</option>
-                    <option value="guarantee">Guarantee</option>
-                    <option value="door_split">Door Split</option>
-                    <option value="percentage">Percentage</option>
-                    <option value="flat_fee">Flat Fee</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="field">
-                  <label className="field-label">Agreed Amount (optional)</label>
-                  <input
-                    className="input"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="e.g. 1500"
-                    value={confirmForm.agreed_amount}
-                    onChange={e => setConfirmForm(f => ({ ...f, agreed_amount: e.target.value }))}
-                  />
-                </div>
-                <div className="field">
-                  <label className="field-label">Draft Social Posts For</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
-                    {(Object.entries(PLATFORM_INFO) as [Platform, typeof PLATFORM_INFO[Platform]][]).map(([p, info]) => (
-                      <label key={p} style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer', fontSize: '0.85rem' }}>
-                        <input
-                          type="checkbox"
-                          checked={confirmPlatforms.includes(p)}
-                          onChange={e => setConfirmPlatforms(prev =>
-                            e.target.checked ? [...prev, p] : prev.filter(x => x !== p)
-                          )}
-                          style={{ accentColor: info.color, width: '14px', height: '14px' }}
-                        />
-                        <span style={{ color: confirmPlatforms.includes(p) ? info.color : 'var(--text-secondary)', fontWeight: confirmPlatforms.includes(p) ? 600 : 400 }}>
-                          {info.icon} {info.label}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.35rem', display: 'block' }}>
-                    AI drafts one algorithm-optimized post per platform for your approval
-                  </span>
-                </div>
-              </div>
-
-              {confirmError && (
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: '#f87171', marginTop: '0.75rem' }}>{confirmError}</div>
-              )}
-
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setConfirmTarget(null)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={confirming}>
-                  {confirming ? 'Confirming...' : 'Confirm & Create Booking'}
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      )}
       {/* Expense Add/Edit Modal */}
       {expModal.open && (
         <div
@@ -1269,7 +1125,14 @@ export default function TourDetail() {
           venueId={composerTourVenue.venue?.id}
           contactEmail={composerTourVenue.venue?.email || ''}
           defaultCategory={tvEmailCategory(composerTourVenue.status)}
-          onClose={() => { setComposerTourVenue(null); loadPool(); }}
+          onClose={async (didSend?: boolean) => {
+            // Auto-advance status: target → pitched after sending initial email
+            if (didSend && composerTourVenue.status === 'target') {
+              await updateStatus(composerTourVenue.id, 'pitched');
+            }
+            setComposerTourVenue(null);
+            loadPool();
+          }}
         />
       )}
 
