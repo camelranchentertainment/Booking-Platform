@@ -161,6 +161,7 @@ export default function VenuesPage() {
       place_id:       form.place_id       || null,
       google_maps_url: form.google_maps_url || null,
       music_genres:   genreArr?.length ? genreArr : null,
+      created_by:     user!.id,
     });
     setForm(BLANK);
     setShowNew(false);
@@ -441,6 +442,7 @@ export default function VenuesPage() {
       google_maps_url: p.google_maps_url,
       website:         website           || null,
       phone:           phone             || null,
+      created_by:      user!.id,
     }).select().single();
 
     setProspects(prev => prev.map(r => r.place_id === p.place_id ? { ...r, already_added: true } : r));
