@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { BOOKING_STATUS_LABELS, OutreachStatus } from '../../lib/types';
 import { STATUS_LABELS } from '../../lib/statusSync';
 import EmailComposer from '../../components/email/EmailComposer';
+import VenueDrawer from '../../components/VenueDrawer';
 import Link from 'next/link';
 
 
@@ -18,23 +19,6 @@ const STATUS_COLOR: Record<OutreachStatus, string> = {
 
 const FILTER_TABS: (OutreachStatus | 'all')[] = ['all', 'target', 'pitched', 'negotiate', 'confirmed', 'declined'];
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-      <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.78rem', minWidth: 96, fontFamily: 'var(--font-body)', paddingTop: '0.1rem', textTransform: 'uppercase', letterSpacing: '0.07em', flexShrink: 0 }}>{label}</span>
-      <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.84rem', flex: 1 }}>{value}</span>
-    </div>
-  );
-}
-
-function VField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-      <label style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.45)' }}>{label}</label>
-      {children}
-    </div>
-  );
-}
 
 export default function TourDetail() {
   const router = useRouter();
@@ -938,101 +922,19 @@ export default function TourDetail() {
         </div>
       )}
 
-      {/* Venue Modal */}
-      {venuePopout && (
-        <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
-          onClick={() => { setVenuePopout(null); setEditingVenue(false); }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              width: '100%', maxWidth: 500,
-              maxHeight: '90vh', overflowY: 'auto',
-              background: '#2c2e45',
-              border: '1px solid rgba(255,255,255,0.14)',
-              borderRadius: 'var(--radius)',
-              padding: '1.75rem',
-              display: 'flex', flexDirection: 'column', gap: '1rem',
-              boxShadow: '0 24px 64px rgba(0,0,0,0.55)',
-            }}
-          >
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', letterSpacing: '0.04em', color: '#fff' }}>
-                {venuePopout.city}{venuePopout.state ? `, ${venuePopout.state}` : ''}
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                {!editingVenue && !venueLoading && (
-                  <button className="btn btn-secondary btn-sm" onClick={() => setEditingVenue(true)}>Edit</button>
-                )}
-                <button className="btn btn-ghost btn-sm" onClick={() => { setVenuePopout(null); setEditingVenue(false); }} style={{ color: 'rgba(255,255,255,0.5)' }}>✕</button>
-              </div>
-            </div>
-
-            {venueLoading && (
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'rgba(255,255,255,0.4)' }}>Loading…</div>
-            )}
-
-            {!venueLoading && (editingVenue ? (
-              /* ── Edit mode ── */
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <VField label="Venue Name">
-                  <input className="input" value={venueForm.name} onChange={e => setVenueForm((f: any) => ({ ...f, name: e.target.value }))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff' }} />
-                </VField>
-                <VField label="Address">
-                  <input className="input" value={venueForm.address} onChange={e => setVenueForm((f: any) => ({ ...f, address: e.target.value }))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff' }} />
-                </VField>
-                <VField label="Phone">
-                  <input className="input" value={venueForm.phone} onChange={e => setVenueForm((f: any) => ({ ...f, phone: e.target.value }))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff' }} />
-                </VField>
-                <VField label="Contact Name">
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input className="input" placeholder="First" value={venueForm.contact_first} onChange={e => setVenueForm((f: any) => ({ ...f, contact_first: e.target.value }))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', flex: 1 }} />
-                    <input className="input" placeholder="Last" value={venueForm.contact_last} onChange={e => setVenueForm((f: any) => ({ ...f, contact_last: e.target.value }))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', flex: 1 }} />
-                  </div>
-                </VField>
-                <VField label="Contact Email">
-                  <input className="input" type="email" value={venueForm.contact_email} onChange={e => setVenueForm((f: any) => ({ ...f, contact_email: e.target.value }))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff' }} />
-                </VField>
-                <VField label="Previous Pay">
-                  <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.84rem', paddingTop: '0.3rem', fontFamily: 'var(--font-body)' }}>
-                    {previousPay != null ? `$${Number(previousPay).toLocaleString()} (last confirmed booking)` : 'No confirmed bookings on record'}
-                  </div>
-                </VField>
-                <VField label="Notes">
-                  <textarea className="textarea" rows={3} value={venueForm.notes} onChange={e => setVenueForm((f: any) => ({ ...f, notes: e.target.value }))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', resize: 'vertical' }} />
-                </VField>
-                <div style={{ display: 'flex', gap: '0.6rem', paddingTop: '0.25rem' }}>
-                  <button className="btn btn-secondary" onClick={() => setEditingVenue(false)}>Cancel</button>
-                  <button className="btn btn-primary" onClick={saveVenueEdits} disabled={savingVenue}>{savingVenue ? 'Saving…' : 'Save'}</button>
-                </div>
-              </div>
-            ) : (
-              /* ── View mode ── */
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                <Row label="Venue Name" value={venueForm.name || venuePopout.name} />
-                <Row label="Address" value={venueForm.address || '—'} />
-                <Row label="Phone" value={venueForm.phone
-                  ? <a href={`tel:${venueForm.phone}`} style={{ color: 'var(--accent)' }}>{venueForm.phone}</a>
-                  : <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>} />
-                <Row label="Contact" value={
-                  (venueForm.contact_first || venueForm.contact_last)
-                    ? `${venueForm.contact_first} ${venueForm.contact_last}`.trim()
-                    : <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>
-                } />
-                <Row label="Contact Email" value={venueForm.contact_email
-                  ? <a href={`mailto:${venueForm.contact_first} ${venueForm.contact_last} <${venueForm.contact_email}>`} style={{ color: 'var(--accent)' }}>{venueForm.contact_email}</a>
-                  : <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>} />
-                <Row label="Previous Pay" value={previousPay != null
-                  ? <span style={{ color: '#34d399', fontWeight: 600 }}>${Number(previousPay).toLocaleString()}</span>
-                  : <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>} />
-                <Row label="Notes" value={venueForm.notes || <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Venue Drawer */}
+      <VenueDrawer
+        venue={venuePopout}
+        venueLoading={venueLoading}
+        editingVenue={editingVenue}
+        setEditingVenue={setEditingVenue}
+        venueForm={venueForm}
+        setVenueForm={setVenueForm}
+        previousPay={previousPay}
+        savingVenue={savingVenue}
+        onSave={saveVenueEdits}
+        onClose={() => { setVenuePopout(null); setEditingVenue(false); }}
+      />
 
       {/* Expense Add/Edit Modal */}
       {expModal.open && (

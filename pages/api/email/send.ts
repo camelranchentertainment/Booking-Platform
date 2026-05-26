@@ -94,7 +94,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       if (newTvStatus) {
-        await updateVenueStatus(service, tourVenueId, newTvStatus, userId, tvExtra);
+        try {
+          await updateVenueStatus(service, tourVenueId, newTvStatus, userId, tvExtra);
+          console.log('[email/send] tour_venues status updated', { tourVenueId, newTvStatus, category });
+        } catch (e: any) {
+          console.error('[email/send] tour_venues status update FAILED', { tourVenueId, newTvStatus, category, error: e?.message });
+        }
       } else {
         // Still track contact date even if status doesn't change
         await service.from('tour_venues')
