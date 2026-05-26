@@ -74,7 +74,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (error) return res.status(500).json({ error: error.message });
 
     // Keep booking pipeline in sync whenever outreach status changes
-    if (status !== undefined) await syncBooking(service, id as string, user.id);
+    if (status !== undefined) {
+      try {
+        await syncBooking(service, id as string, user.id);
+      } catch (e: any) {
+        console.error('[venues PATCH] syncBooking failed', { id, status, error: e?.message });
+      }
+    }
 
     return res.status(200).json(data);
   }

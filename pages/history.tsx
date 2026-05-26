@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { getActId, getBandBookings } from '../lib/bookingQueries';
-import Link from 'next/link';
+import VenueDrawer from '../components/VenueDrawer';
 
 const DEAL_LABELS: Record<string, string> = {
   guarantee:  'Guarantee',
@@ -50,6 +50,7 @@ export default function HistoryPage() {
   const [filterTo, setFilterTo]         = useState('');
   const [sortBy, setSortBy]         = useState<'date' | 'amount'>('date');
   const [expanded, setExpanded]     = useState<string | null>(null);
+  const [drawerVenueId, setDrawerVenueId] = useState<string | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -188,9 +189,12 @@ export default function HistoryPage() {
                         {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                       </td>
                       <td>
-                        <Link href={`/venues/${b.venue?.id}`} style={{ color: 'var(--text-primary)', fontWeight: 500, textDecoration: 'none' }} onClick={e => e.stopPropagation()}>
+                        <button
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, textAlign: 'left' }}
+                          onClick={e => { e.stopPropagation(); if (b.venue?.id) setDrawerVenueId(b.venue.id); }}
+                        >
                           {b.venue?.name || '—'}
-                        </Link>
+                        </button>
                         {b.venue?.city && <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{b.venue.city}, {b.venue.state}</div>}
                       </td>
                       <td style={{ color: 'var(--accent)', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{b.act?.act_name || '—'}</td>
@@ -231,6 +235,11 @@ export default function HistoryPage() {
           </div>
         </div>
       )}
+      <VenueDrawer
+        venueId={drawerVenueId}
+        isOpen={!!drawerVenueId}
+        onClose={() => setDrawerVenueId(null)}
+      />
     </AppShell>
   );
 }

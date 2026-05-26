@@ -7,6 +7,7 @@ import { useLookup } from '../../lib/hooks/useLookup';
 import { getActId } from '../../lib/bookingQueries';
 import Link from 'next/link';
 import EmailComposer from '../../components/email/EmailComposer';
+import VenueDrawer from '../../components/VenueDrawer';
 
 type EmailType = 'cold_pitch' | 'follow_up' | 'reply';
 type Draft = { subject: string; body: string; preview: string };
@@ -146,6 +147,7 @@ export default function EmailPage() {
   const [inboxError, setInboxError]       = useState('');
   const [inboxLoaded, setInboxLoaded]     = useState(false);
   const [selectedInboxMsg, setSelectedInboxMsg] = useState<InboxMessage | null>(null);
+  const [drawerVenueId, setDrawerVenueId] = useState<string | null>(null);
 
   useEffect(() => { loadAll(); }, []);
 
@@ -914,9 +916,9 @@ export default function EmailPage() {
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                             {new Date(m.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           </span>
-                          <a href={`/venues/${m.matchedVenueId}`} className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem', color: '#60a5fa', borderColor: '#60a5fa44' }} onClick={e => e.stopPropagation()}>
+                          <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem', color: '#60a5fa', borderColor: '#60a5fa44' }} onClick={e => { e.stopPropagation(); setDrawerVenueId(m.matchedVenueId); }}>
                             View Venue →
-                          </a>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -944,9 +946,9 @@ export default function EmailPage() {
                           </td>
                           <td>
                             {m.matchedVenueName ? (
-                              <a href={`/venues/${m.matchedVenueId}`} style={{ color: '#60a5fa', fontSize: '0.82rem', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>
+                              <button style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#60a5fa', fontSize: '0.82rem', textDecoration: 'none' }} onClick={e => { e.stopPropagation(); setDrawerVenueId(m.matchedVenueId); }}>
                                 {m.matchedVenueName}
-                              </a>
+                              </button>
                             ) : (
                               <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-mono)' }}>—</span>
                             )}
@@ -1184,9 +1186,9 @@ export default function EmailPage() {
               {selectedInboxMsg.matchedVenueName && (
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>Venue</span>
-                  <a href={`/venues/${selectedInboxMsg.matchedVenueId}`} style={{ color: '#60a5fa', fontSize: '0.84rem', textDecoration: 'none', fontWeight: 600 }}>
+                  <button style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#60a5fa', fontSize: '0.84rem', fontWeight: 600 }} onClick={() => setDrawerVenueId(selectedInboxMsg.matchedVenueId)}>
                     {selectedInboxMsg.matchedVenueName} →
-                  </a>
+                  </button>
                 </div>
               )}
             </div>
@@ -1198,15 +1200,22 @@ export default function EmailPage() {
 
             <div style={{ flexShrink: 0, marginTop: '1rem', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
               {selectedInboxMsg.matchedVenueId && (
-                <a href={`/venues/${selectedInboxMsg.matchedVenueId}`} className="btn btn-secondary btn-sm" style={{ color: '#60a5fa', borderColor: '#60a5fa44' }}>
+                <button className="btn btn-secondary btn-sm" style={{ color: '#60a5fa', borderColor: '#60a5fa44' }} onClick={() => setDrawerVenueId(selectedInboxMsg.matchedVenueId)}>
                   View Venue →
-                </a>
+                </button>
               )}
               <button className="btn btn-secondary btn-sm" onClick={() => setSelectedInboxMsg(null)}>Close</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Venue Drawer */}
+      <VenueDrawer
+        venueId={drawerVenueId}
+        isOpen={!!drawerVenueId}
+        onClose={() => setDrawerVenueId(null)}
+      />
     </AppShell>
   );
 }

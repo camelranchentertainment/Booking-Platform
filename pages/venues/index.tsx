@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { Venue } from '../../lib/types';
 import { useLookup } from '../../lib/hooks/useLookup';
 import { getActId } from '../../lib/bookingQueries';
+import VenueDrawer from '../../components/VenueDrawer';
 
 declare global {
   interface Window { google: any; initGooglePlaces: () => void; }
@@ -30,7 +30,6 @@ type ProspectResult = {
 };
 
 export default function VenuesPage() {
-  const router = useRouter();
   const { values: venueTypes } = useLookup('venue_type');
   const [venues, setVenues]         = useState<Venue[]>([]);
   const [search, setSearch]         = useState('');
@@ -76,6 +75,9 @@ export default function VenuesPage() {
   // Delete venue state
   const [deleteTarget, setDeleteTarget] = useState<Venue | null>(null);
   const [deleting, setDeleting]         = useState(false);
+
+  // Venue drawer
+  const [drawerVenueId, setDrawerVenueId] = useState<string | null>(null);
 
   // Add to tour state
   const [tourTarget, setTourTarget]   = useState<Venue | null>(null);
@@ -596,7 +598,7 @@ export default function VenuesPage() {
                   border: `1px solid ${p.already_added ? 'rgba(52,211,153,0.2)' : 'var(--border)'}`,
                   cursor: p.already_added ? 'default' : 'pointer',
                 }}
-                  onClick={() => { if (p.already_added) { const v = venues.find(v => v.place_id === p.place_id); if (v) router.push(`/venues/${v.id}`); } }}
+                  onClick={() => { if (p.already_added) { const v = venues.find(v => v.place_id === p.place_id); if (v) setDrawerVenueId(v.id); } }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -626,7 +628,7 @@ export default function VenuesPage() {
                       </button>
                     )}
                     {p.already_added && (
-                      <button className="btn btn-ghost btn-sm" onClick={() => { const v = venues.find(v => v.place_id === p.place_id); if (v) router.push(`/venues/${v.id}`); }} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => { const v = venues.find(v => v.place_id === p.place_id); if (v) setDrawerVenueId(v.id); }} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>
                         View →
                       </button>
                     )}
@@ -723,7 +725,7 @@ export default function VenuesPage() {
                             cursor: 'pointer',
                             transition: 'background 0.1s',
                           }}
-                          onClick={() => router.push(`/venues/${v.id}`)}
+                          onClick={() => setDrawerVenueId(v.id)}
                           onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-overlay)'}
                           onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
                         >
@@ -802,11 +804,11 @@ export default function VenuesPage() {
             <tbody>
               {filtered.map(v => (
                 <tr key={v.id}>
-                  <td style={{ color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.name}</td>
-                  <td style={{ cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.city}, {v.state}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.venue_type || '—'}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.capacity ? v.capacity.toLocaleString() : '—'}</td>
-                  <td style={{ cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>
+                  <td style={{ color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }} onClick={() => setDrawerVenueId(v.id)}>{v.name}</td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => setDrawerVenueId(v.id)}>{v.city}, {v.state}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => setDrawerVenueId(v.id)}>{v.venue_type || '—'}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => setDrawerVenueId(v.id)}>{v.capacity ? v.capacity.toLocaleString() : '—'}</td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => setDrawerVenueId(v.id)}>
                     {v.email ? (
                       <span style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>{v.email}</span>
                     ) : enrichStatus[v.id] === 'scraping' ? (
@@ -823,7 +825,7 @@ export default function VenuesPage() {
                       <span style={{ color: 'var(--text-muted)' }}>—</span>
                     )}
                   </td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => router.push(`/venues/${v.id}`)}>{v.phone || '—'}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => setDrawerVenueId(v.id)}>{v.phone || '—'}</td>
                   <td>
                     <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                       {v.website && !v.email && (
@@ -1150,6 +1152,13 @@ export default function VenuesPage() {
           </div>
         </div>
       )}
+
+      {/* Venue Drawer */}
+      <VenueDrawer
+        venueId={drawerVenueId}
+        isOpen={!!drawerVenueId}
+        onClose={() => setDrawerVenueId(null)}
+      />
 
     </AppShell>
   );

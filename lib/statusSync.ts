@@ -103,10 +103,11 @@ export async function updateVenueStatus(
   userId: string,
   extra: Record<string, any> = {}
 ): Promise<void> {
-  await sb
+  const { error } = await sb
     .from('tour_venues')
     .update({ status: newStatus, updated_at: new Date().toISOString(), ...extra })
     .eq('id', tourVenueId);
+  if (error) throw new Error(`tour_venues update failed: ${error.message}`);
   await syncBooking(sb, tourVenueId, userId);
 }
 

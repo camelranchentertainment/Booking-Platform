@@ -33,14 +33,7 @@ export default function TourDetail() {
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [venuePopout, setVenuePopout] = useState<any>(null);
-  const [venueContacts, setVenueContacts] = useState<any[]>([]);
-  const [venueLoading, setVenueLoading] = useState(false);
-  const [activeTvId, setActiveTvId] = useState<string | null>(null);
-  const [editingVenue, setEditingVenue] = useState(false);
-  const [venueForm, setVenueForm] = useState<any>({});
-  const [savingVenue, setSavingVenue] = useState(false);
-  const [previousPay, setPreviousPay] = useState<number | null>(null);
+  const [drawerVenueId, setDrawerVenueId] = useState<string | null>(null);
 
   // Venue search modal
   const [showSearch, setShowSearch]       = useState(false);
@@ -136,69 +129,7 @@ export default function TourDetail() {
     router.push('/tours');
   };
 
-  const openVenuePopout = async (basicVenue: any, tvId: string, tvNotes: string) => {
-    setActiveTvId(tvId);
-    setVenuePopout(basicVenue);
-    setVenueContacts([]);
-    setVenueLoading(true);
-    setEditingVenue(false);
-    setPreviousPay(null);
-    const [venueRes, contactsRes, lastBookingRes] = await Promise.all([
-      supabase.from('venues').select('*').eq('id', basicVenue.id).single(),
-      supabase.from('contacts').select('*').eq('venue_id', basicVenue.id).order('last_name').limit(1),
-      supabase.from('bookings').select('fee').eq('venue_id', basicVenue.id).eq('status', 'confirmed').order('show_date', { ascending: false }).limit(1),
-    ]);
-    const full = venueRes.data || basicVenue;
-    const contact = contactsRes.data?.[0] || null;
-    setVenuePopout(full);
-    setVenueContacts(contactsRes.data || []);
-    setPreviousPay(lastBookingRes.data?.[0]?.fee ?? null);
-    setVenueForm({
-      name:          full.name    || '',
-      address:       full.address || '',
-      phone:         full.phone   || '',
-      contact_first: contact?.first_name || '',
-      contact_last:  contact?.last_name  || '',
-      contact_email: contact?.email      || '',
-      notes:         full.notes || '',
-    });
-    setVenueLoading(false);
-  };
-
-  const saveVenueEdits = async () => {
-    if (!venuePopout) return;
-    setSavingVenue(true);
-    await supabase.from('venues').update({
-      name:    venueForm.name,
-      address: venueForm.address || null,
-      phone:   venueForm.phone   || null,
-      notes:   venueForm.notes   || null,
-    }).eq('id', venuePopout.id);
-
-    const { data: { user } } = await supabase.auth.getUser();
-    const contact = venueContacts[0];
-    if (contact) {
-      await supabase.from('contacts').update({
-        first_name: venueForm.contact_first,
-        last_name:  venueForm.contact_last,
-        email:      venueForm.contact_email || null,
-      }).eq('id', contact.id);
-    } else if (venueForm.contact_first || venueForm.contact_email) {
-      await supabase.from('contacts').insert({
-        venue_id:   venuePopout.id,
-        first_name: venueForm.contact_first || '',
-        last_name:  venueForm.contact_last  || '',
-        email:      venueForm.contact_email || null,
-        status:     'not_contacted',
-      });
-    }
-
-    setVenuePopout((prev: any) => ({ ...prev, name: venueForm.name, address: venueForm.address, phone: venueForm.phone, notes: venueForm.notes }));
-    setEditingVenue(false);
-    setSavingVenue(false);
-  };
-
-  const loadPool = async () => {
+const loadPool = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     const res = await fetch(`/api/tours/venues?tour_id=${id}`, {
@@ -355,6 +286,8 @@ export default function TourDetail() {
     if (res.ok) {
       const updated = await res.json();
       setPool(p => p.map(v => v.id === tvId ? updated : v));
+    } else {
+      console.error('[updateStatus] PATCH failed', { tvId, newStatus: status, httpStatus: res.status });
     }
   };
 
@@ -655,7 +588,7 @@ export default function TourDetail() {
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <button
-                      onClick={() => openVenuePopout(tv.venue, tv.id, tv.notes)}
+                      onClick={() => setDrawerVenueId(tv.venue?.id || null)}
                       style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-primary)', fontSize: '0.88rem', fontWeight: 600, textAlign: 'left' }}
                     >
                       {tv.venue?.name}
@@ -924,16 +857,9 @@ export default function TourDetail() {
 
       {/* Venue Drawer */}
       <VenueDrawer
-        venue={venuePopout}
-        venueLoading={venueLoading}
-        editingVenue={editingVenue}
-        setEditingVenue={setEditingVenue}
-        venueForm={venueForm}
-        setVenueForm={setVenueForm}
-        previousPay={previousPay}
-        savingVenue={savingVenue}
-        onSave={saveVenueEdits}
-        onClose={() => { setVenuePopout(null); setEditingVenue(false); }}
+        venueId={drawerVenueId}
+        isOpen={!!drawerVenueId}
+        onClose={() => setDrawerVenueId(null)}
       />
 
       {/* Expense Add/Edit Modal */}
