@@ -294,13 +294,13 @@ export default function BandDashboard() {
           {/* ── Stat cards ──────────────────────────────────────────────────── */}
           <div className="dash-stats-grid">
             {([
-              { label: 'TARGETS',   value: targetsCount,   sub: 'venues in target list',   href: '/tours',                    color: '#f59e0b' },
-              { label: 'CONFIRMED', value: confirmedCount, sub: 'upcoming confirmed shows', href: '/bookings?filter=confirmed', color: '#34d399' },
-              { label: 'TOURS',     value: toursCount,     sub: 'planning or active',       href: '/tours',                    color: '#60a5fa' },
+              { label: 'TARGETS',   value: targetsCount,   sub: 'venues in target list',   href: '/email?tab=outreach&status=target',    color: '#6B8FB5' },
+              { label: 'CONFIRMED', value: confirmedCount, sub: 'upcoming confirmed shows', href: '/email?tab=outreach&status=confirmed', color: '#4CAF50' },
+              { label: 'TOURS',     value: toursCount,     sub: 'planning or active',       href: '/tours',                               color: '#60a5fa' },
             ] as any[]).map(card => (
-              <Link key={card.label} href={card.href} style={{ textDecoration: 'none', display: 'block', padding: '1.25rem 1.5rem', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderTop: `3px solid ${card.color}`, position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s' }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = card.color)}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
+              <Link key={card.label} href={card.href} style={{ textDecoration: 'none', display: 'block', padding: '1.25rem 1.5rem', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderTop: `3px solid ${card.color}`, position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s, box-shadow 0.15s', cursor: 'pointer' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = card.color; e.currentTarget.style.boxShadow = `0 4px 16px ${card.color}22`; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none'; }}>
                 <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse at top right, ${card.color}11, transparent 65%)`, pointerEvents: 'none' }} />
                 {loading
                   ? <div style={{ height: 68, background: 'rgba(255,255,255,0.05)', marginBottom: 8 }} />

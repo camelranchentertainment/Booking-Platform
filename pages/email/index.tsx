@@ -8,10 +8,17 @@ import { getActId } from '../../lib/bookingQueries';
 import Link from 'next/link';
 import EmailComposer from '../../components/email/EmailComposer';
 import VenueDrawer from '../../components/VenueDrawer';
+import { STATUS_COLORS } from '../../lib/statusSync';
 
 type EmailType = 'cold_pitch' | 'follow_up' | 'reply';
 type Draft = { subject: string; body: string; preview: string };
-type View = 'outbox' | 'pipeline' | 'tracker' | 'inbox';
+type View = 'outbox' | 'pipeline' | 'outreach' | 'inbox';
+
+const OUTREACH_STATUSES = ['all', 'target', 'pitched', 'negotiate', 'confirmed', 'declined'] as const;
+const OUTREACH_STATUS_LABELS: Record<string, string> = {
+  all: 'All', target: 'Target', pitched: 'Pitched',
+  negotiate: 'Negotiate', confirmed: 'Confirmed', declined: 'Declined',
+};
 
 type InboxMessage = {
   uid: number;
@@ -131,9 +138,9 @@ export default function EmailPage() {
   const [bookings, setBookings]   = useState<any[]>([]);
   const [filterAct, setFilterAct] = useState('');
 
-  // Tracker state
-  const [trackerFilter, setTrackerFilter] = useState<'active' | 'all'>('active');
-  const [pitchedTourVenues, setPitchedTourVenues] = useState<any[]>([]);
+  // Outreach tracker state
+  const [trackerStatusFilter, setTrackerStatusFilter] = useState<string>('all');
+  const [allTourVenues, setAllTourVenues] = useState<any[]>([]);
   const [composerBooking, setComposerBooking] = useState<any>(null);
   const [composerTourVenue, setComposerTourVenue] = useState<any>(null);
   const [composerCategory, setComposerCategory] = useState('target');
@@ -150,6 +157,12 @@ export default function EmailPage() {
   const [drawerVenueId, setDrawerVenueId] = useState<string | null>(null);
 
   useEffect(() => { loadAll(); }, []);
+
+  useEffect(() => {
+    const { tab, status } = router.query;
+    if (tab === 'outreach') setView('outreach');
+    if (status && typeof status === 'string') setTrackerStatusFilter(status);
+  }, [router.query]);
 
   const loadAll = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -168,7 +181,7 @@ export default function EmailPage() {
       : null;
 
     const toursQ = actId
-      ? supabase.from('tours').select('id').eq('act_id', actId)
+      ? supabase.from('tours').select('id').eq('act_id', actId).neq('status', 'cancelled')
       : Promise.resolve({ data: [] as any[] });
 
     const [toursRes, logRes, actsRes, venuesRes, contactsRes, profileRes, bookingsRes, draftsRes] = await Promise.all([
@@ -198,10 +211,10 @@ export default function EmailPage() {
     const tourIds = (toursRes.data || []).map((t: any) => t.id);
     const tvRes = tourIds.length > 0
       ? await supabase.from('tour_venues').select(`
-          id, status, tour_id, last_contacted_at, pitched_at, responded_at, updated_at,
+          id, status, tour_id, last_contacted_at, pitched_at, responded_at, updated_at, notes,
           venue:venues(id, name, city, state, email),
-          tour:tours(id, act_id, act:acts(id, act_name))
-        `).in('tour_id', tourIds).in('status', ['pitched', 'follow_up'])
+          tour:tours(id, name, act_id, act:acts(id, act_name))
+        `).in('tour_id', tourIds).order('updated_at', { ascending: false })
       : { data: [] as any[] };
 
     setLog(logRes.data || []);
@@ -211,7 +224,7 @@ export default function EmailPage() {
     setProfile(profileRes.data);
     setBookings(bookingsRes.data || []);
     setPendingDrafts(draftsRes.data || []);
-    setPitchedTourVenues(tvRes.data || []);
+    setAllTourVenues(tvRes.data || []);
     setLoading(false);
   };
 
@@ -327,7 +340,7 @@ export default function EmailPage() {
   const markReplied = async (tvId: string) => {
     setMarkingReplied(tvId);
     await supabase.from('tour_venues').update({ status: 'negotiate', updated_at: new Date().toISOString() }).eq('id', tvId);
-    setPitchedTourVenues(tvs => tvs.filter(tv => tv.id !== tvId));
+    setAllTourVenues(tvs => tvs.map(tv => tv.id === tvId ? { ...tv, status: 'negotiate' } : tv));
     setMarkingReplied(null);
   };
 
@@ -419,8 +432,8 @@ export default function EmailPage() {
 
       {/* Tab bar */}
       <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
-        {(['outbox', 'tracker', 'pipeline', 'inbox'] as View[]).map(v => {
-          const overdueCount = v === 'tracker' ? bookings.filter(b => getActionInfo(b).urgency === 'red').length : 0;
+        {(['outbox', 'outreach', 'pipeline', 'inbox'] as View[]).map(v => {
+          const overdueCount = v === 'outreach' ? allTourVenues.filter(tv => tv.status === 'pitched' && tv.updated_at && Math.floor((Date.now() - new Date(tv.updated_at).getTime()) / 86400000) >= 7).length : 0;
           const venueReplies = v === 'inbox' ? inboxMessages.filter(m => m.matchedVenueId).length : 0;
           return (
             <button
@@ -438,7 +451,7 @@ export default function EmailPage() {
                 marginBottom: '-1px',
               }}
             >
-              {v === 'outbox' ? `Outbox (${log.length})` : v === 'pipeline' ? `Pipeline (${bookings.length})` : v === 'inbox' ? 'Inbox' : 'Outreach Tracker'}
+              {v === 'outbox' ? `Outbox (${log.length})` : v === 'pipeline' ? `Pipeline (${bookings.length})` : v === 'inbox' ? 'Inbox' : `Outreach (${allTourVenues.length})`}
               {v === 'outbox' && pendingDrafts.length > 0 && (
                 <span style={{ background: 'var(--accent)', color: '#000', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, minWidth: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{pendingDrafts.length}</span>
               )}
@@ -641,137 +654,136 @@ export default function EmailPage() {
         </div>
       )}
 
-      {/* TRACKER TAB */}
-      {view === 'tracker' && (() => {
-        // Tour venue outreach — primary tracker source
-        const tvWithDays = pitchedTourVenues.map(tv => {
-          const lastContactStr = tv.last_contacted_at || tv.pitched_at || tv.updated_at;
-          const days = lastContactStr ? Math.floor((Date.now() - new Date(lastContactStr).getTime()) / (1000 * 60 * 60 * 24)) : 999;
-          const tvUrgency: 'green' | 'yellow' | 'red' = days <= 3 ? 'green' : days <= 7 ? 'yellow' : 'red';
-          return { ...tv, days, tvUrgency };
-        }).sort((a, b) => b.days - a.days);
+      {/* OUTREACH TAB */}
+      {view === 'outreach' && (() => {
+        const filtered = trackerStatusFilter === 'all'
+          ? allTourVenues
+          : allTourVenues.filter(tv => tv.status === trackerStatusFilter);
 
-        // Booking-based tracker (email_stage pipeline)
-        const activeBookings = trackerFilter === 'active'
-          ? bookings.filter(b => !['cold', 'decline', 'thank_you', 'cancelled', 'completed'].includes(b.email_stage) || !b.email_stage)
-          : bookings;
-        const overdueItems = [
-          ...tvWithDays.filter(tv => tv.tvUrgency === 'red'),
-          ...activeBookings.filter(b => getActionInfo(b).urgency === 'red'),
-        ];
-        const dueItems = [
-          ...tvWithDays.filter(tv => tv.tvUrgency === 'yellow'),
-          ...activeBookings.filter(b => getActionInfo(b).urgency === 'yellow'),
-        ];
-        const totalActive = tvWithDays.length + activeBookings.filter(b => getActionInfo(b).urgency === 'green').length;
+        const counts = OUTREACH_STATUSES.reduce((acc, s) => ({
+          ...acc,
+          [s]: s === 'all' ? allTourVenues.length : allTourVenues.filter(tv => tv.status === s).length,
+        }), {} as Record<string, number>);
+
+        // Booking pipeline below
+        const activeBookings = bookings.filter(b => !['cold', 'decline', 'thank_you', 'cancelled', 'completed'].includes(b.email_stage) || !b.email_stage);
 
         return (
           <>
-            {/* Summary row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.25rem' }}>
-              {[
-                { label: 'Overdue', count: overdueItems.length, color: '#f87171' },
-                { label: 'Due Soon', count: dueItems.length, color: '#fbbf24' },
-                { label: 'Active', count: totalActive, color: '#34d399' },
-              ].map(({ label, count, color }) => (
-                <div key={label} className="card" style={{ padding: '0.9rem 1.1rem', textAlign: 'center' }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', color, lineHeight: 1 }}>{count}</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{label}</div>
-                </div>
-              ))}
+            {/* Status filter tabs */}
+            <div style={{ display: 'flex', gap: '0.35rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+              {OUTREACH_STATUSES.map(s => {
+                const color = s === 'all' ? 'var(--accent)' : (STATUS_COLORS[s] || 'var(--accent)');
+                const isActive = trackerStatusFilter === s;
+                return (
+                  <button key={s} onClick={() => setTrackerStatusFilter(s)} style={{
+                    fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.08em',
+                    textTransform: 'uppercase', padding: '0.25rem 0.65rem',
+                    borderRadius: 'var(--radius-sm)',
+                    border: `1px solid ${isActive ? color : 'var(--border)'}`,
+                    background: isActive ? `${color}1a` : 'transparent',
+                    color: isActive ? color : 'var(--text-muted)',
+                    cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                  }}>
+                    {OUTREACH_STATUS_LABELS[s]}
+                    <span style={{
+                      background: isActive ? color : 'rgba(255,255,255,0.12)',
+                      color: isActive ? '#000' : 'var(--text-muted)',
+                      borderRadius: '999px', fontSize: '0.6rem', fontWeight: 700,
+                      minWidth: 16, height: 16, display: 'inline-flex', alignItems: 'center',
+                      justifyContent: 'center', padding: '0 4px',
+                    }}>{counts[s]}</span>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Pitched venues tracker */}
-            {tvWithDays.length > 0 && (
-              <div style={{ marginBottom: '1.25rem' }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.6rem' }}>
-                  ◈ Pitched Venues — {tvWithDays.length} active
-                </div>
-                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Venue</th>
-                          <th>Act</th>
-                          <th>Status</th>
-                          <th>Last Contact</th>
-                          <th>Days Since</th>
-                          <th style={{ width: 180 }}></th>
+            {/* Outreach venues table */}
+            <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: '1.5rem' }}>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Venue</th>
+                      <th>Tour</th>
+                      <th>Status</th>
+                      <th>Last Contact</th>
+                      <th>Days Since</th>
+                      <th style={{ width: 180 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.length === 0 && (
+                      <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>
+                        {allTourVenues.length === 0 ? 'No venues in outreach yet — add venues to a tour pool to start tracking.' : `No venues with status "${OUTREACH_STATUS_LABELS[trackerStatusFilter] || trackerStatusFilter}".`}
+                      </td></tr>
+                    )}
+                    {filtered.map(tv => {
+                      const venue = tv.venue as any;
+                      const tour  = tv.tour as any;
+                      const lastContactStr = tv.last_contacted_at || tv.pitched_at || tv.updated_at;
+                      const days = lastContactStr ? Math.floor((Date.now() - new Date(lastContactStr).getTime()) / 86400000) : null;
+                      const isOverdue = tv.status === 'pitched' && days !== null && days >= 7;
+                      const urgencyDot = isOverdue ? '#f87171' : (days !== null && days > 3) ? '#fbbf24' : '#34d399';
+                      const statusColor = STATUS_COLORS[tv.status as string] || 'var(--text-muted)';
+                      return (
+                        <tr key={tv.id}>
+                          <td>
+                            <div style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{venue?.name || '—'}</div>
+                            <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>{venue?.city ? `${venue.city}, ${venue.state}` : ''}</div>
+                          </td>
+                          <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{tour?.name || '—'}</td>
+                          <td>
+                            <span style={{ background: `${statusColor}1a`, color: statusColor, fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0.15rem 0.45rem', borderRadius: '3px' }}>
+                              {OUTREACH_STATUS_LABELS[tv.status] || tv.status}
+                            </span>
+                          </td>
+                          <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                            {lastContactStr ? new Date(lastContactStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                          </td>
+                          <td>
+                            {days !== null && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: urgencyDot, flexShrink: 0 }} />
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: isOverdue ? '#f87171' : 'var(--text-muted)' }}>{days}d</span>
+                                {isOverdue && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.64rem', color: '#f87171', border: '1px solid rgba(248,113,113,0.4)', borderRadius: '3px', padding: '0.1rem 0.4rem' }}>Follow up</span>}
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
+                              {['target', 'pitched'].includes(tv.status) && (
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ fontSize: '0.72rem', color: '#60a5fa', borderColor: 'rgba(96,165,250,0.4)' }}
+                                  onClick={() => setComposerTourVenue(tv)}
+                                >
+                                  ✉ Email
+                                </button>
+                              )}
+                              {tv.status === 'pitched' && (
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  style={{ fontSize: '0.72rem', color: '#34d399', borderColor: 'rgba(52,211,153,0.4)' }}
+                                  disabled={markingReplied === tv.id}
+                                  onClick={() => markReplied(tv.id)}
+                                >
+                                  {markingReplied === tv.id ? '…' : '✓ Replied'}
+                                </button>
+                              )}
+                            </div>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {tvWithDays.map(tv => {
-                          const venue = tv.venue as any;
-                          const act   = (tv.tour as any)?.act;
-                          const lastContactStr = tv.last_contacted_at || tv.pitched_at || tv.updated_at;
-                          const urgencyColor = tv.tvUrgency === 'red' ? '#f87171' : tv.tvUrgency === 'yellow' ? '#fbbf24' : '#34d399';
-                          return (
-                            <tr key={tv.id}>
-                              <td>
-                                <div style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{venue?.name || '—'}</div>
-                                <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>{venue?.city ? `${venue.city}, ${venue.state}` : ''}</div>
-                              </td>
-                              <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{act?.act_name || '—'}</td>
-                              <td>
-                                <span style={{ background: tv.status === 'follow_up' ? 'rgba(251,191,36,0.12)' : 'rgba(96,165,250,0.12)', color: tv.status === 'follow_up' ? '#fbbf24' : '#60a5fa', fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0.15rem 0.45rem', borderRadius: '3px' }}>
-                                  {tv.status === 'follow_up' ? 'Follow-Up' : 'Pitched'}
-                                </span>
-                              </td>
-                              <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                                {lastContactStr ? new Date(lastContactStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
-                              </td>
-                              <td>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: urgencyColor, flexShrink: 0 }} />
-                                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: urgencyColor }}>
-                                    {tv.days === 999 ? '—' : `${tv.days}d`}
-                                  </span>
-                                  {tv.tvUrgency === 'red' && (
-                                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.64rem', color: '#f87171', border: '1px solid rgba(248,113,113,0.4)', borderRadius: '3px', padding: '0.1rem 0.4rem', letterSpacing: '0.04em' }}>Follow up needed</span>
-                                  )}
-                                </div>
-                              </td>
-                              <td>
-                                <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
-                                  <button
-                                    className="btn btn-ghost btn-sm"
-                                    style={{ fontSize: '0.72rem', color: '#fbbf24', borderColor: 'rgba(251,191,36,0.4)' }}
-                                    onClick={() => { setComposerTourVenue(tv); setComposerCategory('follow_up_1'); }}
-                                  >
-                                    ✉ Follow-Up
-                                  </button>
-                                  <button
-                                    className="btn btn-ghost btn-sm"
-                                    style={{ fontSize: '0.72rem', color: '#34d399', borderColor: 'rgba(52,211,153,0.4)' }}
-                                    disabled={markingReplied === tv.id}
-                                    onClick={() => markReplied(tv.id)}
-                                  >
-                                    {markingReplied === tv.id ? '…' : '✓ Replied'}
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            )}
+            </div>
 
-            {/* Booking email pipeline tracker */}
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <span>Booking Pipeline — {activeBookings.length} active</span>
-              <div style={{ display: 'flex', gap: '0.4rem' }}>
-                {(['active', 'all'] as const).map(f => (
-                  <button key={f} onClick={() => setTrackerFilter(f)}
-                    style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '0.15rem 0.55rem', borderRadius: '3px', border: `1px solid ${trackerFilter === f ? 'var(--accent)' : 'var(--border)'}`, background: trackerFilter === f ? 'var(--accent-glow)' : 'transparent', color: trackerFilter === f ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer' }}>
-                    {f === 'active' ? 'Active' : 'All'}
-                  </button>
-                ))}
-              </div>
+            {/* Booking email pipeline */}
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
+              Booking Pipeline — {activeBookings.length} active
             </div>
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <div className="table-wrap">

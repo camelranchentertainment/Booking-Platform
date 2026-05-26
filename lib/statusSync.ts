@@ -36,18 +36,20 @@ export const STATUS_LABELS: Record<string, string> = {
 };
 
 export const STATUS_COLORS: Record<string, string> = {
-  pitch:       '#94a3b8',
-  negotiation: '#fbbf24',
-  hold:        '#f97316',
+  // Outreach statuses (canonical)
+  target:      '#6B8FB5',
+  pitched:     '#E8602A',
+  negotiate:   '#F5C842',
+  confirmed:   '#4CAF50',
+  declined:    '#888888',
+  // Booking pipeline statuses
+  pitch:       '#6B8FB5',
+  negotiation: '#F5C842',
+  hold:        '#F5C842',
   contract:    '#a78bfa',
-  confirmed:   '#34d399',
   advancing:   '#60a5fa',
   completed:   '#6b7280',
-  cancelled:   '#ef4444',
-  target:      '#94a3b8',
-  pitched:     '#c084fc',
-  negotiate:   '#fbbf24',
-  declined:    '#ef4444',
+  cancelled:   '#888888',
 };
 
 // Syncs the bookings record that mirrors a tour_venue, reading the current tv status.
