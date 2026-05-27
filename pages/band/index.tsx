@@ -201,7 +201,7 @@ export default function BandDashboard() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Send failed');
       setSendResult({ sent: json.sent, noEmail: json.noEmail, errors: json.errors });
-      setMessages(prev => [...prev, { role: 'assistant', content: `Sent ${json.sent} email${json.sent !== 1 ? 's' : ''}${json.noEmail ? `, ${json.noEmail} skipped (no email on file)` : ''}${json.errors ? `, ${json.errors} failed` : ''}. Venues have been marked as pitched.` }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: `Sent ${json.sent} email${json.sent !== 1 ? 's' : ''}${json.noEmail ? `, ${json.noEmail} skipped (no email on file)` : ''}${json.errors ? `, ${json.errors} failed` : ''}. Venues have been marked as reached out.` }]);
       setPendingAction(null);
       // Refresh targets count
       load();

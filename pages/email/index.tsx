@@ -14,10 +14,10 @@ type EmailType = 'cold_pitch' | 'follow_up' | 'reply';
 type Draft = { subject: string; body: string; preview: string };
 type View = 'outbox' | 'pipeline' | 'outreach' | 'inbox';
 
-const OUTREACH_STATUSES = ['all', 'target', 'pitched', 'negotiate', 'confirmed', 'declined'] as const;
+const OUTREACH_STATUSES = ['all', 'target', 'reached_out', 'responded', 'negotiating', 'confirmed', 'declined'] as const;
 const OUTREACH_STATUS_LABELS: Record<string, string> = {
-  all: 'All', target: 'Target', pitched: 'Pitched',
-  negotiate: 'Negotiate', confirmed: 'Confirmed', declined: 'Declined',
+  all: 'All', target: 'Target', reached_out: 'Reached Out',
+  responded: 'Responded', negotiating: 'Negotiating', confirmed: 'Confirmed', declined: 'Declined',
 };
 
 type InboxMessage = {
@@ -340,8 +340,8 @@ export default function EmailPage() {
 
   const markReplied = async (tvId: string) => {
     setMarkingReplied(tvId);
-    await supabase.from('tour_venues').update({ status: 'negotiate', updated_at: new Date().toISOString() }).eq('id', tvId);
-    setAllTourVenues(tvs => tvs.map(tv => tv.id === tvId ? { ...tv, status: 'negotiate' } : tv));
+    await supabase.from('tour_venues').update({ status: 'negotiating', updated_at: new Date().toISOString() }).eq('id', tvId);
+    setAllTourVenues(tvs => tvs.map(tv => tv.id === tvId ? { ...tv, status: 'negotiating' } : tv));
     setMarkingReplied(null);
   };
 
@@ -434,7 +434,7 @@ export default function EmailPage() {
       {/* Tab bar */}
       <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
         {(['outbox', 'outreach', 'pipeline', 'inbox'] as View[]).map(v => {
-          const overdueCount = v === 'outreach' ? allTourVenues.filter(tv => tv.status === 'pitched' && tv.updated_at && Math.floor((Date.now() - new Date(tv.updated_at).getTime()) / 86400000) >= 7).length : 0;
+          const overdueCount = v === 'outreach' ? allTourVenues.filter(tv => tv.status === 'reached_out' && tv.updated_at && Math.floor((Date.now() - new Date(tv.updated_at).getTime()) / 86400000) >= 7).length : 0;
           const venueReplies = v === 'inbox' ? inboxMessages.filter(m => m.matchedVenueId).length : 0;
           return (
             <button
@@ -724,7 +724,7 @@ export default function EmailPage() {
                       const tour  = tv.tour as any;
                       const lastContactStr = tv.last_contacted_at || tv.pitched_at || tv.updated_at;
                       const days = lastContactStr ? Math.floor((Date.now() - new Date(lastContactStr).getTime()) / 86400000) : null;
-                      const isOverdue = tv.status === 'pitched' && days !== null && days >= 7;
+                      const isOverdue = tv.status === 'reached_out' && days !== null && days >= 7;
                       const urgencyDot = isOverdue ? '#f87171' : (days !== null && days > 3) ? '#fbbf24' : '#34d399';
                       const statusColor = STATUS_COLORS[tv.status as string] || 'var(--text-muted)';
                       return (
@@ -753,7 +753,7 @@ export default function EmailPage() {
                           </td>
                           <td>
                             <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
-                              {['target', 'pitched'].includes(tv.status) && (
+                              {['target', 'reached_out', 'responded'].includes(tv.status) && (
                                 <button
                                   className="btn btn-ghost btn-sm"
                                   style={{ fontSize: '0.72rem', color: '#60a5fa', borderColor: 'rgba(96,165,250,0.4)' }}
@@ -762,7 +762,7 @@ export default function EmailPage() {
                                   ✉ Email
                                 </button>
                               )}
-                              {tv.status === 'pitched' && (
+                              {(tv.status === 'reached_out' || tv.status === 'responded') && (
                                 <button
                                   className="btn btn-ghost btn-sm"
                                   style={{ fontSize: '0.72rem', color: '#34d399', borderColor: 'rgba(52,211,153,0.4)' }}

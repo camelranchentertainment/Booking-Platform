@@ -96,7 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .from('tour_venues')
       .select('id')
       .in('tour_id', tourIds)
-      .in('status', ['confirmed', 'negotiate', 'advancing', 'declined', 'completed']);
+      .in('status', ['confirmed', 'negotiating', 'advancing', 'declined', 'completed']);
     const staleIds = (staleTVs || []).map((tv: any) => tv.id);
     if (staleIds.length > 0) {
       await service.from('email_drafts')
@@ -201,7 +201,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data: tourVenues, error: tvErr } = await service.from('tour_venues')
       .select('id, venue_id, tour_id, venue:venues(name, city, state, capacity, email, secondary_emails)')
       .in('tour_id', tourIds)
-      .in('status', ['target', 'pitched', 'follow_up'])
+      .in('status', ['target', 'reached_out', 'responded', 'follow_up'])
       .limit(30);
 
     if (tvErr) errors.push(`Tour venues query: ${tvErr.message}`);

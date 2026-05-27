@@ -5,12 +5,12 @@ import EmailComposer from './email/EmailComposer';
 import type { OutreachStatus } from '../lib/types';
 
 const TV_STATUS_LABELS: Record<string, string> = {
-  target: 'Target', pitched: 'Pitched', negotiate: 'Negotiate',
-  confirmed: 'Confirmed', declined: 'Declined',
+  target: 'Target', reached_out: 'Reached Out', responded: 'Responded',
+  negotiating: 'Negotiating', confirmed: 'Confirmed', declined: 'Declined',
 };
 const TV_STATUS_COLOR: Record<string, string> = {
-  target: 'var(--text-muted)', pitched: '#c084fc', negotiate: '#fbbf24',
-  confirmed: '#34d399', declined: '#f87171',
+  target: 'var(--text-muted)', reached_out: '#c084fc', responded: '#F5A623',
+  negotiating: '#fbbf24', confirmed: '#34d399', declined: '#f87171',
 };
 const BK_STATUS_COLOR: Record<string, string> = {
   pitch: '#94a3b8', negotiation: '#fbbf24', hold: '#f97316',
@@ -150,7 +150,7 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
   const emailCategory = () => {
     if (!activeTv) return 'target';
     if (activeTv.status === 'target') return 'target';
-    if (activeTv.status === 'pitched') return 'follow_up_1';
+    if (activeTv.status === 'reached_out' || activeTv.status === 'responded') return 'follow_up_1';
     return 'confirmation';
   };
 

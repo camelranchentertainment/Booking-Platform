@@ -8,7 +8,7 @@ const STATUS_LABELS: Record<ContactStatus, string> = {
   not_contacted: 'Not Contacted',
   pitched:       'Pitched',
   responded:     'Responded',
-  negotiate:   'negotiate',
+  negotiate:   'Negotiate',
   booked:        'Booked',
   declined:      'Declined',
   do_not_contact: 'DNC',

@@ -38,6 +38,10 @@ export default function Settings() {
   const [isSuperAdmin, setIsSuperAdmin]     = useState(false);
   const [icsCopied, setIcsCopied]           = useState(false);
 
+  const [gcal, setGcal]         = useState<{ connected: boolean; sync_enabled?: boolean; selected_calendar_id?: string; calendars?: Array<{ id: string; summary: string; primary?: boolean }> } | null>(null);
+  const [gcalConnecting, setGcalConnecting] = useState(false);
+  const [gcalSaving, setGcalSaving]         = useState(false);
+
   const [myAct, setMyAct]       = useState<any>(null);
   const [actForm, setActForm]   = useState({
     act_name: '', genre: '', bio: '', website: '',
@@ -51,7 +55,21 @@ export default function Settings() {
   const [actPhotoError, setActPhotoError]   = useState('');
   const actPhotoRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { load(); }, []);
+  const [gcalMsg, setGcalMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => { load(); loadGcal(); }, []);
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    if (router.query.calendar_connected) {
+      setGcalMsg({ type: 'success', text: 'Google Calendar connected successfully.' });
+      loadGcal();
+      router.replace('/settings', undefined, { shallow: true });
+    } else if (router.query.calendar_error) {
+      setGcalMsg({ type: 'error', text: `Google Calendar error: ${router.query.calendar_error}` });
+      router.replace('/settings', undefined, { shallow: true });
+    }
+  }, [router.isReady, router.query]);
 
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -93,6 +111,45 @@ export default function Settings() {
         }
       }
     }
+  };
+
+  const loadGcal = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    try {
+      const res = await fetch('/api/google/calendars', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) setGcal(await res.json());
+    } catch {}
+  };
+
+  const connectGoogle = async () => {
+    setGcalConnecting(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setGcalConnecting(false); return; }
+    const res = await fetch('/api/auth/google', {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (res.ok) {
+      const { url } = await res.json();
+      window.location.href = url;
+    } else {
+      setGcalConnecting(false);
+    }
+  };
+
+  const saveGcalSettings = async (patch: { selected_calendar_id?: string; sync_enabled?: boolean }) => {
+    setGcalSaving(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setGcalSaving(false); return; }
+    await fetch('/api/google/calendars', {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify(patch),
+    });
+    setGcal(prev => prev ? { ...prev, ...patch } : prev);
+    setGcalSaving(false);
   };
 
   const changePassword = async (e: React.FormEvent) => {
@@ -536,6 +593,84 @@ export default function Settings() {
                     <span style={{ color: 'var(--accent)', fontWeight: 700 }}>Outlook</span> → Add calendar → Subscribe from web → paste link
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── GOOGLE CALENDAR SYNC ── */}
+        {(profile?.role === 'band_admin' || profile?.role === 'superadmin') && (
+          <div>
+            <div style={sectionLabelStyle}>Google Calendar Sync</div>
+            <div className="card">
+              <div className="card-header"><span className="card-title">SYNC SHOWS TO GOOGLE CALENDAR</span></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+
+                {gcalMsg && (
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: gcalMsg.type === 'success' ? '#4caf50' : '#f44336', padding: '0.5rem 0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: 6 }}>
+                    {gcalMsg.text}
+                  </div>
+                )}
+
+                {!gcal?.connected ? (
+                  <>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                      Connect Google Calendar to automatically sync confirmed shows as events.
+                    </div>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      style={{ alignSelf: 'flex-start', minWidth: 160 }}
+                      onClick={connectGoogle}
+                      disabled={gcalConnecting}
+                    >
+                      {gcalConnecting ? 'Redirecting...' : 'Connect Google Calendar'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#4caf50' }}>
+                      Google Calendar connected
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      <label style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.04em' }}>
+                        Calendar
+                      </label>
+                      <select
+                        className="input"
+                        value={gcal.selected_calendar_id || ''}
+                        onChange={e => saveGcalSettings({ selected_calendar_id: e.target.value })}
+                        style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}
+                      >
+                        <option value="">— select a calendar —</option>
+                        {(gcal.calendars || []).map(c => (
+                          <option key={c.id} value={c.id}>{c.summary}{c.primary ? ' (primary)' : ''}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <input
+                        type="checkbox"
+                        id="gcal-sync-enabled"
+                        checked={gcal.sync_enabled ?? false}
+                        onChange={e => saveGcalSettings({ sync_enabled: e.target.checked })}
+                        disabled={gcalSaving}
+                      />
+                      <label htmlFor="gcal-sync-enabled" style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                        Automatically sync confirmed shows
+                      </label>
+                    </div>
+
+                    <button
+                      className="btn btn-sm"
+                      style={{ alignSelf: 'flex-start', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                      onClick={connectGoogle}
+                    >
+                      Reconnect
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>

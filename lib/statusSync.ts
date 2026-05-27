@@ -2,18 +2,19 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import type { BookingStatus, OutreachStatus } from './types';
 
 const TOUR_VENUE_TO_BOOKING_STATUS: Record<OutreachStatus, BookingStatus> = {
-  target:    'pitch',
-  pitched:   'pitch',
-  negotiate: 'negotiation',
-  confirmed: 'confirmed',
-  declined:  'cancelled',
+  target:      'pitch',
+  reached_out: 'pitch',
+  responded:   'pitch',
+  negotiating: 'negotiation',
+  confirmed:   'confirmed',
+  declined:    'cancelled',
 };
 
 const BOOKING_TO_TOUR_VENUE_STATUS: Partial<Record<BookingStatus, OutreachStatus>> = {
   pitch:       'target',
-  negotiation: 'negotiate',
-  hold:        'negotiate',
-  contract:    'negotiate',
+  negotiation: 'negotiating',
+  hold:        'negotiating',
+  contract:    'negotiating',
   confirmed:   'confirmed',
   advancing:   'confirmed',
   completed:   'confirmed',
@@ -30,16 +31,18 @@ export const STATUS_LABELS: Record<string, string> = {
   completed:   'Completed',
   cancelled:   'Cancelled',
   target:      'Target',
-  pitched:     'Pitched',
-  negotiate:   'Negotiate',
+  reached_out: 'Reached Out',
+  responded:   'Responded',
+  negotiating: 'Negotiating',
   declined:    'Declined',
 };
 
 export const STATUS_COLORS: Record<string, string> = {
   // Outreach statuses (canonical)
   target:      '#6B8FB5',
-  pitched:     '#E8602A',
-  negotiate:   '#F5C842',
+  reached_out: '#E8602A',
+  responded:   '#F5A623',
+  negotiating: '#F5C842',
   confirmed:   '#4CAF50',
   declined:    '#888888',
   // Booking pipeline statuses

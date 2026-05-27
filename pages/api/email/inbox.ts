@@ -85,6 +85,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
+  // Load user's act_id for scoping tour_venues updates
+  const { data: profileRow } = await admin
+    .from('user_profiles')
+    .select('act_id')
+    .eq('id', user.id)
+    .maybeSingle();
+  const actId = profileRow?.act_id || null;
+
   try {
     const messages = await fetchImapMessages(settings.imap_host, settings.imap_port || 993, settings.username, password);
 
@@ -103,6 +111,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         matchedVenueName: matched?.name || null,
       };
     });
+
+    // Advance reached_out → responded for any matched venue replies
+    if (actId) {
+      const matchedVenueIds = [...new Set(enriched.map(m => m.matchedVenueId).filter(Boolean))] as string[];
+      if (matchedVenueIds.length > 0) {
+        // Find all active tour_venues for these venues that are still at reached_out
+        const { data: tvs } = await admin
+          .from('tour_venues')
+          .select('id, tour:tours(act_id)')
+          .in('venue_id', matchedVenueIds)
+          .eq('status', 'reached_out');
+
+        const toAdvance = (tvs || []).filter((tv: any) => tv.tour?.act_id === actId).map((tv: any) => tv.id);
+        if (toAdvance.length > 0) {
+          await admin.from('tour_venues')
+            .update({ status: 'responded', updated_at: new Date().toISOString() })
+            .in('id', toAdvance);
+        }
+      }
+    }
 
     return res.status(200).json({ messages: enriched, configured: true });
   } catch (err: any) {

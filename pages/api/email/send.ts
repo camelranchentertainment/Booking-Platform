@@ -84,10 +84,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const tvExtra: Record<string, any> = { last_contacted_at: now };
 
       if (isColdPitch) {
-        newTvStatus = 'pitched';
+        newTvStatus = 'reached_out';
         tvExtra.pitched_at = now;
       } else if (isFollowUp) {
-        newTvStatus = 'pitched';
+        newTvStatus = 'reached_out';
         tvExtra.responded_at = now;
       } else if (category === 'confirmation') {
         newTvStatus = 'confirmed';
