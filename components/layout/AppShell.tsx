@@ -19,6 +19,7 @@ function daysLeft(trialEndsAt: string | null | undefined): number {
 function needsSubscription(profile: UserProfile): boolean {
   if (profile.role === 'superadmin' || profile.role === 'member') return false;
   const status = profile.subscription_status;
+  if (!status) return false;  // no billing record yet — let them in
   if (status === 'active') return false;
   if (status === 'trialing' && daysLeft(profile.trial_ends_at) > 0) return false;
   return true;
@@ -317,10 +318,10 @@ export default function AppShell({ children, requireRole = null }: Props) {
           return;
         }
 
-        // Onboarding redirect for new band admins
+        // Onboarding redirect for new band admins — only when column explicitly false
         if (
           data.role === 'band_admin' &&
-          !(data as any).onboarding_completed &&
+          (data as any).onboarding_completed === false &&
           router.pathname !== '/onboarding'
         ) {
           router.replace('/onboarding');
