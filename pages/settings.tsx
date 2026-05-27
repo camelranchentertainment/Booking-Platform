@@ -45,7 +45,7 @@ export default function Settings() {
   const [myAct, setMyAct]       = useState<any>(null);
   const [actForm, setActForm]   = useState({
     act_name: '', genre: '', bio: '', website: '',
-    instagram: '', facebook: '', spotify: '', contact_email: '',
+    instagram: '', facebook: '', tiktok_url: '', spotify: '', contact_email: '',
     contact_phone: '', home_city: '', home_state: '', username: '', epk_link: '',
   });
   const [actSaving, setActSaving]           = useState(false);
@@ -134,6 +134,7 @@ export default function Settings() {
             website:       act.website       || '',
             instagram:     act.instagram     || '',
             facebook:      act.facebook      || '',
+            tiktok_url:    act.tiktok_url    || '',
             spotify:       act.spotify       || '',
             contact_email: act.contact_email || '',
             contact_phone: act.contact_phone || '',
@@ -431,6 +432,7 @@ export default function Settings() {
       website:       actForm.website       || null,
       instagram:     actForm.instagram     || null,
       facebook:      actForm.facebook      || null,
+      tiktok_url:    actForm.tiktok_url    || null,
       spotify:       actForm.spotify       || null,
       contact_email: actForm.contact_email || null,
       contact_phone: actForm.contact_phone || null,
@@ -474,110 +476,8 @@ export default function Settings() {
         {/* Platform Setup — superadmin only */}
         {isSuperAdmin && <PlatformSetup />}
 
-        {/* ── ACCOUNT ── */}
-        <div>
-          <div style={sectionLabelStyle}>Account</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-
-            {/* Profile */}
-            <form onSubmit={save}>
-              <div className="card">
-                <div className="card-header"><span className="card-title">PROFILE</span></div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {/* Avatar */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border)' }}>
-                    <div
-                      onClick={() => !avatarUploading && fileInputRef.current?.click()}
-                      style={{
-                        width: 80, height: 80, borderRadius: '50%', flexShrink: 0,
-                        background: avatarUrl ? 'transparent' : 'var(--bg-overlay)',
-                        border: '2px solid var(--border)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: avatarUploading ? 'wait' : 'pointer',
-                        overflow: 'hidden', position: 'relative', transition: 'border-color 0.15s',
-                      }}
-                      title="Click to upload avatar"
-                      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
-                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                    >
-                      {avatarUrl
-                        ? <img src={avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', color: 'var(--accent)', lineHeight: 1 }}>
-                            {(form.display_name || profile?.email || '?')[0].toUpperCase()}
-                          </span>
-                      }
-                      {avatarUploading && (
-                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <span style={{ color: '#fff', fontSize: '0.7rem', fontFamily: 'var(--font-body)' }}>Uploading…</span>
-                        </div>
-                      )}
-                    </div>
-                    <input ref={fileInputRef} type="file" accept="image/*" onChange={uploadAvatar} style={{ display: 'none' }} />
-                    <div>
-                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.2rem' }}>Profile Photo</div>
-                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                        Click your avatar to upload.<br />PNG or JPG · max 5 MB · ideal 200×200 px
-                      </div>
-                      {avatarError && <div style={{ color: '#f87171', fontSize: '0.75rem', fontFamily: 'var(--font-body)', marginTop: '0.25rem' }}>{avatarError}</div>}
-                    </div>
-                  </div>
-                  <div className="field">
-                    <label className="field-label">Your Name</label>
-                    <input className="input" value={form.display_name} onChange={set('display_name')} placeholder="Your full name" />
-                  </div>
-                  <div className="field">
-                    <label className="field-label">Phone</label>
-                    <input className="input" type="tel" value={form.phone} onChange={set('phone')} />
-                  </div>
-                  <div className="field">
-                    <label className="field-label">Email</label>
-                    <input className="input" type="email" value={form.email} disabled style={{ opacity: 0.5 }} />
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>Email cannot be changed here</span>
-                  </div>
-                  <div className="field">
-                    <label className="field-label">Personal Gmail</label>
-                    <input className="input" type="email" value={form.personal_gmail} onChange={set('personal_gmail')} placeholder="yourname@gmail.com" />
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>Used for advance &amp; thank-you reminder emails</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
-                  <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</button>
-                  {saved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>✓ Saved</span>}
-                </div>
-              </div>
-            </form>
-
-            {/* Change Password */}
-            <form onSubmit={changePassword}>
-              <div className="card">
-                <div className="card-header"><span className="card-title">CHANGE PASSWORD</span></div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <div className="field">
-                    <label className="field-label">New Password</label>
-                    <input className="input" type="password" value={pwForm.newPassword}
-                      onChange={e => setPwForm(f => ({ ...f, newPassword: e.target.value }))}
-                      placeholder="Min. 8 characters" autoComplete="new-password" />
-                  </div>
-                  <div className="field">
-                    <label className="field-label">Confirm New Password</label>
-                    <input className="input" type="password" value={pwForm.confirmPassword}
-                      onChange={e => setPwForm(f => ({ ...f, confirmPassword: e.target.value }))}
-                      placeholder="Repeat password" autoComplete="new-password" />
-                  </div>
-                  {pwError && <div style={{ color: '#f87171', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{pwError}</div>}
-                </div>
-                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
-                  <button type="submit" className="btn btn-primary" disabled={pwSaving}>{pwSaving ? 'Saving...' : 'Update Password'}</button>
-                  {pwSaved && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#34d399' }}>✓ Password Updated</span>}
-                </div>
-              </div>
-            </form>
-
-          </div>
-        </div>
-
         {/* ── BAND PROFILE ── */}
-        {myAct && (
+        {myAct && profile?.role !== 'member' && (
           <div>
             <div style={sectionLabelStyle}>Band Profile</div>
             <form onSubmit={saveAct}>
@@ -723,6 +623,10 @@ export default function Settings() {
                       <input className="input" value={actForm.facebook} onChange={setAct('facebook')} placeholder="facebook.com/yourpage" />
                     </div>
                     <div className="field">
+                      <label className="field-label">TikTok</label>
+                      <input className="input" value={actForm.tiktok_url} onChange={setAct('tiktok_url')} placeholder="tiktok.com/@handle" />
+                    </div>
+                    <div className="field">
                       <label className="field-label">Spotify</label>
                       <input className="input" value={actForm.spotify} onChange={setAct('spotify')} placeholder="Spotify artist URL" />
                     </div>
@@ -740,6 +644,108 @@ export default function Settings() {
             </form>
           </div>
         )}
+
+        {/* ── ACCOUNT ── */}
+        <div>
+          <div style={sectionLabelStyle}>Account</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+            {/* Profile */}
+            <form onSubmit={save}>
+              <div className="card">
+                <div className="card-header"><span className="card-title">PROFILE</span></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {/* Avatar */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border)' }}>
+                    <div
+                      onClick={() => !avatarUploading && fileInputRef.current?.click()}
+                      style={{
+                        width: 80, height: 80, borderRadius: '50%', flexShrink: 0,
+                        background: avatarUrl ? 'transparent' : 'var(--bg-overlay)',
+                        border: '2px solid var(--border)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: avatarUploading ? 'wait' : 'pointer',
+                        overflow: 'hidden', position: 'relative', transition: 'border-color 0.15s',
+                      }}
+                      title="Click to upload avatar"
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                    >
+                      {avatarUrl
+                        ? <img src={avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', color: 'var(--accent)', lineHeight: 1 }}>
+                            {(form.display_name || profile?.email || '?')[0].toUpperCase()}
+                          </span>
+                      }
+                      {avatarUploading && (
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ color: '#fff', fontSize: '0.7rem', fontFamily: 'var(--font-body)' }}>Uploading…</span>
+                        </div>
+                      )}
+                    </div>
+                    <input ref={fileInputRef} type="file" accept="image/*" onChange={uploadAvatar} style={{ display: 'none' }} />
+                    <div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.2rem' }}>Profile Photo</div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                        Click your avatar to upload.<br />PNG or JPG · max 5 MB · ideal 200×200 px
+                      </div>
+                      {avatarError && <div style={{ color: '#f87171', fontSize: '0.75rem', fontFamily: 'var(--font-body)', marginTop: '0.25rem' }}>{avatarError}</div>}
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Your Name</label>
+                    <input className="input" value={form.display_name} onChange={set('display_name')} placeholder="Your full name" />
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Phone</label>
+                    <input className="input" type="tel" value={form.phone} onChange={set('phone')} />
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Email</label>
+                    <input className="input" type="email" value={form.email} disabled style={{ opacity: 0.5 }} />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>Email cannot be changed here</span>
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Personal Gmail</label>
+                    <input className="input" type="email" value={form.personal_gmail} onChange={set('personal_gmail')} placeholder="yourname@gmail.com" />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>Used for advance &amp; thank-you reminder emails</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</button>
+                  {saved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>✓ Saved</span>}
+                </div>
+              </div>
+            </form>
+
+            {/* Change Password */}
+            <form onSubmit={changePassword}>
+              <div className="card">
+                <div className="card-header"><span className="card-title">CHANGE PASSWORD</span></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div className="field">
+                    <label className="field-label">New Password</label>
+                    <input className="input" type="password" value={pwForm.newPassword}
+                      onChange={e => setPwForm(f => ({ ...f, newPassword: e.target.value }))}
+                      placeholder="Min. 8 characters" autoComplete="new-password" />
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Confirm New Password</label>
+                    <input className="input" type="password" value={pwForm.confirmPassword}
+                      onChange={e => setPwForm(f => ({ ...f, confirmPassword: e.target.value }))}
+                      placeholder="Repeat password" autoComplete="new-password" />
+                  </div>
+                  {pwError && <div style={{ color: '#f87171', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{pwError}</div>}
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
+                  <button type="submit" className="btn btn-primary" disabled={pwSaving}>{pwSaving ? 'Saving...' : 'Update Password'}</button>
+                  {pwSaved && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#34d399' }}>✓ Password Updated</span>}
+                </div>
+              </div>
+            </form>
+
+          </div>
+        </div>
 
         {/* ── PLAN & BILLING ── */}
         {profile && profile.role !== 'superadmin' && profile.role !== 'member' && (

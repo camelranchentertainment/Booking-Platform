@@ -1223,12 +1223,14 @@ export default function EmailPage() {
         </div>
       )}
 
-      {/* Venue Drawer */}
-      <VenueDrawer
-        venueId={drawerVenueId}
-        isOpen={!!drawerVenueId}
-        onClose={() => setDrawerVenueId(null)}
-      />
+      {/* Venue Drawer — only mount when a venue is selected */}
+      {drawerVenueId && (
+        <VenueDrawer
+          venueId={drawerVenueId}
+          isOpen={true}
+          onClose={() => setDrawerVenueId(null)}
+        />
+      )}
     </AppShell>
   );
 }
