@@ -751,25 +751,20 @@ function Footer() {
 
 /* ── Page ─────────────────────────────────────────────────── */
 export default function Home() {
-  const router  = useRouter();
-  const [ready, setReady] = useState(false);
+  const router = useRouter();
 
+  // Redirect logged-in users — runs after render, never blocks the page
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle().then(({ data }) => {
-          const role = data?.role || 'band_admin';
-          if (role === 'superadmin') router.replace('/admin');
-          else if (role === 'band_admin') router.replace('/band');
-          else router.replace('/member');
-        });
-      } else {
-        setReady(true);
-      }
-    });
+      if (!user) return;
+      supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle().then(({ data }) => {
+        const role = data?.role || 'band_admin';
+        if (role === 'superadmin') router.replace('/admin');
+        else if (role === 'band_admin') router.replace('/band');
+        else router.replace('/member');
+      });
+    }).catch(() => {});
   }, []); // eslint-disable-line
-
-  if (!ready) return null;
 
   return (
     <>
