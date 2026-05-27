@@ -5,6 +5,7 @@ import Imap from 'imap';
 import { simpleParser } from 'mailparser';
 import crypto from 'crypto';
 import { Readable } from 'stream';
+import { notifyActMembers } from '../../../lib/notifications';
 
 function decrypt(enc: string): string {
   const key = process.env.EMAIL_ENCRYPT_KEY || '';
@@ -128,6 +129,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           await admin.from('tour_venues')
             .update({ status: 'responded', updated_at: new Date().toISOString() })
             .in('id', toAdvance);
+
+          const venueNames = [...new Set(enriched
+            .filter(m => m.matchedVenueId && toAdvance.some(() => true))
+            .map(m => m.matchedVenueName).filter(Boolean))];
+          if (actId && venueNames.length > 0) {
+            await notifyActMembers({
+              actId,
+              type:      'venue_replied',
+              message:   `Venue replied: ${venueNames.slice(0, 2).join(', ')}${venueNames.length > 2 ? ` +${venueNames.length - 2} more` : ''}`,
+              actionUrl: '/email',
+            });
+          }
         }
       }
     }

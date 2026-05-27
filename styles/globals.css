@@ -917,10 +917,17 @@ tr:hover td { background: rgba(224,120,32,0.06); color: var(--text-primary); }
   .grid-4 { grid-template-columns: 1fr; }
   .main-content { padding: 0.75rem; padding-top: 3.5rem; }
   .page-title { font-size: 1.5rem; }
-  .kanban-board { grid-template-columns: 1fr 1fr; }
+  .kanban-board { grid-template-columns: 1fr; }
   .kanban-col { min-height: 100px; }
   .card { padding: 1rem; }
   .stat-value { font-size: 1.75rem; }
+
+  /* iOS zoom prevention — inputs must be >= 16px */
+  .input, .select, .textarea, input, select, textarea { font-size: 16px !important; }
+
+  /* Minimum 44px tap targets */
+  .btn { min-height: 44px; }
+  .sidebar-link { min-height: 44px; }
 }
 
 @media (min-width: 769px) {

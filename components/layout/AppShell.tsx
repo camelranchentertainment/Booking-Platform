@@ -317,6 +317,16 @@ export default function AppShell({ children, requireRole = null }: Props) {
           return;
         }
 
+        // Onboarding redirect for new band admins
+        if (
+          data.role === 'band_admin' &&
+          !(data as any).onboarding_completed &&
+          router.pathname !== '/onboarding'
+        ) {
+          router.replace('/onboarding');
+          return;
+        }
+
         const allowedRoles = Array.isArray(requireRole) ? requireRole : requireRole ? [requireRole] : null;
         if (data.role !== 'superadmin' && allowedRoles && !allowedRoles.includes(data.role as any)) {
           if (data.role === 'band_admin') router.replace('/band');

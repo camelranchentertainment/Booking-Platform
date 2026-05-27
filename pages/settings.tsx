@@ -62,7 +62,26 @@ export default function Settings() {
 
   const [gcalMsg, setGcalMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => { load(); loadGcal(); }, []);
+  // Team members
+  const [members, setMembers]                 = useState<any[]>([]);
+  const [pendingInvites, setPendingInvites]   = useState<any[]>([]);
+  const [inviteEmail, setInviteEmail]         = useState('');
+  const [inviteRole, setInviteRole]           = useState<'member' | 'band_admin'>('member');
+  const [inviteSending, setInviteSending]     = useState(false);
+  const [inviteMsg, setInviteMsg]             = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [revoking, setRevoking]               = useState<string | null>(null);
+
+  // Notification preferences
+  const [notifPrefs, setNotifPrefs]           = useState({ venue_reply_email: true, followup_reminder_email: true });
+  const [notifSaving, setNotifSaving]         = useState(false);
+  const [notifSaved, setNotifSaved]           = useState(false);
+
+  // Danger zone
+  const [deleteConfirm, setDeleteConfirm]     = useState('');
+  const [deleting, setDeleting]               = useState(false);
+  const [deleteError, setDeleteError]         = useState('');
+
+  useEffect(() => { load(); loadGcal(); loadTeam(); }, []);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -128,6 +147,85 @@ export default function Settings() {
       });
       if (res.ok) setGcal(await res.json());
     } catch {}
+  };
+
+  const loadTeam = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: prof } = await supabase.from('user_profiles').select('act_id, notification_preferences').eq('id', user.id).single();
+    if (!prof?.act_id) return;
+
+    const [membersRes, invitesRes] = await Promise.all([
+      supabase.from('user_profiles').select('id, display_name, email, role').eq('act_id', prof.act_id),
+      supabase.from('act_invitations').select('id, email, role, expires_at').eq('act_id', prof.act_id).eq('status', 'pending').gt('expires_at', new Date().toISOString()),
+    ]);
+    setMembers(membersRes.data || []);
+    setPendingInvites(invitesRes.data || []);
+    if (prof.notification_preferences) {
+      setNotifPrefs({
+        venue_reply_email:       (prof.notification_preferences as any).venue_reply_email       ?? true,
+        followup_reminder_email: (prof.notification_preferences as any).followup_reminder_email ?? true,
+      });
+    }
+  };
+
+  const sendInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    setInviteSending(true);
+    setInviteMsg(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setInviteSending(false); return; }
+    const res = await fetch('/api/invites/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setInviteMsg({ type: 'success', text: data.message });
+      setInviteEmail('');
+      loadTeam();
+    } else {
+      setInviteMsg({ type: 'error', text: data.error });
+    }
+    setInviteSending(false);
+  };
+
+  const revokeInvite = async (id: string) => {
+    setRevoking(id);
+    await supabase.from('act_invitations').update({ status: 'revoked' }).eq('id', id);
+    setPendingInvites(prev => prev.filter(i => i.id !== id));
+    setRevoking(null);
+  };
+
+  const saveNotifPrefs = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    setNotifSaving(true);
+    await supabase.from('user_profiles').update({ notification_preferences: notifPrefs }).eq('id', user.id);
+    setNotifSaving(false);
+    setNotifSaved(true);
+    setTimeout(() => setNotifSaved(false), 3000);
+  };
+
+  const deleteAccount = async () => {
+    if (deleteConfirm !== 'DELETE') return;
+    setDeleting(true);
+    setDeleteError('');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setDeleting(false); return; }
+    const res = await fetch('/api/account/delete', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (res.ok) {
+      await supabase.auth.signOut();
+      window.location.href = '/';
+    } else {
+      const data = await res.json();
+      setDeleteError(data.error || 'Failed to delete account');
+      setDeleting(false);
+    }
   };
 
   const connectGoogle = async () => {
@@ -752,6 +850,176 @@ export default function Settings() {
                   </>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── TEAM MEMBERS ── */}
+        {(profile?.role === 'band_admin' || profile?.role === 'superadmin') && myAct && (
+          <div>
+            <div style={sectionLabelStyle}>Team Members</div>
+            <div className="card">
+              <div className="card-header"><span className="card-title">MEMBERS</span></div>
+
+              {/* Current members */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+                {members.map(m => (
+                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
+                    <div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: 'var(--text-primary)' }}>{m.display_name || m.email}</div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{m.email}</div>
+                    </div>
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: m.role === 'band_admin' ? '#a78bfa' : 'var(--text-muted)' }}>
+                      {m.role === 'band_admin' ? 'Band Admin' : 'Member'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Pending invites */}
+              {pendingInvites.length > 0 && (
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                    Pending Invites
+                  </div>
+                  {pendingInvites.map(inv => (
+                    <div key={inv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', borderBottom: '1px solid var(--border)' }}>
+                      <div>
+                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>{inv.email}</div>
+                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                          {inv.role === 'band_admin' ? 'Band Admin' : 'Member'} · expires {new Date(inv.expires_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ color: '#f87171', fontSize: '0.7rem' }}
+                        onClick={() => revokeInvite(inv.id)}
+                        disabled={revoking === inv.id}
+                      >
+                        {revoking === inv.id ? '…' : 'Revoke'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Invite form */}
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
+                  Invite Member
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <input
+                    className="input"
+                    type="email"
+                    placeholder="email@example.com"
+                    value={inviteEmail}
+                    onChange={e => setInviteEmail(e.target.value)}
+                    style={{ flex: '1 1 200px', fontSize: '16px' }}
+                  />
+                  <select
+                    className="input select"
+                    value={inviteRole}
+                    onChange={e => setInviteRole(e.target.value as any)}
+                    style={{ flex: '0 0 130px', fontSize: '16px' }}
+                  >
+                    <option value="member">Member</option>
+                    <option value="band_admin">Band Admin</option>
+                  </select>
+                  <button
+                    className="btn btn-primary"
+                    onClick={sendInvite}
+                    disabled={inviteSending || !inviteEmail.trim()}
+                    style={{ flex: '0 0 auto', minHeight: 44 }}
+                  >
+                    {inviteSending ? 'Sending…' : 'Send Invite'}
+                  </button>
+                </div>
+                {inviteMsg && (
+                  <div style={{ marginTop: '0.5rem', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: inviteMsg.type === 'success' ? '#4ade80' : '#f87171' }}>
+                    {inviteMsg.text}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── NOTIFICATION PREFERENCES ── */}
+        {profile && profile.role !== 'superadmin' && (
+          <div>
+            <div style={sectionLabelStyle}>Notifications</div>
+            <div className="card">
+              <div className="card-header"><span className="card-title">EMAIL NOTIFICATIONS</span></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={notifPrefs.venue_reply_email}
+                    onChange={e => setNotifPrefs(p => ({ ...p, venue_reply_email: e.target.checked }))}
+                  />
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: 'var(--text-primary)' }}>Venue replies</div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>Email me when a venue replies to an outreach</div>
+                  </div>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={notifPrefs.followup_reminder_email}
+                    onChange={e => setNotifPrefs(p => ({ ...p, followup_reminder_email: e.target.checked }))}
+                  />
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: 'var(--text-primary)' }}>Follow-up reminders</div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>Email me when a follow-up is due</div>
+                  </div>
+                </label>
+                <button
+                  className="btn btn-secondary"
+                  onClick={saveNotifPrefs}
+                  disabled={notifSaving}
+                  style={{ alignSelf: 'flex-start' }}
+                >
+                  {notifSaving ? 'Saving…' : notifSaved ? '✓ Saved' : 'Save Preferences'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── DANGER ZONE ── */}
+        {profile && profile.role !== 'superadmin' && (
+          <div>
+            <div style={{ ...sectionLabelStyle, color: '#f87171' }}>Danger Zone</div>
+            <div className="card" style={{ border: '1px solid rgba(248,113,113,0.25)' }}>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '0.5rem', fontWeight: 600 }}>
+                Delete my account
+              </div>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem', lineHeight: 1.5 }}>
+                This permanently deletes your account. Type <strong style={{ color: '#f87171' }}>DELETE</strong> to confirm.
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <input
+                  className="input"
+                  placeholder="Type DELETE to confirm"
+                  value={deleteConfirm}
+                  onChange={e => setDeleteConfirm(e.target.value)}
+                  style={{ flex: '1 1 200px', fontSize: '16px', borderColor: deleteConfirm === 'DELETE' ? '#f87171' : undefined }}
+                />
+                <button
+                  className="btn"
+                  style={{ background: '#f87171', color: '#000', border: 'none', minHeight: 44 }}
+                  onClick={deleteAccount}
+                  disabled={deleteConfirm !== 'DELETE' || deleting}
+                >
+                  {deleting ? 'Deleting…' : 'Delete Account'}
+                </button>
+              </div>
+              {deleteError && (
+                <div style={{ marginTop: '0.5rem', color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>
+                  {deleteError}
+                </div>
+              )}
             </div>
           </div>
         )}

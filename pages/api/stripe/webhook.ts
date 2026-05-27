@@ -2,6 +2,7 @@
 import Stripe from 'stripe';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
+import { createNotification } from '../../../lib/notifications';
 
 export const config = { api: { bodyParser: false } };
 
@@ -75,6 +76,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           subscription_tier:      tier || undefined,
           role: 'band_admin',
         }).eq('id', userId);
+        await createNotification({
+          userId,
+          type:    'subscription_active',
+          message: 'Your subscription is now active. Welcome to Camel Ranch Booking!',
+        });
       }
       break;
     }
@@ -93,6 +99,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         subscription_status:    'cancelled',
         stripe_subscription_id: null,
       }).eq('id', userId);
+      await createNotification({
+        userId,
+        type:    'subscription_cancelled',
+        message: 'Your subscription has been cancelled. Visit Settings to resubscribe.',
+        actionUrl: '/settings',
+      });
       break;
     }
     case 'invoice.payment_failed': {

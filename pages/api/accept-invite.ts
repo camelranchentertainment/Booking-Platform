@@ -1,5 +1,6 @@
 ﻿import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../lib/supabase';
+import { createNotification } from '../../lib/notifications';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -62,6 +63,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Mark invite accepted
   await supabase.from('act_invitations').update({ status: 'accepted' }).eq('id', invite.id);
+
+  // Notify the band admin who sent the invite
+  if (invite.invited_by) {
+    const { data: newMember } = await supabase
+      .from('user_profiles')
+      .select('display_name, email')
+      .eq('id', userId)
+      .maybeSingle();
+    const name = newMember?.display_name || newMember?.email || 'Someone';
+    await createNotification({
+      userId:    invite.invited_by,
+      actId:     invite.act_id,
+      type:      'invite_accepted',
+      message:   `${name} accepted your invitation and joined the act.`,
+      actionUrl: '/settings',
+    });
+  }
 
   return res.status(200).json({ ok: true, role: invite.role });
 }

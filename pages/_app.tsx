@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import '../styles/globals.css';
 import { supabase } from '../lib/supabase';
 import { AuthProvider } from '../contexts/AuthContext';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -18,8 +19,10 @@ export default function App({ Component, pageProps }: AppProps) {
   }, [router]);
 
   return (
-    <AuthProvider>
-      <Component {...pageProps} />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Component {...pageProps} />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
