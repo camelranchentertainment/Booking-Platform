@@ -5,6 +5,7 @@ import '../styles/globals.css';
 import { supabase } from '../lib/supabase';
 import { AuthProvider } from '../contexts/AuthContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import ImpersonationBanner from '../components/ImpersonationBanner';
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function App({ Component, pageProps }: AppProps) {
 
   return (
     <ErrorBoundary>
+      <ImpersonationBanner />
       <AuthProvider>
         <Component {...pageProps} />
       </AuthProvider>

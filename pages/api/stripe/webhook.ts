@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
 import { createNotification } from '../../../lib/notifications';
+import { seedDefaultTemplates } from '../../../lib/seedDefaultTemplates';
 
 export const config = { api: { bodyParser: false } };
 
@@ -81,6 +82,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           type:    'subscription_active',
           message: 'Your subscription is now active. Welcome to Camel Ranch Booking!',
         });
+        // Seed default email templates if act exists
+        const { data: profile } = await service
+          .from('user_profiles').select('act_id').eq('id', userId).single();
+        if (profile?.act_id) {
+          await seedDefaultTemplates(service, profile.act_id);
+        }
       }
       break;
     }

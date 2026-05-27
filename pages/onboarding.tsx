@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
+import { seedDefaultTemplates } from '../lib/seedDefaultTemplates';
 
 const STEPS = ['Welcome', 'First Venue', 'Email', 'Ready'] as const;
 
@@ -74,6 +75,9 @@ export default function Onboarding() {
       .from('user_profiles')
       .update({ onboarding_completed: true })
       .eq('id', userId);
+    if (actId) {
+      await seedDefaultTemplates(supabase, actId);
+    }
     router.replace('/band');
   };
 

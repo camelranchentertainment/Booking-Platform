@@ -29,22 +29,24 @@ const superadminNav = [
 
 const bandAdminNav = [
   { label: 'Dashboard',  href: '/band',         icon: '◈' },
-  { label: 'Calendar',   href: '/calendar',     icon: '◷' },
-  { label: 'Email',      href: '/email',        icon: '✉' },
   { label: 'Tours',      href: '/tours',        icon: '⟴' },
-  { label: 'Socials',    href: '/social',       icon: '✦' },
-  { label: 'Media',      href: '/media',        icon: '⬛' },
   { label: 'Venues',     href: '/venues',       icon: '⌂' },
+  { label: 'Email',      href: '/email',        icon: '✉' },
+  { label: 'Calendar',   href: '/calendar',     icon: '◷' },
+  { label: 'Analytics',  href: '/analytics',    icon: '↗' },
   { label: 'Financials', href: '/financials',   icon: '$' },
+  { label: 'History',    href: '/history',      icon: '◎' },
+  { label: 'Media',      href: '/media',        icon: '⬛' },
+  { label: 'Socials',    href: '/social',       icon: '✦' },
   { label: 'Members',    href: '/band/members', icon: '♟' },
   { label: 'Settings',   href: '/settings',     icon: '⚙' },
-  { label: 'History',    href: '/history',      icon: '◎' },
 ];
 
 const memberNav = [
   { label: 'Dashboard', href: '/member',          icon: '◈' },
   { label: 'Today',     href: '/today',           icon: '◉' },
   { label: 'Calendar',  href: '/member/calendar', icon: '◷' },
+  { label: 'History',   href: '/history',         icon: '◎' },
 ];
 
 export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {

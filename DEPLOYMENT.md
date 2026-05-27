@@ -31,6 +31,9 @@ NEXT_PUBLIC_BASE_URL=https://camelranchbooking.com
 
 # Email encryption (32-byte hex key for IMAP password storage)
 EMAIL_ENCRYPT_KEY=
+
+# Follow-up cron secret (also set in Supabase Edge Function env)
+CRON_SECRET=
 ```
 
 ---
@@ -54,6 +57,7 @@ Run migrations in order in the Supabase SQL Editor:
 2. `supabase/migrations/20260527_phase2_calendar_pipeline.sql`
 3. `supabase/migrations/20260527_phase4_media_library.sql`
 4. `supabase/migrations/20260527_phase5_polish_launch.sql`
+5. `supabase/migrations/20260527_phase6_financials_history_followup.sql`
 
 ---
 
@@ -83,6 +87,23 @@ Log in as superadmin and go to Admin → Platform Settings to set:
 - `resend_from_email` — sending address (must be a verified domain in Resend)
 - `stripe_secret_key` — same as `STRIPE_SECRET_KEY` env var (or use env var only)
 - `anthropic_api_key` — your Anthropic API key
+
+---
+
+## Supabase Edge Functions
+
+### process-followups (daily follow-up automation)
+
+1. Deploy the function:
+   ```bash
+   supabase functions deploy process-followups
+   ```
+2. Set environment secrets in Supabase Dashboard → Edge Functions → process-followups → Secrets:
+   - `CRON_SECRET` — a random string, also set as Vercel env var
+3. Register the cron schedule in Supabase Dashboard → Edge Functions → Schedules:
+   - Function: `process-followups`
+   - Schedule: `0 14 * * *` (14:00 UTC = 8am CT)
+   - Authorization header: `Bearer <CRON_SECRET>`
 
 ---
 

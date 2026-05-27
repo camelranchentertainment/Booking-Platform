@@ -76,12 +76,21 @@ export default function Settings() {
   const [notifSaving, setNotifSaving]         = useState(false);
   const [notifSaved, setNotifSaved]           = useState(false);
 
+  // Follow-up automation
+  const [followupRule, setFollowupRule]         = useState<any>(null);
+  const [followupForm, setFollowupForm]         = useState({
+    enabled: true, first_followup_days: 7, second_followup_days: 14, max_followups: 2, followup_template_id: '',
+  });
+  const [followupSaving, setFollowupSaving]     = useState(false);
+  const [followupSaved, setFollowupSaved]       = useState(false);
+  const [followupTemplates, setFollowupTemplates] = useState<any[]>([]);
+
   // Danger zone
   const [deleteConfirm, setDeleteConfirm]     = useState('');
   const [deleting, setDeleting]               = useState(false);
   const [deleteError, setDeleteError]         = useState('');
 
-  useEffect(() => { load(); loadGcal(); loadTeam(); }, []);
+  useEffect(() => { load(); loadGcal(); loadTeam(); loadFollowupRule(); }, []);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -196,6 +205,49 @@ export default function Settings() {
     await supabase.from('act_invitations').update({ status: 'revoked' }).eq('id', id);
     setPendingInvites(prev => prev.filter(i => i.id !== id));
     setRevoking(null);
+  };
+
+  const loadFollowupRule = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: prof } = await supabase.from('user_profiles').select('act_id, role').eq('id', user.id).single();
+    if (!prof?.act_id || !['band_admin', 'superadmin'].includes(prof.role)) return;
+    const [ruleRes, tmplRes] = await Promise.all([
+      supabase.from('followup_rules').select('*').eq('act_id', prof.act_id).maybeSingle(),
+      supabase.from('email_templates').select('id, category').eq('act_id', prof.act_id),
+    ]);
+    if (ruleRes.data) {
+      setFollowupRule(ruleRes.data);
+      setFollowupForm({
+        enabled:             ruleRes.data.enabled,
+        first_followup_days: ruleRes.data.first_followup_days,
+        second_followup_days:ruleRes.data.second_followup_days,
+        max_followups:       ruleRes.data.max_followups,
+        followup_template_id:ruleRes.data.followup_template_id || '',
+      });
+    }
+    setFollowupTemplates(tmplRes.data || []);
+  };
+
+  const saveFollowupRule = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
+    if (!prof?.act_id) return;
+    setFollowupSaving(true);
+    const upsertData = {
+      act_id:               prof.act_id,
+      enabled:              followupForm.enabled,
+      first_followup_days:  followupForm.first_followup_days,
+      second_followup_days: followupForm.second_followup_days,
+      max_followups:        followupForm.max_followups,
+      followup_template_id: followupForm.followup_template_id || null,
+      updated_at:           new Date().toISOString(),
+    };
+    await supabase.from('followup_rules').upsert(upsertData, { onConflict: 'act_id' });
+    setFollowupSaving(false);
+    setFollowupSaved(true);
+    setTimeout(() => setFollowupSaved(false), 3000);
   };
 
   const saveNotifPrefs = async () => {
@@ -981,6 +1033,77 @@ export default function Settings() {
                   style={{ alignSelf: 'flex-start' }}
                 >
                   {notifSaving ? 'Saving…' : notifSaved ? '✓ Saved' : 'Save Preferences'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── FOLLOW-UP AUTOMATION ── */}
+        {profile && profile.role === 'band_admin' && (
+          <div>
+            <div style={sectionLabelStyle}>Follow-up Automation</div>
+            <div className="card">
+              <div className="card-header"><span className="card-title">AUTOMATIC FOLLOW-UPS</span></div>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1.1rem', lineHeight: 1.6 }}>
+                Automatically queue follow-up emails for venues that haven't responded after N days.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+                  <input type="checkbox"
+                    checked={followupForm.enabled}
+                    onChange={e => setFollowupForm(f => ({ ...f, enabled: e.target.checked }))} />
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                      Enable follow-up automation
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      Run the daily cron job to queue follow-ups automatically
+                    </div>
+                  </div>
+                </label>
+
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>FIRST FOLLOW-UP AFTER (DAYS)</span>
+                    <input type="number" className="input" style={{ width: 100 }} min={1} max={60}
+                      value={followupForm.first_followup_days}
+                      onChange={e => setFollowupForm(f => ({ ...f, first_followup_days: parseInt(e.target.value, 10) || 7 }))} />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>SECOND FOLLOW-UP AFTER (DAYS)</span>
+                    <input type="number" className="input" style={{ width: 100 }} min={1} max={90}
+                      value={followupForm.second_followup_days}
+                      onChange={e => setFollowupForm(f => ({ ...f, second_followup_days: parseInt(e.target.value, 10) || 14 }))} />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>MAX FOLLOW-UPS</span>
+                    <select className="select" style={{ width: 90 }}
+                      value={followupForm.max_followups}
+                      onChange={e => setFollowupForm(f => ({ ...f, max_followups: parseInt(e.target.value, 10) }))}>
+                      <option value={1}>1</option>
+                      <option value={2}>2</option>
+                    </select>
+                  </label>
+                </div>
+
+                {followupTemplates.length > 0 && (
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>FOLLOW-UP EMAIL TEMPLATE</span>
+                    <select className="select" style={{ maxWidth: 320 }}
+                      value={followupForm.followup_template_id}
+                      onChange={e => setFollowupForm(f => ({ ...f, followup_template_id: e.target.value }))}>
+                      <option value="">Use default template</option>
+                      {followupTemplates.map(t => (
+                        <option key={t.id} value={t.id}>{t.category}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                <button className="btn btn-secondary" style={{ alignSelf: 'flex-start' }}
+                  onClick={saveFollowupRule} disabled={followupSaving}>
+                  {followupSaving ? 'Saving…' : followupSaved ? '✓ Saved' : 'Save Follow-up Settings'}
                 </button>
               </div>
             </div>

@@ -557,6 +557,16 @@ export default function AdminPage() {
                           onClick={() => { setFixBandTarget(u); setFixBandActId(u.resolvedActId || ''); }}>
                           Fix Band
                         </button>
+                        {/* Impersonate */}
+                        {u.role === 'band_admin' && u.actName && (
+                          <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.68rem', color: '#fbbf24' }}
+                            onClick={() => {
+                              localStorage.setItem('crb_impersonating', JSON.stringify({ act_name: u.actName, user_id: u.id }));
+                              window.location.reload();
+                            }}>
+                            View As
+                          </button>
+                        )}
                         {/* Delete */}
                         {u.role !== 'superadmin' && (
                           <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.68rem', color: '#f87171' }}
