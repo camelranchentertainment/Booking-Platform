@@ -33,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === 'PATCH') {
-    const { id, status, content } = req.body;
+    const { id, status, content, image_url } = req.body;
     if (!id) return res.status(400).json({ error: 'id required' });
 
     const { data: post } = await service.from('social_queue').select('act_id').eq('id', id).maybeSingle();
@@ -42,6 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const update: any = {};
     if (status) update.status = status;
     if (content !== undefined) update.content = content;
+    if (image_url !== undefined) update.image_url = image_url;
 
     const { data, error } = await service.from('social_queue').update(update).eq('id', id).select('*').single();
     if (error) return res.status(500).json({ error: error.message });

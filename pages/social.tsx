@@ -66,6 +66,9 @@ export default function SocialQueue() {
   const [credSaving, setCredSaving] = useState(false);
   const [credSaved, setCredSaved]   = useState(false);
   const [copyDone, setCopyDone]     = useState<string | null>(null);
+  const [imagePickerPost, setImagePickerPost] = useState<string | null>(null);
+  const [mediaItems, setMediaItems] = useState<any[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
 
   useEffect(() => { loadActs(); }, []);
   useEffect(() => { loadPosts(); }, [view]);
@@ -161,6 +164,35 @@ export default function SocialQueue() {
       setPublishResult(r => ({ ...r, [post.id]: data.error || 'Failed' }));
     }
     setPublishing(null);
+  };
+
+  const loadMedia = async () => {
+    if (mediaItems.length > 0) return;
+    setMediaLoading(true);
+    const { data } = await supabase
+      .from('media_library')
+      .select('id, public_url, file_name, file_type, mime_type')
+      .in('file_type', ['image', 'logo'])
+      .order('created_at', { ascending: false });
+    setMediaItems(data || []);
+    setMediaLoading(false);
+  };
+
+  const openImagePicker = (postId: string) => {
+    setImagePickerPost(postId);
+    loadMedia();
+  };
+
+  const attachImage = async (postId: string, imageUrl: string | null) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    await fetch('/api/social/queue', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ id: postId, image_url: imageUrl }),
+    });
+    setPosts(p => p.map(post => post.id === postId ? { ...post, image_url: imageUrl } : post));
+    setImagePickerPost(null);
   };
 
   const saveCredentials = async () => {
@@ -373,6 +405,43 @@ export default function SocialQueue() {
                   </div>
                 )}
 
+                {/* Attached image */}
+                {post.image_url && (
+                  <div style={{ marginBottom: '0.75rem', position: 'relative', display: 'inline-block' }}>
+                    <img
+                      src={post.image_url}
+                      alt="Post image"
+                      style={{ maxHeight: 160, maxWidth: '100%', borderRadius: 6, border: '1px solid var(--border)', display: 'block' }}
+                    />
+                    {post.status === 'pending' && (
+                      <button
+                        onClick={() => attachImage(post.id, null)}
+                        style={{
+                          position: 'absolute', top: 4, right: 4,
+                          background: 'rgba(0,0,0,0.7)', color: '#f87171',
+                          border: 'none', borderRadius: '50%', width: 22, height: 22,
+                          cursor: 'pointer', fontSize: '0.75rem', lineHeight: 1,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                        title="Remove image"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Image picker button */}
+                {post.status === 'pending' && editing !== post.id && !post.image_url && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ marginBottom: '0.6rem', fontSize: '0.75rem', opacity: 0.7 }}
+                    onClick={() => openImagePicker(post.id)}
+                  >
+                    + Add Image
+                  </button>
+                )}
+
                 {/* Algorithm tip */}
                 {post.status === 'pending' && editing !== post.id && meta && (
                   <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: meta.color, opacity: 0.8, marginBottom: '0.6rem' }}>
@@ -575,6 +644,73 @@ export default function SocialQueue() {
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Image picker modal */}
+      {imagePickerPost && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000, padding: '1rem',
+        }}>
+          <div style={{
+            background: 'var(--bg-card, #1a1208)',
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            padding: '1.5rem',
+            width: '100%', maxWidth: 560,
+            maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: '1rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: 'var(--text-primary)', lineHeight: 1 }}>
+                PICK IMAGE
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setImagePickerPost(null)}>✕</button>
+            </div>
+
+            {mediaLoading ? (
+              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.85rem', padding: '1rem 0' }}>
+                Loading…
+              </div>
+            ) : mediaItems.length === 0 ? (
+              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.85rem', padding: '1rem 0', textAlign: 'center' }}>
+                No images in your media library yet.{' '}
+                <a href="/media" style={{ color: 'var(--accent)' }}>Upload images</a> first.
+              </div>
+            ) : (
+              <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
+                gap: '0.75rem', overflowY: 'auto', flex: 1,
+              }}>
+                {mediaItems.map(img => (
+                  <div
+                    key={img.id}
+                    onClick={() => attachImage(imagePickerPost, img.public_url)}
+                    style={{
+                      cursor: 'pointer',
+                      border: '2px solid rgba(255,255,255,0.08)',
+                      borderRadius: 6, overflow: 'hidden',
+                      transition: 'border-color 0.15s',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                    onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}
+                  >
+                    <div style={{ width: '100%', paddingBottom: '66%', position: 'relative', background: 'rgba(0,0,0,0.3)' }}>
+                      <img
+                        src={img.public_url}
+                        alt={img.file_name}
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    </div>
+                    <div style={{ padding: '0.3rem 0.4rem', fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {img.file_name}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

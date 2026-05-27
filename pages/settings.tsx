@@ -55,6 +55,11 @@ export default function Settings() {
   const [actPhotoError, setActPhotoError]   = useState('');
   const actPhotoRef = useRef<HTMLInputElement>(null);
 
+  const [logoUrl, setLogoUrl]               = useState<string | null>(null);
+  const [logoUploading, setLogoUploading]   = useState(false);
+  const [logoError, setLogoError]           = useState('');
+  const logoRef = useRef<HTMLInputElement>(null);
+
   const [gcalMsg, setGcalMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => { load(); loadGcal(); }, []);
@@ -93,6 +98,7 @@ export default function Settings() {
         if (act) {
           setMyAct(act);
           setActPhotoUrl(act.profile_photo_url || null);
+          setLogoUrl(act.logo_url || null);
           setActForm({
             act_name:      act.act_name      || '',
             genre:         act.genre         || '',
@@ -217,6 +223,36 @@ export default function Settings() {
     setActPhotoUploading(false);
     // Reset file input so same file can be re-uploaded
     if (actPhotoRef.current) actPhotoRef.current.value = '';
+  };
+
+  const uploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !myAct) return;
+    if (!file.type.startsWith('image/')) { setLogoError('Please choose an image file'); return; }
+    if (file.size > 10 * 1024 * 1024) { setLogoError('Logo must be under 10 MB'); return; }
+    setLogoError('');
+    setLogoUploading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setLogoUploading(false); return; }
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('is_primary_logo', 'true');
+    fd.append('file_type', 'logo');
+    const res = await fetch('/api/media/upload', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      setLogoError(err.error || 'Upload failed');
+      setLogoUploading(false);
+      return;
+    }
+    const record = await res.json();
+    setLogoUrl(record.public_url);
+    setLogoUploading(false);
+    if (logoRef.current) logoRef.current.value = '';
   };
 
   const save = async (e: React.FormEvent) => {
@@ -442,6 +478,50 @@ export default function Settings() {
                         </button>
                       )}
                       {actPhotoError && <div style={{ color: '#f87171', fontSize: '0.75rem', fontFamily: 'var(--font-body)', marginTop: '0.25rem' }}>{actPhotoError}</div>}
+                    </div>
+                  </div>
+
+                  {/* Logo upload */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border)' }}>
+                    <div
+                      onClick={() => !logoUploading && logoRef.current?.click()}
+                      style={{
+                        width: 88, height: 88, flexShrink: 0,
+                        background: logoUrl ? 'transparent' : 'rgba(224,120,32,0.1)',
+                        border: '2px solid var(--border)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: logoUploading ? 'wait' : 'pointer',
+                        overflow: 'hidden', position: 'relative', transition: 'border-color 0.15s',
+                      }}
+                      title="Click to upload act logo"
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+                    >
+                      {logoUrl
+                        ? <img src={logoUrl} alt="Act logo" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 4 }} />
+                        : <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--accent)', lineHeight: 1, textAlign: 'center' }}>LOGO</span>
+                      }
+                      {logoUploading && (
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ color: '#fff', fontSize: '0.72rem', fontFamily: 'var(--font-body)' }}>Uploading…</span>
+                        </div>
+                      )}
+                      {!logoUploading && !logoUrl && (
+                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(224,120,32,0.7)', padding: '2px 0', textAlign: 'center', fontSize: '0.6rem', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', color: '#000', textTransform: 'uppercase' }}>Upload</div>
+                      )}
+                    </div>
+                    <input ref={logoRef} type="file" accept="image/*" onChange={uploadLogo} style={{ display: 'none' }} />
+                    <div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.2rem' }}>Act Logo</div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                        Used in email templates and media kit.<br />PNG, SVG or JPG · max 10 MB · transparent background ideal
+                      </div>
+                      {logoUrl && (
+                        <button type="button" onClick={() => logoRef.current?.click()} className="btn btn-ghost btn-sm" style={{ marginTop: '0.35rem', fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}>
+                          Replace logo
+                        </button>
+                      )}
+                      {logoError && <div style={{ color: '#f87171', fontSize: '0.75rem', fontFamily: 'var(--font-body)', marginTop: '0.25rem' }}>{logoError}</div>}
                     </div>
                   </div>
 

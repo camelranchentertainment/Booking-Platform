@@ -33,6 +33,7 @@ const bandAdminNav = [
   { label: 'Email',      href: '/email',        icon: '✉' },
   { label: 'Tours',      href: '/tours',        icon: '⟴' },
   { label: 'Socials',    href: '/social',       icon: '✦' },
+  { label: 'Media',      href: '/media',        icon: '⬛' },
   { label: 'Venues',     href: '/venues',       icon: '⌂' },
   { label: 'Financials', href: '/financials',   icon: '$' },
   { label: 'Members',    href: '/band/members', icon: '♟' },
