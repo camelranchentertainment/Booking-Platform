@@ -64,6 +64,11 @@ export default function BandDashboard() {
   const [sending, setSending]                     = useState(false);
   const [sendResult, setSendResult]               = useState<{ sent: number; noEmail: number; errors: number } | null>(null);
 
+  // Band setup form (shown when act_id is null)
+  const [setupForm, setSetupForm]     = useState({ act_name: '', home_city: '', home_state: '', bio: '' });
+  const [setupSaving, setSetupSaving] = useState(false);
+  const [setupError, setSetupError]   = useState('');
+
   const threadRef = useRef<HTMLDivElement>(null);
   const today = new Date().toISOString().split('T')[0];
 
@@ -118,6 +123,47 @@ export default function BandDashboard() {
     }
 
     setLoading(false);
+  };
+
+  const createAct = async () => {
+    if (!setupForm.act_name.trim()) { setSetupError('Act name is required.'); return; }
+    setSetupSaving(true);
+    setSetupError('');
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSetupError('Not signed in.'); setSetupSaving(false); return; }
+
+    const { data: newAct, error: actError } = await supabase
+      .from('acts')
+      .insert({
+        owner_id:  user.id,
+        act_name:  setupForm.act_name.trim(),
+        home_city: setupForm.home_city.trim() || null,
+        home_state: setupForm.home_state.trim() || null,
+        bio:       setupForm.bio.trim() || null,
+        is_active: true,
+      })
+      .select('id')
+      .single();
+
+    if (actError || !newAct) {
+      setSetupError(actError?.message || 'Failed to create act.');
+      setSetupSaving(false);
+      return;
+    }
+
+    const { error: profileError } = await supabase
+      .from('user_profiles')
+      .update({ act_id: newAct.id })
+      .eq('id', user.id);
+
+    if (profileError) {
+      setSetupError(profileError.message);
+      setSetupSaving(false);
+      return;
+    }
+
+    await load();
   };
 
   const sendMessage = async (msg: string, saveNote = false) => {
@@ -280,12 +326,73 @@ export default function BandDashboard() {
         </div>
       )}
 
-      {/* ── No act state ─────────────────────────────────────────────────────── */}
+      {/* ── No act state — inline setup form ────────────────────────────────── */}
       {!loading && !myAct && (
-        <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--accent)', marginBottom: '1rem' }}>GET STARTED</div>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>Your account isn't connected to a band yet.</p>
-          <Link href="/settings" className="btn btn-primary">Set Up Your Band →</Link>
+        <div className="card" style={{ maxWidth: 480, margin: '4rem auto', padding: '2.5rem 2rem' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', color: 'var(--accent)', marginBottom: '0.5rem', letterSpacing: '0.04em' }}>GET STARTED</div>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '1.75rem', fontSize: 14 }}>Create your band profile to unlock the dashboard.</p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Act Name <span style={{ color: '#f87171' }}>*</span></label>
+              <input
+                className="input"
+                style={{ width: '100%' }}
+                placeholder="e.g. The Desert Kings"
+                value={setupForm.act_name}
+                onChange={e => setSetupForm(f => ({ ...f, act_name: e.target.value }))}
+                disabled={setupSaving}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Home City</label>
+                <input
+                  className="input"
+                  style={{ width: '100%' }}
+                  placeholder="Nashville"
+                  value={setupForm.home_city}
+                  onChange={e => setSetupForm(f => ({ ...f, home_city: e.target.value }))}
+                  disabled={setupSaving}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>State</label>
+                <input
+                  className="input"
+                  style={{ width: '100%' }}
+                  placeholder="TN"
+                  value={setupForm.home_state}
+                  onChange={e => setSetupForm(f => ({ ...f, home_state: e.target.value }))}
+                  disabled={setupSaving}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Bio</label>
+              <textarea
+                className="input"
+                style={{ width: '100%', minHeight: 80, resize: 'vertical' }}
+                placeholder="A few sentences about your act…"
+                value={setupForm.bio}
+                onChange={e => setSetupForm(f => ({ ...f, bio: e.target.value }))}
+                disabled={setupSaving}
+              />
+            </div>
+
+            {setupError && <div style={{ fontSize: 13, color: '#f87171' }}>{setupError}</div>}
+
+            <button
+              className="btn btn-primary"
+              style={{ marginTop: '0.25rem' }}
+              onClick={createAct}
+              disabled={setupSaving || !setupForm.act_name.trim()}
+            >
+              {setupSaving ? 'Creating…' : 'Create Band Profile →'}
+            </button>
+          </div>
         </div>
       )}
 
