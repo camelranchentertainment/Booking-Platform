@@ -26,6 +26,7 @@
     "autoprefixer": "^10.4.23",
     "axios": "^1.13.2",
     "cheerio": "^1.1.2",
+    "formidable": "^3.5.4",
     "googleapis": "^170.1.0",
     "ical-generator": "^10.2.0",
     "imap": "^0.8.19",
@@ -42,6 +43,7 @@
   "devDependencies": {
     "@commitlint/cli": "^20.5.3",
     "@commitlint/config-conventional": "^20.5.3",
+    "@types/formidable": "^3.5.1",
     "@types/imap": "^0.8.40",
     "@types/jest": "^30.0.0",
     "@types/mailparser": "^3.4.4",
