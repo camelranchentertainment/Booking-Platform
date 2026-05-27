@@ -64,6 +64,7 @@ export interface ActInvitation {
 
 export interface Venue {
   id: string;
+  act_id?: string | null;
   name: string;
   address?: string | null;
   city: string;
@@ -90,6 +91,7 @@ export interface Venue {
 
 export interface Contact {
   id: string;
+  act_id?: string | null;
   venue_id?: string | null;
   first_name: string;
   last_name: string;
@@ -195,6 +197,7 @@ export interface EmailLogEntry {
 
 export interface RoutingRule {
   id: string;
+  act_id?: string | null;
   name: string;
   trigger_status: BookingStatus;
   delay_days: number;

@@ -19,6 +19,17 @@ function buildAdminMock(overrides: Partial<{
   upsertError: any;
   actInsertError: any;
 }> = {}) {
+  const actInsertChain = {
+    select: jest.fn().mockReturnThis(),
+    single: jest.fn().mockResolvedValue(
+      overrides.actInsertError
+        ? { data: null, error: overrides.actInsertError }
+        : { data: { id: 'act-456' }, error: null }
+    ),
+  };
+  const updateChain = {
+    eq: jest.fn().mockResolvedValue({ error: null }),
+  };
   return {
     auth: {
       admin: {
@@ -30,9 +41,21 @@ function buildAdminMock(overrides: Partial<{
         deleteUser: jest.fn().mockResolvedValue({}),
       },
     },
-    from: jest.fn().mockReturnValue({
-      upsert: jest.fn().mockResolvedValue({ error: overrides.upsertError || null }),
-      insert: jest.fn().mockResolvedValue({ error: overrides.actInsertError || null }),
+    from: jest.fn().mockImplementation((table: string) => {
+      if (table === 'acts') {
+        return { insert: jest.fn().mockReturnValue(actInsertChain) };
+      }
+      if (table === 'user_profiles') {
+        return {
+          upsert: jest.fn().mockResolvedValue({ error: overrides.upsertError || null }),
+          update: jest.fn().mockReturnValue(updateChain),
+        };
+      }
+      return {
+        upsert: jest.fn().mockResolvedValue({ error: overrides.upsertError || null }),
+        insert: jest.fn().mockReturnValue(actInsertChain),
+        update: jest.fn().mockReturnValue(updateChain),
+      };
     }),
   };
 }

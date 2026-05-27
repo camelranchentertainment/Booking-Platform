@@ -241,6 +241,7 @@ const loadPool = async () => {
     setDiscoverAdding(p.place_id);
     const { data: { user } } = await supabase.auth.getUser();
     const { data: { session } } = await supabase.auth.getSession();
+    const { data: dp } = await supabase.from('user_profiles').select('act_id').eq('id', user!.id).single();
 
     let venueId: string | null = null;
 
@@ -254,7 +255,7 @@ const loadPool = async () => {
       }
     } else {
       const { data: inserted } = await supabase.from('venues').insert({
-        name: p.name, city: p.city, state: p.state,
+        act_id: dp?.act_id, name: p.name, city: p.city, state: p.state,
         address: p.address || null, place_id: p.place_id, google_maps_url: p.google_maps_url,
       }).select('id').single();
       venueId = inserted?.id ?? null;

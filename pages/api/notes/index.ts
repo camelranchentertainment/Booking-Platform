@@ -1,7 +1,7 @@
 ﻿import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 
-type Visibility = 'agent_only' | 'band_admin' | 'all_members';
+type Visibility = 'private' | 'band_admin' | 'all_members';
 
 async function getAuthedUser(req: NextApiRequest) {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -125,8 +125,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!note_date) return res.status(400).json({ error: 'note_date required' });
 
-    const vis: Visibility = visibility || 'agent_only';
-    if (!['agent_only', 'band_admin', 'all_members'].includes(vis)) {
+    const vis: Visibility = visibility || 'private';
+    if (!['private', 'band_admin', 'all_members'].includes(vis)) {
       return res.status(400).json({ error: 'Invalid visibility' });
     }
 

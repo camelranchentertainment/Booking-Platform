@@ -40,11 +40,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Get only THIS agent's venues in this city to mark duplicates
     const cityStr = String(city).toLowerCase();
-    const { data: existing } = await service
-      .from('venues')
-      .select('id, name, place_id')
-      .eq('created_by', user.id)
-      .ilike('city', `%${cityStr}%`);
+    const { data: profileRow } = await service
+      .from('user_profiles').select('act_id').eq('id', user.id).single();
+    const actId = profileRow?.act_id;
+
+    const { data: existing } = actId
+      ? await service
+          .from('venues')
+          .select('id, name, place_id')
+          .eq('act_id', actId)
+          .ilike('city', `%${cityStr}%`)
+      : { data: [] };
 
     const existingPlaceIds = new Set((existing || []).map((v: any) => v.place_id).filter(Boolean));
     const existingNames    = new Set((existing || []).map((v: any) => v.name.toLowerCase()));

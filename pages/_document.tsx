@@ -9,19 +9,19 @@ export default function Document() {
         <link rel="apple-touch-icon" href="/images/logo-square.png" />
 
         {/* Site description shown in Google search results */}
-        <meta name="description" content="Camel Ranch Booking — professional music booking platform for country and Americana artists." />
+        <meta name="description" content="Camel Ranch Booking — DIY booking workflow for independent touring artists. Manage venues, run email campaigns, and track every show." />
 
         {/* Open Graph — controls the preview card when sharing a link on Facebook, iMessage, etc. */}
         <meta property="og:site_name" content="Camel Ranch Booking" />
         <meta property="og:type"      content="website" />
         <meta property="og:title"     content="Camel Ranch Booking" />
-        <meta property="og:description" content="Professional music booking platform for country and Americana artists." />
+        <meta property="og:description" content="DIY booking workflow for independent touring artists. Manage venues, run email campaigns, and track every show." />
         <meta property="og:image"     content="https://camelranchbooking.com/images/logo-banner.png" />
 
         {/* Twitter / X card */}
         <meta name="twitter:card"        content="summary_large_image" />
         <meta name="twitter:title"       content="Camel Ranch Booking" />
-        <meta name="twitter:description" content="Professional music booking platform for country and Americana artists." />
+        <meta name="twitter:description" content="DIY booking workflow for independent touring artists. Manage venues, run email campaigns, and track every show." />
         <meta name="twitter:image"       content="https://camelranchbooking.com/images/logo-banner.png" />
       </Head>
       <body>

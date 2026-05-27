@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type Visibility = 'agent_only' | 'band_admin' | 'all_members';
+type Visibility = 'private' | 'band_admin' | 'all_members';
 
 interface DailyNote {
   id: string;
@@ -215,7 +215,7 @@ interface NotesPanelProps {
 function NotesPanel({ userId, actId, tourId, tourName, todayStr, role, session }: NotesPanelProps) {
   const [noteId,     setNoteId]     = useState<string | null>(null);
   const [content,    setContent]    = useState('');
-  const [visibility, setVisibility] = useState<Visibility>('agent_only');
+  const [visibility, setVisibility] = useState<Visibility>('private');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   // Past notes modal
@@ -231,7 +231,7 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, role, session }
 
   // Refs so debounced save always uses the latest values (avoids stale closures)
   const contentRef    = useRef('');
-  const visibilityRef = useRef<Visibility>('agent_only');
+  const visibilityRef = useRef<Visibility>('private');
   const saveTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const authHeaders = {
@@ -252,9 +252,9 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, role, session }
       if (mine) {
         setNoteId(mine.id);
         contentRef.current    = mine.content ?? '';
-        visibilityRef.current = mine.visibility ?? 'agent_only';
+        visibilityRef.current = mine.visibility ?? 'private';
         setContent(mine.content ?? '');
-        setVisibility(mine.visibility ?? 'agent_only');
+        setVisibility(mine.visibility ?? 'private');
         setSaveStatus('saved');
       }
     })();

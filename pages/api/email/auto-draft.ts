@@ -31,6 +31,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: { user } } = await service.auth.getUser(token);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
+  const { data: profileRow } = await service
+    .from('user_profiles').select('act_id').eq('id', user.id).single();
+  const actId = profileRow?.act_id;
+
   // Fetch booking + related data
   const { data: booking } = await service.from('bookings')
     .select(`
@@ -130,6 +134,7 @@ Introduce the act in 2 sentences. Ask them to hold a date. Keep it under 150 wor
       category:   'target',
       subject:    draft.subject,
       body:       draft.body,
+      act_id: actId,
     }, { onConflict: 'booking_id,category' });
 
     return res.status(200).json({ ok: true });

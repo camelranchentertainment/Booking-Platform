@@ -149,8 +149,10 @@ export default function VenuesPage() {
     if (!form.city.trim()) { setSaveError('City is required'); return; }
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
+    const actId = user ? await import('../../lib/bookingQueries').then(m => m.getActId(supabase, user.id)) : null;
     const genreArr = form.music_genres ? form.music_genres.split(',').map(g => g.trim()).filter(Boolean) : null;
     await supabase.from('venues').insert({
+      act_id:         actId,
       name:           form.name,
       city:           form.city,
       state:          form.state,
@@ -237,13 +239,14 @@ export default function VenuesPage() {
   const runImport = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    const actId = await import('../../lib/bookingQueries').then(m => m.getActId(supabase, user.id));
     setImportSaving(true);
     let added = 0; let skipped = 0;
 
     for (const row of importRows.filter(r => r._selected)) {
       // Check for existing venue (same name + city)
       const { data: existing } = await supabase
-        .from('venues').select('id').eq('created_by', user.id)
+        .from('venues').select('id').eq('act_id', actId)
         .ilike('name', row.name).ilike('city', row.city).maybeSingle();
 
       if (existing) {
@@ -260,6 +263,7 @@ export default function VenuesPage() {
         skipped++;
       } else {
         const { data: newV } = await supabase.from('venues').insert({
+          act_id:     actId,
           name:       row.name,
           city:       row.city,
           state:      row.state      || '',
@@ -277,6 +281,7 @@ export default function VenuesPage() {
         // Create contact if name provided
         if (newV?.id && (row.contact_first || row.contact_email)) {
           await supabase.from('contacts').insert({
+            act_id:     actId,
             venue_id:   newV.id,
             first_name: row.contact_first || '',
             last_name:  row.contact_last  || '',
@@ -435,7 +440,9 @@ export default function VenuesPage() {
 
     // Step 2: Insert venue with full details
     const { data: { user } } = await supabase.auth.getUser();
+    const actId = user ? await import('../../lib/bookingQueries').then(m => m.getActId(supabase, user.id)) : null;
     const { data: newVenue } = await supabase.from('venues').insert({
+      act_id:          actId,
       name:            p.name,
       city:            p.city,
       state:           p.state,

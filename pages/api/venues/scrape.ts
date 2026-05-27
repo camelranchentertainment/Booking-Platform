@@ -50,6 +50,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: { user } } = await service.auth.getUser(token || '');
   if (!user) return res.status(401).json({ error: 'Session expired — please refresh the page and try again' });
 
+  const { data: profileRow } = await service
+    .from('user_profiles').select('act_id').eq('id', user.id).single();
+  const actId = profileRow?.act_id;
+
   const { url, venueId } = req.body;
   if (!url) return res.status(400).json({ error: 'url required' });
 
@@ -163,6 +167,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         if (!existing?.length) {
           await service.from('contacts').insert({
+            act_id:     actId,
             venue_id:   venueId,
             first_name: first,
             last_name:  last,

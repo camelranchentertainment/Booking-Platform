@@ -46,13 +46,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (role === 'band_admin' && actName) {
-    const { error: actErr } = await admin.from('acts').insert({
-      owner_id: userId,
-      act_name: actName,
-    });
-    if (actErr) {
+    const { data: actData, error: actErr } = await admin
+      .from('acts')
+      .insert({ owner_id: userId, act_name: actName })
+      .select('id')
+      .single();
+
+    if (actErr || !actData) {
       await admin.auth.admin.deleteUser(userId);
-      return res.status(500).json({ error: actErr.message });
+      return res.status(500).json({ error: actErr?.message || 'Failed to create act' });
+    }
+
+    // Link the new act back to the user's profile
+    const { error: linkErr } = await admin
+      .from('user_profiles')
+      .update({ act_id: actData.id })
+      .eq('id', userId);
+
+    if (linkErr) {
+      await admin.auth.admin.deleteUser(userId);
+      return res.status(500).json({ error: linkErr.message });
     }
   }
 

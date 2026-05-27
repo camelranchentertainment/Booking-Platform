@@ -101,6 +101,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (staleIds.length > 0) {
       await service.from('email_drafts')
         .delete()
+        .eq('act_id', actId)
         .in('tour_venue_id', staleIds);
     }
   }
@@ -115,12 +116,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (confirmedBkIds.length > 0) {
     await service.from('email_drafts')
       .delete()
+      .eq('act_id', actId)
       .in('booking_id', confirmedBkIds);
   }
 
   // Get existing drafts (after cleanup) to avoid duplicates
   const { data: existingDrafts } = await service.from('email_drafts')
     .select('booking_id, tour_venue_id')
+    .eq('act_id', actId)
     .eq('category', 'target');
   const draftedBookings   = new Set((existingDrafts || []).filter((d: any) => d.booking_id).map((d: any) => d.booking_id));
   const draftedTourVenues = new Set((existingDrafts || []).filter((d: any) => d.tour_venue_id).map((d: any) => d.tour_venue_id));
@@ -183,7 +186,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!match) { errors.push(`Claude returned no JSON for booking ${b.id}`); continue; }
       const draft = JSON.parse(match[0]);
       const { error: insertErr } = await service.from('email_drafts').upsert(
-        { booking_id: b.id, tour_venue_id: null, category: 'target', subject: draft.subject, body: draft.body },
+        { booking_id: b.id, tour_venue_id: null, category: 'target', subject: draft.subject, body: draft.body, act_id: actId },
         { onConflict: 'booking_id,category' }
       );
       if (insertErr) { errors.push(`Insert booking draft ${b.id}: ${insertErr.message}`); continue; }
@@ -243,7 +246,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const draft = JSON.parse(match[0]);
 
         const { error: insertErr } = await service.from('email_drafts').upsert(
-          { booking_id: null, tour_venue_id: tv.id, category: 'target', subject: draft.subject, body: draft.body },
+          { booking_id: null, tour_venue_id: tv.id, category: 'target', subject: draft.subject, body: draft.body, act_id: actId },
           { onConflict: 'tour_venue_id,category' }
         );
         if (insertErr) { errors.push(`Insert tour_venue draft ${tv.id}: ${insertErr.message}`); continue; }

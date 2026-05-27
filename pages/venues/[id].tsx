@@ -91,7 +91,9 @@ export default function VenueDetail() {
     e.preventDefault();
     setSavingContact(true);
     const { data: { user } } = await supabase.auth.getUser();
+    const { data: vp } = await supabase.from('user_profiles').select('act_id').eq('id', user!.id).single();
     await supabase.from('contacts').insert({
+      act_id:     vp?.act_id,
       venue_id:   id,
       first_name: contactForm.first_name,
       last_name:  contactForm.last_name  || null,

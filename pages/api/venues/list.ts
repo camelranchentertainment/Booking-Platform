@@ -11,19 +11,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: { user } } = await service.auth.getUser(token);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { data: ownedVenues } = await service
-    .from('venues')
-    .select('*')
-    .eq('created_by', user.id)
-    .order('name')
-    .limit(500);
+  const { data: profileData } = await service
+    .from('user_profiles')
+    .select('act_id')
+    .eq('id', user.id)
+    .single();
+
+  const actId = profileData?.act_id;
+
+  const { data: ownedVenues } = actId
+    ? await service.from('venues').select('*').eq('act_id', actId).order('name').limit(500)
+    : { data: [] };
 
   const owned = ownedVenues || [];
   const ownedIds = new Set(owned.map((v: any) => v.id));
 
   const [agentToursRes, managedActsRes] = await Promise.all([
-    service.from('tours').select('id').eq('created_by', user.id),
-    service.from('acts').select('id').eq('owner_id', user.id),
+    actId
+      ? service.from('tours').select('id').eq('act_id', actId)
+      : Promise.resolve({ data: [] }),
+    actId
+      ? service.from('acts').select('id').eq('id', actId)
+      : Promise.resolve({ data: [] }),
   ]);
 
   const createdTourIds = (agentToursRes.data || []).map((t: any) => t.id);

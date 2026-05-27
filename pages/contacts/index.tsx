@@ -38,9 +38,15 @@ export default function ContactsPage() {
   const loadAll = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
+    const actId = prof?.act_id;
     const [contactsRes, venuesRes] = await Promise.all([
-      supabase.from('contacts').select('*, venue:venues(id, name, city, state)').order('last_name'),
-      supabase.from('venues').select('id, name, city, state').order('name'),
+      actId
+        ? supabase.from('contacts').select('*, venue:venues(id, name, city, state)').eq('act_id', actId).order('last_name')
+        : Promise.resolve({ data: [] }),
+      actId
+        ? supabase.from('venues').select('id, name, city, state').eq('act_id', actId).order('name')
+        : Promise.resolve({ data: [] }),
     ]);
     setContacts(contactsRes.data || []);
     setVenues(venuesRes.data || []);
@@ -50,7 +56,9 @@ export default function ContactsPage() {
     e.preventDefault();
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
+    const { data: prow } = await supabase.from('user_profiles').select('act_id').eq('id', user!.id).single();
     await supabase.from('contacts').insert({
+      act_id:     prow?.act_id,
       first_name: form.first_name,
       last_name:  form.last_name,
       title:      form.title    || null,

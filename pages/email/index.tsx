@@ -189,7 +189,7 @@ export default function EmailPage() {
       supabase.from('email_log').select('*, venue:venues(name)').eq('sent_by', user.id).order('sent_at', { ascending: false }).limit(100),
       actId ? supabase.from('acts').select('*').eq('id', actId) : Promise.resolve({ data: [] as any[] }),
       supabase.from('venues').select('*').order('name'),
-      supabase.from('contacts').select('*, venue:venues(name)').order('last_name'),
+      actId ? supabase.from('contacts').select('*, venue:venues(name)').eq('act_id', actId).order('last_name') : Promise.resolve({ data: [] as any[] }),
       supabase.from('user_profiles').select('display_name, agency_name').eq('id', user.id).single(),
       bookingsQ ?? Promise.resolve({ data: [] as any[] }),
       supabase.from('email_drafts').select(`
@@ -205,7 +205,7 @@ export default function EmailPage() {
           venue:venues(name, city, state, email),
           tour:tours(id, act_id, act:acts(act_name))
         )
-      `).order('created_at', { ascending: false }),
+      `).eq('act_id', actId).order('created_at', { ascending: false }),
     ]);
 
     const tourIds = (toursRes.data || []).map((t: any) => t.id);
@@ -308,7 +308,8 @@ export default function EmailPage() {
     if (!confirm(`Delete all ${pendingDrafts.length} draft${pendingDrafts.length !== 1 ? 's' : ''}?`)) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from('email_drafts').delete().eq('created_by', user.id);
+    const clearActId = await getActId(supabase, user.id);
+    if (clearActId) await supabase.from('email_drafts').delete().eq('act_id', clearActId);
     setPendingDrafts([]);
   };
 
