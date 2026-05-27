@@ -25,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const offset   = (pageNum - 1) * pageSize;
   const today    = new Date().toISOString().split('T')[0];
 
-  let query = service
+  let query: any = service
     .from('bookings')
     .select(`
       id, show_date, deal_type, agreed_amount, fee,

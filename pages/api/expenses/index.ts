@@ -61,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'GET') {
     const { tour_id, start_date, end_date, category } = req.query;
 
-    let query = svc
+    let query: any = svc
       .from('expenses')
       .select('*')
       .eq('user_id', user.id)

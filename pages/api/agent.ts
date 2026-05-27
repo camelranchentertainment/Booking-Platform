@@ -155,7 +155,7 @@ async function resolveCitySearch(
   const activeTour = tours?.[0] || null;
 
   // Find venues in city, excluding ones already on the active tour
-  let query = service.from('venues')
+  let query: any = service.from('venues')
     .select('id, name, city, state, email, capacity, venue_type')
     .ilike('city', `%${city}%`)
     .order('name').limit(20);

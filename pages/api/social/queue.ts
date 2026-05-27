@@ -19,7 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'GET') {
     const { status } = req.query;
-    let query = service
+    let query: any = service
       .from('social_queue')
       .select('*, act:acts(act_name), venue:venues(name, city, state)')
       .in('act_id', actIds)

@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const pageSize = Math.min(100, parseInt(limit as string, 10) || 25);
   const offset   = (pageNum - 1) * pageSize;
 
-  let actsQuery = service
+  let actsQuery: any = service
     .from('acts')
     .select('id, act_name, created_at, owner_id, is_active', { count: 'exact' })
     .order('created_at', { ascending: false });
