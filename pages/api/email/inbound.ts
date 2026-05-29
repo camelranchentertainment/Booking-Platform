@@ -1,39 +1,57 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { Resend } from 'resend';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
 
+export const config = { api: { bodyParser: false } };
+
+async function readRawBody(req: NextApiRequest): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Always return 200 — Resend retries on any non-200
+  // Always return 200 — Resend retries on non-200
   if (req.method !== 'POST') return res.status(200).json({ ok: true });
 
-  // Verify Resend/Svix webhook signature
+  const rawBody = await readRawBody(req);
+
+  // Verify signature using Resend SDK (wraps Svix internally)
   const secret = process.env.RESEND_WEBHOOK_SECRET;
   if (secret) {
-    const sig = req.headers['svix-signature'] as string | undefined;
-    const ts  = req.headers['svix-timestamp'] as string | undefined;
-    const id  = req.headers['svix-id'] as string | undefined;
-    if (!sig || !ts || !id) return res.status(200).json({ ok: true });
-
-    const toSign   = `${id}.${ts}.${JSON.stringify(req.body)}`;
-    const expected = createHmac('sha256', secret).update(toSign).digest('hex');
-    const sigs     = sig.split(' ').map(s => s.split(',')[1]).filter(Boolean);
-    const valid    = sigs.some(s => {
-      try { return timingSafeEqual(Buffer.from(s, 'hex'), Buffer.from(expected, 'hex')); }
-      catch { return false; }
-    });
-    if (!valid) return res.status(200).json({ ok: true });
+    const apiKey = process.env.RESEND_API_KEY || 'placeholder';
+    const resendClient = new Resend(apiKey);
+    try {
+      resendClient.webhooks.verify({
+        webhookSecret: secret,
+        payload:       rawBody,
+        headers: {
+          id:        req.headers['svix-id'] as string        ?? '',
+          timestamp: req.headers['svix-timestamp'] as string ?? '',
+          signature: req.headers['svix-signature'] as string ?? '',
+        },
+      });
+    } catch {
+      // Invalid signature — still return 200 to avoid infinite retries
+      return res.status(200).json({ ok: true });
+    }
   }
 
-  const event = req.body;
+  let event: any;
+  try { event = JSON.parse(rawBody); } catch { return res.status(200).json({ ok: true }); }
+
   if (event.type !== 'email.received') return res.status(200).json({ ok: true });
 
   const inbound = event.data;
-  const emailId = inbound?.id ?? inbound?.email_id ?? null;
-  const rawFrom = inbound?.from;
+  const emailId  = inbound?.id ?? inbound?.email_id ?? null;
+  const rawFrom  = inbound?.from;
   const fromAddress = (typeof rawFrom === 'string'
-    ? rawFrom.replace(/^.*<(.+)>$/, '$1')  // extract "addr@host" from "Name <addr@host>"
-    : rawFrom?.address ?? ''
+    ? rawFrom.replace(/^.*<(.+)>$/, '$1')
+    : (rawFrom?.address ?? '')
   ).toLowerCase().trim();
   const subject = inbound?.subject ?? '';
 
@@ -42,11 +60,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const service = getServiceClient();
   const now = new Date().toISOString();
 
-  // Fetch full email body from Resend API — falls back to webhook payload
+  // Fetch full email body from Resend API; fall back to webhook payload
   let body: string = inbound?.text ?? inbound?.html ?? '';
   if (emailId) {
     try {
-      const apiKey = await getSetting('resend_api_key') || process.env.RESEND_API_KEY;
+      const apiKey = await getSetting('resend_api_key') ?? process.env.RESEND_API_KEY;
       if (apiKey) {
         const emailRes = await fetch(`https://api.resend.com/emails/${emailId}`, {
           headers: { Authorization: `Bearer ${apiKey}` },
@@ -59,7 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } catch {}
   }
 
-  // Find venues whose email matches the sender
+  // Match from address to venues.email
   const { data: venues } = await service
     .from('venues')
     .select('id, name')
@@ -68,7 +86,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!venues?.length) return res.status(200).json({ ok: true });
 
   for (const venue of venues) {
-    // Find active tour_venues for this venue that haven't already been marked as responded
     const { data: tourVenues } = await service
       .from('tour_venues')
       .select('id, tour_id, status')
@@ -80,7 +97,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!tourVenues?.length) continue;
 
     for (const tv of tourVenues) {
-      // Resolve act and owner via tour
       const { data: tour } = await service
         .from('tours')
         .select('id, act_id, acts(id, owner_id, act_name)')
@@ -91,7 +107,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const act = tour.acts as any;
       if (!act?.owner_id) continue;
 
-      // Mark venue as responded
+      // Update tour_venue status to 'responded'
       await service
         .from('tour_venues')
         .update({ status: 'responded', last_replied_at: now, updated_at: now })
@@ -126,5 +142,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   return res.status(200).json({ ok: true });
 }
-
-export const config = { api: { bodyParser: { sizeLimit: '2mb' } } };

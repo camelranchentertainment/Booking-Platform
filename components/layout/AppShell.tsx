@@ -413,7 +413,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
           }} />
           {/* Left spacer to keep logo centred */}
           <div style={{ width: 36, flexShrink: 0 }} />
-          <BrandLogo variant="banner" height={52} style={{ position: 'relative', minWidth: 180 }} />
+          <BrandLogo variant="banner" height={64} style={{ position: 'relative', minWidth: 180 }} />
           {/* Bell — only when logged in */}
           {authUser ? (
             <div style={{ position: 'relative', zIndex: 201 }}>

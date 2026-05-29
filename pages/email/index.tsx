@@ -21,7 +21,7 @@ const OUTREACH_STATUS_LABELS: Record<string, string> = {
 };
 
 type InboxMessage = {
-  uid: number;
+  uid: string;
   from: string;
   fromEmail: string;
   subject: string;
@@ -348,21 +348,42 @@ export default function EmailPage() {
   const loadInbox = async () => {
     setInboxLoading(true);
     setInboxError('');
-    const { data: { session } } = await supabase.auth.getSession();
     try {
-      const res = await fetch('/api/email/inbox', {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) { setInboxError(data.error || 'Failed to load inbox'); }
-      else {
-        setInboxConfigured(data.configured);
-        const msgs = data.messages || [];
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setInboxLoading(false); setInboxLoaded(true); return; }
+
+      const actId = await getActId(supabase, user.id);
+      if (!actId) { setInboxLoading(false); setInboxLoaded(true); return; }
+
+      const { data, error } = await supabase
+        .from('email_log')
+        .select('id, from_address, subject, body, sent_at, venue_id, venues(name)')
+        .eq('direction', 'received')
+        .eq('act_id', actId)
+        .order('sent_at', { ascending: false })
+        .limit(100);
+
+      if (error) {
+        setInboxError(error.message);
+      } else {
+        const msgs: InboxMessage[] = (data || []).map(r => {
+          const rawBody = (r.body || '').replace(/<[^>]*>/g, '').trim();
+          return {
+            uid:              r.id,
+            from:             r.from_address || '',
+            fromEmail:        r.from_address || '',
+            subject:          r.subject || '(no subject)',
+            date:             r.sent_at || '',
+            preview:          rawBody.slice(0, 140),
+            body:             rawBody,
+            matchedVenueId:   r.venue_id || null,
+            matchedVenueName: (r.venues as any)?.name || null,
+          };
+        });
         setInboxMessages(msgs);
-        localStorage.setItem('inbox_count', String(msgs.length));
       }
     } catch (e: any) {
-      setInboxError('Network error fetching inbox');
+      setInboxError('Failed to load inbox');
     }
     setInboxLoading(false);
     setInboxLoaded(true);
@@ -435,7 +456,8 @@ export default function EmailPage() {
       <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
         {(['outbox', 'outreach', 'pipeline', 'inbox'] as View[]).map(v => {
           const overdueCount = v === 'outreach' ? allTourVenues.filter(tv => tv.status === 'reached_out' && tv.updated_at && Math.floor((Date.now() - new Date(tv.updated_at).getTime()) / 86400000) >= 7).length : 0;
-          const venueReplies = v === 'inbox' ? inboxMessages.filter(m => m.matchedVenueId).length : 0;
+          const inboxCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+          const venueReplies = v === 'inbox' ? inboxMessages.filter(m => m.date > inboxCutoff).length : 0;
           return (
             <button
               key={v}
@@ -878,21 +900,12 @@ export default function EmailPage() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', letterSpacing: '0.08em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              {inboxLoaded ? `${inboxMessages.length} messages (last 30 days)` : 'Recent emails from your IMAP inbox'}
+              {inboxLoaded ? `${inboxMessages.length} venue repl${inboxMessages.length === 1 ? 'y' : 'ies'}` : 'Venue replies via Resend inbound'}
             </div>
             <button className="btn btn-secondary btn-sm" onClick={loadInbox} disabled={inboxLoading}>
-              {inboxLoading ? '⟳ Fetching…' : '⟳ Refresh'}
+              {inboxLoading ? '⟳ Loading…' : '⟳ Refresh'}
             </button>
           </div>
-
-          {!inboxConfigured && (
-            <div className="card" style={{ padding: '1.5rem', textAlign: 'center' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                IMAP not configured. Set up your email credentials in Settings to enable the inbox.
-              </div>
-              <a href="/settings" className="btn btn-primary btn-sm">Go to Settings →</a>
-            </div>
-          )}
 
           {inboxError && (
             <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 'var(--radius-sm)', padding: '0.75rem 1rem', color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.84rem', marginBottom: '1rem' }}>
@@ -900,9 +913,9 @@ export default function EmailPage() {
             </div>
           )}
 
-          {inboxConfigured && !inboxLoading && inboxMessages.length === 0 && inboxLoaded && !inboxError && (
-            <div className="card" style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>
-              No messages found in the last 30 days.
+          {!inboxLoading && inboxMessages.length === 0 && inboxLoaded && !inboxError && (
+            <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.88rem', lineHeight: 1.6 }}>
+              No replies yet. When venues respond to your outreach, they will appear here.
             </div>
           )}
 
@@ -912,7 +925,7 @@ export default function EmailPage() {
               {inboxMessages.filter(m => m.matchedVenueId).length > 0 && (
                 <div style={{ marginBottom: '1.25rem' }}>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#60a5fa', marginBottom: '0.5rem' }}>
-                    ◈ Venue Replies ({inboxMessages.filter(m => m.matchedVenueId).length})
+                    ◈ Matched to Venue ({inboxMessages.filter(m => m.matchedVenueId).length})
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                     {inboxMessages.filter(m => m.matchedVenueId).map(m => (
