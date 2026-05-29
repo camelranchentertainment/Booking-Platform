@@ -113,21 +113,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
 
-    // Advance reached_out → responded for any matched venue replies
+    // Advance pitched → waiting for any matched venue replies
     if (actId) {
       const matchedVenueIds = [...new Set(enriched.map(m => m.matchedVenueId).filter(Boolean))] as string[];
       if (matchedVenueIds.length > 0) {
-        // Find all active tour_venues for these venues that are still at reached_out
+        // Find all active tour_venues for these venues that are still at pitched
         const { data: tvs } = await admin
           .from('tour_venues')
           .select('id, tour:tours(act_id)')
           .in('venue_id', matchedVenueIds)
-          .eq('status', 'reached_out');
+          .eq('status', 'pitched');
 
         const toAdvance = (tvs || []).filter((tv: any) => tv.tour?.act_id === actId).map((tv: any) => tv.id);
         if (toAdvance.length > 0) {
           await admin.from('tour_venues')
-            .update({ status: 'responded', updated_at: new Date().toISOString() })
+            .update({ status: 'waiting', updated_at: new Date().toISOString() })
             .in('id', toAdvance);
 
           const venueNames = [...new Set(enriched

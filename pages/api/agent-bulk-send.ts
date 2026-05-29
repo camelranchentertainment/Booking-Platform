@@ -110,10 +110,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sent_at:       now,
       });
 
-      // Update tour_venue status to 'reached_out'
+      // Update tour_venue status to 'pitched'
       if (tourVenueId) {
         await service.from('tour_venues').update({
-          status:            'reached_out',
+          status:            'pitched',
           pitched_at:        now,
           last_contacted_at: now,
           updated_at:        now,

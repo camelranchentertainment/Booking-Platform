@@ -90,7 +90,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .from('tour_venues')
       .select('id, tour_id, status')
       .eq('venue_id', venue.id)
-      .in('status', ['target', 'reached_out', 'negotiating'])
+      .in('status', ['target', 'pitched', 'waiting', 'follow_up'])
       .order('updated_at', { ascending: false })
       .limit(10);
 
@@ -107,10 +107,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const act = tour.acts as any;
       if (!act?.owner_id) continue;
 
-      // Update tour_venue status to 'responded'
+      // Update tour_venue status to 'waiting' (venue replied)
       await service
         .from('tour_venues')
-        .update({ status: 'responded', last_replied_at: now, updated_at: now })
+        .update({ status: 'waiting', last_replied_at: now, updated_at: now })
         .eq('id', tv.id);
 
       // Log the inbound email

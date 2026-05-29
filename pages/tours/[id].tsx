@@ -10,15 +10,15 @@ import Link from 'next/link';
 
 
 const STATUS_COLOR: Record<OutreachStatus, string> = {
-  target:      'var(--text-muted)',
-  reached_out: '#60a5fa',
-  responded:   '#F5A623',
-  negotiating: '#a78bfa',
-  confirmed:   '#34d399',
-  declined:    '#f87171',
+  target:    'var(--text-muted)',
+  pitched:   '#E8602A',
+  waiting:   '#F5A623',
+  follow_up: '#F5C842',
+  confirmed: '#34d399',
+  declined:  '#f87171',
 };
 
-const FILTER_TABS: (OutreachStatus | 'all')[] = ['all', 'target', 'reached_out', 'responded', 'negotiating', 'confirmed', 'declined'];
+const FILTER_TABS: (OutreachStatus | 'all')[] = ['all', 'target', 'pitched', 'waiting', 'follow_up', 'confirmed', 'declined'];
 
 
 export default function TourDetail() {
@@ -61,7 +61,7 @@ export default function TourDetail() {
   const [composerTourVenue, setComposerTourVenue] = useState<any>(null);
   const tvEmailCategory = (status: OutreachStatus): string => {
     if (status === 'target') return 'target';
-    if (status === 'reached_out' || status === 'responded') return 'follow_up_1';
+    if (status === 'pitched' || status === 'waiting') return 'follow_up_1';
     return 'confirmation';
   };
 
@@ -146,7 +146,7 @@ const loadPool = async () => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 7);
     const overdue = (poolData as any[]).filter((tv: any) =>
-      tv.status === 'reached_out' && tv.updated_at && new Date(tv.updated_at) < cutoff,
+      tv.status === 'pitched' && tv.updated_at && new Date(tv.updated_at) < cutoff,
     );
     for (const tv of overdue) {
       const venueName = tv.venue?.name || 'venue';
@@ -573,7 +573,7 @@ const loadPool = async () => {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
             {filteredPool.map((tv: any) => {
-              const isOverdue = tv.status === 'reached_out' && tv.updated_at &&
+              const isOverdue = tv.status === 'pitched' && tv.updated_at &&
                 (Date.now() - new Date(tv.updated_at).getTime()) >= 7 * 24 * 60 * 60 * 1000;
               return (
               <div key={tv.id} style={{
@@ -656,8 +656,8 @@ const loadPool = async () => {
                   ))}
                 </select>
 
-                {/* Confirm: only show when status is 'confirmed' or 'negotiating' — use booking directly */}
-                {tv.status === 'negotiating' && (
+                {/* Confirm: only show when status is 'confirmed' or 'follow_up' — use booking directly */}
+                {tv.status === 'follow_up' && (
                   <Link
                     href={`/bookings/new?venue=${tv.venue?.id || ''}&tour=${tour.id}&act=${tour.act_id}`}
                     className="btn btn-primary btn-sm"
@@ -958,9 +958,9 @@ const loadPool = async () => {
           contactEmail={composerTourVenue.venue?.email || ''}
           defaultCategory={tvEmailCategory(composerTourVenue.status)}
           onClose={async (didSend?: boolean) => {
-            // Auto-advance status: target → reached_out after sending initial email
+            // Auto-advance status: target → pitched after sending initial email
             if (didSend && composerTourVenue.status === 'target') {
-              await updateStatus(composerTourVenue.id, 'reached_out');
+              await updateStatus(composerTourVenue.id, 'pitched');
             }
             setComposerTourVenue(null);
             loadPool();
