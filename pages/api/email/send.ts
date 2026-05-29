@@ -53,7 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const resend = new Resend(apiKey);
 
   try {
-    const { data, error } = await resend.emails.send({ from, to, subject, html });
+    const { data, error } = await resend.emails.send({ from, to, subject, html, replyTo: 'replies@dorurinaah.resend.app' });
     if (error) return res.status(500).json({ error: error.message });
 
     const now = new Date().toISOString();

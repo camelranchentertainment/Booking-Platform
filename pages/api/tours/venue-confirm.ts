@@ -387,6 +387,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           await resend.emails.send({
             from,
             to: toEmail,
+            replyTo: 'replies@dorurinaah.resend.app',
             subject: `${(act as any).act_name} — Show Confirmation — ${(tv.venue as any).name}, ${confDate}`,
             html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:1.5rem">
               <h2 style="color:#c49a3c;margin-top:0">Show Confirmation</h2>

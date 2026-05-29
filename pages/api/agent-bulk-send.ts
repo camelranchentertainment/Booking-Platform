@@ -92,6 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         subject: personalizedSubject,
         html: toHtml(personalizedBody),
         text: personalizedBody,
+        replyTo: 'replies@dorurinaah.resend.app',
       });
 
       if (sendErr) throw new Error(sendErr.message);
