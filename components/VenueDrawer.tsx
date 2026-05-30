@@ -69,6 +69,9 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
   const [saved, setSaved]         = useState(false);
   const [showEmail, setShowEmail] = useState(false);
   const [emailTvId, setEmailTvId] = useState<string | undefined>(undefined);
+  const [scraping, setScraping]           = useState(false);
+  const [scrapeResult, setScrapeResult]   = useState<any>(null);
+  const [scrapeErr, setScrapeErr]         = useState('');
 
   useEffect(() => {
     if (isOpen && venueId) {
@@ -77,6 +80,8 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
       setVenue(null);
       setEditing(false);
       setShowEmail(false);
+      setScrapeResult(null);
+      setScrapeErr('');
     }
   }, [isOpen, venueId]);
 
@@ -85,6 +90,8 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
     setEditing(false);
     setShowEmail(false);
     setSaved(false);
+    setScrapeResult(null);
+    setScrapeErr('');
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
@@ -170,6 +177,34 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
+  };
+
+  const scanWebsite = async () => {
+    const websiteUrl = venue?.website;
+    if (!websiteUrl) return;
+    setScraping(true);
+    setScrapeResult(null);
+    setScrapeErr('');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setScraping(false); return; }
+    try {
+      const res = await fetch('/api/venues/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ url: websiteUrl, venueId: venue?.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setScrapeErr(data.error || 'Scan failed');
+      } else {
+        setScrapeResult(data);
+        if (data.updated && venueId) await load(venueId);
+      }
+    } catch (e: any) {
+      setScrapeErr(e.message || 'Scan failed');
+    } finally {
+      setScraping(false);
+    }
   };
 
   const patchTvStatus = async (tvId: string, status: OutreachStatus) => {
@@ -272,6 +307,14 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
           </div>
           <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexShrink: 0 }}>
             {saved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: '#34d399' }}>✓ Saved</span>}
+            {!loading && !editing && venue?.website && (
+              <button
+                onClick={scanWebsite}
+                disabled={scraping}
+                title="Scan website for booking contact, email, and phone"
+                style={{ ...btnStyle, background: 'rgba(96,165,250,0.15)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)' }}
+              >{scraping ? '…' : '🔍'}</button>
+            )}
             {!loading && !editing && (
               <button
                 onClick={() => setEditing(true)}
@@ -396,7 +439,18 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
                   <Row label="Email">
                     {venue?.email
                       ? <a href={`mailto:${venue.email}`} style={{ color: ACCENT, textDecoration: 'none', wordBreak: 'break-all' }}>{venue.email}</a>
-                      : <span style={{ color: '#f87171', fontSize: '0.8rem' }}>⚠ No email — click Edit to add</span>}
+                      : venue?.website
+                        ? (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <span style={{ color: '#f87171', fontSize: '0.8rem' }}>⚠ No email</span>
+                            <button
+                              onClick={scanWebsite}
+                              disabled={scraping}
+                              style={{ ...btnStyle, padding: '0.15rem 0.45rem', background: 'rgba(96,165,250,0.15)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)', fontSize: '0.72rem' }}
+                            >{scraping ? 'Scanning…' : '🔍 Scan Website'}</button>
+                          </span>
+                        )
+                        : <span style={{ color: '#f87171', fontSize: '0.8rem' }}>⚠ No email — click Edit to add</span>}
                   </Row>
                   <Row label="Phone">
                     {venue?.phone
@@ -415,6 +469,47 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
                   )}
                 </div>
               </section>
+
+              {/* Scan result */}
+              {(scrapeErr || scrapeResult) && (
+                <div style={{
+                  padding: '10px 12px',
+                  borderRadius: 6,
+                  border: scrapeErr ? '1px solid rgba(248,113,113,0.3)' : '1px solid rgba(52,211,153,0.25)',
+                  background: scrapeErr ? 'rgba(248,113,113,0.06)' : 'rgba(52,211,153,0.06)',
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '0.8rem',
+                }}>
+                  {scrapeErr ? (
+                    <div style={{ color: '#f87171' }}>{scrapeErr}</div>
+                  ) : scrapeResult && (
+                    <>
+                      <div style={{ color: '#34d399', fontWeight: 700, marginBottom: '6px', fontSize: '0.78rem' }}>
+                        ◈ Scan complete{scrapeResult.updated ? ' — venue record updated' : ''}{` (${scrapeResult.pagesScraped ?? 1} page${scrapeResult.pagesScraped !== 1 ? 's' : ''})`}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        {[
+                          ['Booking Email', scrapeResult.extracted?.booking_email],
+                          ['General Email', scrapeResult.extracted?.general_email],
+                          ['Phone',         scrapeResult.extracted?.booking_phone],
+                          ['Contact',       scrapeResult.extracted?.booking_contact_name],
+                          ['Title',         scrapeResult.extracted?.booking_contact_title],
+                          ['Capacity',      scrapeResult.extracted?.capacity],
+                          ['Notes',         scrapeResult.extracted?.notes],
+                        ].filter(([, v]) => v).map(([label, value]) => (
+                          <div key={label as string} style={{ display: 'flex', gap: '6px' }}>
+                            <span style={{ color: TEXT_MUT, minWidth: 80, fontSize: '0.74rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+                            <span style={{ color: TEXT_PRI }}>{String(value)}</span>
+                          </div>
+                        ))}
+                        {!Object.values(scrapeResult.extracted || {}).some(Boolean) && (
+                          <div style={{ color: TEXT_MUT, fontStyle: 'italic' }}>No contact info found on this website.</div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Details section */}
               <section>
