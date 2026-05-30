@@ -12,21 +12,40 @@ const TV_STATUS_LABELS: Record<string, string> = {
   declined:  'Declined',
 };
 const TV_STATUS_COLOR: Record<string, string> = {
-  target:    'var(--text-muted)',
+  target:    'rgba(245,237,217,0.35)',
   pitched:   '#E8602A',
   follow_up: '#F5C842',
   confirmed: '#34d399',
   declined:  '#f87171',
 };
 const BK_STATUS_COLOR: Record<string, string> = {
-  pitch: '#94a3b8', negotiation: '#fbbf24', hold: '#f97316',
-  confirmed: '#34d399', advancing: '#60a5fa', completed: '#6b7280', cancelled: '#ef4444',
+  pitch:       '#94a3b8',
+  negotiation: '#fbbf24',
+  hold:        '#f97316',
+  contract:    '#a78bfa',
+  confirmed:   '#34d399',
+  advancing:   '#60a5fa',
+  completed:   '#6b7280',
+  cancelled:   '#ef4444',
 };
 
-const FIELD_STYLE: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.07)',
-  border: '1px solid rgba(255,255,255,0.15)',
-  color: '#F5EDD9',
+const PANEL_BG    = '#1a2540';
+const ACCENT      = '#E8602A';
+const TEXT_PRI    = '#F5EDD9';
+const TEXT_MUT    = 'rgba(245,237,217,0.45)';
+const INPUT_BG    = 'rgba(255,255,255,0.06)';
+const BORDER      = 'rgba(255,255,255,0.08)';
+
+const INPUT: React.CSSProperties = {
+  background: INPUT_BG,
+  border: `1px solid rgba(255,255,255,0.12)`,
+  color: TEXT_PRI,
+  borderRadius: 6,
+  padding: '0.42rem 0.65rem',
+  fontFamily: 'var(--font-body)',
+  fontSize: '0.85rem',
+  width: '100%',
+  boxSizing: 'border-box',
 };
 
 interface Props {
@@ -87,6 +106,7 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
       email:          v?.email          || '',
       phone:          v?.phone          || '',
       website:        v?.website        || '',
+      venue_type:     v?.venue_type     || '',
       capacity:       v?.capacity       || '',
       backline:       v?.backline       ?? false,
       backline_notes: v?.backline_notes || '',
@@ -134,6 +154,7 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
       email:          form.email          || null,
       phone:          form.phone          || null,
       website:        form.website        || null,
+      venue_type:     form.venue_type     || null,
       capacity:       form.capacity ? Number(form.capacity) : null,
       backline:       form.backline,
       backline_notes: form.backline_notes || null,
@@ -157,16 +178,13 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
     });
     if (res.ok) {
       setTvs(prev => prev.map(t => t.id === tvId ? { ...t, status } : t));
-    } else {
-      console.error('[VenueDrawer] tv status PATCH failed', { tvId, status });
     }
   };
 
-  const primaryContact  = contacts[0] || null;
-  const activeTv        = tvs.find(t => !['declined', 'confirmed'].includes(t.status)) || tvs[0] || null;
-  const genres: string[] = venue?.genre_tags || [];
-  const confirmedBk     = bookings.find(b => ['confirmed', 'completed'].includes(b.status));
-  const previousPay     = confirmedBk?.fee ?? null;
+  const primaryContact = contacts[0] || null;
+  const activeTv       = tvs.find(t => !['declined', 'confirmed'].includes(t.status)) || tvs[0] || null;
+  const confirmedBk    = bookings.find(b => ['confirmed', 'completed'].includes(b.status));
+  const previousPay    = confirmedBk?.fee ?? confirmedBk?.agreed_amount ?? null;
 
   const fmtDate = (d: string) =>
     new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -174,11 +192,11 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
   const emailCategory = () => {
     if (!activeTv) return 'target';
     if (activeTv.status === 'target')   return 'target';
-    if (['pitched', 'waiting'].includes(activeTv.status)) return 'follow_up_1';
+    if (activeTv.status === 'pitched')  return 'follow_up_1';
     return 'confirmation';
   };
 
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((f: any) => ({ ...f, [k]: e.target.value }));
 
   if (showEmail) {
@@ -204,7 +222,7 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
         onClick={onClose}
         style={{
           position: 'fixed', inset: 0,
-          background: 'rgba(0,0,0,0.55)',
+          background: 'rgba(0,0,0,0.6)',
           zIndex: 1000,
           opacity: isOpen ? 1 : 0,
           pointerEvents: isOpen ? 'auto' : 'none',
@@ -216,11 +234,11 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
       <div
         style={{
           position: 'fixed', top: 0, right: 0, bottom: 0,
-          width: 480,
-          maxWidth: '96vw',
-          background: '#0E1628',
-          borderLeft: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '-16px 0 56px rgba(0,0,0,0.65)',
+          width: 380,
+          maxWidth: '100vw',
+          background: PANEL_BG,
+          borderLeft: `1px solid ${BORDER}`,
+          boxShadow: '-20px 0 60px rgba(0,0,0,0.7)',
           zIndex: 1001,
           display: 'flex',
           flexDirection: 'column',
@@ -233,122 +251,133 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
         {/* Sticky header */}
         <div style={{
           position: 'sticky', top: 0, zIndex: 2,
-          background: '#0E1628',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          padding: '1.1rem 1.4rem',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          background: PANEL_BG,
+          borderBottom: `1px solid ${BORDER}`,
+          padding: '16px 24px',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
         }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', letterSpacing: '0.04em', color: '#F5EDD9', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ minWidth: 0, flex: 1, paddingRight: '0.5rem' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', letterSpacing: '0.04em', color: TEXT_PRI, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {venue?.name || '—'}
             </div>
             {(venue?.city || venue?.state) && (
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'rgba(245,237,217,0.45)', marginTop: '0.15rem' }}>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: TEXT_MUT, marginTop: '0.2rem' }}>
                 {[venue?.city, venue?.state].filter(Boolean).join(', ')}
               </div>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexShrink: 0 }}>
             {saved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: '#34d399' }}>✓ Saved</span>}
             {!loading && !editing && (
-              <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>Edit</button>
+              <button
+                onClick={() => setEditing(true)}
+                style={{ ...btnStyle, background: 'rgba(255,255,255,0.06)', color: TEXT_PRI, border: `1px solid ${BORDER}` }}
+              >Edit</button>
             )}
             {!loading && (
               <button
-                className="btn btn-primary btn-sm"
                 onClick={() => { setEmailTvId(activeTv?.id); setShowEmail(true); }}
-                style={{ fontSize: '0.72rem', background: '#E8602A', border: 'none' }}
-              >
-                ✉ Email
-              </button>
+                style={{ ...btnStyle, background: ACCENT, color: '#fff', border: 'none' }}
+              >✉ Email</button>
             )}
             <button
-              className="btn btn-ghost btn-sm"
               onClick={onClose}
-              style={{ color: 'rgba(245,237,217,0.4)', fontSize: '1.1rem', lineHeight: 1 }}
+              style={{ background: 'none', border: 'none', color: TEXT_MUT, fontSize: '1.2rem', cursor: 'pointer', padding: '0.1rem 0.25rem', lineHeight: 1 }}
             >✕</button>
           </div>
         </div>
 
         {/* Body */}
-        <div style={{ padding: '1.25rem 1.4rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {loading && (
-            <div style={{ color: 'rgba(245,237,217,0.4)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading…</div>
+            <div style={{ color: TEXT_MUT, fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading…</div>
           )}
 
           {!loading && editing ? (
             /* ─── Edit mode ─── */
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-              <FieldLabel>Venue Name</FieldLabel>
-              <input className="input" value={form.name} onChange={set('name')} style={FIELD_STYLE} />
+              <Field label="Venue Name">
+                <input style={INPUT} value={form.name} onChange={set('name')} />
+              </Field>
 
-              <FieldLabel>Address</FieldLabel>
-              <input className="input" value={form.address} onChange={set('address')} style={FIELD_STYLE} />
+              <Field label="Email *">
+                <input style={{ ...INPUT, borderColor: 'rgba(232,96,42,0.4)' }} type="email" value={form.email} onChange={set('email')} placeholder="booking@venue.com" />
+              </Field>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: '0.5rem' }}>
-                <div>
-                  <FieldLabel>City</FieldLabel>
-                  <input className="input" value={form.city} onChange={set('city')} style={FIELD_STYLE} />
-                </div>
-                <div>
-                  <FieldLabel>State</FieldLabel>
-                  <input className="input" value={form.state} onChange={set('state')} maxLength={2} style={FIELD_STYLE} />
-                </div>
+              <Field label="Phone">
+                <input style={INPUT} type="tel" value={form.phone} onChange={set('phone')} placeholder="(555) 555-5555" />
+              </Field>
+
+              <Field label="Website">
+                <input style={INPUT} value={form.website} onChange={set('website')} placeholder="https://venue.com" />
+              </Field>
+
+              <Field label="Booking Contact">
+                <input
+                  style={{ ...INPUT, opacity: 0.5, cursor: 'not-allowed' }}
+                  value={primaryContact ? `${primaryContact.first_name || ''} ${primaryContact.last_name || ''}`.trim() : ''}
+                  readOnly
+                  placeholder="Manage via Contacts page"
+                  title="Edit contacts via the Contacts page"
+                />
+              </Field>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: '10px' }}>
+                <Field label="City">
+                  <input style={INPUT} value={form.city} onChange={set('city')} />
+                </Field>
+                <Field label="State">
+                  <input style={INPUT} value={form.state} onChange={set('state')} maxLength={2} />
+                </Field>
               </div>
 
-              <FieldLabel>Email</FieldLabel>
-              <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="booking@venue.com" style={FIELD_STYLE} />
+              <Field label="Address">
+                <input style={INPUT} value={form.address} onChange={set('address')} />
+              </Field>
 
-              <FieldLabel>Phone</FieldLabel>
-              <input className="input" type="tel" value={form.phone} onChange={set('phone')} style={FIELD_STYLE} />
-
-              <FieldLabel>Website</FieldLabel>
-              <input className="input" value={form.website} onChange={set('website')} placeholder="https://venue.com" style={FIELD_STYLE} />
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                <div>
-                  <FieldLabel>Booking Contact</FieldLabel>
-                  <input className="input" value={primaryContact ? `${primaryContact.first_name || ''} ${primaryContact.last_name || ''}`.trim() : ''} readOnly placeholder="—" style={{ ...FIELD_STYLE, opacity: 0.55, cursor: 'not-allowed' }} title="Edit contacts via Contacts page" />
-                </div>
-                <div>
-                  <FieldLabel>Capacity</FieldLabel>
-                  <input className="input" type="number" value={form.capacity} onChange={set('capacity')} placeholder="e.g. 250" style={FIELD_STYLE} />
-                </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <Field label="Capacity">
+                  <input style={INPUT} type="number" value={form.capacity} onChange={set('capacity')} placeholder="250" />
+                </Field>
+                <Field label="Venue Type">
+                  <input style={INPUT} value={form.venue_type} onChange={set('venue_type')} placeholder="Bar, Theater…" />
+                </Field>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', paddingTop: '0.1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', paddingTop: '4px' }}>
                 <input
                   type="checkbox"
                   id="backline-chk"
                   checked={!!form.backline}
                   onChange={e => setForm((f: any) => ({ ...f, backline: e.target.checked }))}
-                  style={{ width: 16, height: 16, accentColor: '#E8602A', cursor: 'pointer' }}
+                  style={{ width: 16, height: 16, accentColor: ACCENT, cursor: 'pointer', flexShrink: 0 }}
                 />
-                <label htmlFor="backline-chk" style={{ color: '#F5EDD9', fontSize: '0.84rem', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
+                <label htmlFor="backline-chk" style={{ color: TEXT_PRI, fontSize: '0.84rem', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
                   Backline available
                 </label>
               </div>
 
-              <FieldLabel>Backline Notes</FieldLabel>
-              <input className="input" value={form.backline_notes} onChange={set('backline_notes')} placeholder="e.g. Full backline — guitar amp, bass amp, drum kit" style={FIELD_STYLE} />
+              <Field label="Backline Notes">
+                <input style={INPUT} value={form.backline_notes} onChange={set('backline_notes')} placeholder="Guitar amp, bass amp, drum kit…" />
+              </Field>
 
-              <FieldLabel>Pay Notes</FieldLabel>
-              <input className="input" value={form.pay_notes} onChange={set('pay_notes')} placeholder="e.g. Door deal, 60/40 split after $200 guarantee" style={FIELD_STYLE} />
+              <Field label="Pay Notes">
+                <input style={INPUT} value={form.pay_notes} onChange={set('pay_notes')} placeholder="Door deal, 60/40 after $200…" />
+              </Field>
 
-              <FieldLabel>Notes</FieldLabel>
-              <textarea
-                className="input"
-                rows={3}
-                value={form.notes}
-                onChange={set('notes')}
-                style={{ ...FIELD_STYLE, resize: 'vertical' }}
-              />
+              <Field label="Notes">
+                <textarea
+                  style={{ ...INPUT, resize: 'vertical', minHeight: '72px' }}
+                  rows={3}
+                  value={form.notes}
+                  onChange={set('notes')}
+                />
+              </Field>
 
-              <div style={{ display: 'flex', gap: '0.6rem', paddingTop: '0.2rem' }}>
-                <button className="btn btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
-                <button className="btn btn-primary" onClick={saveVenue} disabled={saving}
-                  style={{ background: '#E8602A', border: 'none' }}>
+              <div style={{ display: 'flex', gap: '0.6rem', paddingTop: '4px' }}>
+                <button onClick={() => setEditing(false)} style={{ ...btnStyle, flex: 1, background: 'rgba(255,255,255,0.06)', color: TEXT_PRI, border: `1px solid ${BORDER}`, justifyContent: 'center' }}>Cancel</button>
+                <button onClick={saveVenue} disabled={saving} style={{ ...btnStyle, flex: 2, background: ACCENT, color: '#fff', border: 'none', justifyContent: 'center' }}>
                   {saving ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>
@@ -357,159 +386,130 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
           ) : !loading && (
             /* ─── View mode ─── */
             <>
-              {/* Contact & links */}
+              {/* Contact section */}
               <section>
                 <SectionLabel>Contact</SectionLabel>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
-                  {venue?.address && <Detail label="Address" value={venue.address} />}
-                  {venue?.email && (
-                    <Detail label="Email" value={
-                      <a href={`mailto:${venue.email}`} style={{ color: '#E8602A' }}>{venue.email}</a>
-                    } />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {venue?.email ? (
+                    <Row label="Email">
+                      <a href={`mailto:${venue.email}`} style={{ color: ACCENT, textDecoration: 'none', wordBreak: 'break-all' }}>{venue.email}</a>
+                    </Row>
+                  ) : (
+                    <Row label="Email"><span style={{ color: '#f87171', fontSize: '0.8rem' }}>⚠ No email — click Edit</span></Row>
                   )}
                   {venue?.phone && (
-                    <Detail label="Phone" value={
-                      <a href={`tel:${venue.phone}`} style={{ color: '#E8602A' }}>{venue.phone}</a>
-                    } />
+                    <Row label="Phone">
+                      <a href={`tel:${venue.phone}`} style={{ color: ACCENT, textDecoration: 'none' }}>{venue.phone}</a>
+                    </Row>
                   )}
                   {venue?.website && (
-                    <Detail label="Website" value={
-                      <a href={venue.website} target="_blank" rel="noopener noreferrer" style={{ color: '#E8602A' }}>
+                    <Row label="Website">
+                      <a href={venue.website} target="_blank" rel="noopener noreferrer" style={{ color: ACCENT, textDecoration: 'none' }}>
                         {venue.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
                       </a>
-                    } />
+                    </Row>
                   )}
                   {primaryContact && (
-                    <Detail label="Contact" value={`${primaryContact.first_name || ''} ${primaryContact.last_name || ''}`.trim() || '—'} />
-                  )}
-                  {venue?.capacity && (
-                    <Detail label="Capacity" value={Number(venue.capacity).toLocaleString()} />
+                    <Row label="Contact">{`${primaryContact.first_name || ''} ${primaryContact.last_name || ''}`.trim() || '—'}</Row>
                   )}
                 </div>
               </section>
 
-              {/* Backline */}
-              {(venue?.backline || venue?.backline_notes) && (
-                <section>
-                  <SectionLabel>Backline</SectionLabel>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                    <span style={{ color: venue?.backline ? '#34d399' : 'rgba(245,237,217,0.45)', fontSize: '0.84rem', fontFamily: 'var(--font-body)' }}>
-                      {venue?.backline ? '✓ Backline available' : '✗ No backline'}
+              {/* Details section */}
+              <section>
+                <SectionLabel>Details</SectionLabel>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {venue?.capacity && <Row label="Capacity">{Number(venue.capacity).toLocaleString()}</Row>}
+                  {venue?.venue_type && <Row label="Type">{venue.venue_type}</Row>}
+                  {venue?.address && <Row label="Address">{venue.address}</Row>}
+                  <Row label="Backline">
+                    <span style={{ color: venue?.backline ? '#34d399' : TEXT_MUT }}>
+                      {venue?.backline ? '✓ Available' : '✗ None'}
                     </span>
                     {venue?.backline_notes && (
-                      <span style={{ color: 'rgba(245,237,217,0.65)', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>{venue.backline_notes}</span>
+                      <span style={{ color: TEXT_MUT, fontSize: '0.8rem', display: 'block', marginTop: '2px' }}>{venue.backline_notes}</span>
                     )}
-                  </div>
-                </section>
-              )}
+                  </Row>
+                  {venue?.pay_notes && <Row label="Pay">{venue.pay_notes}</Row>}
+                  {previousPay != null && (
+                    <Row label="Last Pay"><span style={{ color: '#34d399', fontWeight: 600 }}>${Number(previousPay).toLocaleString()}</span></Row>
+                  )}
+                  {venue?.notes && <Row label="Notes"><span style={{ color: TEXT_MUT, whiteSpace: 'pre-wrap', fontSize: '0.82rem' }}>{venue.notes}</span></Row>}
+                </div>
+              </section>
 
-              {/* Pay notes */}
-              {venue?.pay_notes && (
-                <section>
-                  <SectionLabel>Pay Notes</SectionLabel>
-                  <div style={{ color: 'rgba(245,237,217,0.65)', fontSize: '0.84rem', fontFamily: 'var(--font-body)' }}>{venue.pay_notes}</div>
-                </section>
-              )}
-
-              {/* Genre tags */}
-              {genres.length > 0 && (
-                <section>
-                  <SectionLabel>Genres</SectionLabel>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                    {genres.map((g: string) => (
-                      <span key={g} style={{
-                        fontFamily: 'var(--font-mono)', fontSize: '0.7rem', textTransform: 'uppercase',
-                        letterSpacing: '0.06em', padding: '0.15rem 0.5rem',
-                        border: '1px solid rgba(232,96,42,0.4)', color: '#E8602A',
-                        borderRadius: '2px',
-                      }}>{g}</span>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {/* Notes */}
-              {venue?.notes && (
-                <section>
-                  <SectionLabel>Notes</SectionLabel>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'rgba(245,237,217,0.65)' }}>
-                    {venue.notes}
-                  </div>
-                </section>
-              )}
-
-              {/* Previous pay */}
-              {previousPay != null && (
-                <section>
-                  <SectionLabel>Previous Pay</SectionLabel>
-                  <span style={{ color: '#34d399', fontWeight: 600, fontSize: '0.92rem' }}>
-                    ${Number(previousPay).toLocaleString()}
-                  </span>
-                  <span style={{ color: 'rgba(245,237,217,0.35)', fontSize: '0.78rem', marginLeft: '0.4rem', fontFamily: 'var(--font-body)' }}>last confirmed booking</span>
-                </section>
-              )}
-
-              {/* Booking history */}
-              {bookings.length > 0 && (
-                <section>
-                  <SectionLabel>Booking History</SectionLabel>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              {/* Booking History */}
+              <section>
+                <SectionLabel>Booking History</SectionLabel>
+                {bookings.length === 0 ? (
+                  <div style={{ color: TEXT_MUT, fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontStyle: 'italic' }}>No booking history yet</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {bookings.map(b => (
                       <div key={b.id} style={{
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '0.45rem 0.6rem',
+                        display: 'grid', gridTemplateColumns: '1fr auto auto',
+                        alignItems: 'center', gap: '8px',
+                        padding: '8px 10px',
                         background: 'rgba(255,255,255,0.04)',
-                        borderRadius: 'var(--radius-sm)',
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: 6,
                         fontFamily: 'var(--font-body)', fontSize: '0.82rem',
                       }}>
-                        <span style={{ color: 'rgba(245,237,217,0.5)' }}>
+                        <span style={{ color: TEXT_MUT }}>
                           {b.show_date ? fmtDate(b.show_date) : 'Date TBD'}
                         </span>
                         <span style={{
-                          color: BK_STATUS_COLOR[b.status] || 'rgba(245,237,217,0.45)',
-                          fontFamily: 'var(--font-mono)', fontSize: '0.72rem',
-                          textTransform: 'uppercase', letterSpacing: '0.07em',
+                          color: BK_STATUS_COLOR[b.status] || TEXT_MUT,
+                          fontFamily: 'var(--font-mono)', fontSize: '0.7rem',
+                          textTransform: 'uppercase', letterSpacing: '0.06em',
                         }}>{b.status}</span>
-                        {b.fee != null && (
+                        {(b.fee != null || b.agreed_amount != null) && (
                           <span style={{ color: '#34d399', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
-                            ${Number(b.fee).toLocaleString()}
+                            ${Number(b.fee ?? b.agreed_amount).toLocaleString()}
                           </span>
                         )}
                       </div>
                     ))}
                   </div>
-                </section>
-              )}
+                )}
+              </section>
 
-              {/* Tour associations */}
-              {tvs.length > 0 && (
-                <section>
-                  <SectionLabel>Tour Associations</SectionLabel>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {/* Tour Associations */}
+              <section>
+                <SectionLabel>Tour Associations</SectionLabel>
+                {tvs.length === 0 ? (
+                  <div style={{ color: TEXT_MUT, fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontStyle: 'italic' }}>Not in any tours yet</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {tvs.map(tv => (
                       <div key={tv.id} style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '0.5rem 0.6rem',
+                        padding: '8px 10px',
                         background: 'rgba(255,255,255,0.04)',
-                        borderRadius: 'var(--radius-sm)',
-                        gap: '0.6rem',
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: 6,
+                        gap: '8px',
                       }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: '#F5EDD9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: TEXT_PRI, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {(tv.tour as any)?.name || 'Unnamed Tour'}
                           </div>
-                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'rgba(245,237,217,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: '0.1rem' }}>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: TEXT_MUT, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: '2px' }}>
                             {(tv.tour as any)?.status || ''}
                           </div>
                         </div>
                         <select
-                          className="select"
                           value={tv.status}
                           onChange={e => patchTvStatus(tv.id, e.target.value as OutreachStatus)}
                           style={{
-                            fontSize: '0.78rem', padding: '0.25rem 0.4rem',
-                            color: TV_STATUS_COLOR[tv.status] || 'rgba(245,237,217,0.45)',
-                            minWidth: 120,
+                            background: 'rgba(255,255,255,0.06)',
+                            border: `1px solid ${BORDER}`,
+                            borderRadius: 4,
+                            color: TV_STATUS_COLOR[tv.status] || TEXT_MUT,
+                            fontSize: '0.76rem',
+                            padding: '0.25rem 0.4rem',
+                            cursor: 'pointer',
+                            minWidth: 100,
                           }}
                         >
                           {Object.entries(TV_STATUS_LABELS).map(([val, lbl]) => (
@@ -519,15 +519,8 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
                       </div>
                     ))}
                   </div>
-                </section>
-              )}
-
-              {/* Empty state */}
-              {!venue && (
-                <div style={{ color: 'rgba(245,237,217,0.35)', fontSize: '0.84rem', fontFamily: 'var(--font-body)' }}>
-                  Venue not found.
-                </div>
-              )}
+                )}
+              </section>
             </>
           )}
         </div>
@@ -536,30 +529,63 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
   );
 }
 
+const btnStyle: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+  padding: '0.3rem 0.7rem',
+  borderRadius: 5,
+  fontSize: '0.78rem',
+  fontFamily: 'var(--font-body)',
+  fontWeight: 600,
+  cursor: 'pointer',
+  lineHeight: 1.4,
+  transition: 'opacity 0.15s',
+};
+
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      fontFamily: 'var(--font-body)', fontSize: '0.7rem', textTransform: 'uppercase',
-      letterSpacing: '0.1em', color: 'rgba(245,237,217,0.3)', marginBottom: '0.5rem',
+      fontFamily: 'var(--font-body)',
+      fontSize: '0.68rem',
+      textTransform: 'uppercase',
+      letterSpacing: '0.12em',
+      color: '#E8602A',
+      marginBottom: '10px',
+      fontWeight: 700,
     }}>{children}</div>
   );
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label style={{
-      display: 'block',
-      fontFamily: 'var(--font-body)', fontSize: '0.7rem', textTransform: 'uppercase',
-      letterSpacing: '0.08em', color: 'rgba(245,237,217,0.4)', marginBottom: '0.25rem',
-    }}>{children}</label>
+    <div>
+      <label style={{
+        display: 'block',
+        fontFamily: 'var(--font-body)',
+        fontSize: '0.68rem',
+        textTransform: 'uppercase',
+        letterSpacing: '0.08em',
+        color: 'rgba(245,237,217,0.45)',
+        marginBottom: '5px',
+      }}>{label}</label>
+      {children}
+    </div>
   );
 }
 
-function Detail({ label, value }: { label: string; value: React.ReactNode }) {
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
-      <span style={{ color: 'rgba(245,237,217,0.35)', fontSize: '0.76rem', minWidth: 70, fontFamily: 'var(--font-body)', textTransform: 'uppercase', letterSpacing: '0.07em', paddingTop: '0.1rem', flexShrink: 0 }}>{label}</span>
-      <span style={{ color: '#F5EDD9', fontSize: '0.84rem', wordBreak: 'break-word' }}>{value}</span>
+    <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+      <span style={{
+        color: 'rgba(245,237,217,0.35)',
+        fontSize: '0.72rem',
+        minWidth: 68,
+        fontFamily: 'var(--font-body)',
+        textTransform: 'uppercase',
+        letterSpacing: '0.07em',
+        paddingTop: '2px',
+        flexShrink: 0,
+      }}>{label}</span>
+      <span style={{ color: '#F5EDD9', fontSize: '0.84rem', wordBreak: 'break-word', flex: 1 }}>{children}</span>
     </div>
   );
 }
