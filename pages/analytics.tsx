@@ -6,11 +6,10 @@ import { supabase } from '../lib/supabase';
 
 type SortKey = 'state' | 'total' | 'waiting' | 'confirmed' | 'conversionRate' | 'responseRate';
 
-const STAGE_ORDER = ['target', 'pitched', 'waiting', 'follow_up', 'confirmed'] as const;
+const STAGE_ORDER = ['target', 'pitched', 'follow_up', 'confirmed'] as const;
 const STAGE_LABELS: Record<string, string> = {
   target:    'Target',
   pitched:   'Pitched',
-  waiting:   'Waiting on Response',
   follow_up: 'Follow Up',
   confirmed: 'Confirmed',
 };

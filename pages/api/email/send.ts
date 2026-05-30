@@ -87,7 +87,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         newTvStatus = 'pitched';
         tvExtra.pitched_at = now;
       } else if (isFollowUp) {
-        newTvStatus = 'waiting';
+        newTvStatus = 'follow_up';
         tvExtra.responded_at = now;
       } else if (category === 'confirmation') {
         newTvStatus = 'confirmed';

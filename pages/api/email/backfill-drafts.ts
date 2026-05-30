@@ -201,7 +201,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data: tourVenues, error: tvErr } = await service.from('tour_venues')
       .select('id, venue_id, tour_id, venue:venues(name, city, state, capacity, email, secondary_emails)')
       .in('tour_id', tourIds)
-      .in('status', ['target', 'pitched', 'waiting', 'follow_up'])
+      .in('status', ['target', 'pitched', 'follow_up'])
       .limit(30);
 
     if (tvErr) errors.push(`Tour venues query: ${tvErr.message}`);

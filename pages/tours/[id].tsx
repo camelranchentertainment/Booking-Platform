@@ -12,13 +12,12 @@ import Link from 'next/link';
 const STATUS_COLOR: Record<OutreachStatus, string> = {
   target:    'var(--text-muted)',
   pitched:   '#E8602A',
-  waiting:   '#F5A623',
   follow_up: '#F5C842',
   confirmed: '#34d399',
   declined:  '#f87171',
 };
 
-const FILTER_TABS: (OutreachStatus | 'all')[] = ['all', 'target', 'pitched', 'waiting', 'follow_up', 'confirmed', 'declined'];
+const FILTER_TABS: (OutreachStatus | 'all')[] = ['all', 'target', 'pitched', 'follow_up', 'confirmed', 'declined'];
 
 
 export default function TourDetail() {
@@ -61,7 +60,7 @@ export default function TourDetail() {
   const [composerTourVenue, setComposerTourVenue] = useState<any>(null);
   const tvEmailCategory = (status: OutreachStatus): string => {
     if (status === 'target') return 'target';
-    if (status === 'pitched' || status === 'waiting') return 'follow_up_1';
+    if (status === 'pitched') return 'follow_up_1';
     return 'confirmation';
   };
 

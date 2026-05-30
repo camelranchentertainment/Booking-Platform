@@ -206,7 +206,7 @@ export interface RoutingRule {
   created_at: string;
 }
 
-export type OutreachStatus = 'target' | 'pitched' | 'waiting' | 'follow_up' | 'confirmed' | 'declined';
+export type OutreachStatus = 'target' | 'pitched' | 'follow_up' | 'confirmed' | 'declined';
 export type SocialPlatform = 'instagram' | 'facebook' | 'youtube' | 'tiktok' | 'discord';
 export type SocialStatus   = 'pending' | 'approved' | 'posted' | 'dismissed';
 

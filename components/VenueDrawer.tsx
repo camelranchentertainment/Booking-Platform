@@ -7,16 +7,14 @@ import type { OutreachStatus } from '../lib/types';
 const TV_STATUS_LABELS: Record<string, string> = {
   target:    'Target',
   pitched:   'Pitched',
-  waiting:   'Waiting on Response',
   follow_up: 'Follow Up',
   confirmed: 'Confirmed',
   declined:  'Declined',
 };
 const TV_STATUS_COLOR: Record<string, string> = {
   target:    'var(--text-muted)',
-  pitched:   '#c084fc',
-  waiting:   '#F5A623',
-  follow_up: '#fbbf24',
+  pitched:   '#E8602A',
+  follow_up: '#F5C842',
   confirmed: '#34d399',
   declined:  '#f87171',
 };
