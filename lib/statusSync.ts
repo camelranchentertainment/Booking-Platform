@@ -4,6 +4,7 @@ import type { BookingStatus, OutreachStatus } from './types';
 const TOUR_VENUE_TO_BOOKING_STATUS: Record<OutreachStatus, BookingStatus> = {
   target:    'pitch',
   pitched:   'pitch',
+  waiting:   'pitch',
   follow_up: 'negotiation',
   confirmed: 'confirmed',
   declined:  'cancelled',
@@ -31,6 +32,7 @@ export const STATUS_LABELS: Record<string, string> = {
   cancelled:   'Cancelled',
   target:      'Target',
   pitched:     'Pitched',
+  waiting:     'Waiting on Response',
   follow_up:   'Follow Up',
   declined:    'Declined',
 };
@@ -39,6 +41,7 @@ export const STATUS_COLORS: Record<string, string> = {
   // Outreach statuses
   target:    '#6B8FB5',
   pitched:   '#E8602A',
+  waiting:   '#F5A623',
   follow_up: '#F5C842',
   confirmed: '#4CAF50',
   declined:  '#888888',

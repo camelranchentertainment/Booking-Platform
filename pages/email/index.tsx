@@ -14,10 +14,10 @@ type EmailType = 'cold_pitch' | 'follow_up' | 'reply';
 type Draft = { subject: string; body: string; preview: string };
 type View = 'outbox' | 'pipeline' | 'outreach' | 'inbox';
 
-const OUTREACH_STATUSES = ['all', 'target', 'pitched', 'follow_up', 'confirmed', 'declined'] as const;
+const OUTREACH_STATUSES = ['all', 'target', 'pitched', 'waiting', 'follow_up', 'confirmed', 'declined'] as const;
 const OUTREACH_STATUS_LABELS: Record<string, string> = {
   all: 'All', target: 'Target', pitched: 'Pitched',
-  follow_up: 'Follow Up', confirmed: 'Confirmed', declined: 'Declined',
+  waiting: 'Waiting on Response', follow_up: 'Follow Up', confirmed: 'Confirmed', declined: 'Declined',
 };
 
 type InboxMessage = {
@@ -775,7 +775,7 @@ export default function EmailPage() {
                           </td>
                           <td>
                             <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
-                              {['target', 'pitched', 'follow_up'].includes(tv.status) && (
+                              {['target', 'pitched', 'waiting', 'follow_up'].includes(tv.status) && (
                                 <button
                                   className="btn btn-ghost btn-sm"
                                   style={{ fontSize: '0.72rem', color: '#60a5fa', borderColor: 'rgba(96,165,250,0.4)' }}
@@ -784,7 +784,7 @@ export default function EmailPage() {
                                   ✉ Email
                                 </button>
                               )}
-                              {tv.status === 'pitched' && (
+                              {(tv.status === 'pitched' || tv.status === 'waiting') && (
                                 <button
                                   className="btn btn-ghost btn-sm"
                                   style={{ fontSize: '0.72rem', color: '#34d399', borderColor: 'rgba(52,211,153,0.4)' }}

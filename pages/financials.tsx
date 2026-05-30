@@ -112,10 +112,8 @@ export default function Financials() {
       .from('bookings')
       .select('id, show_date, fee, agreed_amount, amount_paid, actual_amount_received, payment_status, expenses, status, act:acts(act_name), venue:venues(name, city, state)')
       .eq('act_id', actId)
-      .gte('show_date', startDate)
-      .lte('show_date', endDate)
       .neq('status', 'cancelled')
-      .order('show_date', { ascending: true });
+      .order('show_date', { ascending: true, nullsFirst: false });
     setBookings((data as any[]) || []);
     setLoading(false);
   };
@@ -125,16 +123,17 @@ export default function Financials() {
   const totalPaid      = bookings.reduce((s, b) => s + (Number(b.actual_amount_received ?? b.amount_paid) || 0), 0);
   const totalExpenses  = expenses.reduce((s, e) => s + Number(e.amount), 0);
   const outstanding    = totalFee - totalPaid;
-  const potential      = bookings.filter(b => b.status === 'confirmed' && b.show_date && b.show_date > todayStr && b.payment_status === 'pending')
+  const potential      = bookings.filter(b => b.status === 'confirmed')
     .reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
   const earned         = bookings.filter(b => b.status === 'completed')
     .reduce((s, b) => s + (Number(b.actual_amount_received ?? b.amount_paid) || 0), 0);
   const netIncome      = earned - totalExpenses;
   const showCount      = bookings.filter(b => ['confirmed', 'advancing', 'completed'].includes(b.status)).length;
 
-  // Monthly breakdown — expenses bucketed from the expenses table by month+year
+  // Monthly breakdown for the selected year — expenses bucketed from the expenses table by month+year
+  const yearBookings = bookings.filter(b => !b.show_date || new Date(b.show_date + 'T00:00:00').getFullYear() === year);
   const monthly = MONTHS.map((month, idx) => {
-    const mbs = bookings.filter(b => b.show_date && new Date(b.show_date + 'T00:00:00').getMonth() === idx);
+    const mbs = yearBookings.filter(b => b.show_date && new Date(b.show_date + 'T00:00:00').getMonth() === idx);
     const monthExpenses = expenses.filter(e => {
       const d = new Date(e.expense_date + 'T00:00:00');
       return d.getMonth() === idx && d.getFullYear() === year;

@@ -127,7 +127,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const toAdvance = (tvs || []).filter((tv: any) => tv.tour?.act_id === actId).map((tv: any) => tv.id);
         if (toAdvance.length > 0) {
           await admin.from('tour_venues')
-            .update({ status: 'follow_up', updated_at: new Date().toISOString() })
+            .update({ status: 'waiting', updated_at: new Date().toISOString() })
             .in('id', toAdvance);
 
           const venueNames = [...new Set(enriched

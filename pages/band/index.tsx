@@ -113,7 +113,7 @@ export default function BandDashboard() {
         tourIds.length
           ? supabase.from('tour_venues').select('id', { count: 'exact', head: true }).in('tour_id', tourIds).eq('status', 'target')
           : Promise.resolve({ count: 0 }),
-        supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('act_id', actId).eq('status', 'confirmed').gt('show_date', today),
+        supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('act_id', actId).eq('status', 'confirmed'),
         supabase.from('tours').select('id', { count: 'exact', head: true }).eq('act_id', actId).in('status', ['planning', 'active']),
       ]);
 

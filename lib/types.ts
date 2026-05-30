@@ -78,6 +78,9 @@ export interface Venue {
   capacity?: number | null;
   stage_size?: string | null;
   backline?: string | null;
+  backline_notes?: string | null;
+  pay_notes?: string | null;
+  booking_contact?: string | null;
   notes?: string | null;
   source: string;
   place_id?: string | null;
@@ -206,7 +209,7 @@ export interface RoutingRule {
   created_at: string;
 }
 
-export type OutreachStatus = 'target' | 'pitched' | 'follow_up' | 'confirmed' | 'declined';
+export type OutreachStatus = 'target' | 'pitched' | 'waiting' | 'follow_up' | 'confirmed' | 'declined';
 export type SocialPlatform = 'instagram' | 'facebook' | 'youtube' | 'tiktok' | 'discord';
 export type SocialStatus   = 'pending' | 'approved' | 'posted' | 'dismissed';
 

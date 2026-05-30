@@ -60,19 +60,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const pipeline = {
     target:    tourVenues.filter(v => v.status === 'target').length,
     pitched:   tourVenues.filter(v => v.status === 'pitched').length,
+    waiting:   tourVenues.filter(v => v.status === 'waiting').length,
     follow_up: tourVenues.filter(v => v.status === 'follow_up').length,
     confirmed: tourVenues.filter(v => v.status === 'confirmed').length,
     declined:  tourVenues.filter(v => v.status === 'declined').length,
     total:     tourVenues.length,
   };
 
-  const activeOutreach = pipeline.pitched + pipeline.follow_up + pipeline.confirmed;
+  const activeOutreach = pipeline.pitched + pipeline.waiting + pipeline.follow_up + pipeline.confirmed;
   const conversionRate = pipeline.total > 0
     ? Math.round((pipeline.confirmed / pipeline.total) * 100)
     : 0;
   const responseRate = activeOutreach > 0
     ? Math.round(
-        ((pipeline.follow_up + pipeline.confirmed) / activeOutreach) * 100
+        ((pipeline.waiting + pipeline.follow_up + pipeline.confirmed) / activeOutreach) * 100
       )
     : 0;
 
@@ -83,7 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!regionMap[state]) regionMap[state] = { state, total: 0, confirmed: 0, responded: 0 };
     regionMap[state].total++;
     if (v.status === 'confirmed') regionMap[state].confirmed++;
-    if (['follow_up', 'confirmed'].includes(v.status)) regionMap[state].responded++;
+    if (['waiting', 'follow_up', 'confirmed'].includes(v.status)) regionMap[state].responded++;
   }
   const regionalPerformance = Object.values(regionMap)
     .sort((a, b) => b.confirmed - a.confirmed)

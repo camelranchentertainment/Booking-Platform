@@ -7,6 +7,7 @@ import type { OutreachStatus } from '../lib/types';
 const TV_STATUS_LABELS: Record<string, string> = {
   target:    'Target',
   pitched:   'Pitched',
+  waiting:   'Waiting on Response',
   follow_up: 'Follow Up',
   confirmed: 'Confirmed',
   declined:  'Declined',
@@ -14,6 +15,7 @@ const TV_STATUS_LABELS: Record<string, string> = {
 const TV_STATUS_COLOR: Record<string, string> = {
   target:    'rgba(245,237,217,0.35)',
   pitched:   '#E8602A',
+  waiting:   '#F5A623',
   follow_up: '#F5C842',
   confirmed: '#34d399',
   declined:  '#f87171',
@@ -99,16 +101,17 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
     setVenue(v);
     setContacts(contactsRes.data || []);
     setForm({
-      name:           v?.name           || '',
-      address:        v?.address        || '',
-      city:           v?.city           || '',
-      state:          v?.state          || '',
-      email:          v?.email          || '',
-      phone:          v?.phone          || '',
-      website:        v?.website        || '',
-      venue_type:     v?.venue_type     || '',
-      capacity:       v?.capacity       || '',
-      backline:       v?.backline       ?? false,
+      name:            v?.name            || '',
+      address:         v?.address         || '',
+      city:            v?.city            || '',
+      state:           v?.state           || '',
+      email:           v?.email           || '',
+      phone:           v?.phone           || '',
+      website:         v?.website         || '',
+      venue_type:      v?.venue_type      || '',
+      booking_contact: v?.booking_contact || '',
+      capacity:        v?.capacity        || '',
+      backline:        v?.backline        ?? false,
       backline_notes: v?.backline_notes || '',
       pay_notes:      v?.pay_notes      || '',
       notes:          v?.notes          || '',
@@ -147,19 +150,20 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
     if (!venue) return;
     setSaving(true);
     await supabase.from('venues').update({
-      name:           form.name           || null,
-      address:        form.address        || null,
-      city:           form.city           || null,
-      state:          form.state          || null,
-      email:          form.email          || null,
-      phone:          form.phone          || null,
-      website:        form.website        || null,
-      venue_type:     form.venue_type     || null,
-      capacity:       form.capacity ? Number(form.capacity) : null,
-      backline:       form.backline,
-      backline_notes: form.backline_notes || null,
-      pay_notes:      form.pay_notes      || null,
-      notes:          form.notes          || null,
+      name:            form.name            || null,
+      address:         form.address         || null,
+      city:            form.city            || null,
+      state:           form.state           || null,
+      email:           form.email           || null,
+      phone:           form.phone           || null,
+      website:         form.website         || null,
+      venue_type:      form.venue_type      || null,
+      booking_contact: form.booking_contact || null,
+      capacity:        form.capacity ? Number(form.capacity) : null,
+      backline:        form.backline,
+      backline_notes:  form.backline_notes  || null,
+      pay_notes:       form.pay_notes       || null,
+      notes:           form.notes           || null,
     }).eq('id', venue.id);
     setVenue((prev: any) => ({ ...prev, ...form, capacity: form.capacity ? Number(form.capacity) : null }));
     setEditing(false);
@@ -314,13 +318,7 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
               </Field>
 
               <Field label="Booking Contact">
-                <input
-                  style={{ ...INPUT, opacity: 0.5, cursor: 'not-allowed' }}
-                  value={primaryContact ? `${primaryContact.first_name || ''} ${primaryContact.last_name || ''}`.trim() : ''}
-                  readOnly
-                  placeholder="Manage via Contacts page"
-                  title="Edit contacts via the Contacts page"
-                />
+                <input style={INPUT} value={form.booking_contact} onChange={set('booking_contact')} placeholder="e.g. Jake Smith" />
               </Field>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: '10px' }}>
@@ -386,22 +384,25 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
           ) : !loading && (
             /* ─── View mode ─── */
             <>
-              {/* Contact section */}
+              {/* Contact section — always visible, critical fields first */}
               <section>
                 <SectionLabel>Contact</SectionLabel>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {venue?.email ? (
-                    <Row label="Email">
-                      <a href={`mailto:${venue.email}`} style={{ color: ACCENT, textDecoration: 'none', wordBreak: 'break-all' }}>{venue.email}</a>
-                    </Row>
-                  ) : (
-                    <Row label="Email"><span style={{ color: '#f87171', fontSize: '0.8rem' }}>⚠ No email — click Edit</span></Row>
-                  )}
-                  {venue?.phone && (
-                    <Row label="Phone">
-                      <a href={`tel:${venue.phone}`} style={{ color: ACCENT, textDecoration: 'none' }}>{venue.phone}</a>
-                    </Row>
-                  )}
+                  <Row label="Booking Contact">
+                    {venue?.booking_contact
+                      ? <span style={{ color: TEXT_PRI, fontWeight: 600 }}>{venue.booking_contact}</span>
+                      : <span style={{ color: TEXT_MUT, fontSize: '0.8rem', fontStyle: 'italic' }}>— click Edit to add</span>}
+                  </Row>
+                  <Row label="Email">
+                    {venue?.email
+                      ? <a href={`mailto:${venue.email}`} style={{ color: ACCENT, textDecoration: 'none', wordBreak: 'break-all' }}>{venue.email}</a>
+                      : <span style={{ color: '#f87171', fontSize: '0.8rem' }}>⚠ No email — click Edit to add</span>}
+                  </Row>
+                  <Row label="Phone">
+                    {venue?.phone
+                      ? <a href={`tel:${venue.phone}`} style={{ color: ACCENT, textDecoration: 'none' }}>{venue.phone}</a>
+                      : <span style={{ color: TEXT_MUT, fontSize: '0.8rem', fontStyle: 'italic' }}>—</span>}
+                  </Row>
                   {venue?.website && (
                     <Row label="Website">
                       <a href={venue.website} target="_blank" rel="noopener noreferrer" style={{ color: ACCENT, textDecoration: 'none' }}>
@@ -410,7 +411,7 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
                     </Row>
                   )}
                   {primaryContact && (
-                    <Row label="Contact">{`${primaryContact.first_name || ''} ${primaryContact.last_name || ''}`.trim() || '—'}</Row>
+                    <Row label="Contact DB">{`${primaryContact.first_name || ''} ${primaryContact.last_name || ''}`.trim() || '—'}</Row>
                   )}
                 </div>
               </section>

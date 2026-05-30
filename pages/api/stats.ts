@@ -40,11 +40,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     tourIds.length > 0
       ? service.from('tour_venues').select('status')
           .in('tour_id', tourIds)
-          .in('status', ['pitched', 'follow_up'])
+          .in('status', ['pitched', 'waiting', 'follow_up'])
       : Promise.resolve({ data: [] }),
 
     service.from('bookings').select('id', { count: 'exact', head: true })
-      .eq('act_id', actId).eq('status', 'confirmed').gt('show_date', today),
+      .eq('act_id', actId).eq('status', 'confirmed'),
 
     service.from('tours').select('id', { count: 'exact', head: true })
       .eq('act_id', actId).in('status', ['planning', 'active']),
