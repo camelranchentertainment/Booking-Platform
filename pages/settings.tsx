@@ -582,7 +582,7 @@ export default function Settings() {
                     </div>
                     <div className="field">
                       <label className="field-label">Genre</label>
-                      <input className="input" value={actForm.genre} onChange={setAct('genre')} placeholder="e.g. Country, Rock" />
+                      <input className="input" value={actForm.genre} onChange={setAct('genre')} placeholder="e.g. Rock, Pop, Jazz, Hip-Hop" />
                     </div>
                     <div className="field">
                       <label className="field-label">Home City</label>

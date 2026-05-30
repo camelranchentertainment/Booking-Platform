@@ -53,7 +53,7 @@ export default function NewBand() {
               </div>
               <div className="field">
                 <label className="field-label">Genre</label>
-                <input className="input" value={form.genre} onChange={set('genre')} placeholder="Country, Rock, Americana..." />
+                <input className="input" value={form.genre} onChange={set('genre')} placeholder="e.g. Rock, Pop, Jazz, Hip-Hop..." />
               </div>
               <div className="field">
                 <label className="field-label">Bio</label>

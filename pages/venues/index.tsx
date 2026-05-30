@@ -965,7 +965,7 @@ export default function VenuesPage() {
               </div>
               <div className="field">
                 <label className="field-label">Music Genres</label>
-                <input className="input" value={form.music_genres} onChange={set('music_genres')} placeholder="Country, Americana, Folk (comma-separated)" />
+                <input className="input" value={form.music_genres} onChange={set('music_genres')} placeholder="e.g. Rock, Jazz, Folk, Electronic (comma-separated)" />
               </div>
               {form.google_maps_url && (
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent)', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
