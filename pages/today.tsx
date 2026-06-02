@@ -664,11 +664,11 @@ export default function TodayPage() {
 
     const [todayRes, tomorrowRes, upcomingRes] = await Promise.all([
       supabase.from('bookings').select(bookingSelect)
-        .eq('act_id', actId).in('status', ['confirmed', 'advancing']).eq('show_date', td).limit(1),
+        .eq('act_id', actId).in('status', ['confirmed']).eq('show_date', td).limit(1),
       supabase.from('bookings').select(bookingSelect)
-        .eq('act_id', actId).in('status', ['confirmed', 'advancing']).eq('show_date', tm).limit(1),
+        .eq('act_id', actId).in('status', ['confirmed']).eq('show_date', tm).limit(1),
       supabase.from('bookings').select('id, show_date, venue:venues(name, city, state)')
-        .eq('act_id', actId).in('status', ['confirmed', 'advancing']).gt('show_date', tm).order('show_date').limit(1),
+        .eq('act_id', actId).in('status', ['confirmed']).gt('show_date', tm).order('show_date').limit(1),
     ]);
 
     const todayBooking    = todayRes.data?.[0]    ?? null;

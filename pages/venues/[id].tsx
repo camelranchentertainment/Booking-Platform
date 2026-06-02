@@ -55,7 +55,7 @@ export default function VenueDetail() {
     const { data: { user } } = await supabase.auth.getUser();
     const [venueRes, bookingsRes, contactsRes, actsRes] = await Promise.all([
       supabase.from('venues').select('*').eq('id', id).single(),
-      supabase.from('bookings').select('id, status, show_date, fee, deal_type, amount_paid, payment_status, rebook, post_show_notes, act:acts(act_name)')
+      supabase.from('bookings').select('id, status, show_date, fee, deal_type, actual_amount_received, payment_status, rebook_flag, post_show_notes, act:acts(act_name)')
         .eq('venue_id', id).order('show_date', { ascending: false }).limit(50),
       supabase.from('contacts').select('*').eq('venue_id', id).order('last_name'),
       user ? supabase.from('acts').select('id, act_name').eq('owner_id', user.id).eq('is_active', true).order('act_name') : Promise.resolve({ data: [] }),
@@ -322,7 +322,7 @@ export default function VenueDetail() {
               <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>No bookings at this venue</div>
             ) : (() => {
               const totalFee = bookings.reduce((s, b) => s + (b.fee ? Number(b.fee) : 0), 0);
-              const totalPaid = bookings.reduce((s, b) => s + (b.amount_paid ? Number(b.amount_paid) : 0), 0);
+              const totalPaid = bookings.reduce((s, b) => s + ((b as any).actual_amount_received ? Number((b as any).actual_amount_received) : 0), 0);
               const completed = bookings.filter((b: any) => b.status === 'completed').length;
               return (
                 <>
@@ -361,13 +361,13 @@ export default function VenueDetail() {
                             </td>
                             <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>{b.fee ? `$${Number(b.fee).toLocaleString()}` : '—'}</td>
                             <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{b.deal_type || '—'}</td>
-                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: b.amount_paid ? '#34d399' : 'var(--text-muted)' }}>
-                              {b.amount_paid ? `$${Number(b.amount_paid).toLocaleString()}` : '—'}
+                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: b.actual_amount_received ? '#34d399' : 'var(--text-muted)' }}>
+                              {b.actual_amount_received ? `$${Number(b.actual_amount_received).toLocaleString()}` : '—'}
                             </td>
                             <td><span className={`badge badge-${b.status}`} style={{ fontSize: '0.7rem' }}>{bookingLabel(b.status)}</span></td>
                             <td>
-                              {b.rebook === true && <span style={{ color: '#34d399', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>✓</span>}
-                              {b.rebook === false && <span style={{ color: '#f87171', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>✕</span>}
+                              {b.rebook_flag === true && <span style={{ color: '#34d399', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>✓</span>}
+                              {b.rebook_flag === false && <span style={{ color: '#f87171', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>✕</span>}
                             </td>
                           </tr>
                         ))}

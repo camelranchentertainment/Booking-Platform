@@ -108,7 +108,7 @@ export default function Financials() {
       .from('bookings')
       .select('id, show_date, fee, agreed_amount, actual_amount_received, payment_status, status, act:acts(act_name), venue:venues(name, city, state)')
       .eq('act_id', actId)
-      .neq('status', 'cancelled')
+      .in('status', ['confirmed', 'completed'])
       .order('show_date', { ascending: true, nullsFirst: false });
     if (error) console.error('loadBookings error:', error);
     setBookings((data as any[]) || []);
@@ -121,13 +121,14 @@ export default function Financials() {
   const totalFee       = yearBookings.reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
   const totalPaid      = yearBookings.reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0);
   const totalExpenses  = expenses.reduce((s, e) => s + Number(e.amount), 0);
-  const outstanding    = totalFee - totalPaid;
-  const potential      = yearBookings.filter(b => ['confirmed', 'advancing'].includes(b.status) && b.show_date && b.show_date >= todayStr)
+  const potential      = yearBookings.filter(b => b.status === 'confirmed' && b.show_date && b.show_date >= todayStr)
     .reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
-  const earned         = yearBookings.filter(b => b.status === 'completed')
+  const earned         = yearBookings.filter(b => b.status === 'completed' && b.payment_status === 'received')
     .reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0);
+  const outstanding    = yearBookings.filter(b => b.status === 'confirmed' && b.payment_status !== 'received')
+    .reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
   const netIncome      = earned - totalExpenses;
-  const showCount      = yearBookings.filter(b => ['contract', 'confirmed', 'advancing', 'completed'].includes(b.status)).length;
+  const showCount      = yearBookings.filter(b => ['confirmed', 'completed'].includes(b.status)).length;
 
   // Monthly breakdown for the selected year
   const monthly = MONTHS.map((month, idx) => {

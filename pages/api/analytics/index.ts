@@ -107,7 +107,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // ── Booking financials ───────────────────────────────────────────────────
   const confirmedBookings = bookings.filter((b: any) =>
-    ['confirmed', 'advancing', 'completed'].includes(b.status)
+    ['confirmed', 'completed'].includes(b.status)
   );
   const completedBookings = bookings.filter((b: any) => b.status === 'completed');
 
