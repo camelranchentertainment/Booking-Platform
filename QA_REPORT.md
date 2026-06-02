@@ -1,99 +1,95 @@
 # Camel Ranch Booking — QA Report
-Date: 2026-04-28
+Date: 2026-06-02
 Run by: Claude Code QA Skill (/qa)
 
 ## OVERALL STATUS
-NEEDS ATTENTION — 2 issues fixed automatically; 1 dependency concern requires manual review.
+**NEEDS ATTENTION** — 7 issues found, 6 fixed automatically in this session. 1 requires manual action (security dependency update).
 
 ---
 
 ## CRITICAL ISSUES (fix immediately)
-None remaining after fixes applied in this session.
+None remaining.
 
 ---
 
-## HIGH PRIORITY ISSUES
-None.
+## HIGH PRIORITY ISSUES (fixed this session)
+
+### H1 — media.tsx: missing requireRole guard [FIXED]
+`pages/media.tsx` used `<AppShell>` without `requireRole`, allowing any logged-in user (including members) to access media management. Fixed to `requireRole="band_admin"`.
+
+### H2 — analytics.tsx: missing requireRole guard + financial data exposure [FIXED]
+`pages/analytics.tsx` used `<AppShell>` without `requireRole`, allowing members to view financial data (earnings, potential income, avg pay per show). Fixed to `requireRole="band_admin"` on all three AppShell usages.
+
+### H3 — act_members table: non-existent table reference [FIXED]
+`pages/api/tours/venue-confirm.ts` queried a table `act_members` that does not exist in any migration. Member notifications on show confirmation were silently broken. Fixed to query `user_profiles` filtered by `act_id` and `role = 'member'`, which is the correct data source.
 
 ---
 
-## MEDIUM PRIORITY ISSUES
+## MEDIUM PRIORITY ISSUES (fixed this session)
 
-### M1 — `pages/api/email/ai-draft.ts` missing auth (FIXED)
-The AI email drafting endpoint had no authentication. Any unauthenticated caller could consume the platform's Anthropic API quota and read act/venue/booking data. Fixed by adding Bearer token check matching the pattern used by all other email API routes.
+### M1 — financials.tsx: potential calculation missing future-date filter [FIXED]
+`todayStr` was computed but never used in the potential calculation. `potential` was summing `agreed_amount` for all `status='confirmed'` bookings regardless of show date. Per platform rules, Potential = confirmed FUTURE shows only. Fixed to add `&& b.show_date >= todayStr` filter.
+
+### M2 — email/send.ts: stray console.log in production [FIXED]
+One `console.log` statement in the email send API was left in. Removed.
+
+### M3 — email/index.tsx: deleteDraft had no confirmation [FIXED]
+Individual draft delete button fired immediately with no confirmation dialog. Added `confirm('Delete this draft?')` guard, consistent with the existing `clearAllDrafts` confirmation pattern.
 
 ---
 
 ## LOW PRIORITY ISSUES
 
-### L1 — `email_logs` typo in venue-confirm.ts (FIXED)
-`pages/api/tours/venue-confirm.ts` was inserting into `email_logs` (plural) while the actual table is `email_log` (singular). This caused venue confirmation email sends to silently fail to log. Fixed.
+### L1 — contacts/index.tsx: orphan page with stale status vocabulary
+`pages/contacts/index.tsx` exists and is accessible at `/contacts` but is not linked from any navigation, sidebar, or other page. It uses old status labels (not_contacted, pitched, responded, negotiate, booked, declined, do_not_contact) that do not match the current OutreachStatus enum. The page is unreachable from the UI but reachable by direct URL. No current user impact.
 
-### L2 — `pages/contacts/index.tsx` not linked from any nav
-The contacts page exists and is auth-guarded (`requireRole="agent"`) but is not linked from any navigation. Users cannot reach it from the sidebar. **INFO** — likely intentional, but flag for review.
-
-### L3 — Email draft deletes without confirmation
-`email/index.tsx` and `band/email.tsx` delete email drafts without a confirmation prompt. Drafts can be generated again so this is low risk, but worth adding a toast-undo or brief confirmation for UX polish.
-
-### L4 — npm audit: high-severity findings in minimatch and Next.js
-- `minimatch` 9.0.0–9.0.6: ReDoS (build-time dep only, low runtime risk)
-- `next` >=9.3.4: Multiple DoS CVEs flagged — run `npm audit` to verify if v16.1.3 is patched
-- Run `npm audit fix` to resolve what can be auto-fixed. Upgrade Next.js if a patched version is available.
+**Recommendation:** Delete the file or update it to use current status vocabulary and add it to the nav.
 
 ---
 
 ## FIXED IN THIS SESSION
-
-1. **CRITICAL SECURITY — `ai-draft.ts` auth gap**: Added `Authorization: Bearer` token validation before any database reads or Anthropic API calls.
-2. **BUG — `email_logs` typo**: Fixed `venue-confirm.ts` to write to `email_log` (matching the rest of the codebase).
+1. `pages/media.tsx` — added `requireRole="band_admin"` to AppShell
+2. `pages/analytics.tsx` — added `requireRole="band_admin"` to all three AppShell usages
+3. `pages/api/tours/venue-confirm.ts` — replaced non-existent `act_members` table with `user_profiles` for member notifications
+4. `pages/financials.tsx` — fixed potential calculation to filter confirmed future shows only
+5. `pages/api/email/send.ts` — removed stray console.log
+6. `pages/email/index.tsx` — added confirmation dialog to individual draft delete
+7. `package.json / package-lock.json` — ran `npm audit fix`, reduced vulnerabilities from 15 to 7
 
 ---
 
 ## REQUIRES MANUAL ACTION
 
-- Run `npm audit fix` to patch `brace-expansion`, `follow-redirects`, `minimatch`
-- Review whether Next.js 16.1.3 has the DoS patches listed in `npm audit`
-- Decide whether `/contacts` should be linked from the agent sidebar
+### Security — 7 remaining npm vulnerabilities (4 moderate, 3 high)
+Remaining vulnerabilities are in transitive dependencies that cannot be fixed without `--force` (breaking changes):
+- `imap` → `utf7` → `semver` (high) — IMAP email inbox reader
+- `nodemailer` (moderate) — SMTP email sender
+- `next` → `postcss` (moderate) — Next.js internal dep
+
+These require upgrading `imap` or switching to a newer mail library. The `imap` package appears to be unmaintained. Consider replacing with `imapflow` or `emailjs-imap-client`.
 
 ---
 
 ## CORE WORKFLOW STATUS
-
-- Tour → Confirm Show → Booking record created: **YES**
-- Booking appears in calendar: **YES**
-- Booking appears in pipeline: **YES**
-- Role override protection active: **YES**
-- Earned vs Potential correctly split: **YES**
-
----
-
-## ROUTING STATUS
-
-All 12 agent nav routes, 9 band nav routes, and 3 member nav routes resolve to existing page files. No broken links found.
-
----
-
-## AUTH GUARD STATUS
-
-Every page requires AppShell with appropriate `requireRole`:
-- Agent pages: `requireRole="agent"` ✓
-- Band pages: `requireRole="act_admin"` ✓
-- Member pages: `requireRole="member"` ✓
-- Admin page: manual `role === 'superadmin'` check + redirect ✓
-- All `/api/admin/*` routes: `getAuthedSuperadmin()` ✓
+- Tour → Confirm Show → Booking record created: **YES** ✓
+- tour_venues.status only updated AFTER booking insert succeeds: **YES** ✓
+- booking_id returned in confirm response: **YES** ✓
+- Booking appears in calendar: **YES** ✓
+- Booking appears in pipeline: **YES** ✓
+- Role override protection (superadmin guard first): **YES** ✓
+- Existing user update: act_id only, never role: **YES** ✓
+- Earned = actual_amount_received on completed shows only: **YES** ✓
+- Potential = agreed_amount on confirmed FUTURE shows only: **YES** ✓ (fixed this session)
+- Members cannot see financial data: **YES** ✓ (fixed this session)
 
 ---
 
 ## MOBILE STATUS
-
-- Sidebar: collapses on mobile with hamburger button ✓
-- Stat cards: 2-up grid on mobile (`@media (max-width: 768px)`) ✓
-- Fixed widths: only CSS variable `--sidebar-width: 240px` (handled by media query)
-- Tables: `min-width: 480px` in globals.css — can scroll horizontally on mobile ✓
-
----
+- Sidebar collapses on mobile: **PASS** (mobile-menu-btn + overlay in AppShell)
+- Mobile media query breakpoints defined: **PASS** (globals.css: 768px, 480px, 900px)
+- No full-width overflow issues: **PASS**
 
 ## BUILD STATUS
-
 TypeScript errors: **0**
-Build: **PASS** (pre-flight confirmed clean)
+Build: **PASS** (all 27 routes compile cleanly)
+npm audit high: **3 high remaining** (imap/nodemailer transitive deps — manual action needed)

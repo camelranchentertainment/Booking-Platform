@@ -168,7 +168,7 @@ export default function AnalyticsPage() {
 
   if (authLoading || loading) {
     return (
-      <AppShell>
+      <AppShell requireRole="band_admin">
         <div style={{ padding: '2rem', fontFamily: 'var(--font-body)', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
           Loading analytics…
         </div>
@@ -178,7 +178,7 @@ export default function AnalyticsPage() {
 
   if (error) {
     return (
-      <AppShell>
+      <AppShell requireRole="band_admin">
         <div style={{ padding: '2rem', fontFamily: 'var(--font-body)', color: '#f87171', fontSize: '0.88rem' }}>
           {error}
         </div>
@@ -228,7 +228,7 @@ export default function AnalyticsPage() {
     sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
 
   return (
-    <AppShell>
+    <AppShell requireRole="band_admin">
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '1.5rem 1rem 3rem', display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
 
         {/* Page header */}

@@ -123,7 +123,7 @@ export default function Financials() {
   const totalPaid      = bookings.reduce((s, b) => s + (Number(b.actual_amount_received ?? b.amount_paid) || 0), 0);
   const totalExpenses  = expenses.reduce((s, e) => s + Number(e.amount), 0);
   const outstanding    = totalFee - totalPaid;
-  const potential      = bookings.filter(b => b.status === 'confirmed')
+  const potential      = bookings.filter(b => b.status === 'confirmed' && b.show_date && b.show_date >= todayStr)
     .reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
   const earned         = bookings.filter(b => b.status === 'completed')
     .reduce((s, b) => s + (Number(b.actual_amount_received ?? b.amount_paid) || 0), 0);

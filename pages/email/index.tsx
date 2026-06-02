@@ -300,6 +300,7 @@ export default function EmailPage() {
   };
 
   const deleteDraft = async (id: string) => {
+    if (!confirm('Delete this draft?')) return;
     await supabase.from('email_drafts').delete().eq('id', id);
     setPendingDrafts(prev => prev.filter(d => d.id !== id));
   };

@@ -485,12 +485,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await service.from('social_queue').insert(inserts);
 
-    // Notify band members
+    // Notify band members (linked via user_profiles.act_id)
     const { data: members } = await service
-      .from('act_members')
-      .select('user_id, user_profiles(email, display_name)')
+      .from('user_profiles')
+      .select('id, email, display_name')
       .eq('act_id', (act as any).id)
-      .eq('is_active', true);
+      .eq('role', 'member');
 
     if (members && members.length > 0) {
       try {
@@ -498,7 +498,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (apiKey) {
           const resend = new Resend(apiKey);
           for (const member of members as any[]) {
-            const profile = member.user_profiles;
+            const profile = member;
             if (!profile?.email) continue;
             await resend.emails.send({
               from,

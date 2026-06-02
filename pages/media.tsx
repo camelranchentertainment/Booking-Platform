@@ -280,7 +280,7 @@ export default function MediaLibraryPage() {
   );
 
   return (
-    <AppShell>
+    <AppShell requireRole="band_admin">
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem' }}>
 
         {/* Header */}
