@@ -8,10 +8,8 @@ type Booking = {
   show_date: string | null;
   fee: number | null;
   agreed_amount: number | null;
-  amount_paid: number | null;
   actual_amount_received: number | null;
   payment_status: string | null;
-  expenses: number | null;
   status: string;
   act: { act_name: string } | null;
   venue: { name: string; city: string; state: string } | null;
@@ -108,29 +106,30 @@ export default function Financials() {
     const endDate   = `${year}-12-31`;
     const actId = await getActId(supabase, user.id);
     if (!actId) { setLoading(false); return; }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('bookings')
-      .select('id, show_date, fee, agreed_amount, amount_paid, actual_amount_received, payment_status, expenses, status, act:acts(act_name), venue:venues(name, city, state)')
+      .select('id, show_date, fee, agreed_amount, actual_amount_received, payment_status, status, act:acts(act_name), venue:venues(name, city, state)')
       .eq('act_id', actId)
       .neq('status', 'cancelled')
       .gte('show_date', startDate)
       .lte('show_date', endDate)
       .order('show_date', { ascending: true, nullsFirst: false });
+    if (error) console.error('loadBookings error:', error);
     setBookings((data as any[]) || []);
     setLoading(false);
   };
 
   const todayStr       = new Date().toISOString().split('T')[0];
   const totalFee       = bookings.reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
-  const totalPaid      = bookings.reduce((s, b) => s + (Number(b.actual_amount_received ?? b.amount_paid) || 0), 0);
+  const totalPaid      = bookings.reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0);
   const totalExpenses  = expenses.reduce((s, e) => s + Number(e.amount), 0);
   const outstanding    = totalFee - totalPaid;
-  const potential      = bookings.filter(b => b.status === 'confirmed' && b.show_date && b.show_date >= todayStr)
+  const potential      = bookings.filter(b => ['confirmed', 'advancing'].includes(b.status) && b.show_date && b.show_date >= todayStr)
     .reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
   const earned         = bookings.filter(b => b.status === 'completed')
-    .reduce((s, b) => s + (Number(b.actual_amount_received ?? b.amount_paid) || 0), 0);
+    .reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0);
   const netIncome      = earned - totalExpenses;
-  const showCount      = bookings.filter(b => ['confirmed', 'advancing', 'completed'].includes(b.status)).length;
+  const showCount      = bookings.filter(b => ['contract', 'confirmed', 'advancing', 'completed'].includes(b.status)).length;
 
   // Monthly breakdown for the selected year
   const monthly = MONTHS.map((month, idx) => {
@@ -143,7 +142,7 @@ export default function Financials() {
       month,
       shows:    mbs.length,
       fee:      mbs.reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0),
-      paid:     mbs.reduce((s, b) => s + (Number(b.actual_amount_received ?? b.amount_paid) || 0), 0),
+      paid:     mbs.reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0),
       expenses: monthExpenses.reduce((s, e) => s + Number(e.amount), 0),
     };
   });
@@ -155,7 +154,7 @@ export default function Financials() {
     if (!actMap[key]) actMap[key] = { name: key, shows: 0, fee: 0, paid: 0 };
     actMap[key].shows++;
     actMap[key].fee  += Number(b.agreed_amount ?? b.fee) || 0;
-    actMap[key].paid += Number(b.actual_amount_received ?? b.amount_paid) || 0;
+    actMap[key].paid += Number(b.actual_amount_received) || 0;
   }
   const byAct = Object.values(actMap).sort((a, b) => b.fee - a.fee);
 
@@ -166,7 +165,7 @@ export default function Financials() {
     if (!venueMap[key]) venueMap[key] = { name: key, city: b.venue?.city || '', state: b.venue?.state || '', shows: 0, fee: 0, paid: 0 };
     venueMap[key].shows++;
     venueMap[key].fee  += Number(b.agreed_amount ?? b.fee) || 0;
-    venueMap[key].paid += Number(b.actual_amount_received ?? b.amount_paid) || 0;
+    venueMap[key].paid += Number(b.actual_amount_received) || 0;
   }
   const byVenue = Object.values(venueMap).sort((a, b) => b.fee - a.fee);
 
@@ -175,7 +174,7 @@ export default function Financials() {
       ['Date', 'Act', 'Venue', 'City', 'State', 'Contracted', 'Collected', 'Outstanding', 'Status'],
       ...bookings.map(b => {
         const contracted = Number(b.agreed_amount ?? b.fee) || 0;
-        const collected  = Number(b.actual_amount_received ?? b.amount_paid) || 0;
+        const collected  = Number(b.actual_amount_received) || 0;
         return [
           b.show_date || '',
           b.act?.act_name || '',
@@ -353,7 +352,7 @@ export default function Financials() {
                   </thead>
                   <tbody>
                     {bookings.map(b => {
-                      const collected = b.actual_amount_received ?? b.amount_paid;
+                      const collected = b.actual_amount_received;
                       const contracted = b.agreed_amount ?? b.fee;
                       return (
                         <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => window.location.href = `/bookings/${b.id}`}>
