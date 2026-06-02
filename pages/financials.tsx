@@ -57,7 +57,7 @@ export default function Financials() {
     error: string;
   }>({ open: false, mode: 'add', expense: null, saving: false, error: '' });
 
-  useEffect(() => { init(); }, [year]);
+  useEffect(() => { init(); }, []);
 
   const init = async () => {
     const { data: { session: sess } } = await supabase.auth.getSession();
@@ -102,8 +102,6 @@ export default function Financials() {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const startDate = `${year}-01-01`;
-    const endDate   = `${year}-12-31`;
     const actId = await getActId(supabase, user.id);
     if (!actId) { setLoading(false); return; }
     const { data, error } = await supabase
@@ -111,8 +109,6 @@ export default function Financials() {
       .select('id, show_date, fee, agreed_amount, actual_amount_received, payment_status, status, act:acts(act_name), venue:venues(name, city, state)')
       .eq('act_id', actId)
       .neq('status', 'cancelled')
-      .gte('show_date', startDate)
-      .lte('show_date', endDate)
       .order('show_date', { ascending: true, nullsFirst: false });
     if (error) console.error('loadBookings error:', error);
     setBookings((data as any[]) || []);
@@ -120,20 +116,22 @@ export default function Financials() {
   };
 
   const todayStr       = new Date().toISOString().split('T')[0];
-  const totalFee       = bookings.reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
-  const totalPaid      = bookings.reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0);
+  // Year-scoped bookings: shows with a date in the selected year, plus undated shows in all-years view
+  const yearBookings   = bookings.filter(b => !b.show_date || b.show_date.startsWith(String(year)));
+  const totalFee       = yearBookings.reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
+  const totalPaid      = yearBookings.reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0);
   const totalExpenses  = expenses.reduce((s, e) => s + Number(e.amount), 0);
   const outstanding    = totalFee - totalPaid;
-  const potential      = bookings.filter(b => ['confirmed', 'advancing'].includes(b.status) && b.show_date && b.show_date >= todayStr)
+  const potential      = yearBookings.filter(b => ['confirmed', 'advancing'].includes(b.status) && b.show_date && b.show_date >= todayStr)
     .reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
-  const earned         = bookings.filter(b => b.status === 'completed')
+  const earned         = yearBookings.filter(b => b.status === 'completed')
     .reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0);
   const netIncome      = earned - totalExpenses;
-  const showCount      = bookings.filter(b => ['contract', 'confirmed', 'advancing', 'completed'].includes(b.status)).length;
+  const showCount      = yearBookings.filter(b => ['contract', 'confirmed', 'advancing', 'completed'].includes(b.status)).length;
 
   // Monthly breakdown for the selected year
   const monthly = MONTHS.map((month, idx) => {
-    const mbs = bookings.filter(b => b.show_date && new Date(b.show_date + 'T00:00:00').getMonth() === idx);
+    const mbs = yearBookings.filter(b => b.show_date && new Date(b.show_date + 'T00:00:00').getMonth() === idx);
     const monthExpenses = expenses.filter(e => {
       const d = new Date(e.expense_date + 'T00:00:00');
       return d.getMonth() === idx && d.getFullYear() === year;
@@ -149,7 +147,7 @@ export default function Financials() {
 
   // By act
   const actMap: Record<string, { name: string; shows: number; fee: number; paid: number }> = {};
-  for (const b of bookings) {
+  for (const b of yearBookings) {
     const key = b.act?.act_name || 'Unknown';
     if (!actMap[key]) actMap[key] = { name: key, shows: 0, fee: 0, paid: 0 };
     actMap[key].shows++;
@@ -160,7 +158,7 @@ export default function Financials() {
 
   // By venue
   const venueMap: Record<string, { name: string; city: string; state: string; shows: number; fee: number; paid: number }> = {};
-  for (const b of bookings) {
+  for (const b of yearBookings) {
     const key = b.venue?.name || 'Unknown';
     if (!venueMap[key]) venueMap[key] = { name: key, city: b.venue?.city || '', state: b.venue?.state || '', shows: 0, fee: 0, paid: 0 };
     venueMap[key].shows++;
@@ -172,7 +170,7 @@ export default function Financials() {
   const downloadCSV = () => {
     const rows = [
       ['Date', 'Act', 'Venue', 'City', 'State', 'Contracted', 'Collected', 'Outstanding', 'Status'],
-      ...bookings.map(b => {
+      ...yearBookings.map(b => {
         const contracted = Number(b.agreed_amount ?? b.fee) || 0;
         const collected  = Number(b.actual_amount_received) || 0;
         return [
@@ -208,7 +206,7 @@ export default function Financials() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Financials</h1>
-          <div className="page-sub">{bookings.length} bookings in {year}</div>
+          <div className="page-sub">{yearBookings.length} bookings in {year}</div>
         </div>
         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
           <select className="select" style={{ width: 100 }} value={year} onChange={e => setYear(Number(e.target.value))}>
@@ -251,9 +249,9 @@ export default function Financials() {
 
       {loading && view !== 'expenses' ? (
         <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>Loading…</div>
-      ) : bookings.length === 0 && view !== 'expenses' ? (
+      ) : yearBookings.length === 0 && view !== 'expenses' ? (
         <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>
-          No bookings with show dates in {year}.
+          No bookings in {year}.
         </div>
       ) : view !== 'expenses' ? (
         <>
@@ -351,7 +349,7 @@ export default function Financials() {
                     <tr><th>Date</th><th>Act</th><th>Venue</th><th>Contracted</th><th>Collected</th><th>Status</th></tr>
                   </thead>
                   <tbody>
-                    {bookings.map(b => {
+                    {yearBookings.map(b => {
                       const collected = b.actual_amount_received;
                       const contracted = b.agreed_amount ?? b.fee;
                       return (
