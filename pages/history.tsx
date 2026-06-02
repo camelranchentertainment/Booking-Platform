@@ -76,6 +76,7 @@ export default function HistoryPage() {
     setRole(prof?.role || '');
     const actId = await getActId(supabase, user.id);
     if (!actId) { setLoading(false); return; }
+    const today = new Date().toISOString().split('T')[0];
     const { data, error } = await supabase
       .from('bookings')
       .select(`
@@ -86,7 +87,9 @@ export default function HistoryPage() {
         venue:venues(id, name, city, state)
       `)
       .eq('act_id', actId)
-      .eq('status', 'completed')
+      .neq('status', 'cancelled')
+      .not('show_date', 'is', null)
+      .lt('show_date', today)
       .order('show_date', { ascending: false });
     if (error) console.error('History query error:', error);
     setBookings((data || []) as any[]);
@@ -212,7 +215,7 @@ export default function HistoryPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Show History</h1>
-          <div className="page-sub">{filtered.length} completed show{filtered.length !== 1 ? 's' : ''}</div>
+          <div className="page-sub">{filtered.length} past show{filtered.length !== 1 ? 's' : ''}</div>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={exportCSV}>↓ Export CSV</button>
       </div>
@@ -287,7 +290,7 @@ export default function HistoryPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>
-          No completed shows match your filters.
+          No past shows found. Shows appear here once their date has passed.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginBottom: '2rem' }}>
@@ -334,13 +337,18 @@ export default function HistoryPage() {
                       {b.payment_status}
                     </span>
                   )}
+                  {b.status !== 'completed' && (
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#f97316', border: '1px solid #f97316', borderRadius: 4, padding: '0.1rem 0.4rem' }}>
+                      Needs Settle
+                    </span>
+                  )}
                   {role === 'band_admin' && (
                     <button
                       className="btn btn-ghost btn-sm"
                       style={{ marginLeft: 'auto', fontSize: '0.74rem' }}
-                      onClick={() => openEdit(b)}
+                      onClick={() => window.location.href = `/bookings/${b.id}`}
                     >
-                      Edit Post-Gig Data
+                      {b.status === 'completed' ? 'Edit Post-Gig Data' : 'Settle Show →'}
                     </button>
                   )}
                 </div>
