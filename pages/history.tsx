@@ -76,18 +76,19 @@ export default function HistoryPage() {
     setRole(prof?.role || '');
     const actId = await getActId(supabase, user.id);
     if (!actId) { setLoading(false); return; }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('bookings')
       .select(`
         id, show_date, deal_type, agreed_amount, fee,
         actual_amount_received, payment_status, status,
-        post_show_notes, rebook_flag, issue_notes,
+        post_show_notes, rebook_flag,
         rating, attendance, would_return, venue_feedback,
         venue:venues(id, name, city, state)
       `)
       .eq('act_id', actId)
       .eq('status', 'completed')
       .order('show_date', { ascending: false });
+    if (error) console.error('History query error:', error);
     setBookings((data || []) as any[]);
     setLoading(false);
   };
