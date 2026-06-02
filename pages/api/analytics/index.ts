@@ -140,8 +140,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const wouldReturnPct = rebookTotal > 0 ? Math.round((rebookYes / rebookTotal) * 100) : null;
 
   const bookingFinancials = {
-    totalConfirmed:  confirmedBookings.length,
-    totalCompleted:  completedBookings.length,
+    totalConfirmed:       confirmedBookings.length,
+    futureConfirmedCount: futureConfirmed.length,
+    totalCompleted:       completedBookings.length,
     totalEarned,
     totalPotential,
     avgPay,

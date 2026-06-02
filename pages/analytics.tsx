@@ -264,8 +264,13 @@ export default function AnalyticsPage() {
             />
             <StatCard
               label="Confirmed Shows"
-              value={financials.totalConfirmed ?? 0}
-              sub={financials.totalCompleted ? `${financials.totalCompleted} completed` : undefined}
+              value={financials.futureConfirmedCount ?? 0}
+              sub="upcoming booked shows"
+            />
+            <StatCard
+              label="Shows Performed"
+              value={financials.totalCompleted ?? 0}
+              sub="completed shows"
             />
           </div>
         </div>
