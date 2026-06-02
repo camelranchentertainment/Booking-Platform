@@ -113,6 +113,8 @@ export default function Financials() {
       .select('id, show_date, fee, agreed_amount, amount_paid, actual_amount_received, payment_status, expenses, status, act:acts(act_name), venue:venues(name, city, state)')
       .eq('act_id', actId)
       .neq('status', 'cancelled')
+      .gte('show_date', startDate)
+      .lte('show_date', endDate)
       .order('show_date', { ascending: true, nullsFirst: false });
     setBookings((data as any[]) || []);
     setLoading(false);
@@ -130,10 +132,9 @@ export default function Financials() {
   const netIncome      = earned - totalExpenses;
   const showCount      = bookings.filter(b => ['confirmed', 'advancing', 'completed'].includes(b.status)).length;
 
-  // Monthly breakdown for the selected year — expenses bucketed from the expenses table by month+year
-  const yearBookings = bookings.filter(b => !b.show_date || new Date(b.show_date + 'T00:00:00').getFullYear() === year);
+  // Monthly breakdown for the selected year
   const monthly = MONTHS.map((month, idx) => {
-    const mbs = yearBookings.filter(b => b.show_date && new Date(b.show_date + 'T00:00:00').getMonth() === idx);
+    const mbs = bookings.filter(b => b.show_date && new Date(b.show_date + 'T00:00:00').getMonth() === idx);
     const monthExpenses = expenses.filter(e => {
       const d = new Date(e.expense_date + 'T00:00:00');
       return d.getMonth() === idx && d.getFullYear() === year;
