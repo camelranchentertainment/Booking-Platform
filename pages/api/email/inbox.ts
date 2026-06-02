@@ -1,10 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { getServiceClient } from '../../../lib/supabase';
-import Imap from 'imap';
+import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import crypto from 'crypto';
-import { Readable } from 'stream';
 import { notifyActMembers } from '../../../lib/notifications';
 
 function decrypt(enc: string): string {
@@ -113,11 +112,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
 
-    // Advance pitched → follow_up for any matched venue replies
+    // Advance pitched → waiting for any matched venue replies
     if (actId) {
       const matchedVenueIds = [...new Set(enriched.map(m => m.matchedVenueId).filter(Boolean))] as string[];
       if (matchedVenueIds.length > 0) {
-        // Find all active tour_venues for these venues that are still at pitched or follow_up
         const { data: tvs } = await admin
           .from('tour_venues')
           .select('id, tour:tours(act_id)')
@@ -151,78 +149,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-function fetchImapMessages(host: string, port: number, user: string, password: string): Promise<Omit<InboxMessage, 'matchedVenueId' | 'matchedVenueName'>[]> { // returns full body field
-  return new Promise((resolve, reject) => {
-    const imap = new Imap({
-      user,
-      password,
-      host,
-      port,
-      tls: true,
-      tlsOptions: { rejectUnauthorized: false },
-      connTimeout: 10000,
-      authTimeout: 5000,
-    });
-
-    const messages: Omit<InboxMessage, 'matchedVenueId' | 'matchedVenueName'>[] = []; // includes body
-
-    imap.once('ready', () => {
-      imap.openBox('INBOX', true, (err, box) => {
-        if (err) { imap.end(); reject(err); return; }
-
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        const dateStr = thirtyDaysAgo.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
-
-        imap.search([['SINCE', dateStr]], (searchErr, uids) => {
-          if (searchErr || !uids.length) { imap.end(); resolve([]); return; }
-
-          const limited = uids.slice(-50); // last 50 messages
-          const fetch = imap.fetch(limited, { bodies: '' });
-          const pending: Promise<void>[] = [];
-
-          fetch.on('message', (msg, seqno) => {
-            let uid = seqno;
-            const p = new Promise<void>(res2 => {
-              const chunks: Buffer[] = [];
-              msg.on('body', stream => {
-                (stream as any).on('data', (chunk: Buffer) => chunks.push(chunk));
-                (stream as any).on('end', async () => {
-                  try {
-                    const buf = Buffer.concat(chunks);
-                    const readable = Readable.from(buf);
-                    const parsed = await simpleParser(readable as any);
-                    const fromAddr = (parsed.from?.value?.[0]) as any;
-                    const fromEmail = fromAddr?.address || '';
-                    const fromName  = fromAddr?.name || fromEmail;
-                    const bodyText = parsed.text || '';
-                    messages.push({
-                      uid,
-                      from:      fromName,
-                      fromEmail,
-                      subject:   parsed.subject || '(no subject)',
-                      date:      parsed.date?.toISOString() || '',
-                      preview:   bodyText.slice(0, 160).replace(/\s+/g, ' '),
-                      body:      bodyText.trim(),
-                    });
-                  } catch { /* skip unparseable */ }
-                  res2();
-                });
-              });
-              msg.on('attributes', attrs => { uid = attrs.uid; });
-            });
-            pending.push(p);
-          });
-
-          fetch.once('end', async () => {
-            await Promise.all(pending);
-            imap.end();
-          });
-        });
-      });
-    });
-
-    imap.once('error', (err: Error) => reject(err));
-    imap.once('end', () => resolve(messages.sort((a, b) => b.date.localeCompare(a.date))));
-    imap.connect();
+async function fetchImapMessages(
+  host: string, port: number, user: string, password: string
+): Promise<Omit<InboxMessage, 'matchedVenueId' | 'matchedVenueName'>[]> {
+  const client = new ImapFlow({
+    host,
+    port,
+    secure: port === 993,
+    auth: { user, pass: password },
+    logger: false,
+    tls: { rejectUnauthorized: false },
   });
+
+  await client.connect();
+  const messages: Omit<InboxMessage, 'matchedVenueId' | 'matchedVenueName'>[] = [];
+
+  try {
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const uids = await client.search({ since }, { uid: true });
+      const uidList = Array.isArray(uids) ? uids : [];
+
+      if (uidList.length > 0) {
+        const limited = uidList.slice(-50);
+        for await (const msg of client.fetch(limited, { source: true }, { uid: true })) {
+          try {
+            const parsed = await simpleParser(msg.source as Buffer);
+            const fromAddr = (parsed.from?.value?.[0]) as any;
+            const fromEmail = fromAddr?.address || '';
+            const fromName  = fromAddr?.name || fromEmail;
+            const bodyText  = parsed.text || '';
+            messages.push({
+              uid:     msg.uid,
+              from:    fromName,
+              fromEmail,
+              subject: parsed.subject || '(no subject)',
+              date:    parsed.date?.toISOString() || '',
+              preview: bodyText.slice(0, 160).replace(/\s+/g, ' '),
+              body:    bodyText.trim(),
+            });
+          } catch { /* skip unparseable */ }
+        }
+      }
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout();
+  }
+
+  return messages.sort((a, b) => b.date.localeCompare(a.date));
 }
