@@ -70,9 +70,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       category:      category     || null,
       resend_id:     data?.id     || null,
       subject,
+      body:          bodyPreview  || null,
       recipient:     to,
       status:        'sent',
       sent_at:       now,
+      direction:     'sent',
     });
 
     // Step 2 — Update tour_venues status + timestamps
