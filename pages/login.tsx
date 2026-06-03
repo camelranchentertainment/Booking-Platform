@@ -1,5 +1,4 @@
 ﻿import { useState } from 'react';
-import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import BrandLogo from '../components/BrandLogo';
@@ -16,7 +15,6 @@ const TIERS = [
 ];
 
 export default function Login() {
-  const router = useRouter();
   const [email, setEmail]         = useState('');
   const [password, setPassword]   = useState('');
   const [error, setError]         = useState('');
@@ -32,17 +30,7 @@ export default function Login() {
     setLoading(true);
     const { error: err } = await supabase.auth.signInWithPassword({ email, password });
     if (err) { setError(err.message); setLoading(false); return; }
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setError('Login failed'); setLoading(false); return; }
-
-    const { data: profile } = await supabase
-      .from('user_profiles').select('role').eq('id', user.id).maybeSingle();
-
-    const role = profile?.role || 'band_admin';
-    if (role === 'superadmin') router.replace('/admin');
-    else if (role === 'band_admin') router.replace('/band');
-    else router.replace('/member');
+    // Redirect is handled by AuthContext.onAuthStateChange after profile loads
   };
 
   const handleForgot = async (e: React.FormEvent) => {
