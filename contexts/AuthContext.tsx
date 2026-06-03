@@ -1,5 +1,4 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
-import { useRouter } from 'next/router';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { UserProfile } from '../lib/types';
@@ -21,20 +20,15 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 async function fetchProfile(userId: string): Promise<UserProfile | null> {
-  try {
-    const { data } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    return (data as UserProfile) ?? null;
-  } catch {
-    return null;
-  }
+  const { data } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle();
+  return (data as UserProfile) ?? null;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const router                = useRouter();
   const [user, setUser]       = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,29 +71,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(resolve);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (_event, session) => {
         setUser(session?.user ?? null);
         if (session?.user) {
-          if (event === 'SIGNED_IN') {
-            // Re-enter loading so the UI shows a spinner during profile fetch
-            setLoading(true);
-            const p = await loadProfile(session.user);
-            setLoading(false);
-            // Only redirect when coming from login/root — avoids loops on token refresh
-            const path = router.pathname;
-            if (p?.role && (path === '/login' || path === '/')) {
-              if (p.role === 'superadmin') router.push('/admin');
-              else if (p.role === 'band_admin') router.push('/band');
-              else router.push('/member');
-            }
-          } else {
-            await loadProfile(session.user);
-            resolve();
-          }
+          await loadProfile(session.user);
         } else {
           setProfile(null);
-          resolve();
         }
+        resolve();
       },
     );
 

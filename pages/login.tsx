@@ -1,4 +1,5 @@
 ﻿import { useState } from 'react';
+import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import BrandLogo from '../components/BrandLogo';
@@ -15,6 +16,7 @@ const TIERS = [
 ];
 
 export default function Login() {
+  const router = useRouter();
   const [email, setEmail]         = useState('');
   const [password, setPassword]   = useState('');
   const [error, setError]         = useState('');
@@ -28,9 +30,29 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
+
     const { error: err } = await supabase.auth.signInWithPassword({ email, password });
     if (err) { setError(err.message); setLoading(false); return; }
-    // Redirect is handled by AuthContext.onAuthStateChange after profile loads
+
+    // getSession reads from localStorage — no network race with getUser()
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) { setError('Login failed. Please try again.'); setLoading(false); return; }
+
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('role')
+      .eq('id', session.user.id)
+      .maybeSingle();
+
+    if (!profile?.role) {
+      setError('Account setup incomplete. Please contact support or try again.');
+      setLoading(false);
+      return;
+    }
+
+    if (profile.role === 'superadmin') router.replace('/admin');
+    else if (profile.role === 'member') router.replace('/member');
+    else router.replace('/band');
   };
 
   const handleForgot = async (e: React.FormEvent) => {
