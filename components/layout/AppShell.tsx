@@ -299,6 +299,12 @@ export default function AppShell({ children, requireRole = null }: Props) {
   const [authUser, setAuthUser] = useState<{ id: string; email: string } | null>(null);
 
   useEffect(() => {
+    let active = true;
+    // Hard 5-second timeout — if Supabase hangs, never leave the user on a blank spinner
+    const timeout = setTimeout(() => {
+      if (active) { setLoading(false); router.replace('/login'); }
+    }, 5000);
+
     const init = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -345,12 +351,16 @@ export default function AppShell({ children, requireRole = null }: Props) {
           if (ownedAct?.act_name) setActName(ownedAct.act_name);
         }
 
-        setLoading(false);
+        if (active) setLoading(false);
       } catch {
         router.replace('/login');
+      } finally {
+        clearTimeout(timeout);
       }
     };
+
     init();
+    return () => { active = false; clearTimeout(timeout); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSignOut = async () => {

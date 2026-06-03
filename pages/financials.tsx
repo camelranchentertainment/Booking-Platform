@@ -100,19 +100,24 @@ export default function Financials() {
 
   const loadBookings = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const actId = await getActId(supabase, user.id);
-    if (!actId) { setLoading(false); return; }
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('id, show_date, fee, agreed_amount, actual_amount_received, payment_status, status, act:acts(act_name), venue:venues(name, city, state)')
-      .eq('act_id', actId)
-      .in('status', ['confirmed', 'completed'])
-      .order('show_date', { ascending: true, nullsFirst: false });
-    if (error) console.error('loadBookings error:', error);
-    setBookings((data as any[]) || []);
-    setLoading(false);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const actId = await getActId(supabase, user.id);
+      if (!actId) return;
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('id, show_date, fee, agreed_amount, actual_amount_received, payment_status, status, act:acts(act_name), venue:venues(name, city, state)')
+        .eq('act_id', actId)
+        .in('status', ['confirmed', 'completed'])
+        .order('show_date', { ascending: true, nullsFirst: false });
+      if (error) console.error('loadBookings error:', error);
+      setBookings((data as any[]) || []);
+    } catch (err) {
+      console.error('loadBookings:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const todayStr       = new Date().toISOString().split('T')[0];

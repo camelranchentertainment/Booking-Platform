@@ -178,16 +178,19 @@ export default function MediaLibraryPage() {
 
   const load = async () => {
     setLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { setLoading(false); return; }
-
-    const { data } = await supabase
-      .from('media_library')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    setItems(data || []);
-    setLoading(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data } = await supabase
+        .from('media_library')
+        .select('*')
+        .order('created_at', { ascending: false });
+      setItems(data || []);
+    } catch (err) {
+      console.error('media load:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, []);

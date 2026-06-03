@@ -67,33 +67,37 @@ export default function HistoryPage() {
 
   const load = async () => {
     setLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    const tok = session?.access_token || '';
-    setToken(tok);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setLoading(false); return; }
-    const { data: prof } = await supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle();
-    setRole(prof?.role || '');
-    const actId = await getActId(supabase, user.id);
-    if (!actId) { setLoading(false); return; }
-    const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await supabase
-      .from('bookings')
-      .select(`
-        id, show_date, deal_type, agreed_amount, fee,
-        actual_amount_received, payment_status, status,
-        post_show_notes, rebook_flag,
-        rating, attendance, would_return, venue_feedback,
-        venue:venues(id, name, city, state)
-      `)
-      .eq('act_id', actId)
-      .neq('status', 'cancelled')
-      .not('show_date', 'is', null)
-      .lt('show_date', today)
-      .order('show_date', { ascending: false });
-    if (error) console.error('History query error:', error);
-    setBookings((data || []) as any[]);
-    setLoading(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      setToken(session?.access_token || '');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: prof } = await supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle();
+      setRole(prof?.role || '');
+      const actId = await getActId(supabase, user.id);
+      if (!actId) return;
+      const today = new Date().toISOString().split('T')[0];
+      const { data, error } = await supabase
+        .from('bookings')
+        .select(`
+          id, show_date, deal_type, agreed_amount, fee,
+          actual_amount_received, payment_status, status,
+          post_show_notes, rebook_flag,
+          rating, attendance, would_return, venue_feedback,
+          venue:venues(id, name, city, state)
+        `)
+        .eq('act_id', actId)
+        .neq('status', 'cancelled')
+        .not('show_date', 'is', null)
+        .lt('show_date', today)
+        .order('show_date', { ascending: false });
+      if (error) console.error('History query error:', error);
+      setBookings((data || []) as any[]);
+    } catch (err) {
+      console.error('history load:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filtered = useMemo(() => {

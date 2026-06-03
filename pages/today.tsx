@@ -630,82 +630,87 @@ export default function TodayPage() {
   }, []);
 
   const load = async (td: string, tm: string) => {
-    const [{ data: { user } }, { data: { session: sess } }] = await Promise.all([
-      supabase.auth.getUser(),
-      supabase.auth.getSession(),
-    ]);
-    if (!user || !sess) return;
+    setLoading(true);
+    try {
+      const [{ data: { user } }, { data: { session: sess } }] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase.auth.getSession(),
+      ]);
+      if (!user || !sess) return;
 
-    setUserId(user.id);
-    setSession(sess.access_token);
+      setUserId(user.id);
+      setSession(sess.access_token);
 
-    const { data: prof } = await supabase
-      .from('user_profiles')
-      .select('role, act_id')
-      .eq('id', user.id)
-      .maybeSingle();
+      const { data: prof } = await supabase
+        .from('user_profiles')
+        .select('role, act_id')
+        .eq('id', user.id)
+        .maybeSingle();
 
-    const userRole = prof?.role || 'member';
-    setRole(userRole);
+      const userRole = prof?.role || 'member';
+      setRole(userRole);
 
-    const actId = prof?.act_id ?? null;
-    setUserActId(actId);
+      const actId = prof?.act_id ?? null;
+      setUserActId(actId);
 
-    if (!actId) { setLoading(false); return; }
+      if (!actId) return;
 
-    const bookingSelect = `
-      id, show_date, load_in_time, soundcheck_time, set_time, end_time,
-      set_length_min, sound_system, meals_provided, drinks_provided,
-      hotel_booked, lodging_details, venue_contact_name, special_requirements,
-      advance_notes, deal_type, agreed_amount, tour_id,
-      venue:venues(id, name, city, state, address, phone),
-      tour:tours(id, name)
-    `;
+      const bookingSelect = `
+        id, show_date, load_in_time, soundcheck_time, set_time, end_time,
+        set_length_min, sound_system, meals_provided, drinks_provided,
+        hotel_booked, lodging_details, venue_contact_name, special_requirements,
+        advance_notes, deal_type, agreed_amount, tour_id,
+        venue:venues(id, name, city, state, address, phone),
+        tour:tours(id, name)
+      `;
 
-    const [todayRes, tomorrowRes, upcomingRes] = await Promise.all([
-      supabase.from('bookings').select(bookingSelect)
-        .eq('act_id', actId).in('status', ['confirmed']).eq('show_date', td).limit(1),
-      supabase.from('bookings').select(bookingSelect)
-        .eq('act_id', actId).in('status', ['confirmed']).eq('show_date', tm).limit(1),
-      supabase.from('bookings').select('id, show_date, venue:venues(name, city, state)')
-        .eq('act_id', actId).in('status', ['confirmed']).gt('show_date', tm).order('show_date').limit(1),
-    ]);
+      const [todayRes, tomorrowRes, upcomingRes] = await Promise.all([
+        supabase.from('bookings').select(bookingSelect)
+          .eq('act_id', actId).in('status', ['confirmed']).eq('show_date', td).limit(1),
+        supabase.from('bookings').select(bookingSelect)
+          .eq('act_id', actId).in('status', ['confirmed']).eq('show_date', tm).limit(1),
+        supabase.from('bookings').select('id, show_date, venue:venues(name, city, state)')
+          .eq('act_id', actId).in('status', ['confirmed']).gt('show_date', tm).order('show_date').limit(1),
+      ]);
 
-    const todayBooking    = todayRes.data?.[0]    ?? null;
-    const tomorrowBooking = tomorrowRes.data?.[0] ?? null;
-    const upcomingBooking = upcomingRes.data?.[0] ?? null;
+      const todayBooking    = todayRes.data?.[0]    ?? null;
+      const tomorrowBooking = tomorrowRes.data?.[0] ?? null;
+      const upcomingBooking = upcomingRes.data?.[0] ?? null;
 
-    // Tour position for today's show
-    if (todayBooking?.tour_id) {
-      const { data: tourShows } = await supabase.from('bookings')
-        .select('id, show_date').eq('tour_id', todayBooking.tour_id)
-        .neq('status', 'cancelled').order('show_date');
-      const sorted = (tourShows || []).filter((b: any) => b.show_date);
-      const pos    = sorted.findIndex((b: any) => b.id === todayBooking.id);
-      if (pos !== -1) (todayBooking as any).tourPosition = { current: pos + 1, total: sorted.length };
+      // Tour position for today's show
+      if (todayBooking?.tour_id) {
+        const { data: tourShows } = await supabase.from('bookings')
+          .select('id, show_date').eq('tour_id', todayBooking.tour_id)
+          .neq('status', 'cancelled').order('show_date');
+        const sorted = (tourShows || []).filter((b: any) => b.show_date);
+        const pos    = sorted.findIndex((b: any) => b.id === todayBooking.id);
+        if (pos !== -1) (todayBooking as any).tourPosition = { current: pos + 1, total: sorted.length };
+      }
+
+      setToday(todayBooking);
+      setTomorrow(tomorrowBooking);
+      setUpcoming(upcomingBooking);
+
+      // Resolve active tour: today's show tour OR most recent active/planning tour
+      if (todayBooking?.tour) {
+        const tourAny = todayBooking.tour as any;
+        const tourName: string = (Array.isArray(tourAny) ? tourAny[0]?.name : tourAny?.name) ?? '';
+        setActiveTour({ id: todayBooking.tour_id as string, name: tourName });
+      } else {
+        const { data: activeTours } = await supabase.from('tours')
+          .select('id, name')
+          .eq('act_id', actId)
+          .in('status', ['active', 'planning'])
+          .order('start_date', { ascending: false })
+          .limit(1);
+        const at = (activeTours as { id: string; name: string }[] | null)?.[0];
+        if (at) setActiveTour({ id: at.id, name: at.name });
+      }
+    } catch (err) {
+      console.error('today load:', err);
+    } finally {
+      setLoading(false);
     }
-
-    setToday(todayBooking);
-    setTomorrow(tomorrowBooking);
-    setUpcoming(upcomingBooking);
-
-    // Resolve active tour: today's show tour OR most recent active/planning tour
-    if (todayBooking?.tour) {
-      const tourAny = todayBooking.tour as any;
-      const tourName: string = (Array.isArray(tourAny) ? tourAny[0]?.name : tourAny?.name) ?? '';
-      setActiveTour({ id: todayBooking.tour_id as string, name: tourName });
-    } else {
-      const { data: activeTours } = await supabase.from('tours')
-        .select('id, name')
-        .eq('act_id', actId)
-        .in('status', ['active', 'planning'])
-        .order('start_date', { ascending: false })
-        .limit(1);
-      const at = (activeTours as { id: string; name: string }[] | null)?.[0];
-      if (at) setActiveTour({ id: at.id, name: at.name });
-    }
-
-    setLoading(false);
   };
 
   const dateLabel = (d: string) =>

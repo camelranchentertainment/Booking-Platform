@@ -97,12 +97,17 @@ export default function SocialQueue() {
 
   const loadPosts = async () => {
     setLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    const url = view === 'all' ? '/api/social/queue' : `/api/social/queue?status=${view}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${session.access_token}` } });
-    if (res.ok) setPosts(await res.json());
-    setLoading(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const url = view === 'all' ? '/api/social/queue' : `/api/social/queue?status=${view}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${session.access_token}` } });
+      if (res.ok) setPosts(await res.json());
+    } catch (err) {
+      console.error('loadPosts:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const updatePost = async (id: string, status: SocialStatus, content?: string) => {

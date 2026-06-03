@@ -166,12 +166,13 @@ export default function EmailPage() {
 
   const loadAll = async () => {
     setLoading(true);
+    try {
     const { data: { session } } = await supabase.auth.getSession();
     const tok = session?.access_token || '';
     setToken(tok);
 
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setLoading(false); return; }
+    if (!user) return;
 
     const aid = await getActId(supabase, user.id);
     setActId(aid);
@@ -224,7 +225,11 @@ export default function EmailPage() {
     setBookings(bookingsRes.data || []);
     setInboxEmails(inboxRes.data || []);
     setOutboxEmails(outboxRes.data || []);
-    setLoading(false);
+    } catch (err) {
+      console.error('email loadAll:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loadArchived = async () => {
