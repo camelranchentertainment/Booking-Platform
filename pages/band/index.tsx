@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { getActId } from '../../lib/bookingQueries';
 import Link from 'next/link';
+import * as XLSX from 'xlsx';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -56,6 +57,9 @@ export default function BandDashboard() {
   const [noteSaved, setNoteSaved]         = useState(false);
   const [pendingAction, setPendingAction] = useState<AgentAction | null>(null);
   const [greetingSent, setGreetingSent]   = useState(false);
+  const [attachedFile, setAttachedFile]   = useState<{ name: string; content: string } | null>(null);
+  const [fileLoading, setFileLoading]     = useState(false);
+  const fileInputRef                      = useRef<HTMLInputElement>(null);
 
   // Approval
   const [draftSubject, setDraftSubject]           = useState('');
@@ -167,8 +171,12 @@ export default function BandDashboard() {
   };
 
   const sendMessage = async (msg: string, saveNote = false) => {
-    if (!msg.trim() || agentLoading) return;
-    const userMsg: Message = { role: 'user', content: msg.trim() };
+    const fullMsg = attachedFile
+      ? `${msg.trim() ? msg.trim() + '\n\n' : ''}[File: ${attachedFile.name}]\n${attachedFile.content}`
+      : msg.trim();
+    if (!fullMsg || agentLoading) return;
+    setAttachedFile(null);
+    const userMsg: Message = { role: 'user', content: fullMsg };
     const next = [...messages, userMsg];
     setMessages(next);
     setAgentInput('');
@@ -184,7 +192,7 @@ export default function BandDashboard() {
       const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ message: msg.trim(), history, saveNote }),
+        body: JSON.stringify({ message: fullMsg, history, saveNote }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Agent error');
@@ -211,6 +219,56 @@ export default function BandDashboard() {
       setAgentLoading(false);
     }
   };
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileLoading(true);
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+
+      if (ext === 'csv' || ext === 'txt') {
+        const text = await file.text();
+        setAttachedFile({ name: file.name, content: text });
+
+      } else if (ext === 'xlsx' || ext === 'xls') {
+        const buf = await file.arrayBuffer();
+        const wb  = XLSX.read(buf, { type: 'array' });
+        const ws  = wb.Sheets[wb.SheetNames[0]];
+        const csv = XLSX.utils.sheet_to_csv(ws);
+        setAttachedFile({ name: file.name, content: csv });
+
+      } else if (ext === 'pdf') {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch('/api/parse-file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ base64, mimeType: 'application/pdf' }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'PDF parse failed');
+        setAttachedFile({ name: file.name, content: json.text });
+
+      } else {
+        alert('Supported formats: CSV, Excel (.xlsx/.xls), PDF');
+      }
+    } catch (err: any) {
+      alert(`Could not read file: ${err.message}`);
+    } finally {
+      setFileLoading(false);
+      // Reset input so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }, []);
 
   const approveSend = async () => {
     if (!pendingAction || sending || !myAct) return;
@@ -528,39 +586,85 @@ export default function BandDashboard() {
             {agentError && <div style={{ margin: '0.4rem 1.25rem 0', fontSize: 13, color: '#f87171' }}>{agentError}</div>}
 
             {/* Input */}
-            <div style={{ display: 'flex', gap: '0.5rem', padding: '0.75rem 1.25rem', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-              <input
-                className="input"
-                style={{
-                  flex: 1, fontSize: 14,
-                  background: 'rgba(255,255,255,0.08)',
-                  border: '1px solid rgba(255,255,255,0.3)',
-                  color: '#fff',
-                  opacity: 1,
-                }}
-                placeholder={`Ask about ${myAct?.act_name || 'your pipeline'}, or say "send outreach to all targets on [tour name]"…`}
-                value={agentInput}
-                onChange={e => setAgentInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(agentInput); } }}
-                disabled={agentLoading}
-              />
-              <button
-                className="btn"
-                style={{
-                  flexShrink: 0,
-                  background: '#c47b2b',
-                  border: 'none',
-                  color: '#fff',
-                  opacity: 1,
-                  cursor: agentLoading ? 'wait' : 'pointer',
-                  fontWeight: 700,
-                  fontSize: 16,
-                }}
-                onClick={() => sendMessage(agentInput)}
-                disabled={agentLoading}
-              >
-                {agentLoading ? '…' : '→'}
-              </button>
+            <div style={{ borderTop: '1px solid var(--border)', flexShrink: 0 }}>
+              {/* Attachment badge */}
+              {attachedFile && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '0.5rem',
+                  padding: '0.4rem 1.25rem 0',
+                }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                    background: 'rgba(196,123,43,0.15)', border: '1px solid rgba(196,123,43,0.4)',
+                    borderRadius: 4, padding: '0.2rem 0.55rem',
+                    fontSize: 12, color: '#c47b2b', fontFamily: 'var(--font-body)',
+                  }}>
+                    📎 {attachedFile.name}
+                    <button
+                      onClick={() => setAttachedFile(null)}
+                      style={{ background: 'none', border: 'none', color: '#c47b2b', cursor: 'pointer', padding: 0, fontSize: 13, lineHeight: 1 }}
+                      title="Remove attachment"
+                    >✕</button>
+                  </span>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '0.5rem', padding: '0.5rem 1.25rem 0.75rem' }}>
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.txt,.xlsx,.xls,.pdf"
+                  style={{ display: 'none' }}
+                  onChange={handleFileChange}
+                />
+                {/* Paperclip button */}
+                <button
+                  title="Attach file (CSV, Excel, PDF)"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={agentLoading || fileLoading}
+                  style={{
+                    flexShrink: 0, background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.3)', color: fileLoading ? '#c47b2b' : 'rgba(255,255,255,0.7)',
+                    cursor: agentLoading || fileLoading ? 'not-allowed' : 'pointer',
+                    fontSize: 16, padding: '0 0.6rem', borderRadius: 4,
+                    display: 'flex', alignItems: 'center',
+                  }}
+                >
+                  {fileLoading ? '⏳' : '📎'}
+                </button>
+                <input
+                  className="input"
+                  style={{
+                    flex: 1, fontSize: 14,
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    color: '#fff',
+                    opacity: 1,
+                  }}
+                  placeholder={attachedFile ? 'Add a message or just hit send…' : `Ask about ${myAct?.act_name || 'your pipeline'}, or attach a show list…`}
+                  value={agentInput}
+                  onChange={e => setAgentInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(agentInput); } }}
+                  disabled={agentLoading}
+                />
+                <button
+                  className="btn"
+                  style={{
+                    flexShrink: 0,
+                    background: '#c47b2b',
+                    border: 'none',
+                    color: '#fff',
+                    opacity: 1,
+                    cursor: agentLoading ? 'wait' : 'pointer',
+                    fontWeight: 700,
+                    fontSize: 16,
+                  }}
+                  onClick={() => sendMessage(agentInput)}
+                  disabled={agentLoading || fileLoading}
+                >
+                  {agentLoading ? '…' : '→'}
+                </button>
+              </div>
             </div>
           </div>
 
