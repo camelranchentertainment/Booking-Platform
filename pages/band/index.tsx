@@ -94,11 +94,13 @@ export default function BandDashboard() {
   }, [myAct, userProfile, loading, greetingSent, targetsCount, confirmedCount, toursCount]);
 
   const load = async () => {
+    setLoading(true);
+    try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
     const actId = await getActId(supabase, user.id);
-    if (!actId) { setLoading(false); return; }
+    if (!actId) { return; }
 
     const [actRes, profileRes] = await Promise.all([
       supabase.from('acts').select('*').eq('id', actId).eq('is_active', true).single(),
@@ -126,7 +128,11 @@ export default function BandDashboard() {
       setToursCount((toursRes as any).count ?? 0);
     }
 
-    setLoading(false);
+    } catch (err) {
+      console.error('band dashboard load:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const createAct = async () => {

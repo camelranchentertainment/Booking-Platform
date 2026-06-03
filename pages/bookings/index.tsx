@@ -16,13 +16,19 @@ export default function BookingsPage() {
   }, []);
 
   const loadAll = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const actId = await getActId(supabase, user.id);
-    if (!actId) { setLoading(false); return; }
-    const data = await getBandBookings(supabase, actId);
-    setBookings(data);
-    setLoading(false);
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const actId = await getActId(supabase, user.id);
+      if (!actId) return;
+      const data = await getBandBookings(supabase, actId);
+      setBookings(data);
+    } catch (err) {
+      console.error('bookings load:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const moveStatus = async (bookingId: string, newStatus: BookingStatus) => {

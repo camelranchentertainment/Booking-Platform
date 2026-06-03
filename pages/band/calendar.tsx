@@ -24,28 +24,34 @@ export default function BandCalendar() {
   useEffect(() => { load(); }, []);
 
   const load = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const { data: ownedActs } = await supabase.from('acts').select('id').eq('owner_id', user.id).eq('is_active', true);
-    let actId: string | null = ownedActs?.[0]?.id || null;
+      const { data: ownedActs } = await supabase.from('acts').select('id').eq('owner_id', user.id).eq('is_active', true);
+      let actId: string | null = ownedActs?.[0]?.id || null;
 
-    if (!actId) {
-      const { data: profile } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
-      actId = profile?.act_id || null;
+      if (!actId) {
+        const { data: profile } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
+        actId = profile?.act_id || null;
+      }
+
+      if (!actId) return;
+      setActId(actId);
+
+      const { data } = await supabase.from('bookings')
+        .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, fee, venue:venues(id, name, city, state, address, phone)')
+        .eq('act_id', actId)
+        .neq('status', 'cancelled')
+        .not('show_date', 'is', null)
+        .order('show_date');
+      setShows(data || []);
+    } catch (err) {
+      console.error('band calendar load:', err);
+    } finally {
+      setLoading(false);
     }
-
-    if (!actId) { setLoading(false); return; }
-    setActId(actId);
-
-    const { data } = await supabase.from('bookings')
-      .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, fee, venue:venues(id, name, city, state, address, phone)')
-      .eq('act_id', actId)
-      .neq('status', 'cancelled')
-      .not('show_date', 'is', null)
-      .order('show_date');
-    setShows(data || []);
-    setLoading(false);
   };
 
   const prev = () => setCurrent(c => c.month === 0 ? { year: c.year - 1, month: 11 } : { ...c, month: c.month - 1 });

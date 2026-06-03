@@ -22,29 +22,35 @@ export default function BandTours() {
   useEffect(() => { load(); }, []);
 
   const load = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    let { data: acts } = await supabase.from('acts').select('id').eq('owner_id', user.id).eq('is_active', true).limit(1);
-    if (!acts?.length) {
-      const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
-      if (prof?.act_id) {
-        const { data: linked } = await supabase.from('acts').select('id').eq('id', prof.act_id).eq('is_active', true).limit(1);
-        acts = linked;
+      let { data: acts } = await supabase.from('acts').select('id').eq('owner_id', user.id).eq('is_active', true).limit(1);
+      if (!acts?.length) {
+        const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
+        if (prof?.act_id) {
+          const { data: linked } = await supabase.from('acts').select('id').eq('id', prof.act_id).eq('is_active', true).limit(1);
+          acts = linked;
+        }
       }
+      const act = acts?.[0];
+      if (!act) return;
+      setActId(act.id);
+
+      const { data } = await supabase
+        .from('tours')
+        .select('id, name, status, start_date, end_date, description, tour_venues(count)')
+        .or(`act_id.eq.${act.id},created_by.eq.${user.id}`)
+        .order('start_date', { ascending: false });
+
+      setTours(data || []);
+    } catch (err) {
+      console.error('tours load:', err);
+    } finally {
+      setLoading(false);
     }
-    const act = acts?.[0];
-    if (!act) { setLoading(false); return; }
-    setActId(act.id);
-
-    const { data } = await supabase
-      .from('tours')
-      .select('id, name, status, start_date, end_date, description, tour_venues(count)')
-      .or(`act_id.eq.${act.id},created_by.eq.${user.id}`)
-      .order('start_date', { ascending: false });
-
-    setTours(data || []);
-    setLoading(false);
   };
 
   const field = (k: keyof typeof form) =>

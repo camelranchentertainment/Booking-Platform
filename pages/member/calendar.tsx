@@ -18,21 +18,27 @@ export default function MemberCalendar() {
   useEffect(() => { load(); }, []);
 
   const load = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: profile } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
-    if (!profile?.act_id) { setLoading(false); return; }
-    const { data } = await supabase.from('bookings')
-      .select(`id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes,
-        soundcheck_time, end_time, meals_provided, drinks_provided, hotel_booked, sound_system,
-        special_requirements, venue_contact_name,
-        venue:venues(name, city, state, address, phone)`)
-      .eq('act_id', profile.act_id)
-      .in('status', ['confirmed', 'advancing', 'completed'])
-      .not('show_date', 'is', null)
-      .order('show_date');
-    setShows(data || []);
-    setLoading(false);
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
+      if (!profile?.act_id) return;
+      const { data } = await supabase.from('bookings')
+        .select(`id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes,
+          soundcheck_time, end_time, meals_provided, drinks_provided, hotel_booked, sound_system,
+          special_requirements, venue_contact_name,
+          venue:venues(name, city, state, address, phone)`)
+        .eq('act_id', profile.act_id)
+        .in('status', ['confirmed', 'advancing', 'completed'])
+        .not('show_date', 'is', null)
+        .order('show_date');
+      setShows(data || []);
+    } catch (err) {
+      console.error('member calendar load:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const prev = () => setCurrent(c => c.month === 0 ? { year: c.year - 1, month: 11 } : { ...c, month: c.month - 1 });

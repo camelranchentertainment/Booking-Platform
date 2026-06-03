@@ -49,20 +49,26 @@ export default function AgentCalendar() {
   useEffect(() => { load(); }, []);
 
   const load = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const aid = await getActId(supabase, user.id);
-    if (!aid) { setLoading(false); return; }
-    setActId(aid);
-    const [data, actRes, venueRes] = await Promise.all([
-      getBandBookings(supabase, aid),
-      supabase.from('acts').select('id, act_name').eq('id', aid).single(),
-      supabase.from('venues').select('id, name, city, state').order('name').limit(300),
-    ]);
-    if (actRes.data) setActs([actRes.data]);
-    setShows(data.filter((b: any) => b.status !== 'cancelled' && b.show_date));
-    setVenueList(venueRes.data || []);
-    setLoading(false);
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const aid = await getActId(supabase, user.id);
+      if (!aid) return;
+      setActId(aid);
+      const [data, actRes, venueRes] = await Promise.all([
+        getBandBookings(supabase, aid),
+        supabase.from('acts').select('id, act_name').eq('id', aid).single(),
+        supabase.from('venues').select('id, name, city, state').order('name').limit(300),
+      ]);
+      if (actRes.data) setActs([actRes.data]);
+      setShows(data.filter((b: any) => b.status !== 'cancelled' && b.show_date));
+      setVenueList(venueRes.data || []);
+    } catch (err) {
+      console.error('calendar load:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const prevPeriod = () => {

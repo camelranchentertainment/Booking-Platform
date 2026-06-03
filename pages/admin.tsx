@@ -106,14 +106,20 @@ export default function AdminPage() {
   useEffect(() => { init(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const init = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.replace('/login'); return; }
-    const { data: prof } = await supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle();
-    if (prof?.role !== 'superadmin') { router.replace('/band'); return; }
-    setAuthorized(true);
-    await loadData();
-    await loadSysStatus();
-    setLoading(false);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.replace('/login'); return; }
+      const { data: prof } = await supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle();
+      if (prof?.role !== 'superadmin') { router.replace('/band'); return; }
+      setAuthorized(true);
+      await loadData();
+      await loadSysStatus();
+    } catch (err) {
+      console.error('admin init:', err);
+      router.replace('/login');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const callAdmin = useCallback(async (path: string, body?: Record<string, unknown>, method = 'POST') => {

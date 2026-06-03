@@ -10,25 +10,31 @@ export default function MemberView() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: profile } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).maybeSingle();
-      if (!profile?.act_id) { setLoading(false); return; }
+      setLoading(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data: profile } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).maybeSingle();
+        if (!profile?.act_id) return;
 
-      const { data: act } = await supabase.from('acts').select('act_name').eq('id', profile.act_id).maybeSingle();
-      if (act) setActName(act.act_name);
+        const { data: act } = await supabase.from('acts').select('act_name').eq('id', profile.act_id).maybeSingle();
+        if (act) setActName(act.act_name);
 
-      const { data: bookings } = await supabase.from('bookings')
-        .select(`id, status, show_date, set_time, set_length_min, load_in_time, door_time, advance_notes,
-          soundcheck_time, end_time, meals_provided, drinks_provided, hotel_booked, sound_system,
-          special_requirements, venue_contact_name,
-          venue:venues(name, city, state, address, phone)`)
-        .eq('act_id', profile.act_id)
-        .in('status', ['confirmed', 'advancing', 'completed'])
-        .order('show_date', { ascending: true });
+        const { data: bookings } = await supabase.from('bookings')
+          .select(`id, status, show_date, set_time, set_length_min, load_in_time, door_time, advance_notes,
+            soundcheck_time, end_time, meals_provided, drinks_provided, hotel_booked, sound_system,
+            special_requirements, venue_contact_name,
+            venue:venues(name, city, state, address, phone)`)
+          .eq('act_id', profile.act_id)
+          .in('status', ['confirmed', 'advancing', 'completed'])
+          .order('show_date', { ascending: true });
 
-      setShows(bookings || []);
-      setLoading(false);
+        setShows(bookings || []);
+      } catch (err) {
+        console.error('member load:', err);
+      } finally {
+        setLoading(false);
+      }
     };
     load();
   }, []);

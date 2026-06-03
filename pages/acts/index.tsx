@@ -11,26 +11,31 @@ export default function BandsPage() {
   useEffect(() => { loadAll(); }, []);
 
   const loadAll = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const { data: myBands } = await supabase.from('acts').select('*').eq('owner_id', user.id).order('act_name');
-    const owned = myBands || [];
-    setBands(owned);
+      const { data: myBands } = await supabase.from('acts').select('*').eq('owner_id', user.id).order('act_name');
+      const owned = myBands || [];
+      setBands(owned);
 
-    if (owned.length > 0) {
-      const ids = owned.map((b: any) => b.id);
-      const { data: counts } = await supabase
-        .from('bookings')
-        .select('act_id')
-        .in('act_id', ids)
-        .in('status', ['pitch', 'negotiation', 'hold', 'contract', 'confirmed', 'advancing']);
-      const map: Record<string, number> = {};
-      for (const row of counts || []) map[row.act_id] = (map[row.act_id] || 0) + 1;
-      setBookingCounts(map);
+      if (owned.length > 0) {
+        const ids = owned.map((b: any) => b.id);
+        const { data: counts } = await supabase
+          .from('bookings')
+          .select('act_id')
+          .in('act_id', ids)
+          .in('status', ['pitch', 'negotiation', 'hold', 'contract', 'confirmed', 'advancing']);
+        const map: Record<string, number> = {};
+        for (const row of counts || []) map[row.act_id] = (map[row.act_id] || 0) + 1;
+        setBookingCounts(map);
+      }
+    } catch (err) {
+      console.error('acts load:', err);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
