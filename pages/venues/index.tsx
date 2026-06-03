@@ -5,6 +5,7 @@ import { Venue } from '../../lib/types';
 import { useLookup } from '../../lib/hooks/useLookup';
 import { getActId } from '../../lib/bookingQueries';
 import VenueDrawer from '../../components/VenueDrawer';
+import ImportModal from '../../components/ImportModal';
 
 declare global {
   interface Window { google: any; initGooglePlaces: () => void; }
@@ -39,6 +40,9 @@ export default function VenuesPage() {
   const [saving, setSaving]         = useState(false);
   const [saveError, setSaveError]   = useState('');
   const [mapsReady, setMapsReady]   = useState(false);
+
+  // AI file import
+  const [showAiImport, setShowAiImport] = useState(false);
 
   // Bulk import
   const [showImport, setShowImport]     = useState(false);
@@ -523,6 +527,7 @@ export default function VenuesPage() {
               {bulkEnriching ? '✉ Finding…' : `✉ Find Emails (${venues.filter(v => !v.email && v.website).length})`}
             </button>
           )}
+          <button className="btn btn-secondary" onClick={() => setShowAiImport(true)}>⬆ Import File</button>
           <button className="btn btn-secondary" onClick={() => { setShowImport(true); setImportParsed(false); setImportText(''); setImportRows([]); setImportDone(null); setImportError(''); }}>⬆ Bulk Import</button>
           <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ Add Venue</button>
         </div>
@@ -1166,6 +1171,14 @@ export default function VenuesPage() {
           venueId={drawerVenueId}
           isOpen={true}
           onClose={() => setDrawerVenueId(null)}
+        />
+      )}
+
+      {showAiImport && (
+        <ImportModal
+          defaultType="venues"
+          onClose={() => setShowAiImport(false)}
+          onComplete={loadVenues}
         />
       )}
 

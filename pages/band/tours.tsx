@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
+import ImportModal from '../../components/ImportModal';
 
 const STATUS_COLOR: Record<string, string> = {
   active:    '#34d399',
@@ -12,10 +13,11 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function BandTours() {
   const router = useRouter();
-  const [tours, setTours]     = useState<any[]>([]);
-  const [actId, setActId]     = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [showNew, setShowNew] = useState(false);
+  const [tours, setTours]         = useState<any[]>([]);
+  const [actId, setActId]         = useState<string | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [showNew, setShowNew]     = useState(false);
+  const [showAiImport, setShowAiImport] = useState(false);
   const [saving, setSaving]   = useState(false);
   const [form, setForm]       = useState({ name: '', description: '', start_date: '', end_date: '' });
 
@@ -90,9 +92,14 @@ export default function BandTours() {
             {tours.length} total{active > 0 ? ` · ${active} active` : ''}{planning > 0 ? ` · ${planning} planning` : ''}
           </div>
         </div>
-        {actId && (
-          <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ New Tour</button>
-        )}
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {actId && (
+            <button className="btn btn-secondary" onClick={() => setShowAiImport(true)}>⬆ Import Shows</button>
+          )}
+          {actId && (
+            <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ New Tour</button>
+          )}
+        </div>
       </div>
 
       {loading && (
@@ -200,6 +207,14 @@ export default function BandTours() {
             </form>
           </div>
         </div>
+      )}
+
+      {showAiImport && (
+        <ImportModal
+          defaultType="shows"
+          onClose={() => setShowAiImport(false)}
+          onComplete={load}
+        />
       )}
     </AppShell>
   );
