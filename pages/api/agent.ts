@@ -4,6 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 import { getServiceClient } from '../../lib/supabase';
 import { getSetting } from '../../lib/platformSettings';
 
+export const config = { api: { bodyParser: { sizeLimit: '5mb' } } };
+
 // ── System prompt ──────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are an AI booking agent for Camel Ranch Booking. You help DIY bands book shows.
 Be direct, confident, and concise. Music industry voice. Bold key numbers with **asterisks**.

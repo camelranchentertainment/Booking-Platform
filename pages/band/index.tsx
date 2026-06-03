@@ -233,16 +233,22 @@ export default function BandDashboard() {
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || '';
 
+      const MAX_CHARS = 50_000;
+      const truncate = (raw: string) =>
+        raw.length > MAX_CHARS
+          ? raw.slice(0, MAX_CHARS) + `\n\n[File truncated — showing first ${MAX_CHARS.toLocaleString()} characters]`
+          : raw;
+
       if (ext === 'csv' || ext === 'txt') {
         const text = await file.text();
-        setAttachedFile({ name: file.name, content: text });
+        setAttachedFile({ name: file.name, content: truncate(text) });
 
       } else if (ext === 'xlsx' || ext === 'xls') {
         const buf = await file.arrayBuffer();
         const wb  = XLSX.read(buf, { type: 'array' });
         const ws  = wb.Sheets[wb.SheetNames[0]];
         const csv = XLSX.utils.sheet_to_csv(ws);
-        setAttachedFile({ name: file.name, content: csv });
+        setAttachedFile({ name: file.name, content: truncate(csv) });
 
       } else if (ext === 'pdf') {
         const base64 = await new Promise<string>((resolve, reject) => {
@@ -262,7 +268,7 @@ export default function BandDashboard() {
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || 'PDF parse failed');
-        setAttachedFile({ name: file.name, content: json.text });
+        setAttachedFile({ name: file.name, content: truncate(json.text) });
 
       } else {
         alert('Supported formats: CSV, Excel (.xlsx/.xls), PDF');
