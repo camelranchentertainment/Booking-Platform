@@ -300,10 +300,11 @@ export default function AppShell({ children, requireRole = null }: Props) {
 
   useEffect(() => {
     let active = true;
-    // Hard 5-second timeout — if Supabase hangs, never leave the user on a blank spinner
+    // 6-second auto-reload — if Supabase hangs on getUser(), silently reload rather than
+    // bouncing the user to login (which would cause a redirect loop on a fresh login).
     const timeout = setTimeout(() => {
-      if (active) { setLoading(false); router.replace('/login'); }
-    }, 5000);
+      if (active) window.location.reload();
+    }, 6000);
 
     const init = async () => {
       try {

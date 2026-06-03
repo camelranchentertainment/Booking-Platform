@@ -50,9 +50,9 @@ export default function Login() {
       return;
     }
 
-    if (profile.role === 'superadmin') router.replace('/admin');
-    else if (profile.role === 'member') router.replace('/member');
-    else router.replace('/band');
+    if (profile.role === 'superadmin') window.location.href = '/admin';
+    else if (profile.role === 'member') window.location.href = '/member';
+    else window.location.href = '/band';
   };
 
   const handleForgot = async (e: React.FormEvent) => {

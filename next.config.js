@@ -2,7 +2,17 @@ const { withSentryConfig } = require('@sentry/nextjs');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Booking Platform — Camel Ranch Entertainment
+  generateEtags: false,
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, must-revalidate' },
+        ],
+      },
+    ];
+  },
 };
 
 // Only wrap with Sentry when both env vars are present — avoids a
