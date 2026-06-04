@@ -271,10 +271,11 @@ export default function BandDashboard() {
         setAttachedFile({ name: file.name, content: truncate(json.text) });
 
       } else {
-        alert('Supported formats: CSV, Excel (.xlsx/.xls), PDF');
+        setAgentError('Unsupported format — use CSV, Excel (.xlsx/.xls), or PDF.');
       }
     } catch (err: any) {
-      alert(`Could not read file: ${err.message}`);
+      console.error('Could not read file:', err);
+      setAgentError('Could not read file — please try again or use a different format.');
     } finally {
       setFileLoading(false);
       // Reset input so the same file can be re-selected
