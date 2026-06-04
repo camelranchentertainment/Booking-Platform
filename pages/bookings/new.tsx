@@ -23,14 +23,22 @@ export default function NewBooking() {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const [actsRes, venuesRes, toursRes] = await Promise.all([
+      const [actsRes, venuesRes] = await Promise.all([
         supabase.from('acts').select('id, act_name').eq('is_active', true).eq('owner_id', user.id).order('act_name'),
         supabase.from('venues').select('id, name, city, state').order('name'),
-        supabase.from('tours').select('id, name, act_id').neq('status', 'cancelled').order('name'),
       ]);
       setActs(actsRes.data || []);
       setVenues(venuesRes.data || []);
-      setTours(toursRes.data || []);
+      const actIds = (actsRes.data || []).map((a: ActPick) => a.id);
+      if (actIds.length > 0) {
+        const { data: toursData } = await supabase
+          .from('tours')
+          .select('id, name, act_id')
+          .in('act_id', actIds)
+          .neq('status', 'cancelled')
+          .order('name');
+        setTours(toursData || []);
+      }
       if (router.query.act) setForm(f => ({ ...f, act_id: router.query.act as string }));
     };
     load();

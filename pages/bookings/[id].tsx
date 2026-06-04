@@ -76,11 +76,10 @@ export default function BookingDetail() {
   const loadAll = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const [bookingRes, actsRes, venuesRes, toursRes] = await Promise.all([
+    const [bookingRes, actsRes, venuesRes] = await Promise.all([
       supabase.from('bookings').select(`*, act:acts(*), venue:venues(*), tour:tours(id, name), contact:contacts(*)`).eq('id', id).single(),
       supabase.from('acts').select('id, act_name').eq('owner_id', user.id).order('act_name'),
       supabase.from('venues').select('id, name, city, state').order('name'),
-      supabase.from('tours').select('id, name, act_id').neq('status', 'cancelled').order('name'),
     ]);
     if (bookingRes.data) {
       setBooking(bookingRes.data);
@@ -91,7 +90,18 @@ export default function BookingDetail() {
     }
     setActs(actsRes.data || []);
     setVenues(venuesRes.data || []);
-    setTours(toursRes.data || []);
+    const actIds = (actsRes.data || []).map((a: ActPick) => a.id);
+    const bookingActId = bookingRes.data?.act_id;
+    const filterIds = actIds.length > 0 ? actIds : bookingActId ? [bookingActId] : [];
+    if (filterIds.length > 0) {
+      const { data: toursData } = await supabase
+        .from('tours')
+        .select('id, name, act_id')
+        .in('act_id', filterIds)
+        .neq('status', 'cancelled')
+        .order('name');
+      setTours(toursData || []);
+    }
   };
 
   const setStatus = async (newStatus: BookingStatus) => {
