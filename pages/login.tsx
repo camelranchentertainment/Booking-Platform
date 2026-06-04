@@ -39,7 +39,7 @@ export default function Login() {
     if (!session?.user) { setError('Login failed. Please try again.'); setLoading(false); return; }
 
     const { data: profile } = await supabase
-      .from('user_profiles')
+      .from('profiles')
       .select('role')
       .eq('id', session.user.id)
       .maybeSingle();
