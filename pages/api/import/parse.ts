@@ -2,8 +2,6 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import formidable from 'formidable';
 import fs from 'fs';
 import * as XLSX from 'xlsx';
-import * as pdfParseModule from 'pdf-parse';
-const pdf = (pdfParseModule as any).default ?? pdfParseModule;
 import Anthropic from '@anthropic-ai/sdk';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
@@ -125,6 +123,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     if (ext === 'pdf') {
       const buf = fs.readFileSync(file.filepath);
+      (globalThis as any).DOMMatrix ??= class DOMMatrix {};
+      const pdfParseModule = await import('pdf-parse');
+      const pdf = (pdfParseModule as any).default ?? pdfParseModule;
       const pdfData = await pdf(buf);
       rawText = pdfData.text;
     } else if (ext === 'xlsx' || ext === 'xls') {

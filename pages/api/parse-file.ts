@@ -1,9 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../lib/supabase';
-import * as pdfParseModule from 'pdf-parse';
-const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
 
-// Increase body size limit for file uploads
 export const config = { api: { bodyParser: { sizeLimit: '10mb' } } };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -20,6 +17,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!base64 || !mimeType) return res.status(400).json({ error: 'base64 and mimeType required' });
 
   try {
+    // pdfjs-dist (bundled in pdf-parse v2) references DOMMatrix at init time.
+    // Polyfill before the dynamic import so the module loads cleanly in Node.js serverless.
+    (globalThis as any).DOMMatrix ??= class DOMMatrix {};
+    const pdfParseModule = await import('pdf-parse');
+    const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
+
     const buffer = Buffer.from(base64, 'base64');
     const parsed = await pdfParse(buffer);
     const text = parsed.text?.trim() || '';
