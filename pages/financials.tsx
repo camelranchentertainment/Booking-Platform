@@ -64,15 +64,20 @@ export default function Financials() {
     const token = sess?.access_token ?? '';
     setSession(token);
     const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
     await loadBookings();
     if (token) loadExpenses(token);
-    const { data: toursData } = await supabase
-      .from('tours')
-      .select('id, name')
-      .eq('created_by', user?.id)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    setTours((toursData as TourOption[]) || []);
+    const actId = await getActId(supabase, user.id);
+    if (actId) {
+      const { data: toursData } = await supabase
+        .from('tours')
+        .select('id, name')
+        .eq('act_id', actId)
+        .neq('status', 'cancelled')
+        .order('name')
+        .limit(50);
+      setTours((toursData as TourOption[]) || []);
+    }
   };
 
   const loadExpenses = async (token: string, overrides?: {

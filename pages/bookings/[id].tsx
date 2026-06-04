@@ -80,7 +80,7 @@ export default function BookingDetail() {
       supabase.from('bookings').select(`*, act:acts(*), venue:venues(*), tour:tours(id, name), contact:contacts(*)`).eq('id', id).single(),
       supabase.from('acts').select('id, act_name').eq('owner_id', user.id).order('act_name'),
       supabase.from('venues').select('id, name, city, state').order('name'),
-      supabase.from('tours').select('id, name, act_id').eq('created_by', user.id).order('name'),
+      supabase.from('tours').select('id, name, act_id').neq('status', 'cancelled').order('name'),
     ]);
     if (bookingRes.data) {
       setBooking(bookingRes.data);
@@ -193,6 +193,7 @@ export default function BookingDetail() {
 
   const isPast     = booking.show_date && new Date(booking.show_date + 'T23:59:59') < new Date();
   const canSettle  = booking.status === 'confirmed' && isPast;
+  const filteredTours = tours.filter(t => t.act_id === (form.act_id || booking.act_id));
 
   return (
     <AppShell requireRole="band_admin">
@@ -261,6 +262,11 @@ export default function BookingDetail() {
                   {venues.map(v => <option key={v.id} value={v.id}>{v.name} — {v.city}, {v.state}</option>)}
                 </select></div>
             </div>
+            <div className="field"><label className="field-label">Tour</label>
+              <select className="select" value={form.tour_id || ''} onChange={set('tour_id')}>
+                <option value="">No tour</option>
+                {filteredTours.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select></div>
             <div className="grid-2">
               <div className="field"><label className="field-label">Show Date</label>
                 <input className="input" type="date" value={form.show_date?.substring(0, 10) || ''} onChange={set('show_date')} /></div>

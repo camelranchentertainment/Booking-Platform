@@ -26,7 +26,7 @@ export default function NewBooking() {
       const [actsRes, venuesRes, toursRes] = await Promise.all([
         supabase.from('acts').select('id, act_name').eq('is_active', true).eq('owner_id', user.id).order('act_name'),
         supabase.from('venues').select('id, name, city, state').order('name'),
-        supabase.from('tours').select('id, name, act_id').eq('status', 'active').order('name'),
+        supabase.from('tours').select('id, name, act_id').neq('status', 'cancelled').order('name'),
       ]);
       setActs(actsRes.data || []);
       setVenues(venuesRes.data || []);
