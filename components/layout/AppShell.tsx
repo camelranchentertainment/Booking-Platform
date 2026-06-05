@@ -300,11 +300,6 @@ export default function AppShell({ children, requireRole = null }: Props) {
 
   useEffect(() => {
     let active = true;
-    // 6-second auto-reload — if Supabase hangs on getUser(), silently reload rather than
-    // bouncing the user to login (which would cause a redirect loop on a fresh login).
-    const timeout = setTimeout(() => {
-      if (active) window.location.reload();
-    }, 6000);
 
     const init = async () => {
       try {
@@ -355,13 +350,11 @@ export default function AppShell({ children, requireRole = null }: Props) {
         if (active) setLoading(false);
       } catch {
         router.replace('/login');
-      } finally {
-        clearTimeout(timeout);
       }
     };
 
     init();
-    return () => { active = false; clearTimeout(timeout); };
+    return () => { active = false; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSignOut = async () => {
