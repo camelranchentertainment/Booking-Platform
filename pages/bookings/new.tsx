@@ -29,7 +29,7 @@ export default function NewBooking() {
       ]);
       setActs(actsRes.data || []);
       setVenues(venuesRes.data || []);
-      const { data: profile } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).maybeSingle();
+      const { data: profile } = await supabase.from('profiles').select('act_id').eq('id', user.id).maybeSingle();
       const { data: tourList } = await supabase
         .from('tours')
         .select('id, name')
