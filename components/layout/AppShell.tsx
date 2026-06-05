@@ -312,7 +312,11 @@ export default function AppShell({ children, requireRole = null }: Props) {
           .eq('id', user.id)
           .maybeSingle();
 
-        if (!data) { router.replace('/login'); return; }
+        if (!data) {
+          console.error('Profile not found for user:', user.id);
+          setLoading(false);
+          return;
+        }
 
         if (needsSubscription(data as UserProfile) && router.pathname !== '/pricing') {
           router.replace('/pricing?trial=expired');
@@ -322,7 +326,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
         // Onboarding redirect for new band admins — only when column explicitly false
         if (
           data.role === 'band_admin' &&
-          (data as any).onboarding_completed === false &&
+          (data as any).onboarding_completed !== true &&
           router.pathname !== '/onboarding'
         ) {
           router.replace('/onboarding');
