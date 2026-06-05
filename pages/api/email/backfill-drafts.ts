@@ -69,7 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (owned?.length) {
     actId = owned[0].id;
   } else {
-    const { data: prof } = await service.from('user_profiles').select('act_id').eq('id', user.id).maybeSingle();
+    const { data: prof } = await service.from('profiles').select('act_id').eq('id', user.id).maybeSingle();
     actId = prof?.act_id || null;
   }
   const { data: ownedActs } = await service.from('acts').select('id').eq('owner_id', user.id).eq('is_active', true);
@@ -79,7 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ created: 0, message: 'No acts found for this account.' });
   }
 
-  const { data: profile } = await service.from('user_profiles').select('display_name').eq('id', user.id).single();
+  const { data: profile } = await service.from('profiles').select('display_name').eq('id', user.id).single();
   const senderFrom = profile?.display_name || 'Band Management';
 
   // Fetch tours first (needed for cleanup + generation)

@@ -11,7 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const service = getServiceClient();
 
   const { data: profile } = await service
-    .from('user_profiles')
+    .from('profiles')
     .select('role')
     .eq('id', user.id)
     .single();
@@ -27,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: existing } = await service.from('acts').select('id').eq('owner_id', user.id).limit(1);
   if (existing?.length) return res.status(400).json({ error: 'You already have a band profile' });
 
-  const { data: prof } = await service.from('user_profiles').select('act_id').eq('id', user.id).single();
+  const { data: prof } = await service.from('profiles').select('act_id').eq('id', user.id).single();
   if (prof?.act_id) return res.status(400).json({ error: 'You already have a band profile' });
 
   const { data: act, error } = await service.from('acts').insert({

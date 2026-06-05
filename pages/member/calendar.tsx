@@ -22,7 +22,7 @@ export default function MemberCalendar() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: profile } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
+      const { data: profile } = await supabase.from('profiles').select('act_id').eq('id', user.id).single();
       if (!profile?.act_id) return;
       const { data } = await supabase.from('bookings')
         .select(`id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes,

@@ -196,7 +196,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const service = getServiceClient();
 
-  const { data: profile } = await service.from('user_profiles').select('act_id').eq('id', user.id).single();
+  const { data: profile } = await service.from('profiles').select('act_id').eq('id', user.id).single();
   let actId: string | null = profile?.act_id ?? null;
   if (!actId) {
     const { data: owned } = await service.from('acts').select('id').eq('owner_id', user.id).eq('is_active', true).limit(1).maybeSingle();

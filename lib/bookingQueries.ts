@@ -6,7 +6,7 @@ export async function getActId(
   userId: string
 ): Promise<string | null> {
   const { data } = await supabase
-    .from('user_profiles')
+    .from('profiles')
     .select('act_id')
     .eq('id', userId)
     .single()

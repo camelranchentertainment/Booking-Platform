@@ -25,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
   const { data: profile } = await service
-    .from('user_profiles')
+    .from('profiles')
     .select('stripe_customer_id, subscription_tier, role, email')
     .eq('id', user.id)
     .single();
@@ -43,7 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       metadata: { supabase_user_id: user.id },
     });
     customerId = customer.id;
-    await service.from('user_profiles').update({ stripe_customer_id: customerId }).eq('id', user.id);
+    await service.from('profiles').update({ stripe_customer_id: customerId }).eq('id', user.id);
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';

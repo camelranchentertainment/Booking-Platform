@@ -13,7 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // NEVER delete a superadmin
   const { data: profile } = await service
-    .from('user_profiles')
+    .from('profiles')
     .select('role')
     .eq('id', user.id)
     .single();

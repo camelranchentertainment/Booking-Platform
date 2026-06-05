@@ -39,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const svc = getServiceClient();
 
   const { data: profile } = await svc
-    .from('user_profiles')
+    .from('profiles')
     .select('role, act_id')
     .eq('id', user.id)
     .maybeSingle();

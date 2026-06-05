@@ -7,7 +7,7 @@ async function getAuthedSuperadmin(req: NextApiRequest) {
   const service = getServiceClient();
   const { data: { user } } = await service.auth.getUser(token);
   if (!user) return null;
-  const { data: profile } = await service.from('user_profiles').select('role').eq('id', user.id).single();
+  const { data: profile } = await service.from('profiles').select('role').eq('id', user.id).single();
   return profile?.role === 'superadmin' ? user : null;
 }
 

@@ -33,7 +33,7 @@ export default function BandCalendar() {
       let actId: string | null = ownedActs?.[0]?.id || null;
 
       if (!actId) {
-        const { data: profile } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
+        const { data: profile } = await supabase.from('profiles').select('act_id').eq('id', user.id).single();
         actId = profile?.act_id || null;
       }
 

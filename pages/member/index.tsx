@@ -14,7 +14,7 @@ export default function MemberView() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        const { data: profile } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).maybeSingle();
+        const { data: profile } = await supabase.from('profiles').select('act_id').eq('id', user.id).maybeSingle();
         if (!profile?.act_id) return;
 
         const { data: act } = await supabase.from('acts').select('act_name').eq('id', profile.act_id).maybeSingle();

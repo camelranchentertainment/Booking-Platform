@@ -109,7 +109,7 @@ export default function AdminPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace('/login'); return; }
-      const { data: prof } = await supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle();
+      const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
       if (prof?.role !== 'superadmin') { router.replace('/band'); return; }
       setAuthorized(true);
       await loadData();
@@ -139,7 +139,7 @@ export default function AdminPage() {
     const token = sess?.access_token;
 
     const [profilesRes, actsRes, bookingsRes, billingRes] = await Promise.all([
-      supabase.from('user_profiles').select('*').order('created_at', { ascending: false }).limit(500),
+      supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(500),
       supabase.from('acts').select('id, act_name, owner_id').eq('is_active', true),
       supabase.from('bookings').select(`
         id, show_date, deal_type, agreed_amount, fee,

@@ -29,7 +29,7 @@ export async function notifyActMembers({
 }) {
   const service = getServiceClient();
   const { data: members } = await service
-    .from('user_profiles')
+    .from('profiles')
     .select('id')
     .eq('act_id', actId);
 

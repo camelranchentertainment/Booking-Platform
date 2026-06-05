@@ -642,7 +642,7 @@ export default function TodayPage() {
       setSession(sess.access_token);
 
       const { data: prof } = await supabase
-        .from('user_profiles')
+        .from('profiles')
         .select('role, act_id')
         .eq('id', user.id)
         .maybeSingle();

@@ -242,7 +242,7 @@ const loadPool = async () => {
     setDiscoverAdding(p.place_id);
     const { data: { user } } = await supabase.auth.getUser();
     const { data: { session } } = await supabase.auth.getSession();
-    const { data: dp } = await supabase.from('user_profiles').select('act_id').eq('id', user!.id).single();
+    const { data: dp } = await supabase.from('profiles').select('act_id').eq('id', user!.id).single();
 
     let venueId: string | null = null;
 

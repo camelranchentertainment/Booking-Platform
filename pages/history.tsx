@@ -72,7 +72,7 @@ export default function HistoryPage() {
       setToken(session?.access_token || '');
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: prof } = await supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle();
+      const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
       setRole(prof?.role || '');
       const actId = await getActId(supabase, user.id);
       if (!actId) return;

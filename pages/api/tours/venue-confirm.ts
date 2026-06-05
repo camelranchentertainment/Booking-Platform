@@ -308,7 +308,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const isCreator = (tv.tour as any).created_by === user.id;
   if (!isCreator) {
     const { data: prof } = await service
-      .from('user_profiles')
+      .from('profiles')
       .select('act_id, role')
       .eq('id', user.id)
       .maybeSingle();
@@ -332,7 +332,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!act) return res.status(404).json({ error: 'Act not found' });
 
   const { data: senderProfile } = await service
-    .from('user_profiles')
+    .from('profiles')
     .select('display_name, email')
     .eq('id', user.id)
     .maybeSingle();
@@ -487,7 +487,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Notify band members (linked via user_profiles.act_id)
     const { data: members } = await service
-      .from('user_profiles')
+      .from('profiles')
       .select('id, email, display_name')
       .eq('act_id', (act as any).id)
       .eq('role', 'member');

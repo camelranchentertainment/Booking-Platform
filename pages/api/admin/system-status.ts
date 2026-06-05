@@ -8,7 +8,7 @@ async function getAuthedSuperadmin(req: NextApiRequest) {
   const service = getServiceClient();
   const { data: { user } } = await service.auth.getUser(token);
   if (!user) return null;
-  const { data: profile } = await service.from('user_profiles').select('role').eq('id', user.id).single();
+  const { data: profile } = await service.from('profiles').select('role').eq('id', user.id).single();
   return profile?.role === 'superadmin' ? user : null;
 }
 
@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let supabaseOk = false;
   try {
     const { error } = await getServiceClient()
-      .from('user_profiles')
+      .from('profiles')
       .select('id', { head: true, count: 'exact' });
     supabaseOk = !error;
   } catch {

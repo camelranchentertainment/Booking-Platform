@@ -11,7 +11,7 @@ export default function DashboardRedirect() {
       if (!user) { router.replace('/login'); return; }
 
       const { data: profile } = await supabase
-        .from('user_profiles').select('role').eq('id', user.id).maybeSingle();
+        .from('profiles').select('role').eq('id', user.id).maybeSingle();
 
       const role = profile?.role;
       if (role === 'superadmin') router.replace('/admin');

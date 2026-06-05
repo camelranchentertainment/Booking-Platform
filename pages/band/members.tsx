@@ -63,7 +63,7 @@ export default function BandMembers() {
       ownerId    = ownedActs[0].owner_id || null;
       setActName(ownedActs[0].act_name);
     } else {
-      const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).maybeSingle();
+      const { data: prof } = await supabase.from('profiles').select('act_id').eq('id', user.id).maybeSingle();
       if (prof?.act_id) {
         const { data: linkedAct } = await supabase.from('acts').select('id, act_name, owner_id').eq('id', prof.act_id).maybeSingle();
         if (linkedAct) {
@@ -77,7 +77,7 @@ export default function BandMembers() {
     setActId(foundActId);
 
     const [membersRes, invitesRes] = await Promise.all([
-      supabase.from('user_profiles').select('id, display_name, email, role, created_at').eq('act_id', foundActId),
+      supabase.from('profiles').select('id, display_name, email, role, created_at').eq('act_id', foundActId),
       supabase.from('act_invitations').select('id, email, role, invited_at').eq('act_id', foundActId).eq('status', 'pending'),
     ]);
 
@@ -85,7 +85,7 @@ export default function BandMembers() {
     const existingIds = new Set(membersList.map((m: any) => m.id));
 
     if (ownerId && !existingIds.has(ownerId)) {
-      const { data: ownerProf } = await supabase.from('user_profiles')
+      const { data: ownerProf } = await supabase.from('profiles')
         .select('id, display_name, email, role, created_at').eq('id', ownerId).maybeSingle();
       if (ownerProf) { membersList.push(ownerProf as any); existingIds.add(ownerId); }
     }

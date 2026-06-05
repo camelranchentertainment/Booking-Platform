@@ -12,7 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Superadmin guard — superadmins must never have their role or act_id changed.
   const { data: currentProfile } = await supabase
-    .from('user_profiles')
+    .from('profiles')
     .select('role')
     .eq('id', userId)
     .maybeSingle();
@@ -32,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (new Date(invite.expires_at) < new Date()) return res.status(410).json({ error: 'Invite expired' });
 
   const { data: existingProfile } = await supabase
-    .from('user_profiles')
+    .from('profiles')
     .select('id')
     .eq('id', userId)
     .maybeSingle();
@@ -40,13 +40,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Band members (band_admin, member) get linked via profile.act_id.
   if (existingProfile) {
     // Profile already exists — only update act_id, never touch role.
-    const { error: profileErr } = await supabase.from('user_profiles')
+    const { error: profileErr } = await supabase.from('profiles')
       .update({ act_id: invite.act_id })
       .eq('id', userId);
     if (profileErr) return res.status(500).json({ error: profileErr.message });
   } else {
     // New user — create profile with correct role.
-    const { error: profileErr } = await supabase.from('user_profiles').insert({
+    const { error: profileErr } = await supabase.from('profiles').insert({
       id:           userId,
       role:         invite.role,
       email:        invite.email,
@@ -67,7 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Notify the band admin who sent the invite
   if (invite.invited_by) {
     const { data: newMember } = await supabase
-      .from('user_profiles')
+      .from('profiles')
       .select('display_name, email')
       .eq('id', userId)
       .maybeSingle();

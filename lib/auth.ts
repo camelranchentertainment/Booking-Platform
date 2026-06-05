@@ -12,7 +12,7 @@ export async function getCurrentProfile(): Promise<UserProfile | null> {
   if (!user) return null;
 
   const { data, error } = await supabase
-    .from('user_profiles')
+    .from('profiles')
     .select('*, acts(id, act_name, logo_url)')
     .eq('id', user.id)
     .single();

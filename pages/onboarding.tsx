@@ -24,7 +24,7 @@ export default function Onboarding() {
       setUserId(user.id);
 
       const { data: profile } = await supabase
-        .from('user_profiles')
+        .from('profiles')
         .select('act_id, role, onboarding_completed')
         .eq('id', user.id)
         .single();
@@ -72,7 +72,7 @@ export default function Onboarding() {
   const finish = async () => {
     if (!userId) return;
     await supabase
-      .from('user_profiles')
+      .from('profiles')
       .update({ onboarding_completed: true })
       .eq('id', userId);
     if (actId) {

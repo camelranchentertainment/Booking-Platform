@@ -18,8 +18,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Get act name, inviter display name, and current admin count
   const [actRes, profileRes, currentAdminsRes, pendingAdminsRes] = await Promise.all([
     service.from('acts').select('act_name').eq('id', actId).single(),
-    service.from('user_profiles').select('display_name, agency_name').eq('id', user.id).maybeSingle(),
-    service.from('user_profiles').select('id', { count: 'exact', head: true }).eq('act_id', actId).eq('role', 'band_admin'),
+    service.from('profiles').select('display_name, agency_name').eq('id', user.id).maybeSingle(),
+    service.from('profiles').select('id', { count: 'exact', head: true }).eq('act_id', actId).eq('role', 'band_admin'),
     service.from('act_invitations').select('id', { count: 'exact', head: true }).eq('act_id', actId).eq('role', 'band_admin').eq('status', 'pending'),
   ]);
   const actName     = actRes.data?.act_name || 'a band';

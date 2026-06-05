@@ -34,7 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { data: profileRow } = await service
-    .from('user_profiles')
+    .from('profiles')
     .select('act_id')
     .eq('id', user.id)
     .maybeSingle();

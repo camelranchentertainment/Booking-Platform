@@ -31,7 +31,7 @@ export default function BandTours() {
 
       let { data: acts } = await supabase.from('acts').select('id').eq('owner_id', user.id).eq('is_active', true).limit(1);
       if (!acts?.length) {
-        const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
+        const { data: prof } = await supabase.from('profiles').select('act_id').eq('id', user.id).single();
         if (prof?.act_id) {
           const { data: linked } = await supabase.from('acts').select('id').eq('id', prof.act_id).eq('is_active', true).limit(1);
           acts = linked;

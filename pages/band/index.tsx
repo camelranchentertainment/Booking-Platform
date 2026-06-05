@@ -104,7 +104,7 @@ export default function BandDashboard() {
 
     const [actRes, profileRes] = await Promise.all([
       supabase.from('acts').select('*').eq('id', actId).eq('is_active', true).single(),
-      supabase.from('user_profiles').select('display_name, email, role').eq('id', user.id).single(),
+      supabase.from('profiles').select('display_name, email, role').eq('id', user.id).single(),
     ]);
 
     setMyAct(actRes.data || null);
@@ -163,7 +163,7 @@ export default function BandDashboard() {
     }
 
     const { error: profileError } = await supabase
-      .from('user_profiles')
+      .from('profiles')
       .update({ act_id: newAct.id })
       .eq('id', user.id);
 

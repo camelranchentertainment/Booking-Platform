@@ -7,7 +7,7 @@ async function getAuthedSuperadmin(req: NextApiRequest) {
   const service = getServiceClient();
   const { data: { user } } = await service.auth.getUser(token);
   if (!user) return null;
-  const { data: profile } = await service.from('user_profiles').select('role').eq('id', user.id).single();
+  const { data: profile } = await service.from('profiles').select('role').eq('id', user.id).single();
   return profile?.role === 'superadmin' ? user : null;
 }
 
@@ -20,6 +20,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!userId) return res.status(400).json({ error: 'userId required' });
 
   const service = getServiceClient();
-  await service.from('user_profiles').update({ act_id: actId || null }).eq('id', userId);
+  await service.from('profiles').update({ act_id: actId || null }).eq('id', userId);
   return res.json({ ok: true });
 }

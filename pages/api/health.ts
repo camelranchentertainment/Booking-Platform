@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let dbStatus: 'up' | 'down' = 'down';
   try {
     const { error } = await getServiceClient()
-      .from('user_profiles')
+      .from('profiles')
       .select('id', { head: true, count: 'exact' });
     dbStatus = error ? 'down' : 'up';
   } catch {

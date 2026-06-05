@@ -7,7 +7,7 @@ async function getAuthedSuperadmin(req: NextApiRequest) {
   const service = getServiceClient();
   const { data: { user } } = await service.auth.getUser(token);
   if (!user) return null;
-  const { data: profile } = await service.from('user_profiles').select('role').eq('id', user.id).single();
+  const { data: profile } = await service.from('profiles').select('role').eq('id', user.id).single();
   return profile?.role === 'superadmin' ? user : null;
 }
 
@@ -25,11 +25,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const service = getServiceClient();
 
   // Never allow changing a superadmin's role
-  const { data: target } = await service.from('user_profiles').select('role').eq('id', userId).single();
+  const { data: target } = await service.from('profiles').select('role').eq('id', userId).single();
   if (target?.role === 'superadmin') {
     return res.status(403).json({ error: 'Cannot change superadmin role' });
   }
 
-  await service.from('user_profiles').update({ role: newRole }).eq('id', userId);
+  await service.from('profiles').update({ role: newRole }).eq('id', userId);
   return res.json({ ok: true });
 }

@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
   const { data: profile } = await service
-    .from('user_profiles').select('stripe_customer_id').eq('id', user.id).single();
+    .from('profiles').select('stripe_customer_id').eq('id', user.id).single();
 
   if (!profile?.stripe_customer_id)
     return res.status(400).json({ error: 'No billing account found' });

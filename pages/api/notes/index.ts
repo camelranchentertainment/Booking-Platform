@@ -33,7 +33,7 @@ async function enrichWithAuthors(
   if (!notes.length) return notes;
   const ids = [...new Set(notes.map((n) => n.user_id))];
   const { data: profiles } = await svc
-    .from('user_profiles')
+    .from('profiles')
     .select('id, display_name, email')
     .in('id', ids);
   const byId: Record<string, any> = Object.fromEntries(
@@ -50,7 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Resolve profile (role + act_id)
   const { data: profile } = await svc
-    .from('user_profiles')
+    .from('profiles')
     .select('role, act_id')
     .eq('id', user.id)
     .maybeSingle();

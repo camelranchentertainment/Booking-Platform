@@ -12,7 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
   const { data: profile } = await service
-    .from('user_profiles')
+    .from('profiles')
     .select('act_id')
     .eq('id', user.id)
     .single();

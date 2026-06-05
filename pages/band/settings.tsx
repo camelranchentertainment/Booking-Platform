@@ -56,7 +56,7 @@ export default function BandSettings() {
     if (!user) return;
 
     // Load personal display_name from profile
-    const { data: prof } = await supabase.from('user_profiles').select('display_name, act_id, email, personal_gmail').eq('id', user.id).single();
+    const { data: prof } = await supabase.from('profiles').select('display_name, act_id, email, personal_gmail').eq('id', user.id).single();
     setDisplayName(prof?.display_name || '');
     setPersonalGmail((prof as any)?.personal_gmail || '');
 
@@ -101,7 +101,7 @@ export default function BandSettings() {
     setSavedProfile(false);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from('user_profiles').update({ display_name: displayName.trim(), personal_gmail: personalGmail.trim() || null } as any).eq('id', user.id);
+    await supabase.from('profiles').update({ display_name: displayName.trim(), personal_gmail: personalGmail.trim() || null } as any).eq('id', user.id);
     setSavingProfile(false);
     setSavedProfile(true);
     setTimeout(() => setSavedProfile(false), 3000);
@@ -165,7 +165,7 @@ export default function BandSettings() {
     setAccepting(invite.id);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setAccepting(''); return; }
-    const { data: prof } = await supabase.from('user_profiles').select('display_name').eq('id', user.id).single();
+    const { data: prof } = await supabase.from('profiles').select('display_name').eq('id', user.id).single();
     const res = await fetch('/api/accept-invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -757,7 +757,7 @@ export default function Home() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
-      supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle().then(({ data }) => {
+      supabase.from('profiles').select('role').eq('id', user.id).maybeSingle().then(({ data }) => {
         const role = data?.role || 'band_admin';
         if (role === 'superadmin') router.replace('/admin');
         else if (role === 'band_admin') router.replace('/band');

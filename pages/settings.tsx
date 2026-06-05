@@ -107,7 +107,7 @@ export default function Settings() {
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase.from('user_profiles').select('*').eq('id', user.id).maybeSingle();
+    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
     if (data) {
       setProfile(data);
       setAvatarUrl(data.avatar_url || null);
@@ -162,11 +162,11 @@ export default function Settings() {
   const loadTeam = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data: prof } = await supabase.from('user_profiles').select('act_id, notification_preferences').eq('id', user.id).single();
+    const { data: prof } = await supabase.from('profiles').select('act_id, notification_preferences').eq('id', user.id).single();
     if (!prof?.act_id) return;
 
     const [membersRes, invitesRes] = await Promise.all([
-      supabase.from('user_profiles').select('id, display_name, email, role').eq('act_id', prof.act_id),
+      supabase.from('profiles').select('id, display_name, email, role').eq('act_id', prof.act_id),
       supabase.from('act_invitations').select('id, email, role, expires_at').eq('act_id', prof.act_id).eq('status', 'pending').gt('expires_at', new Date().toISOString()),
     ]);
     setMembers(membersRes.data || []);
@@ -211,7 +211,7 @@ export default function Settings() {
   const loadFollowupRule = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data: prof } = await supabase.from('user_profiles').select('act_id, role').eq('id', user.id).single();
+    const { data: prof } = await supabase.from('profiles').select('act_id, role').eq('id', user.id).single();
     if (!prof?.act_id || !['band_admin', 'superadmin'].includes(prof.role)) return;
     const [ruleRes, tmplRes] = await Promise.all([
       supabase.from('followup_rules').select('*').eq('act_id', prof.act_id).maybeSingle(),
@@ -233,7 +233,7 @@ export default function Settings() {
   const saveFollowupRule = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data: prof } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).single();
+    const { data: prof } = await supabase.from('profiles').select('act_id').eq('id', user.id).single();
     if (!prof?.act_id) return;
     setFollowupSaving(true);
     const upsertData = {
@@ -255,7 +255,7 @@ export default function Settings() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setNotifSaving(true);
-    await supabase.from('user_profiles').update({ notification_preferences: notifPrefs }).eq('id', user.id);
+    await supabase.from('profiles').update({ notification_preferences: notifPrefs }).eq('id', user.id);
     setNotifSaving(false);
     setNotifSaved(true);
     setTimeout(() => setNotifSaved(false), 3000);
@@ -351,7 +351,7 @@ export default function Settings() {
     if (upErr) { setAvatarError(upErr.message); setAvatarUploading(false); return; }
     const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
     const url = `${publicUrl}?t=${Date.now()}`;
-    await supabase.from('user_profiles').update({ avatar_url: url }).eq('id', profile.id);
+    await supabase.from('profiles').update({ avatar_url: url }).eq('id', profile.id);
     setAvatarUrl(url);
     setAvatarUploading(false);
   };
@@ -410,7 +410,7 @@ export default function Settings() {
     e.preventDefault();
     if (!profile) return;
     setSaving(true);
-    await supabase.from('user_profiles').update({
+    await supabase.from('profiles').update({
       display_name:   form.display_name,
       agency_name:    form.agency_name    || null,
       phone:          form.phone          || null,

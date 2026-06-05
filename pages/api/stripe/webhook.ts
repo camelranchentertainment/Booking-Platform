@@ -31,7 +31,7 @@ async function updateSubscription(
     incomplete_expired: 'inactive',
     paused:             'inactive',
   };
-  await service.from('user_profiles').update({
+  await service.from('profiles').update({
     stripe_subscription_id: sub.id,
     subscription_status:    statusMap[sub.status] || 'inactive',
   }).eq('id', userId);
@@ -70,7 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!userId) break;
       if (session.subscription) {
         const sub = await stripe.subscriptions.retrieve(session.subscription as string);
-        await service.from('user_profiles').update({
+        await service.from('profiles').update({
           stripe_customer_id:     session.customer as string,
           stripe_subscription_id: sub.id,
           subscription_status:    'active',
@@ -84,7 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
         // Seed default email templates if act exists
         const { data: profile } = await service
-          .from('user_profiles').select('act_id').eq('id', userId).single();
+          .from('profiles').select('act_id').eq('id', userId).single();
         if (profile?.act_id) {
           await seedDefaultTemplates(service, profile.act_id);
         }
@@ -102,7 +102,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const sub = event.data.object as Stripe.Subscription;
       const userId = sub.metadata?.supabase_user_id;
       if (!userId) break;
-      await service.from('user_profiles').update({
+      await service.from('profiles').update({
         subscription_status:    'cancelled',
         stripe_subscription_id: null,
       }).eq('id', userId);
@@ -116,14 +116,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     case 'invoice.payment_failed': {
       const invoice = event.data.object as Stripe.Invoice;
-      await service.from('user_profiles').update({ subscription_status: 'past_due' })
+      await service.from('profiles').update({ subscription_status: 'past_due' })
         .eq('stripe_customer_id', invoice.customer as string);
       break;
     }
     case 'invoice.payment_succeeded': {
       const invoice = event.data.object as Stripe.Invoice;
       if (invoice.subscription) {
-        await service.from('user_profiles').update({ subscription_status: 'active' })
+        await service.from('profiles').update({ subscription_status: 'active' })
           .eq('stripe_customer_id', invoice.customer as string);
       }
       break;

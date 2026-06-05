@@ -32,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
   const { data: profileRow } = await service
-    .from('user_profiles').select('act_id').eq('id', user.id).single();
+    .from('profiles').select('act_id').eq('id', user.id).single();
   const actId = profileRow?.act_id;
 
   // Fetch booking + related data
@@ -51,7 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Fetch agent profile
-  const { data: profile } = await service.from('user_profiles')
+  const { data: profile } = await service.from('profiles')
     .select('display_name, agency_name')
     .eq('id', user.id)
     .single();

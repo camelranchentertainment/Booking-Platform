@@ -8,7 +8,7 @@ async function getAuthedSuperadmin(req: NextApiRequest) {
   const { data: { user } } = await service.auth.getUser(token);
   if (!user) return null;
   const { data: profile } = await service
-    .from('user_profiles').select('role').eq('id', user.id).single();
+    .from('profiles').select('role').eq('id', user.id).single();
   return profile?.role === 'superadmin' ? user : null;
 }
 
@@ -40,7 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const [profilesRes, venueCountRes, bookingCountRes] = await Promise.all([
     ownerIds.length > 0
-      ? service.from('user_profiles')
+      ? service.from('profiles')
           .select('id, email, display_name, subscription_status, subscription_tier')
           .in('id', ownerIds as string[])
       : Promise.resolve({ data: [] }),

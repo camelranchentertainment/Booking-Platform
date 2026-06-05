@@ -47,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!userId) return res.status(500).json({ error: 'Could not determine user ID' });
 
   // 2. Upsert the profile with superadmin role
-  const { error: profileErr } = await supabase.from('user_profiles').upsert({
+  const { error: profileErr } = await supabase.from('profiles').upsert({
     id:           userId,
     role:         'superadmin',
     email:        SUPERADMIN_EMAIL,

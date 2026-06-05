@@ -87,7 +87,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Load user's act_id for scoping tour_venues updates
   const { data: profileRow } = await admin
-    .from('user_profiles')
+    .from('profiles')
     .select('act_id')
     .eq('id', user.id)
     .maybeSingle();

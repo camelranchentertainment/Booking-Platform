@@ -41,7 +41,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Get only THIS agent's venues in this city to mark duplicates
     const cityStr = String(city).toLowerCase();
     const { data: profileRow } = await service
-      .from('user_profiles').select('act_id').eq('id', user.id).single();
+      .from('profiles').select('act_id').eq('id', user.id).single();
     const actId = profileRow?.act_id;
 
     const { data: existing } = actId

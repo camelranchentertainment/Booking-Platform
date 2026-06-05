@@ -30,7 +30,7 @@ export default function BandDetail() {
     const { data: { user } } = await supabase.auth.getUser();
     const [actRes, membersRes, invitesRes, bookingsRes] = await Promise.all([
       supabase.from('acts').select('*').eq('id', id).single(),
-      supabase.from('user_profiles').select('*').eq('act_id', id),
+      supabase.from('profiles').select('*').eq('act_id', id),
       supabase.from('act_invitations').select('*').eq('act_id', id).eq('status', 'pending'),
       supabase.from('bookings').select(`
         id, status, show_date, fee,

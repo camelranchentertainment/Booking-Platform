@@ -122,7 +122,7 @@ function NotifBell({ userId, email }: { userId: string; email: string }) {
     setResponding(inv.id);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setResponding(''); return; }
-    const { data: prof } = await supabase.from('user_profiles').select('display_name').eq('id', user.id).single();
+    const { data: prof } = await supabase.from('profiles').select('display_name').eq('id', user.id).single();
     await fetch('/api/accept-invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -312,7 +312,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
         if (!user) { router.replace('/login'); return; }
 
         const { data } = await supabase
-          .from('user_profiles')
+          .from('profiles')
           .select('*')
           .eq('id', user.id)
           .maybeSingle();
