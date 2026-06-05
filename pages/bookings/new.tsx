@@ -23,19 +23,32 @@ export default function NewBooking() {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const [actsRes, venuesRes] = await Promise.all([
-        supabase.from('acts').select('id, act_name').eq('is_active', true).eq('owner_id', user.id).order('act_name'),
-        supabase.from('venues').select('id, name, city, state').order('name'),
+
+      // Get profile first to get act_id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('act_id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!profile?.act_id) return;
+
+      // Load acts, venues, and tours in parallel using act_id
+      const [actsRes, venuesRes, toursRes] = await Promise.all([
+        supabase.from('acts').select('id, act_name').eq('id', profile.act_id),
+        supabase.from('venues').select('id, name, city, state').eq('act_id', profile.act_id).order('name'),
+        supabase.from('tours').select('id, name').eq('act_id', profile.act_id).order('name'),
       ]);
+
       setActs(actsRes.data || []);
       setVenues(venuesRes.data || []);
-      const { data: profile } = await supabase.from('profiles').select('act_id').eq('id', user.id).maybeSingle();
-      const { data: tourList } = await supabase
-        .from('tours')
-        .select('id, name')
-        .eq('act_id', profile?.act_id)
-        .order('name');
-      setTours(tourList || []);
+      setTours(toursRes.data || []);
+
+      // Auto-select the act
+      if (actsRes.data && actsRes.data.length > 0) {
+        setForm(f => ({ ...f, act_id: actsRes.data![0].id }));
+      }
+
       if (router.query.act) setForm(f => ({ ...f, act_id: router.query.act as string }));
     };
     load();
