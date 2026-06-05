@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { BookingStatus } from '../../lib/types';
 type ActPick   = { id: string; act_name: string };
 type VenuePick = { id: string; name: string; city: string; state: string };
-type TourPick  = { id: string; name: string; act_id: string };
+type TourPick  = { id: string; name: string };
 
 export default function NewBooking() {
   const router = useRouter();
@@ -29,16 +29,13 @@ export default function NewBooking() {
       ]);
       setActs(actsRes.data || []);
       setVenues(venuesRes.data || []);
-      const actIds = (actsRes.data || []).map((a: ActPick) => a.id);
-      if (actIds.length > 0) {
-        const { data: toursData } = await supabase
-          .from('tours')
-          .select('id, name, act_id')
-          .in('act_id', actIds)
-          .neq('status', 'cancelled')
-          .order('name');
-        setTours(toursData || []);
-      }
+      const { data: profile } = await supabase.from('user_profiles').select('act_id').eq('id', user.id).maybeSingle();
+      const { data: tourList } = await supabase
+        .from('tours')
+        .select('id, name')
+        .eq('act_id', profile?.act_id)
+        .order('name');
+      setTours(tourList || []);
       if (router.query.act) setForm(f => ({ ...f, act_id: router.query.act as string }));
     };
     load();
@@ -81,7 +78,7 @@ export default function NewBooking() {
     router.push(`/bookings/${data.id}`);
   };
 
-  const filteredTours = form.act_id ? tours.filter(t => t.act_id === form.act_id) : tours;
+  const filteredTours = tours;
 
   return (
     <AppShell requireRole="band_admin">
