@@ -32,13 +32,6 @@ const QUICK_CHIPS: { label: string; href?: string; prompt?: string }[] = [
   { label: 'Help me plan a tour',   prompt: 'Help me plan a tour. What should I think about for routing, timing, and targeting venues?' },
 ];
 
-function timeOfDay(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'morning';
-  if (h < 17) return 'afternoon';
-  return 'evening';
-}
-
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function BandDashboard() {
   // Data
@@ -86,9 +79,10 @@ export default function BandDashboard() {
   useEffect(() => {
     if (myAct && userProfile && !greetingSent && !loading) {
       setGreetingSent(true);
-      const firstName = (userProfile.display_name || '').split(' ')[0] || 'there';
-      const tagline = [myAct.genre, myAct.home_city && myAct.home_state ? `${myAct.home_city}, ${myAct.home_state}` : null].filter(Boolean).join(' · ');
-      const greeting = `Good ${timeOfDay()}, ${firstName}. ${myAct.act_name}${tagline ? ` — ${tagline}` : ''} — has **${targetsCount}** venue${targetsCount !== 1 ? 's' : ''} targeted across **${toursCount}** active tour${toursCount !== 1 ? 's' : ''} and **${confirmedCount}** confirmed show${confirmedCount !== 1 ? 's' : ''} coming up. What do you want to work on today?`;
+      const hour = new Date().getHours();
+      const greetingWord = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+      const firstName = (userProfile.display_name || '').split(' ')[0] || myAct.act_name || 'there';
+      const greeting = `${greetingWord} ${firstName}! Currently you have ${toursCount} active tour${toursCount !== 1 ? 's' : ''} with ${confirmedCount} confirmed show${confirmedCount !== 1 ? 's' : ''} and ${targetsCount} target${targetsCount !== 1 ? 's' : ''}. What should we work on today?`;
       setMessages([{ role: 'assistant', content: greeting }]);
     }
   }, [myAct, userProfile, loading, greetingSent, targetsCount, confirmedCount, toursCount]);
