@@ -39,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   };
 
   // upsert so the on_auth_user_created trigger row (if present) gets overwritten with correct data
-  const { error: profileErr } = await admin.from('user_profiles').upsert(profileData, { onConflict: 'id' });
+  const { error: profileErr } = await admin.from('profiles').upsert(profileData, { onConflict: 'id' });
   if (profileErr) {
     await admin.auth.admin.deleteUser(userId);
     return res.status(500).json({ error: profileErr.message });
@@ -59,7 +59,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Link the new act back to the user's profile
     const { error: linkErr } = await admin
-      .from('user_profiles')
+      .from('profiles')
       .update({ act_id: actData.id })
       .eq('id', userId);
 
