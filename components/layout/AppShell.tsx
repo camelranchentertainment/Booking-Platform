@@ -121,7 +121,8 @@ function NotifBell({ userId, email }: { userId: string; email: string }) {
 
   const acceptInvite = async (inv: InviteNotif) => {
     setResponding(inv.id);
-    const { data: { user } } = await supabase.auth.getUser();
+   const { data: { session } } = await supabase.auth.getSession();
+   const user = session?.user ?? null;
     if (!user) { setResponding(''); return; }
     const { data: prof } = await supabase.from('profiles').select('display_name').eq('id', user.id).single();
     await fetch('/api/accept-invite', {
