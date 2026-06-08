@@ -50,6 +50,7 @@ export default function Settings() {
   });
   const [actSaving, setActSaving]           = useState(false);
   const [actSaved, setActSaved]             = useState(false);
+  const [actError, setActError]             = useState('');
   const [actPhotoUrl, setActPhotoUrl]       = useState<string | null>(null);
   const [actPhotoUploading, setActPhotoUploading] = useState(false);
   const [actPhotoError, setActPhotoError]   = useState('');
@@ -425,25 +426,37 @@ export default function Settings() {
     e.preventDefault();
     if (!myAct) return;
     setActSaving(true);
-    await supabase.from('acts').update({
-      act_name:      actForm.act_name      || null,
-      genre:         actForm.genre         || null,
-      bio:           actForm.bio           || null,
-      website:       actForm.website       || null,
-      instagram:     actForm.instagram     || null,
-      facebook:      actForm.facebook      || null,
-      tiktok_url:    actForm.tiktok_url    || null,
-      spotify:       actForm.spotify       || null,
-      contact_email: actForm.contact_email || null,
-      contact_phone: actForm.contact_phone || null,
-      home_city:     actForm.home_city     || null,
-      home_state:    actForm.home_state    || null,
-      username:      actForm.username      || null,
-      epk_link:      actForm.epk_link      || null,
-    }).eq('id', myAct.id);
-    setActSaving(false);
-    setActSaved(true);
-    setTimeout(() => setActSaved(false), 3000);
+    setActError('');
+    const saveTimeout = setTimeout(() => {
+      setActSaving(false);
+      setActError('Save timed out. Please try again.');
+    }, 10000);
+    try {
+      const { error } = await supabase.from('acts').update({
+        act_name:      actForm.act_name      || null,
+        genre:         actForm.genre         || null,
+        bio:           actForm.bio           || null,
+        website:       actForm.website       || null,
+        instagram:     actForm.instagram     || null,
+        facebook:      actForm.facebook      || null,
+        tiktok_url:    actForm.tiktok_url    || null,
+        spotify:       actForm.spotify       || null,
+        contact_email: actForm.contact_email || null,
+        contact_phone: actForm.contact_phone || null,
+        home_city:     actForm.home_city     || null,
+        home_state:    actForm.home_state    || null,
+        username:      actForm.username      || null,
+        epk_link:      actForm.epk_link      || null,
+      }).eq('id', myAct.id);
+      if (error) throw error;
+      setActSaved(true);
+      setTimeout(() => setActSaved(false), 3000);
+    } catch (err: any) {
+      setActError(err.message || 'Save failed. Please try again.');
+    } finally {
+      clearTimeout(saveTimeout);
+      setActSaving(false);
+    }
   };
 
   const setAct = (k: keyof typeof actForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -639,6 +652,7 @@ export default function Settings() {
                 <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
                   <button type="submit" className="btn btn-primary" disabled={actSaving}>{actSaving ? 'Saving...' : 'Save Band Profile'}</button>
                   {actSaved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>✓ Saved</span>}
+                  {actError && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#f87171' }}>{actError}</span>}
                 </div>
               </div>
             </form>
