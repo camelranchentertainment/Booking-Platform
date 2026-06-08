@@ -75,7 +75,7 @@ export default function BookingsPage() {
                   <div className="kanban-card-meta">
                     {b.venue?.city ? `${b.venue.city}, ${b.venue.state}` : ''}
                     {b.show_date ? ` · ${new Date(b.show_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
-                    {b.fee ? ` · $${Number(b.fee).toLocaleString()}` : ''}
+                    {(b.agreed_amount ?? b.fee) ? ` · $${Number(b.agreed_amount ?? b.fee).toLocaleString()}` : ''}
                   </div>
                 </div>
               ))}

@@ -34,6 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       set_time,
       load_in_time,
       fee,
+      agreed_amount,
       notes,
       venue:venues(name, city, state),
       tour:tours(name)

@@ -69,7 +69,7 @@ export default function NewBooking() {
       tour_id:    form.tour_id  || null,
       status:     form.status,
       show_date:  form.show_date || null,
-      fee:        form.fee ? Number(form.fee) : null,
+      agreed_amount: form.fee ? Number(form.fee) : null,
       deal_notes: form.deal_notes || null,
       internal_notes: form.internal_notes || null,
       pitched_at: form.status === 'pitch' ? new Date().toISOString() : null,

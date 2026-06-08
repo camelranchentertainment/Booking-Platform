@@ -125,7 +125,7 @@ export default function AgentCalendar() {
         venue_id:   quickForm.venue_id  || null,
         status:     quickForm.status,
         set_time:   quickForm.set_time  || null,
-        fee:        quickForm.fee ? Number(quickForm.fee) : null,
+        agreed_amount: quickForm.fee ? Number(quickForm.fee) : null,
         notes:      quickForm.notes     || null,
       }).select().single();
       if (error) throw error;
@@ -239,7 +239,7 @@ export default function AgentCalendar() {
                       </span>
                     </td>
                     <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent)', fontWeight: 700 }}>
-                      {s.fee ? `$${Number(s.fee).toLocaleString()}` : '—'}
+                      {(s.agreed_amount ?? s.fee) ? `$${Number(s.agreed_amount ?? s.fee).toLocaleString()}` : '—'}
                     </td>
                     <td><Link href={`/bookings/${s.id}`} style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>View →</Link></td>
                   </tr>
@@ -402,7 +402,7 @@ export default function AgentCalendar() {
                         {BOOKING_STATUS_LABELS[s.status as keyof typeof BOOKING_STATUS_LABELS] || s.status}
                       </span>
                     </div>
-                    {s.fee && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent)', marginTop: '0.25rem' }}>${Number(s.fee).toLocaleString()}</div>}
+                    {(s.agreed_amount ?? s.fee) != null && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: 700, color: 'var(--accent)', marginTop: '0.25rem' }}>${Number(s.agreed_amount ?? s.fee).toLocaleString()}</div>}
                   </Link>
                 ))}
                 <button

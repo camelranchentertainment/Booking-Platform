@@ -41,7 +41,7 @@ export default function BandCalendar() {
       setActId(actId);
 
       const { data } = await supabase.from('bookings')
-        .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, fee, venue:venues(id, name, city, state, address, phone)')
+        .select('id, status, show_date, set_time, load_in_time, door_time, set_length_min, advance_notes, fee, agreed_amount, venue:venues(id, name, city, state, address, phone)')
         .eq('act_id', actId)
         .neq('status', 'cancelled')
         .not('show_date', 'is', null)
@@ -197,7 +197,7 @@ export default function BandCalendar() {
                   <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-body)', marginTop: '0.25rem' }}>
                     {s.venue?.city ? `${s.venue.city}, ${s.venue.state}` : ''}
                     {s.set_time ? ` · ${s.set_time}` : ''}
-                    {s.fee ? ` · $${Number(s.fee).toLocaleString()}` : ''}
+                    {(s.agreed_amount ?? s.fee) ? ` · $${Number(s.agreed_amount ?? s.fee).toLocaleString()}` : ''}
                   </div>
                 </div>
               ))}
@@ -250,7 +250,7 @@ export default function BandCalendar() {
               {([
                 ['Date',       detailBooking.show_date ? new Date(detailBooking.show_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : '—'],
                 ['Status',     BOOKING_STATUS_LABELS[detailBooking.status as keyof typeof BOOKING_STATUS_LABELS] || detailBooking.status],
-                ['Fee',        detailBooking.fee ? `$${Number(detailBooking.fee).toLocaleString()}` : '—'],
+                ['Fee',        (detailBooking.agreed_amount ?? detailBooking.fee) ? `$${Number(detailBooking.agreed_amount ?? detailBooking.fee).toLocaleString()}` : '—'],
                 ['Door',       detailBooking.door_time || '—'],
                 ['Load In',    detailBooking.load_in_time || '—'],
                 ['Set Time',   detailBooking.set_time || '—'],

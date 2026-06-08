@@ -120,7 +120,6 @@ export default function BookingDetail() {
       load_in_time:   form.load_in_time   || null,
       set_time:       form.set_time       || null,
       set_length_min: form.set_length_min ? Number(form.set_length_min) : null,
-      fee:            form.fee            ? Number(form.fee) : null,
       deal_type:      form.deal_type      || null,
       agreed_amount:  form.agreed_amount  ? Number(form.agreed_amount) : null,
       deal_notes:     form.deal_notes     || null,

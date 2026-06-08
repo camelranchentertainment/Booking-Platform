@@ -106,7 +106,7 @@ export default function TourDetail() {
     const [tourRes, bookingsRes] = await Promise.all([
       supabase.from('tours').select('*, act:acts(act_name)').eq('id', id).single(),
       supabase.from('bookings').select(`
-        id, status, show_date, fee,
+        id, status, show_date, fee, agreed_amount,
         venue:venues(name, city, state)
       `).eq('tour_id', id).in('status', ['confirmed', 'advancing', 'completed']).order('show_date', { ascending: true }),
     ]);
@@ -430,7 +430,7 @@ const loadPool = async () => {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
                     <span className={`badge badge-${b.status}`}>{BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}</span>
-                    {b.fee && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--accent)' }}>${Number(b.fee).toLocaleString()}</span>}
+                    {(b.agreed_amount ?? b.fee) != null && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--accent)' }}>${Number(b.agreed_amount ?? b.fee).toLocaleString()}</span>}
                   </div>
                 </Link>
               ))}
