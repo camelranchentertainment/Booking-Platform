@@ -27,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(403).json({ error: 'Cannot delete superadmin' });
   }
 
-  // Delete from auth (cascades to user_profiles via FK trigger)
+  // Delete from auth (cascades to profiles via FK trigger)
   const { error } = await service.auth.admin.deleteUser(userId);
   if (error) {
     // Fallback: delete profile if auth delete fails

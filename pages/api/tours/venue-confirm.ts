@@ -485,7 +485,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await service.from('social_queue').insert(inserts);
 
-    // Notify band members (linked via user_profiles.act_id)
+    // Notify band members (linked via profiles.act_id)
     const { data: members } = await service
       .from('profiles')
       .select('id, email, display_name')

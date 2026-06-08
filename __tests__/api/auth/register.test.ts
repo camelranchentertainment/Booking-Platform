@@ -45,7 +45,7 @@ function buildAdminMock(overrides: Partial<{
       if (table === 'acts') {
         return { insert: jest.fn().mockReturnValue(actInsertChain) };
       }
-      if (table === 'user_profiles') {
+      if (table === 'profiles') {
         return {
           upsert: jest.fn().mockResolvedValue({ error: overrides.upsertError || null }),
           update: jest.fn().mockReturnValue(updateChain),

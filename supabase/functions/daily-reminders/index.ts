@@ -51,7 +51,7 @@ Deno.serve(async () => {
 
     // Fetch agent profile for email routing
     const { data: agent } = await supabase
-      .from('user_profiles')
+      .from('profiles')
       .select('id, display_name, email, personal_gmail')
       .eq('id', createdBy)
       .maybeSingle();
@@ -108,7 +108,7 @@ Deno.serve(async () => {
     if (!resendKey || !createdBy) continue;
 
     const { data: agent } = await supabase
-      .from('user_profiles')
+      .from('profiles')
       .select('id, display_name, email, personal_gmail')
       .eq('id', createdBy)
       .maybeSingle();

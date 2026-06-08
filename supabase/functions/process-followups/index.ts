@@ -81,7 +81,7 @@ serve(async (req) => {
 
         // Notify band admin
         const { data: owner } = await supabase
-          .from('user_profiles')
+          .from('profiles')
           .select('id')
           .eq('act_id', rule.act_id)
           .eq('role', 'band_admin')

@@ -14,7 +14,7 @@ async function verifySuperadmin(token: string): Promise<boolean> {
     if (!userId) return false;
 
     const profileRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/user_profiles?id=eq.${userId}&select=role`,
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=role`,
       { headers: { Authorization: `Bearer ${SERVICE_KEY}`, apikey: SERVICE_KEY } },
     );
     if (!profileRes.ok) return false;

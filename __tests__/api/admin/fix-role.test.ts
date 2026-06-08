@@ -19,7 +19,7 @@ function mockRes() {
 }
 
 // Builds a service mock that returns different data based on which `from()` table is queried.
-// First call to from() is always for auth (getUser), subsequent chain calls for user_profiles.
+// First call to from() is always for auth (getUser), subsequent chain calls for profiles.
 function buildServiceMock({ callerRole = 'superadmin', targetRole = 'band_admin' } = {}) {
   let callCount = 0;
   const profileChain = (role: string) => ({
@@ -36,8 +36,8 @@ function buildServiceMock({ callerRole = 'superadmin', targetRole = 'band_admin'
     },
     from: jest.fn().mockImplementation(() => {
       callCount++;
-      // First from('user_profiles') call = look up caller role
-      // Second from('user_profiles') call = look up target role
+      // First from('profiles') call = look up caller role
+      // Second from('profiles') call = look up target role
       const role = callCount === 1 ? callerRole : targetRole;
       return profileChain(role);
     }),

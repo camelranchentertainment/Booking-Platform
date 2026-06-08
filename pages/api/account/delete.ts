@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(403).json({ error: 'Superadmin accounts cannot be deleted through this endpoint.' });
   }
 
-  // Delete auth user (cascades to user_profiles via RLS and DB constraints)
+  // Delete auth user (cascades to profiles via RLS and DB constraints)
   const { error } = await service.auth.admin.deleteUser(user.id);
   if (error) return res.status(500).json({ error: error.message });
 
