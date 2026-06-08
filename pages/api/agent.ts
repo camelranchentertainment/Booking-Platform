@@ -265,8 +265,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({ reply });
   } catch (err: any) {
-    if (err instanceof Anthropic.RateLimitError) return res.status(429).json({ error: 'Rate limited — try again shortly' });
-    if (err instanceof Anthropic.APIError) return res.status(502).json({ error: `AI error: ${err.message}` });
+    if (err instanceof Anthropic.RateLimitError) return res.status(429).json({ error: 'AI is busy — try again in a moment' });
+    if (err instanceof Anthropic.APIError) {
+      const inner = (err.error as any)?.error?.message;
+      return res.status(502).json({ error: inner || 'AI features temporarily unavailable — please try again' });
+    }
     return res.status(500).json({ error: err.message });
   }
 }

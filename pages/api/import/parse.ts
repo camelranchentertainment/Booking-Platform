@@ -169,8 +169,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: 'AI could not structure the document. Please check the file format.' });
     }
   } catch (e: any) {
-    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ error: 'AI rate limited — try again shortly' });
-    if (e instanceof Anthropic.APIError) return res.status(502).json({ error: `AI error: ${e.message}` });
+    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ error: 'AI is busy — try again in a moment' });
+    if (e instanceof Anthropic.APIError) {
+      const inner = (e.error as any)?.error?.message;
+      return res.status(502).json({ error: inner || 'AI features temporarily unavailable — please try again' });
+    }
     return res.status(500).json({ error: 'AI parsing failed: ' + e.message });
   }
 
