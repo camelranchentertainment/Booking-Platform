@@ -410,7 +410,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
         <div style={{
           margin: '-2rem -2rem 1.75rem',
           padding: '0.6rem 1.25rem 0.6rem 2rem',
-          minHeight: 100,
+          minHeight: 130,
           background: 'linear-gradient(90deg, rgba(13,27,42,0.98) 0%, rgba(20,42,68,0.92) 40%, rgba(20,42,68,0.92) 60%, rgba(13,27,42,0.98) 100%)',
           borderBottom: '1px solid var(--border)',
           display: 'flex',
@@ -429,7 +429,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
           <img
             src="/camel-ranch-booking-square.svg"
             alt="Camel Ranch Booking"
-            style={{ height: '56px', width: 'auto', minWidth: '200px', maxWidth: '320px', objectFit: 'contain', display: 'block' }}
+            style={{ height: '112px', width: 'auto', minWidth: '400px', maxWidth: '640px', objectFit: 'contain', display: 'block' }}
           />
           {/* Bell — only when logged in */}
           {authUser ? (
