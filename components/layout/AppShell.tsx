@@ -294,32 +294,46 @@ function NotifBell({ userId, email }: { userId: string; email: string }) {
 
 export default function AppShell({ children, requireRole = null }: Props) {
   const router = useRouter();
+  const { user: authUser, profile: authProfile, loading: authLoading } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [actName, setActName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [navOpen, setNavOpen] = useState(false);
-  const { profile: authProfile, user: authUser, loading: authLoading } = useAuth();
 
   useEffect(() => {
+    // Safety timeout — never hang forever
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn('AppShell timeout — forcing render');
+        setLoading(false);
+      }
+    }, 4000);
+
     if (authLoading) return;
 
     if (!authUser && !authProfile) {
+      clearTimeout(timeout);
       router.replace('/login');
       return;
     }
 
-    if (!authProfile) return;
+    if (!authProfile) {
+      clearTimeout(timeout);
+      return;
+    }
 
     const allowedRoles = Array.isArray(requireRole)
       ? requireRole
       : requireRole ? [requireRole] : null;
 
     if (authProfile.role !== 'superadmin' && allowedRoles && !allowedRoles.includes(authProfile.role as any)) {
+      clearTimeout(timeout);
       if (authProfile.role === 'band_admin') { router.replace('/band'); return; }
       else { router.replace('/member'); return; }
     }
 
     if (needsSubscription(authProfile as UserProfile) && router.pathname !== '/pricing') {
+      clearTimeout(timeout);
       router.replace('/pricing?trial=expired');
       return;
     }
@@ -329,6 +343,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
       (authProfile as any).onboarding_completed !== true &&
       router.pathname !== '/onboarding'
     ) {
+      clearTimeout(timeout);
       router.replace('/onboarding');
       return;
     }
@@ -346,7 +361,10 @@ export default function AppShell({ children, requireRole = null }: Props) {
         });
     }
 
+    clearTimeout(timeout);
     setLoading(false);
+
+
   }, [authProfile, authUser, authLoading, requireRole, router.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSignOut = async () => {
@@ -416,7 +434,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
           {/* Bell — only when logged in */}
           {authUser ? (
             <div style={{ position: 'relative', zIndex: 201 }}>
-              <NotifBell userId={authUser.id} email={authUser.email || ''} />
+              <NotifBell userId={authUser.id} email={authUser.email ?? ''} />
             </div>
           ) : (
             <div style={{ width: 36, flexShrink: 0 }} />
