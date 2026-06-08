@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabase';
 import { UserProfile } from '../../lib/types';
+import { useAuth } from '../../contexts/AuthContext';
 import Sidebar from './Sidebar';
 
 interface Props {
@@ -296,70 +297,56 @@ export default function AppShell({ children, requireRole = null }: Props) {
   const [actName, setActName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [navOpen, setNavOpen] = useState(false);
-  const [authUser, setAuthUser] = useState<{ id: string; email: string } | null>(null);
+  const { profile: authProfile, user: authUser, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    let active = true;
+    if (authLoading) return;
 
-    const init = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { router.replace('/login'); return; }
+    if (!authUser && !authProfile) {
+      router.replace('/login');
+      return;
+    }
 
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .maybeSingle();
+    if (!authProfile) return;
 
-        if (!data) {
-          console.error('Profile not found for user:', user.id);
-          setLoading(false);
-          return;
-        }
+    const allowedRoles = Array.isArray(requireRole)
+      ? requireRole
+      : requireRole ? [requireRole] : null;
 
-        if (needsSubscription(data as UserProfile) && router.pathname !== '/pricing') {
-          router.replace('/pricing?trial=expired');
-          return;
-        }
+    if (authProfile.role !== 'superadmin' && allowedRoles && !allowedRoles.includes(authProfile.role as any)) {
+      if (authProfile.role === 'band_admin') { router.replace('/band'); return; }
+      else { router.replace('/member'); return; }
+    }
 
-        // Onboarding redirect for new band admins — only when column explicitly false
-        if (
-          data.role === 'band_admin' &&
-          (data as any).onboarding_completed !== true &&
-          router.pathname !== '/onboarding'
-        ) {
-          router.replace('/onboarding');
-          return;
-        }
+    if (needsSubscription(authProfile as UserProfile) && router.pathname !== '/pricing') {
+      router.replace('/pricing?trial=expired');
+      return;
+    }
 
-        const allowedRoles = Array.isArray(requireRole) ? requireRole : requireRole ? [requireRole] : null;
-        if (data.role !== 'superadmin' && allowedRoles && !allowedRoles.includes(data.role as any)) {
-          if (data.role === 'band_admin') router.replace('/band');
-          else router.replace('/member');
-          return;
-        }
+    if (
+      authProfile.role === 'band_admin' &&
+      (authProfile as any).onboarding_completed !== true &&
+      router.pathname !== '/onboarding'
+    ) {
+      router.replace('/onboarding');
+      return;
+    }
 
-        setProfile(data as UserProfile);
-        setAuthUser({ id: user.id, email: user.email || '' });
+    setProfile(authProfile as UserProfile);
 
-        if ((data.role === 'band_admin' || data.role === 'member') && data.act_id) {
-          const { data: act } = await supabase.from('acts').select('act_name').eq('id', data.act_id).maybeSingle();
+    if (authProfile.act_id) {
+      supabase
+        .from('acts')
+        .select('act_name')
+        .eq('id', authProfile.act_id)
+        .maybeSingle()
+        .then(({ data: act }) => {
           if (act?.act_name) setActName(act.act_name);
-        } else if (data.role === 'band_admin') {
-          const { data: ownedAct } = await supabase.from('acts').select('act_name').eq('owner_id', user.id).limit(1).maybeSingle();
-          if (ownedAct?.act_name) setActName(ownedAct.act_name);
-        }
+        });
+    }
 
-        if (active) setLoading(false);
-      } catch {
-        router.replace('/login');
-      }
-    };
-
-    init();
-    return () => { active = false; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    setLoading(false);
+  }, [authProfile, authUser, authLoading, requireRole, router.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -428,7 +415,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
           {/* Bell — only when logged in */}
           {authUser ? (
             <div style={{ position: 'relative', zIndex: 201 }}>
-              <NotifBell userId={authUser.id} email={authUser.email} />
+              <NotifBell userId={authUser.id} email={authUser.email || ''} />
             </div>
           ) : (
             <div style={{ width: 36, flexShrink: 0 }} />
