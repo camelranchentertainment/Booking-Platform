@@ -97,19 +97,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .eq('is_primary_logo', true);
   }
 
+  const mediaFileType = isPrimaryLogo
+    ? 'logo'
+    : mimeType.startsWith('image/')
+    ? 'photo'
+    : mimeType === 'application/pdf'
+    ? 'press'
+    : 'other';
+
   const { data: record, error: dbError } = await service
     .from('media_library')
     .insert({
-      act_id:          profile.act_id,
-      user_id:         user.id,
-      file_name:       file.originalFilename || storagePath,
-      file_type:       isPrimaryLogo ? 'logo' : fileType,
-      mime_type:       mimeType,
-      file_size:       file.size,
-      storage_path:    storagePath,
-      public_url:      publicUrl,
-      alt_text:        fields.alt_text?.[0] || null,
-      is_primary_logo: isPrimaryLogo,
+      act_id:           profile.act_id,
+      uploaded_by:      user.id,
+      file_name:        file.originalFilename || storagePath,
+      storage_path:     storagePath,
+      public_url:       publicUrl,
+      file_type:        mediaFileType,
+      mime_type:        mimeType,
+      file_size_bytes:  file.size,
+      alt_text:         fields.alt_text?.[0] || null,
+      is_primary_logo:  isPrimaryLogo,
+      tags:             null,
     })
     .select()
     .single();
