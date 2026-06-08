@@ -427,7 +427,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
           {/* Left spacer to keep logo centred */}
           <div style={{ width: 36, flexShrink: 0 }} />
           <img
-            src="/camel-ranch-booking-horizontal.svg"
+            src="/camel-ranch-booking-square.svg"
             alt="Camel Ranch Booking"
             style={{ height: '56px', width: 'auto', minWidth: '200px', maxWidth: '320px', objectFit: 'contain', display: 'block' }}
           />

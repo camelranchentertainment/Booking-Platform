@@ -85,7 +85,7 @@ export default function Login() {
 
       {/* Logo */}
       <div style={{ textAlign: 'center', marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-        <BrandLogo variant="banner" height={52} />
+        <BrandLogo variant="banner" width={260} />
         <div style={{
           fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'rgba(224,120,32,0.7)',
           letterSpacing: '0.02em', lineHeight: 1.4,
