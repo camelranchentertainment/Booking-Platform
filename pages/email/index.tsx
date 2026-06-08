@@ -8,7 +8,7 @@ import VenueDrawer from '../../components/VenueDrawer';
 
 // ─── Types & Constants ────────────────────────────────────────────────────────
 
-type TabView = 'inbox' | 'pipeline' | 'outreach' | 'outbox' | 'archive';
+type TabView = 'inbox' | 'pipeline' | 'outreach' | 'outbox' | 'archive' | 'drafts';
 
 const PIPELINE_STAGES = [
   { key: 'target',    label: 'Target',              color: '#6B8FB5' },
@@ -109,6 +109,9 @@ export default function EmailPage() {
   const [inboxEmails, setInboxEmails]     = useState<any[]>([]);
   const [outboxEmails, setOutboxEmails]   = useState<any[]>([]);
   const [archivedEmails, setArchivedEmails] = useState<any[]>([]);
+  const [draftEmails, setDraftEmails]         = useState<any[]>([]);
+  const [composerDraft, setComposerDraft]     = useState<any>(null);
+  const [deletingDraftId, setDeletingDraftId] = useState<string | null>(null);
 
   // Pipeline
   const [pipelineFilter, setPipelineFilter]   = useState<string>('all');
@@ -208,8 +211,17 @@ export default function EmailPage() {
       .order('sent_at', { ascending: false })
       .limit(200);
 
-    const [toursRes, bookingsRes, inboxRes, outboxRes] = await Promise.all([
-      toursQ, bookingsQ, inboxQ, outboxQ,
+    const draftsQ = aid
+      ? supabase.from('email_log')
+          .select('id, subject, body, category, recipient, updated_at, venue_id, venue:venues(name)')
+          .eq('act_id', aid)
+          .eq('is_draft', true)
+          .order('updated_at', { ascending: false })
+          .limit(100)
+      : Promise.resolve({ data: [] as any[] });
+
+    const [toursRes, bookingsRes, inboxRes, outboxRes, draftsRes] = await Promise.all([
+      toursQ, bookingsQ, inboxQ, outboxQ, draftsQ,
     ]);
 
     const tourIds = (toursRes.data || []).map((t: any) => t.id);
@@ -225,6 +237,7 @@ export default function EmailPage() {
     setBookings(bookingsRes.data || []);
     setInboxEmails(inboxRes.data || []);
     setOutboxEmails(outboxRes.data || []);
+    setDraftEmails(draftsRes.data || []);
     } catch (err) {
       console.error('email loadAll:', err);
     } finally {
@@ -255,6 +268,13 @@ export default function EmailPage() {
   const unarchiveEmail = async (id: string) => {
     await supabase.from('email_log').update({ archived: false, archived_at: null }).eq('id', id);
     setArchivedEmails(prev => prev.filter(e => e.id !== id));
+  };
+
+  const deleteDraft = async (id: string) => {
+    setDeletingDraftId(id);
+    await supabase.from('email_log').delete().eq('id', id).eq('is_draft', true);
+    setDraftEmails(prev => prev.filter(d => d.id !== id));
+    setDeletingDraftId(null);
   };
 
   const markRead = (id: string) => {
@@ -449,6 +469,7 @@ export default function EmailPage() {
           { id: 'pipeline', label: 'Pipeline', badge: allTourVenues.length },
           { id: 'outreach', label: 'Outreach', badge: 0 },
           { id: 'outbox',   label: 'Outbox',   badge: outboxEmails.length },
+          { id: 'drafts',   label: 'Drafts',   badge: draftEmails.length },
           { id: 'archive',  label: 'Archive',  badge: 0 },
         ] as { id: TabView; label: string; badge: number }[]).map(t => (
           <button
@@ -943,6 +964,56 @@ export default function EmailPage() {
         </div>
       )}
 
+      {/* ══ DRAFTS TAB ══ */}
+      {view === 'drafts' && (
+        <div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            {draftEmails.length} draft{draftEmails.length !== 1 ? 's' : ''}
+          </div>
+          {draftEmails.length === 0 && !loading ? (
+            <div className="card" style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.88rem' }}>
+              No drafts saved. Use "Save Draft" in the composer to save emails here.
+            </div>
+          ) : (
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              {draftEmails.map(d => (
+                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.88rem' }}>
+                        {(d.venue as any)?.name || d.recipient || '—'}
+                      </span>
+                      {d.category && (
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3, padding: '0 4px' }}>
+                          {BK_STAGE_LABELS[d.category] || d.category}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.1rem' }}>{d.subject || '(no subject)'}</div>
+                  </div>
+                  <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {fmtDate(d.updated_at)}
+                    </span>
+                    <div style={{ display: 'flex', gap: '0.3rem' }}>
+                      <button
+                        style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', padding: '0.15rem 0.5rem', borderRadius: 3, border: '1px solid rgba(96,165,250,0.4)', background: 'transparent', color: '#60a5fa', cursor: 'pointer' }}
+                        onClick={() => setComposerDraft(d)}
+                      >Edit</button>
+                      <button
+                        style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', padding: '0.15rem 0.5rem', borderRadius: 3, border: '1px solid rgba(255,255,255,0.12)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}
+                        disabled={deletingDraftId === d.id}
+                        onClick={() => deleteDraft(d.id)}
+                      >{deletingDraftId === d.id ? '…' : 'Delete'}</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ══ ARCHIVE TAB ══ */}
       {view === 'archive' && (
         <div>
@@ -1061,6 +1132,19 @@ export default function EmailPage() {
               .eq('id', composerBooking.id).single()
               .then(({ data }) => { if (data) setBookings(bs => bs.map(b => b.id === data.id ? { ...b, ...data } : b)); });
           }}
+        />
+      )}
+
+      {composerDraft && (
+        <EmailComposer
+          actId={composerDraft.act_id || actId || ''}
+          venueId={composerDraft.venue_id || undefined}
+          contactEmail={composerDraft.recipient || undefined}
+          defaultCategory={composerDraft.category || 'target'}
+          initialSubject={composerDraft.subject || undefined}
+          initialBody={composerDraft.body || undefined}
+          draftId={composerDraft.id}
+          onClose={() => { setComposerDraft(null); loadAll(); }}
         />
       )}
 
