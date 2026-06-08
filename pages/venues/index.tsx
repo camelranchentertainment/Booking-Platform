@@ -411,15 +411,26 @@ export default function VenuesPage() {
     setProspecting(true);
     setProspectErr('');
     setProspects([]);
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
-    const res = await fetch(`/api/venues/prospect?city=${encodeURIComponent(prospectCity.trim())}&state=${encodeURIComponent(prospectState.trim())}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const json = await res.json();
-    if (!res.ok) { setProspectErr(json.error || 'Search failed'); }
-    else { setProspects(json); }
-    setProspecting(false);
+    const timeout = setTimeout(() => {
+      setProspecting(false);
+      setProspectErr('Search failed - please try again');
+    }, 5000);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`/api/venues/prospect?city=${encodeURIComponent(prospectCity.trim())}&state=${encodeURIComponent(prospectState.trim())}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) { setProspectErr(json.error || 'Search failed - please try again'); }
+      else { setProspects(json); }
+    } catch (e) {
+      console.error(e);
+      setProspectErr('Search failed - please try again');
+    } finally {
+      clearTimeout(timeout);
+      setProspecting(false);
+    }
   };
 
   const addProspect = async (p: ProspectResult) => {

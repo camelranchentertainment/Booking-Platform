@@ -95,42 +95,43 @@ export default function BandDashboard() {
 
   const load = async () => {
     setLoading(true);
+    const timeout = setTimeout(() => setLoading(false), 5000);
     try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const actId = await getActId(supabase, user.id);
-    if (!actId) { return; }
+      const actId = await getActId(supabase, user.id);
+      if (!actId) { return; }
 
-    const [actRes, profileRes] = await Promise.all([
-      supabase.from('acts').select('*').eq('id', actId).eq('is_active', true).single(),
-      supabase.from('profiles').select('display_name, email, role').eq('id', user.id).single(),
-    ]);
-
-    setMyAct(actRes.data || null);
-    setUserProfile(profileRes.data || null);
-
-    if (actRes.data) {
-      // Accurate counts per spec
-      const tourIdsRes = await supabase.from('tours').select('id').eq('act_id', actId).neq('status', 'cancelled');
-      const tourIds = (tourIdsRes.data || []).map((t: any) => t.id);
-
-      const [tvTargetRes, confirmedRes, toursRes] = await Promise.all([
-        tourIds.length
-          ? supabase.from('tour_venues').select('id', { count: 'exact', head: true }).in('tour_id', tourIds).eq('status', 'target')
-          : Promise.resolve({ count: 0 }),
-        supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('act_id', actId).in('status', ['confirmed', 'completed']),
-        supabase.from('tours').select('id', { count: 'exact', head: true }).eq('act_id', actId).in('status', ['planning', 'active']),
+      const [actRes, profileRes] = await Promise.all([
+        supabase.from('acts').select('*').eq('id', actId).eq('is_active', true).single(),
+        supabase.from('profiles').select('display_name, email, role').eq('id', user.id).single(),
       ]);
 
-      setTargetsCount((tvTargetRes as any).count ?? 0);
-      setConfirmedCount((confirmedRes as any).count ?? 0);
-      setToursCount((toursRes as any).count ?? 0);
-    }
+      setMyAct(actRes.data || null);
+      setUserProfile(profileRes.data || null);
 
+      if (actRes.data) {
+        // Accurate counts per spec
+        const tourIdsRes = await supabase.from('tours').select('id').eq('act_id', actId).neq('status', 'cancelled');
+        const tourIds = (tourIdsRes.data || []).map((t: any) => t.id);
+
+        const [tvTargetRes, confirmedRes, toursRes] = await Promise.all([
+          tourIds.length
+            ? supabase.from('tour_venues').select('id', { count: 'exact', head: true }).in('tour_id', tourIds).eq('status', 'target')
+            : Promise.resolve({ count: 0 }),
+          supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('act_id', actId).in('status', ['confirmed', 'completed']),
+          supabase.from('tours').select('id', { count: 'exact', head: true }).eq('act_id', actId).in('status', ['planning', 'active']),
+        ]);
+
+        setTargetsCount((tvTargetRes as any).count ?? 0);
+        setConfirmedCount((confirmedRes as any).count ?? 0);
+        setToursCount((toursRes as any).count ?? 0);
+      }
     } catch (err) {
       console.error('band dashboard load:', err);
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
   };

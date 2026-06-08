@@ -95,6 +95,7 @@ export default function AnalyticsPage() {
   const loadAnalytics = async () => {
     setLoading(true);
     setError(null);
+    const timeout = setTimeout(() => setLoading(false), 5000);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch('/api/analytics', {
@@ -105,6 +106,7 @@ export default function AnalyticsPage() {
     } catch (e: any) {
       setError(e.message);
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
   };
