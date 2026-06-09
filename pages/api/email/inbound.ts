@@ -110,7 +110,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Update tour_venue status to 'follow_up' (venue replied)
       await service
         .from('tour_venues')
-        .update({ status: 'waiting', last_replied_at: now, updated_at: now })
+        .update({ status: 'follow_up', last_replied_at: now, updated_at: now })
         .eq('id', tv.id);
 
       // Log the inbound email

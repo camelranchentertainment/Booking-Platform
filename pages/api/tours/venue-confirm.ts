@@ -517,6 +517,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 <p style="margin-top:1.5rem">Log in to Camel Ranch Booking for full details.</p>
               </div>`,
             });
+            await service.from('email_log').insert({
+              sent_by:    user.id,
+              act_id:     (act as any).id,
+              booking_id: (booking as any).id,
+              venue_id:   (tv.venue as any).id,
+              recipient:  profile.email,
+              subject:    `New Show Confirmed: ${(act as any).act_name} @ ${(tv.venue as any).name}`,
+              direction:  'sent',
+              category:   'confirmation',
+              status:     'sent',
+              sent_at:    new Date().toISOString(),
+});
           }
         }
       } catch { /* email failures don't block */ }
