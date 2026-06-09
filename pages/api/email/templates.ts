@@ -14,13 +14,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { actId, category } = req.query;
     if (!actId) return res.status(400).json({ error: 'actId required' });
 
-    // If no category → return all templates for this act (plus global templates where act_id IS NULL)
+    // List all templates for this act (plus global where act_id IS NULL)
     if (!category) {
       const { data } = await service.from('email_templates')
         .select('id, category, subject, body, updated_at')
         .or(`act_id.eq.${actId as string},act_id.is.null`)
         .order('category', { ascending: true });
-
       return res.status(200).json({ templates: data || [] });
     }
 
