@@ -49,7 +49,7 @@ export default function Settings() {
     contact_phone: '', home_city: '', home_state: '', username: '', epk_link: '',
   });
   const [actSaving, setActSaving]           = useState(false);
-  const [actSaved, setActSaved]             = useState(false);
+  const [actSuccess, setActSuccess]         = useState('');
   const [actError, setActError]             = useState('');
   const [actPhotoUrl, setActPhotoUrl]       = useState<string | null>(null);
   const [actPhotoUploading, setActPhotoUploading] = useState(false);
@@ -469,8 +469,8 @@ export default function Settings() {
       console.log('[saveAct] result error:', error);
 
       if (error) throw error;
-      setActSaved(true);
-      setTimeout(() => setActSaved(false), 3000);
+      setActSuccess('Saved successfully.');
+      setTimeout(() => setActSuccess(''), 3000);
     } catch (err: any) {
       setActError(err.message || 'Save failed. Please try again.');
     } finally {
@@ -670,7 +670,7 @@ export default function Settings() {
                 </div>
                 <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
                   <button type="submit" className="btn btn-primary" disabled={actSaving}>{actSaving ? 'Saving...' : 'Save Band Profile'}</button>
-                  {actSaved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>✓ Saved</span>}
+                  {actSuccess && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>✓ {actSuccess}</span>}
                   {actError && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#f87171' }}>{actError}</span>}
                 </div>
               </div>
