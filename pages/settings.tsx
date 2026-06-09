@@ -424,37 +424,56 @@ export default function Settings() {
 
   const saveAct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!myAct) return;
     setActSaving(true);
     setActError('');
-    const saveTimeout = setTimeout(() => {
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      setActError('Not logged in. Please refresh and try again.');
       setActSaving(false);
-      setActError('Save timed out. Please try again.');
-    }, 10000);
+      return;
+    }
+
+    const actId = myAct?.id;
+    if (!actId) {
+      setActError('No act linked to your account. Please contact support.');
+      setActSaving(false);
+      return;
+    }
+
+    const payload = {
+      act_name:      actForm.act_name      || null,
+      genre:         actForm.genre         || null,
+      bio:           actForm.bio           || null,
+      website:       actForm.website       || null,
+      instagram:     actForm.instagram     || null,
+      facebook:      actForm.facebook      || null,
+      tiktok_url:    actForm.tiktok_url    || null,
+      spotify:       actForm.spotify       || null,
+      contact_email: actForm.contact_email || null,
+      contact_phone: actForm.contact_phone || null,
+      home_city:     actForm.home_city     || null,
+      home_state:    actForm.home_state    || null,
+      username:      actForm.username      || null,
+      epk_link:      actForm.epk_link      || null,
+    };
+
+    console.log('[saveAct] actId:', actId, 'payload:', payload);
+
     try {
-      const { error } = await supabase.from('acts').update({
-        act_name:      actForm.act_name      || null,
-        genre:         actForm.genre         || null,
-        bio:           actForm.bio           || null,
-        website:       actForm.website       || null,
-        instagram:     actForm.instagram     || null,
-        facebook:      actForm.facebook      || null,
-        tiktok_url:    actForm.tiktok_url    || null,
-        spotify:       actForm.spotify       || null,
-        contact_email: actForm.contact_email || null,
-        contact_phone: actForm.contact_phone || null,
-        home_city:     actForm.home_city     || null,
-        home_state:    actForm.home_state    || null,
-        username:      actForm.username      || null,
-        epk_link:      actForm.epk_link      || null,
-      }).eq('id', myAct.id);
+      const { error } = await supabase
+        .from('acts')
+        .update(payload)
+        .eq('id', actId);
+
+      console.log('[saveAct] result error:', error);
+
       if (error) throw error;
       setActSaved(true);
       setTimeout(() => setActSaved(false), 3000);
     } catch (err: any) {
       setActError(err.message || 'Save failed. Please try again.');
     } finally {
-      clearTimeout(saveTimeout);
       setActSaving(false);
     }
   };
