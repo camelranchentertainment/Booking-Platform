@@ -258,6 +258,7 @@ const loadPool = async () => {
       const { data: inserted } = await supabase.from('venues').insert({
         act_id: dp?.act_id, name: p.name, city: p.city, state: p.state,
         address: p.address || null, place_id: p.place_id, google_maps_url: p.google_maps_url,
+        created_by: user!.id,
       }).select('id').single();
       venueId = inserted?.id ?? null;
     }
