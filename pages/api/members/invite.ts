@@ -86,7 +86,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (apiKey) {
     const resend = new Resend(apiKey);
     await resend.emails.send({
-      from:    fromEmail || 'bookings@camelranchbooking.com',
+      from:    fromEmail || 'booking@mail.camelranchbooking.com',
       to:      email.trim().toLowerCase(),
       subject: emailSubject,
       html: `

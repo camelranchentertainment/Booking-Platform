@@ -8,7 +8,7 @@ Draft a professional cold pitch email to a venue on behalf of a band and their m
 Style: professional but human, music industry voice, concise, clear call-to-action.
 Never open with "I hope this email finds you well". No em dashes or bullet points in body.
 Subject line format MUST be: [Band Name] — Booking Inquiry — [Venue Name], [City]
-Example: Jake Stringer — Booking Inquiry — Off Broadway, St. Louis
+Example: Artist Name — Booking Inquiry — Off Broadway, St. Louis
 Output ONLY valid JSON: { "subject": "...", "body": "...", "preview": "..." }`;
 
 async function getTourDateRange(service: any, tourId: string): Promise<string> {
