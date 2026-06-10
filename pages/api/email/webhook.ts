@@ -35,6 +35,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Missing Svix headers' });
     }
 
+    console.log('Webhook secret prefix:', secret?.substring(0, 10));
+    console.log('Svix headers present:', !!svixId, !!svixTimestamp, !!svixSignature);
     try {
       const wh = new Webhook(secret);
       wh.verify(rawBodyString, {
