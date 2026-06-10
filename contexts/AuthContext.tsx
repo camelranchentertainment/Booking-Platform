@@ -56,22 +56,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Hard 3-second timeout — never leave the app in a loading state
-    const timeout = setTimeout(resolve, 3000);
+    const timeout = setTimeout(resolve, 8000);
 
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          loadProfile(session.user).finally(resolve);
-        } else {
-          resolve();
-        }
-      })
-      .catch(resolve);
+    // Use getSession first - reads from localStorage, instant
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+        loadProfile(session.user).finally(resolve);
+      } else {
+        resolve();
+      }
+      clearTimeout(timeout);
+    }).catch(() => {
+      clearTimeout(timeout);
+      resolve();
+    });
 
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         setUser(session?.user ?? null);
         if (session?.user) {
           await loadProfile(session.user);
@@ -79,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(null);
         }
         resolve();
-      },
+      }
     );
 
     return () => {

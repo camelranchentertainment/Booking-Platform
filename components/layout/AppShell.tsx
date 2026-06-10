@@ -350,17 +350,6 @@ export default function AppShell({ children, requireRole = null }: Props) {
 
     setProfile(authProfile as UserProfile);
 
-    if (authProfile.act_id) {
-      supabase
-        .from('acts')
-        .select('act_name')
-        .eq('id', authProfile.act_id)
-        .maybeSingle()
-        .then(({ data: act }) => {
-          if (act?.act_name) setActName(act.act_name);
-        });
-    }
-
     clearTimeout(timeout);
     setLoading(false);
 
