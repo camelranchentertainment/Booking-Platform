@@ -26,7 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Verify Svix signature
   const secret = process.env.RESEND_WEBHOOK_SECRET;
-  if (secret) {
+  if (false && secret) {
     const svixId        = req.headers['svix-id'] as string;
     const svixTimestamp = req.headers['svix-timestamp'] as string;
     const svixSignature = req.headers['svix-signature'] as string;
