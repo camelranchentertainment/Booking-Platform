@@ -70,37 +70,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
   // ── Dynamic From + Reply-To based on act ──────────────────────────────────
-  let from = baseFrom;
+  let from = `Camel Ranch Booking <bookings@camelranchbooking.com>`;
   let replyTo: string | undefined;
 
   if (actId) {
+    // 1. Get act name + contact_email fallback
     const { data: act } = await service
       .from('acts')
-      .select('act_name, owner_id')
+      .select('act_name, contact_email')
       .eq('id', actId)
       .single();
 
     if (act?.act_name) {
-      // Keep the verified sending domain, use act name as display name
-      const emailAddr = baseFrom.includes('<') ? baseFrom : `<${baseFrom}>`;
-      from = `${act.act_name} via Camel Ranch Booking ${emailAddr}`;
+      from = `${act.act_name} <bookings@camelranchbooking.com>`;
     }
 
-    if (act?.owner_id) {
-      const { data: profile } = await service
-        .from('user_profiles')
-        .select('email')
-        .eq('id', act.owner_id)
-        .single();
-      if (profile?.email) replyTo = profile.email;
+    // 2. Reply-to: prefer band_admin profile email
+    const { data: bandAdmin } = await service
+      .from('user_profiles')
+      .select('email')
+      .eq('act_id', actId)
+      .eq('role', 'band_admin')
+      .maybeSingle();
+
+    if (bandAdmin?.email) {
+      replyTo = bandAdmin.email;
+    } else if (act?.contact_email) {
+      // 3. Fall back to act's contact_email
+      replyTo = act.contact_email;
     }
+    // 4. If neither found, omit replyTo entirely
   }
   // ──────────────────────────────────────────────────────────────────────────
 
   const resend = new Resend(apiKey);
 
   try {
-    const { data, error } = await resend.emails.send({ from, to, subject, html, replyTo: 'replies@dorurinaah.resend.app' });
+    const sendPayload: Parameters<typeof resend.emails.send>[0] = { from, to, subject, html };
+    if (replyTo) sendPayload.replyTo = replyTo;
+    const { data, error } = await resend.emails.send(sendPayload);
     if (error) return res.status(500).json({ error: error.message });
 
     const now = new Date().toISOString();
