@@ -8,7 +8,7 @@ async function getResendConfig(service: ReturnType<typeof getServiceClient>) {
   if (process.env.RESEND_API_KEY) {
     return {
       apiKey: process.env.RESEND_API_KEY,
-      from:   process.env.RESEND_FROM_EMAIL || 'booking@mail.camelranchbooking.com',
+      baseFrom: process.env.RESEND_FROM_EMAIL || 'booking@mail.camelranchbooking.com',
     };
   }
   const { data } = await service
@@ -21,8 +21,27 @@ async function getResendConfig(service: ReturnType<typeof getServiceClient>) {
 
   return {
     apiKey: map['resend_api_key'] || '',
-    from:   map['resend_from_email'] || 'booking@mail.camelranchbooking.com',
+    baseFrom: map['resend_from_email'] || 'booking@mail.camelranchbooking.com',
   };
+}
+
+/** Strip HTML tags for plain-text fallback */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<li>/gi, '• ')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -32,7 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!to || !subject || !html) return res.status(400).json({ error: 'to, subject, html required' });
 
   const service = getServiceClient();
-  const { apiKey, from } = await getResendConfig(service);
+  const { apiKey, baseFrom } = await getResendConfig(service);
 
   if (!apiKey) {
     return res.status(500).json({ error: 'Email not configured. Add your Resend API key in Settings.' });
@@ -49,6 +68,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch {}
 
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  // ── Dynamic From + Reply-To based on act ──────────────────────────────────
+  let from = baseFrom;
+  let replyTo: string | undefined;
+
+  if (actId) {
+    const { data: act } = await service
+      .from('acts')
+      .select('act_name, owner_id')
+      .eq('id', actId)
+      .single();
+
+    if (act?.act_name) {
+      // Keep the verified sending domain, use act name as display name
+      const emailAddr = baseFrom.includes('<') ? baseFrom : `<${baseFrom}>`;
+      from = `${act.act_name} via Camel Ranch Booking ${emailAddr}`;
+    }
+
+    if (act?.owner_id) {
+      const { data: profile } = await service
+        .from('user_profiles')
+        .select('email')
+        .eq('id', act.owner_id)
+        .single();
+      if (profile?.email) replyTo = profile.email;
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   const resend = new Resend(apiKey);
 
@@ -102,7 +149,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           console.error('[email/send] tour_venues status update FAILED', { tourVenueId, newTvStatus, category, error: e?.message });
         }
       } else {
-        // Still track contact date even if status doesn't change
         await service.from('tour_venues')
           .update({ last_contacted_at: now, updated_at: now })
           .eq('id', tourVenueId);
@@ -115,7 +161,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const isFollowUp  = ['follow_up_1', 'follow_up_2', 'follow_up'].includes(category || '');
 
       if (bookingId) {
-        // Update existing booking email tracking
         const bkUpdate: Record<string, any> = {
           email_stage:       category,
           last_contact_date: now,
@@ -125,10 +170,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (category === 'follow_up_2') bkUpdate.follow_up_count = 2;
         if (isColdPitch)  { bkUpdate.status = 'pitch';    bkUpdate.pitched_at   = now; }
         if (isFollowUp)   { bkUpdate.status = 'pitch';    bkUpdate.responded_at = now; }
-
         await service.from('bookings').update(bkUpdate).eq('id', bookingId);
       } else if (venueId && isColdPitch) {
-        // No booking yet — check if one exists for this venue/act
         const { data: existing } = await service.from('bookings')
           .select('id')
           .eq('act_id', actId)
@@ -137,7 +180,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           .maybeSingle();
 
         if (!existing) {
-          // Create a pitch-stage booking so the pipeline picks it up
           await service.from('bookings').insert({
             created_by:        userId,
             act_id:            actId,

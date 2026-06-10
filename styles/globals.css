@@ -1041,3 +1041,49 @@ tr:hover td { background: rgba(224,120,32,0.06); color: var(--text-primary); }
 [data-theme="light"] .badge-completed   { background: rgba(75,85,99,0.12); }
 [data-theme="light"] .badge-cancelled   { background: rgba(156,163,175,0.15); }
 
+/* ── EmailComposer: Quill rich-text editor overrides ────────── */
+/* The .ec-quill wrapper is placed around the ReactQuill component. */
+.ec-quill {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+/* Make the quill root div flex too */
+.ec-quill .quill {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.ec-quill .ql-toolbar.ql-snow {
+  border: 1px solid #e0e0e0;
+  border-bottom: none;
+  background: #fafafa;
+  padding: 4px 6px;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+.ec-quill .ql-container.ql-snow {
+  border: 1px solid #e0e0e0;
+  flex: 1;
+  overflow-y: auto;
+}
+.ec-quill .ql-editor {
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: #1a1a2e;
+  min-height: 120px;
+}
+.ec-quill .ql-editor.ql-blank::before {
+  color: #aaa;
+  font-style: normal;
+}
+/* Quill toolbar button sizing */
+.ec-quill .ql-toolbar .ql-formats {
+  margin-right: 6px;
+}
+.ec-quill .ql-snow .ql-picker-label {
+  font-size: 0.78rem;
+}
+
