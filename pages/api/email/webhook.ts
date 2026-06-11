@@ -38,7 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('Webhook secret prefix:', secret?.substring(0, 10));
     console.log('Svix headers present:', !!svixId, !!svixTimestamp, !!svixSignature);
     try {
-      const wh = new Webhook(secret);
+      const wh = new Webhook(secret!);
       wh.verify(rawBodyString, {
         'svix-id':        svixId,
         'svix-timestamp': svixTimestamp,

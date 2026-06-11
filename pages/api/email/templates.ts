@@ -14,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // ── GET: list all templates for act, or fetch one by name ──────────────
   if (req.method === 'GET') {
-    const { actId, category } = req.query;
+    const { actId, category, name } = req.query;
     if (!actId) return res.status(400).json({ error: 'actId required' });
 
     // List all templates for this act (plus global where act_id IS NULL)

@@ -1,23 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import dynamic from 'next/dynamic';
-import type ReactQuillType from 'react-quill';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-
-// ── Dynamic ReactQuill (SSR-safe) ─────────────────────────────────────────
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false }) as React.ComponentType<any>;
-
-const QUILL_MODULES = {
-  toolbar: [
-    [{ font: [] }, { size: ['small', false, 'large', 'huge'] }],
-    ['bold', 'italic', 'underline'],
-    [{ color: [] }],
-    [{ align: [] }],
-    [{ list: 'ordered' }, { list: 'bullet' }],
-    ['link'],
-    ['clean'],
-  ],
-};
-const QUILL_FORMATS = ['font', 'size', 'bold', 'italic', 'underline', 'color', 'align', 'list', 'link'];
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const CATEGORY_LABELS: Record<string, string> = {
@@ -181,23 +163,8 @@ export default function EmailComposer({
     });
     setTemplates(prev => ({ ...prev, [category]: { subject, body } }));
     setSavingTemplate(false);
-    setActiveTemplate(name.trim());
-    fetchTemplates();
-  };
-
-  const insertDateText = (td: TourDate) => {
-    const label = td.date
-      ? new Date(td.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
-      : '?';
-    const text = td.venue_name ? `${td.venue_name} — ${label}` : label;
-
-    const editor = (quillRef.current as any)?.getEditor?.();
-    if (editor) {
-      const sel = editor.getSelection(true);
-      editor.insertText(sel?.index ?? editor.getLength(), text + '\n');
-    } else {
-      setBody(b => b + `<p>${text}</p>`);
-    }
+    setTemplateSaved(true);
+    setTimeout(() => setTemplateSaved(false), 2500);
   };
 
   const send = async () => {
@@ -256,10 +223,7 @@ export default function EmailComposer({
 
   const catColor = CATEGORY_COLORS[category] || '#888';
 
-  // Compute Quill container height from total panel minus chrome
-  const CHROME_H = 48 + 44 + 80 + 48; // header + category bar + to/subj + footer
-  const editorH  = Math.max(180, h - CHROME_H - (tourDates.length && showTourDates ? 80 : tourDates.length ? 36 : 0));
-
+  return (
     <div
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
       onClick={e => e.target === e.currentTarget && onClose()}
@@ -414,23 +378,6 @@ export default function EmailComposer({
           </div>
         )}
       </div>
-    </>
-  );
-}
-
-// ── Small helper: header control button ────────────────────────────────────
-function BtnCtrl({ onClick, title, children }: { onClick: () => void; title: string; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      style={{
-        background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer',
-        fontSize: '0.95rem', padding: '0 7px', lineHeight: '32px', borderRadius: 2,
-      }}
-      onMouseEnter={e => (e.currentTarget.style.color = '#f5f3ee')}
-      onMouseLeave={e => (e.currentTarget.style.color = '#9ca3af')}>
-      {children}
-    </button>
+    </div>
   );
 }
