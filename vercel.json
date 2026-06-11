@@ -2,12 +2,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "framework": "nextjs",
-  "crons": [
-    {
-      "path": "/api/cron/keep-warm",
-      "schedule": "*/5 * * * *"
-    }
-  ],
   "headers": [
     {
       "source": "/_next/static/(.*)",
