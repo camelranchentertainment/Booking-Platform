@@ -56,17 +56,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const timeout = setTimeout(resolve, 8000);
+    // Hard 4-second timeout — never leave the app in a loading state
+    const timeout = setTimeout(resolve, 4000);
 
     // Use getSession first - reads from localStorage, instant
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
-        loadProfile(session.user).finally(resolve);
+        loadProfile(session.user).finally(() => {
+          clearTimeout(timeout);
+          resolve();
+        });
       } else {
+        clearTimeout(timeout);
         resolve();
       }
-      clearTimeout(timeout);
     }).catch(() => {
       clearTimeout(timeout);
       resolve();
