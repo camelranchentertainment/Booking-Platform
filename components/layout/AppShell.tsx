@@ -317,10 +317,27 @@ export default function AppShell({ children, requireRole = null }: Props) {
       return;
     }
 
-    if (!authProfile) {
-      clearTimeout(timeout);
+    if (!authProfile && authUser) {
+      // AuthContext timed out before profile loaded — try once more directly
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (data && !error) {
+            setProfile(data as UserProfile);
+            clearTimeout(timeout);
+            setLoading(false);
+          } else {
+            clearTimeout(timeout);
+            router.replace('/login');
+          }
+        });
       return;
     }
+
+    if (!authProfile) return; // TypeScript guard — authUser is null, nothing to do
 
     const allowedRoles = Array.isArray(requireRole)
       ? requireRole
