@@ -38,20 +38,28 @@ export default function Login() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) { setError('Login failed. Please try again.'); setLoading(false); return; }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .maybeSingle();
+    let role = 'band_admin';
+    try {
+      const profilePromise = supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .maybeSingle();
 
-    if (!profile?.role) {
-      setError('Account setup incomplete. Please contact support or try again.');
-      setLoading(false);
-      return;
+      const timeoutPromise = new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), 5000)
+      );
+
+      const result = await Promise.race([profilePromise, timeoutPromise]);
+      if (result && 'data' in result && result.data?.role) {
+        role = result.data.role;
+      }
+    } catch {
+      // use default role
     }
 
-    if (profile.role === 'superadmin') window.location.href = '/admin';
-    else if (profile.role === 'member') window.location.href = '/member';
+    if (role === 'superadmin') window.location.href = '/admin';
+    else if (role === 'member') window.location.href = '/member';
     else window.location.href = '/band';
   };
 
