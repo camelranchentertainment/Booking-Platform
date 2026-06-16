@@ -21,7 +21,7 @@ const AuthContext = createContext<AuthContextType>({
 
 async function fetchProfile(userId: string): Promise<UserProfile | null> {
   const { data } = await supabase
-    .from('profiles')
+    .from('user_profiles')
     .select('*')
     .eq('id', userId)
     .maybeSingle();
@@ -56,37 +56,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Hard 4-second timeout — never leave the app in a loading state
-    const timeout = setTimeout(resolve, 4000);
+    // Hard 3-second timeout — never leave the app in a loading state
+    const timeout = setTimeout(resolve, 3000);
 
-    // Use getSession first - reads from localStorage, instant
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        loadProfile(session.user).finally(() => {
-          clearTimeout(timeout);
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          loadProfile(session.user).finally(resolve);
+        } else {
           resolve();
-        });
-      } else {
-        clearTimeout(timeout);
-        resolve();
-      }
-    }).catch(() => {
-      clearTimeout(timeout);
-      resolve();
-    });
+        }
+      })
+      .catch(resolve);
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // Never wipe state on TOKEN_REFRESHED — it fires mid-navigation with a
+        // momentarily null session, clearing profile and causing the sidebar to vanish.
+        if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setProfile(null);
+          resolve();
+          return;
+        }
         setUser(session?.user ?? null);
         if (session?.user) {
           await loadProfile(session.user);
-        } else {
-          setProfile(null);
         }
         resolve();
-      }
+      },
     );
 
     return () => {

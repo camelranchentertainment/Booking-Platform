@@ -121,10 +121,9 @@ function NotifBell({ userId, email }: { userId: string; email: string }) {
 
   const acceptInvite = async (inv: InviteNotif) => {
     setResponding(inv.id);
-   const { data: { session } } = await supabase.auth.getSession();
-   const user = session?.user ?? null;
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setResponding(''); return; }
-    const { data: prof } = await supabase.from('profiles').select('display_name').eq('id', user.id).single();
+    const { data: prof } = await supabase.from('user_profiles').select('display_name').eq('id', user.id).single();
     await fetch('/api/accept-invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -294,91 +293,59 @@ function NotifBell({ userId, email }: { userId: string; email: string }) {
 
 export default function AppShell({ children, requireRole = null }: Props) {
   const router = useRouter();
-  const { user: authUser, profile: authProfile, loading: authLoading } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const { user, profile, loading: authLoading } = useAuth();
   const [actName, setActName] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [navOpen, setNavOpen] = useState(false);
 
+  // Redirect to login when auth resolves with no session
   useEffect(() => {
-    // Safety timeout — never hang forever
-    const timeout = setTimeout(() => {
-      if (loading) {
-        console.warn('AppShell timeout — forcing render');
-        setLoading(false);
-      }
-    }, 4000);
-
-    if (authLoading) return;
-
-    if (!authUser && !authProfile) {
-      clearTimeout(timeout);
+    if (!authLoading && !user) {
       router.replace('/login');
-      return;
     }
+  }, [authLoading, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    if (!authProfile && authUser) {
-      // AuthContext timed out before profile loaded — try once more directly
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .maybeSingle()
-        .then(({ data, error }) => {
-          if (data && !error) {
-            setProfile(data as UserProfile);
-            clearTimeout(timeout);
-            setLoading(false);
-          } else {
-            clearTimeout(timeout);
-            router.replace('/login');
-          }
-        });
-      return;
-    }
+  // Role-based and subscription redirects — re-run on every route change
+  useEffect(() => {
+    if (authLoading || !user || !profile) return;
 
-    if (!authProfile) return; // TypeScript guard — authUser is null, nothing to do
-
-    const allowedRoles = Array.isArray(requireRole)
-      ? requireRole
-      : requireRole ? [requireRole] : null;
-
-    if (authProfile.role !== 'superadmin' && allowedRoles && !allowedRoles.includes(authProfile.role as any)) {
-      clearTimeout(timeout);
-      if (authProfile.role === 'band_admin') { router.replace('/band'); return; }
-      else { router.replace('/member'); return; }
-    }
-
-    if (needsSubscription(authProfile as UserProfile) && router.pathname !== '/pricing') {
-      clearTimeout(timeout);
+    if (needsSubscription(profile) && router.pathname !== '/pricing') {
       router.replace('/pricing?trial=expired');
       return;
     }
 
     if (
-      authProfile.role === 'band_admin' &&
-      (authProfile as any).onboarding_completed !== true &&
+      profile.role === 'band_admin' &&
+      (profile as any).onboarding_completed === false &&
       router.pathname !== '/onboarding'
     ) {
-      clearTimeout(timeout);
       router.replace('/onboarding');
       return;
     }
 
-    setProfile(authProfile as UserProfile);
+    const allowedRoles = Array.isArray(requireRole) ? requireRole : requireRole ? [requireRole] : null;
+    if (profile.role !== 'superadmin' && allowedRoles && !allowedRoles.includes(profile.role as any)) {
+      if (profile.role === 'band_admin') router.replace('/band');
+      else router.replace('/member');
+    }
+  }, [authLoading, user, profile, requireRole, router.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    clearTimeout(timeout);
-    setLoading(false);
-
-
-  }, [authProfile, authUser, authLoading, requireRole, router.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Load act name once — non-blocking, does not gate rendering
+  useEffect(() => {
+    if (!profile?.act_id) return;
+    supabase
+      .from('acts')
+      .select('act_name')
+      .eq('id', profile.act_id)
+      .maybeSingle()
+      .then(({ data }) => { if (data?.act_name) setActName(data.act_name); });
+  }, [profile?.act_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.replace('/login');
   };
 
-  if (loading) {
+  if (authLoading || !profile) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg-base)' }}>
         <div style={{ fontFamily: 'var(--font-body)', fontWeight: 500, fontSize: '0.85rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
@@ -416,7 +383,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
         <div style={{
           margin: '-2rem -2rem 1.75rem',
           padding: '0.6rem 1.25rem 0.6rem 2rem',
-          minHeight: 130,
+          minHeight: 100,
           background: 'linear-gradient(90deg, rgba(13,27,42,0.98) 0%, rgba(20,42,68,0.92) 40%, rgba(20,42,68,0.92) 60%, rgba(13,27,42,0.98) 100%)',
           borderBottom: '1px solid var(--border)',
           display: 'flex',
@@ -433,14 +400,14 @@ export default function AppShell({ children, requireRole = null }: Props) {
           {/* Left spacer to keep logo centred */}
           <div style={{ width: 36, flexShrink: 0 }} />
           <img
-            src="/camel-ranch-booking-square.svg"
+            src="/camel-ranch-booking-horizontal.svg"
             alt="Camel Ranch Booking"
-            style={{ height: '112px', width: 'auto', minWidth: '400px', maxWidth: '640px', objectFit: 'contain', display: 'block' }}
+            style={{ height: '56px', width: 'auto', minWidth: '200px', maxWidth: '320px', objectFit: 'contain', display: 'block' }}
           />
           {/* Bell — only when logged in */}
-          {authUser ? (
+          {user ? (
             <div style={{ position: 'relative', zIndex: 201 }}>
-              <NotifBell userId={authUser.id} email={authUser.email ?? ''} />
+              <NotifBell userId={user.id} email={user.email ?? ''} />
             </div>
           ) : (
             <div style={{ width: 36, flexShrink: 0 }} />
