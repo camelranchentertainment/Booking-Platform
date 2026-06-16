@@ -20,11 +20,17 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 async function fetchProfile(userId: string): Promise<UserProfile | null> {
-  const { data } = await supabase
-    .from('user_profiles')
+  const fetchPromise = supabase
+    .from('profiles')
     .select('*')
     .eq('id', userId)
     .maybeSingle();
+
+  const timeoutPromise = new Promise<{ data: null }>((resolve) =>
+    setTimeout(() => resolve({ data: null }), 5000)
+  );
+
+  const { data } = await Promise.race([fetchPromise, timeoutPromise]) as any;
   return (data as UserProfile) ?? null;
 }
 

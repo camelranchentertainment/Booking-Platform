@@ -31,7 +31,11 @@ export default function Login() {
     setError('');
     setLoading(true);
 
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+    const signInPromise = supabase.auth.signInWithPassword({ email, password });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Login timed out. Please try again.')), 8000)
+    );
+    const { error: err } = await Promise.race([signInPromise, timeoutPromise]) as any;
     if (err) { setError(err.message); setLoading(false); return; }
 
     // getSession reads from localStorage — no network race with getUser()
