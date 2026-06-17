@@ -62,6 +62,8 @@ export default function Settings() {
   const logoRef = useRef<HTMLInputElement>(null);
 
   const [gcalMsg, setGcalMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [gmailMsg, setGmailMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [gmailDisconnecting, setGmailDisconnecting] = useState(false);
 
   // Team members
   const [members, setMembers]                 = useState<any[]>([]);
@@ -101,6 +103,14 @@ export default function Settings() {
       router.replace('/settings', undefined, { shallow: true });
     } else if (router.query.calendar_error) {
       setGcalMsg({ type: 'error', text: `Google Calendar error: ${router.query.calendar_error}` });
+      router.replace('/settings', undefined, { shallow: true });
+    }
+    if (router.query.gmail_connected) {
+      setGmailMsg({ type: 'success', text: 'Gmail connected successfully.' });
+      load();
+      router.replace('/settings', undefined, { shallow: true });
+    } else if (router.query.gmail_error) {
+      setGmailMsg({ type: 'error', text: `Gmail error: ${router.query.gmail_error}` });
       router.replace('/settings', undefined, { shallow: true });
     }
   }, [router.isReady, router.query]);
@@ -295,6 +305,23 @@ export default function Settings() {
     } else {
       setGcalConnecting(false);
     }
+  };
+
+  const disconnectGmail = async () => {
+    setGmailDisconnecting(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setGmailDisconnecting(false); return; }
+    const res = await fetch('/api/gmail/disconnect', {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (res.ok) {
+      setMyAct((prev: any) => prev ? { ...prev, gmail_address: null, gmail_connected_at: null } : prev);
+      setGmailMsg({ type: 'success', text: 'Gmail disconnected.' });
+    } else {
+      setGmailMsg({ type: 'error', text: 'Failed to disconnect Gmail.' });
+    }
+    setGmailDisconnecting(false);
   };
 
   const saveGcalSettings = async (patch: { selected_calendar_id?: string; sync_enabled?: boolean }) => {
@@ -938,6 +965,79 @@ export default function Settings() {
                     >
                       Reconnect
                     </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── GMAIL SEND-AS ── */}
+        {(profile?.role === 'band_admin' || profile?.role === 'superadmin') && myAct && (
+          <div>
+            <div style={sectionLabelStyle}>Gmail Send-As</div>
+            <div className="card">
+              <div className="card-header"><span className="card-title">SEND OUTREACH FROM YOUR GMAIL</span></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+
+                {gmailMsg && (
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: gmailMsg.type === 'success' ? '#4caf50' : '#f44336', padding: '0.5rem 0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: 6 }}>
+                    {gmailMsg.text}
+                  </div>
+                )}
+
+                {!myAct?.gmail_address ? (
+                  <>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                      Connect your Gmail account to send booking outreach emails directly from your own inbox.
+                      Venues will see your real email address, not a platform sender.
+                    </div>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      style={{ alignSelf: 'flex-start', minWidth: 160 }}
+                      onClick={async () => {
+                        const { data: { session } } = await supabase.auth.getSession();
+                        if (!session) return;
+                        window.location.href = `/api/auth/google/connect?actId=${myAct.id}`;
+                      }}
+                    >
+                      Connect Gmail
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ color: '#4caf50', fontSize: '1rem' }}>✓</span>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                        Connected as <strong>{myAct.gmail_address}</strong>
+                      </span>
+                    </div>
+                    {myAct.gmail_connected_at && (
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                        Connected {new Date(myAct.gmail_connected_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        className="btn btn-sm"
+                        style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                        onClick={async () => {
+                          const { data: { session } } = await supabase.auth.getSession();
+                          if (!session) return;
+                          window.location.href = `/api/auth/google/connect?actId=${myAct.id}`;
+                        }}
+                      >
+                        Reconnect
+                      </button>
+                      <button
+                        className="btn btn-sm"
+                        style={{ color: '#f87171', border: '1px solid rgba(248,113,113,0.35)' }}
+                        onClick={disconnectGmail}
+                        disabled={gmailDisconnecting}
+                      >
+                        {gmailDisconnecting ? 'Disconnecting…' : 'Disconnect'}
+                      </button>
+                    </div>
                   </>
                 )}
               </div>
