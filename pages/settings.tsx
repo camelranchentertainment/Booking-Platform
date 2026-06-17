@@ -998,7 +998,7 @@ export default function Settings() {
                       onClick={async () => {
                         const { data: { session } } = await supabase.auth.getSession();
                         if (!session) return;
-                        window.location.href = `/api/auth/google/connect?actId=${myAct.id}`;
+                        window.location.href = `/api/auth/google/connect?actId=${myAct.id}&token=${session?.access_token}`;
                       }}
                     >
                       Connect Gmail
@@ -1024,7 +1024,7 @@ export default function Settings() {
                         onClick={async () => {
                           const { data: { session } } = await supabase.auth.getSession();
                           if (!session) return;
-                          window.location.href = `/api/auth/google/connect?actId=${myAct.id}`;
+                          window.location.href = `/api/auth/google/connect?actId=${myAct.id}&token=${session?.access_token}`;
                         }}
                       >
                         Reconnect

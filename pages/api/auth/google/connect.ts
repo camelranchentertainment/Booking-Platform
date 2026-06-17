@@ -7,7 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'GET') return res.status(405).end();
 
   // Require authenticated user
-  const token = req.headers.authorization?.replace('Bearer ', '');
+  const token = (req.headers.authorization?.replace('Bearer ', '')) || (req.query.token as string);
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
   const service = getServiceClient();
