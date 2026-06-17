@@ -47,5 +47,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     state,
   });
 
+  console.log('GOOGLE_CLIENT_ID value:', JSON.stringify(process.env.GOOGLE_CLIENT_ID));
+  console.log('GOOGLE_CLIENT_ID length:', process.env.GOOGLE_CLIENT_ID?.length);
+
   return res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
 }
