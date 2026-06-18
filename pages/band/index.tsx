@@ -684,7 +684,7 @@ export default function BandDashboard() {
               { label: 'FINANCIALS', sub: 'Track payments & fees', href: '/financials', accent: '#34d399', icon: '$' },
               { label: 'HISTORY',    sub: 'Past shows & notes',    href: '/history',   accent: '#f59e0b', icon: '◎' },
             ] as any[]).map(tile => (
-              <Link key={tile.label} href={tile.href} style={{ display: 'block', height: 90, padding: '1rem 1.25rem', textDecoration: 'none', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderTop: `3px solid ${tile.accent}`, position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s' }}
+              <Link key={tile.label} href={tile.href} style={{ display: 'block', height: 180, padding: '1rem 1.25rem', textDecoration: 'none', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderTop: `3px solid ${tile.accent}`, position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s' }}
                 onMouseEnter={e => (e.currentTarget.style.borderColor = tile.accent)}
                 onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
                 <div style={{ position: 'absolute', top: '0.75rem', right: '0.9rem', fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: tile.accent, opacity: 0.2 }}>{tile.icon}</div>
