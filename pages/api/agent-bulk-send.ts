@@ -50,6 +50,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const service = getServiceClient();
 
+  // Verify caller owns the actId and tourId supplied in the request body.
+  // Service client bypasses RLS so ownership must be checked explicitly.
+  const { data: callerProfile } = await service
+    .from('profiles')
+    .select('act_id')
+    .eq('id', user.id)
+    .single();
+  if (!callerProfile?.act_id) return res.status(403).json({ error: 'Forbidden' });
+  if (actId !== callerProfile.act_id) return res.status(403).json({ error: 'Forbidden' });
+
+  if (tourId) {
+    const { data: tourCheck } = await service
+      .from('tours')
+      .select('id')
+      .eq('id', tourId)
+      .eq('act_id', callerProfile.act_id)
+      .single();
+    if (!tourCheck) return res.status(403).json({ error: 'Forbidden' });
+  }
+
   // Get Resend config
   const [resendKey, fromEmail] = await Promise.all([
     getSetting('resend_api_key'),
