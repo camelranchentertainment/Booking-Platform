@@ -422,7 +422,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
           <img
             src="/camel-ranch-booking-horizontal.svg"
             alt="Camel Ranch Booking"
-            style={{ height: '56px', width: 'auto', minWidth: '200px', maxWidth: '320px', objectFit: 'contain', display: 'block' }}
+            style={{ height: '112px', width: 'auto', minWidth: '400px', maxWidth: '640px', objectFit: 'contain', display: 'block' }}
           />
           {/* Bell — only when logged in */}
           {user ? (
