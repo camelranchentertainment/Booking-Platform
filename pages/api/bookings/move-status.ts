@@ -18,28 +18,37 @@ export default withHandler(async function handler(req: NextApiRequest, res: Next
   const { data: { user } } = await service.auth.getUser(token);
   if (!user) throw new AppError(401, 'Unauthorized');
 
+  // Resolve caller's act and verify booking ownership before any mutation.
+  // Service client bypasses RLS so the ownership check must be explicit.
+  const { data: profile } = await service
+    .from('profiles')
+    .select('act_id')
+    .eq('id', user.id)
+    .single();
+  if (!profile?.act_id) throw new AppError(403, 'Forbidden');
+
+  const { data: booking } = await service
+    .from('bookings')
+    .select('id, act_id, venue:venues(name, city, state), show_date')
+    .eq('id', bookingId)
+    .eq('act_id', profile.act_id)
+    .maybeSingle();
+  if (!booking) throw new AppError(403, 'Forbidden');
+
   await updateBookingStatus(service, bookingId, status as BookingStatus);
 
   if (status === 'confirmed') {
-    const { data: booking } = await service
-      .from('bookings')
-      .select('act_id, venue:venues(name, city, state), show_date')
-      .eq('id', bookingId)
-      .maybeSingle();
-
-    if (booking?.act_id) {
-      const venueName = (booking.venue as any)?.name || 'venue';
-      const city = (booking.venue as any)?.city || '';
-      const dateStr = booking.show_date
-        ? new Date(booking.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        : '';
-      await notifyActMembers({
-        actId:     booking.act_id,
-        type:      'booking_confirmed',
-        message:   `Show confirmed: ${venueName}${city ? `, ${city}` : ''}${dateStr ? ` — ${dateStr}` : ''}`,
-        actionUrl: '/band',
-      });
-    }
+    const venueName = (booking.venue as any)?.name || 'venue';
+    const city = (booking.venue as any)?.city || '';
+    const dateStr = booking.show_date
+      ? new Date(booking.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : '';
+    await notifyActMembers({
+      actId:     profile.act_id,
+      type:      'booking_confirmed',
+      message:   `Show confirmed: ${venueName}${city ? `, ${city}` : ''}${dateStr ? ` — ${dateStr}` : ''}`,
+      actionUrl: '/band',
+    });
   }
 
   return res.status(200).json({ ok: true });
