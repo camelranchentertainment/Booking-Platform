@@ -14,12 +14,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { bookingId, actual_amount_received, payment_status, post_show_notes, rebook_flag, issue_notes } = req.body;
   if (!bookingId) return res.status(400).json({ error: 'bookingId required' });
 
+  // Resolve caller's act and verify booking ownership before any mutation.
+  // Service client bypasses RLS so the ownership check must be explicit.
+  const { data: profile } = await service
+    .from('profiles')
+    .select('act_id')
+    .eq('id', user.id)
+    .single();
+  if (!profile?.act_id) return res.status(403).json({ error: 'Forbidden' });
+
   const { data: booking } = await service
     .from('bookings')
     .select('venue_id, show_date, venue:venues(name)')
     .eq('id', bookingId)
+    .eq('act_id', profile.act_id)
     .single();
-  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+  if (!booking) return res.status(403).json({ error: 'Forbidden' });
 
   const { error: updateErr } = await service.from('bookings').update({
     status:                 'completed',
@@ -29,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     post_show_notes:        post_show_notes  || null,
     rebook_flag:            rebook_flag      || null,
     issue_notes:            issue_notes      || null,
-  }).eq('id', bookingId);
+  }).eq('id', bookingId).eq('act_id', profile.act_id);
 
   if (updateErr) return res.status(500).json({ error: updateErr.message });
 
