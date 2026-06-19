@@ -87,7 +87,7 @@ function BannerFallback({ height }: { height: number }) {
 export default function BrandLogo({ variant = 'square', height = 72, width: widthProp, className, style }: Props) {
   const [imgError, setImgError] = useState(false);
 
-  const src = variant === 'banner' ? '/camel-ranch-booking-square.svg' : '/camel-ranch-booking-horizontal.svg';
+  const src = variant === 'banner' ? '/camel-ranch-booking-horizontal.svg' : '/camel-ranch-booking-square.svg';
 
   if (imgError) {
     return variant === 'banner'

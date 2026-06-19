@@ -45,3 +45,14 @@ When asked to run /review:
 ## Database
 Supabase project — all migrations must be reviewed
 before running. Never auto-run migrations.
+
+## Git Workflow
+After every commit, immediately push to origin main — do not wait to be asked.
+This applies whether the commit was a single file or a batch of related changes.
+
+Exception: if the user explicitly says "don't push yet" or "hold this commit,"
+skip the push for that specific commit only — this instruction resumes for the
+next commit unless the user says otherwise.
+
+Always show the push confirmation (commit hash and "main -> main" or similar)
+so the user can verify the push went through.
