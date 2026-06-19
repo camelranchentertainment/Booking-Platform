@@ -69,16 +69,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
+  // Resolve caller's act and validate the body-supplied actId before any write.
+  // Service client bypasses RLS so ownership must be checked explicitly.
+  const { data: callerProfile } = await service
+    .from('profiles')
+    .select('act_id')
+    .eq('id', userId)
+    .single();
+  if (!callerProfile?.act_id) return res.status(403).json({ error: 'Forbidden' });
+  if (actId && actId !== callerProfile.act_id) return res.status(403).json({ error: 'Forbidden' });
+  const effectiveActId = callerProfile.act_id;
+
   // ── Dynamic From + Reply-To based on act ──────────────────────────────────
   let from = `Camel Ranch Booking <bookings@camelranchbooking.com>`;
   let replyTo: string | undefined;
 
-  if (actId) {
+  if (effectiveActId) {
     // 1. Get act name + contact_email fallback
     const { data: act } = await service
       .from('acts')
       .select('act_name, contact_email')
-      .eq('id', actId)
+      .eq('id', effectiveActId)
       .single();
 
     if (act?.act_name) {
@@ -89,7 +100,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { data: bandAdmin } = await service
       .from('profiles')
       .select('email')
-      .eq('act_id', actId)
+      .eq('act_id', effectiveActId)
       .eq('role', 'band_admin')
       .maybeSingle();
 
@@ -116,14 +127,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Step 1 — Log to email_log
     await service.from('email_log').insert({
       sent_by:       userId,
-      booking_id:    bookingId    || null,
-      tour_venue_id: tourVenueId  || null,
-      venue_id:      venueId      || null,
-      contact_id:    contactId    || null,
-      act_id:        actId        || null,
-      template_id:   templateId   || null,
-      category:      category     || null,
-      resend_id:     data?.id     || null,
+      booking_id:    bookingId      || null,
+      tour_venue_id: tourVenueId    || null,
+      venue_id:      venueId        || null,
+      contact_id:    contactId      || null,
+      act_id:        effectiveActId || null,
+      template_id:   templateId     || null,
+      category:      category       || null,
+      resend_id:     data?.id       || null,
       subject,
       body:          bodyPreview  || null,
       recipient:     to,
@@ -134,6 +145,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Step 2 — Update tour_venues status + timestamps
     if (tourVenueId && category) {
+      // Verify tourVenueId belongs to caller's act before mutating.
+      const { data: tvLookup } = await service.from('tour_venues')
+        .select('tour_id').eq('id', tourVenueId).single();
+      if (!tvLookup) return res.status(403).json({ error: 'Forbidden' });
+      const { data: tourCheck } = await service.from('tours')
+        .select('id').eq('id', tvLookup.tour_id).eq('act_id', effectiveActId).single();
+      if (!tourCheck) return res.status(403).json({ error: 'Forbidden' });
+
       const isColdPitch = ['target', 'cold_pitch'].includes(category);
       const isFollowUp  = ['follow_up_1', 'follow_up_2', 'follow_up'].includes(category);
 
@@ -164,7 +183,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Step 3 — Update or create booking record
-    if (actId && (venueId || bookingId)) {
+    if (effectiveActId && (venueId || bookingId)) {
       const isColdPitch = ['target', 'cold_pitch'].includes(category || '');
       const isFollowUp  = ['follow_up_1', 'follow_up_2', 'follow_up'].includes(category || '');
 
@@ -178,11 +197,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (category === 'follow_up_2') bkUpdate.follow_up_count = 2;
         if (isColdPitch)  { bkUpdate.status = 'pitch';    bkUpdate.pitched_at   = now; }
         if (isFollowUp)   { bkUpdate.status = 'pitch';    bkUpdate.responded_at = now; }
-        await service.from('bookings').update(bkUpdate).eq('id', bookingId);
+        await service.from('bookings').update(bkUpdate)
+          .eq('id', bookingId)
+          .eq('act_id', effectiveActId);
       } else if (venueId && isColdPitch) {
         const { data: existing } = await service.from('bookings')
           .select('id')
-          .eq('act_id', actId)
+          .eq('act_id', effectiveActId)
           .eq('venue_id', venueId)
           .not('status', 'in', '("completed","cancelled")')
           .maybeSingle();
@@ -190,7 +211,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (!existing) {
           await service.from('bookings').insert({
             created_by:        userId,
-            act_id:            actId,
+            act_id:            effectiveActId,
             venue_id:          venueId,
             contact_id:        contactId || null,
             status:            'pitch',
