@@ -70,6 +70,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!tourCheck) return res.status(403).json({ error: 'Forbidden' });
   }
 
+  // Pre-validate every tourVenueId in the request before the loop.
+  // Reject the entire request if any item's tourVenueId doesn't belong to
+  // the validated tour (or act), so a single malicious ID can't slip through.
+  const prePopulatedTvIds = venues
+    .map(v => v.tourVenueId)
+    .filter((id): id is string => !!id);
+
+  if (prePopulatedTvIds.length > 0) {
+    const { data: tvRows } = await service
+      .from('tour_venues')
+      .select('id, tour_id')
+      .in('id', prePopulatedTvIds);
+
+    if (!tvRows || tvRows.length !== prePopulatedTvIds.length) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (tourId) {
+      // Strict check: every tourVenueId must belong to the validated tourId.
+      if (!tvRows.every(tv => tv.tour_id === tourId)) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+    } else {
+      // No tourId supplied — verify each tv's tour belongs to caller's act.
+      const uniqueTourIds = [...new Set(tvRows.map(tv => tv.tour_id).filter(Boolean))] as string[];
+      if (uniqueTourIds.length > 0) {
+        const { data: tourRows } = await service
+          .from('tours')
+          .select('id')
+          .in('id', uniqueTourIds)
+          .eq('act_id', callerProfile.act_id);
+        if (!tourRows || tourRows.length !== uniqueTourIds.length) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+      }
+    }
+  }
+
   // Get Resend config
   const [resendKey, fromEmail] = await Promise.all([
     getSetting('resend_api_key'),
