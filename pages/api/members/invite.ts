@@ -15,15 +15,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!actId || !email || !role) return res.status(400).json({ error: 'actId, email, role required' });
   if (!['band_admin', 'member'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
 
-  // Get act name, inviter display name, and current admin count
-  const [actRes, profileRes, currentAdminsRes, pendingAdminsRes] = await Promise.all([
+  // Verify caller belongs to the act they are inviting into.
+  // Service client bypasses RLS so this must be explicit.
+  const { data: callerProfile } = await service
+    .from('profiles')
+    .select('display_name, agency_name, act_id, role')
+    .eq('id', user.id)
+    .single();
+  if (!callerProfile) return res.status(403).json({ error: 'Forbidden' });
+  if (callerProfile.role !== 'superadmin' && callerProfile.act_id !== actId) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  const inviterName = callerProfile.agency_name || callerProfile.display_name || user.email || 'Someone';
+
+  // Get act name and current admin count
+  const [actRes, currentAdminsRes, pendingAdminsRes] = await Promise.all([
     service.from('acts').select('act_name').eq('id', actId).single(),
-    service.from('profiles').select('display_name, agency_name').eq('id', user.id).maybeSingle(),
     service.from('profiles').select('id', { count: 'exact', head: true }).eq('act_id', actId).eq('role', 'band_admin'),
     service.from('act_invitations').select('id', { count: 'exact', head: true }).eq('act_id', actId).eq('role', 'band_admin').eq('status', 'pending'),
   ]);
-  const actName     = actRes.data?.act_name || 'a band';
-  const inviterName = profileRes.data?.agency_name || profileRes.data?.display_name || user.email || 'Someone';
+  const actName = actRes.data?.act_name || 'a band';
 
   // Enforce 2-admin limit
   if (role === 'band_admin') {
