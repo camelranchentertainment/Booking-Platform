@@ -117,12 +117,17 @@ export async function updateVenueStatus(
 }
 
 // Atomically updates bookings.status and syncs back to the associated tour_venue (if linked).
+// actId is required so the UPDATE is self-contained and can't affect another act's booking
+// even if the caller forgets to pre-check ownership.
 export async function updateBookingStatus(
   sb: SupabaseClient,
   bookingId: string,
-  newStatus: BookingStatus
+  newStatus: BookingStatus,
+  actId: string
 ): Promise<void> {
-  await sb.from('bookings').update({ status: newStatus }).eq('id', bookingId);
+  await sb.from('bookings').update({ status: newStatus })
+    .eq('id', bookingId)
+    .eq('act_id', actId);
 
   const tvStatus = BOOKING_TO_TOUR_VENUE_STATUS[newStatus];
   if (!tvStatus) return;
@@ -131,6 +136,7 @@ export async function updateBookingStatus(
     .from('bookings')
     .select('tour_id, venue_id')
     .eq('id', bookingId)
+    .eq('act_id', actId)
     .single();
   if (!booking?.tour_id || !booking?.venue_id) return;
 

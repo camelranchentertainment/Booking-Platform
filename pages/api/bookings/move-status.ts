@@ -35,7 +35,7 @@ export default withHandler(async function handler(req: NextApiRequest, res: Next
     .maybeSingle();
   if (!booking) throw new AppError(403, 'Forbidden');
 
-  await updateBookingStatus(service, bookingId, status as BookingStatus);
+  await updateBookingStatus(service, bookingId, status as BookingStatus, profile.act_id);
 
   if (status === 'confirmed') {
     const venueName = (booking.venue as any)?.name || 'venue';
