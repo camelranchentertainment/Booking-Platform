@@ -87,7 +87,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 2. Reply-to: prefer band_admin profile email
     const { data: bandAdmin } = await service
-      .from('user_profiles')
+      .from('profiles')
       .select('email')
       .eq('act_id', actId)
       .eq('role', 'band_admin')

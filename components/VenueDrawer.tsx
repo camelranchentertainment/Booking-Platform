@@ -93,64 +93,66 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
     setScrapeResult(null);
     setScrapeErr('');
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setLoading(false); return; }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const aid = await getActId(supabase, user.id);
-    setActId(aid);
+      const aid = await getActId(supabase, user.id);
+      setActId(aid);
 
-    const [venueRes, contactsRes] = await Promise.all([
-      supabase.from('venues').select('*').eq('id', vid).single(),
-      supabase.from('contacts').select('*').eq('venue_id', vid).order('last_name'),
-    ]);
-
-    const v = venueRes.data;
-    setVenue(v);
-    setContacts(contactsRes.data || []);
-    setForm({
-      name:            v?.name            || '',
-      address:         v?.address         || '',
-      city:            v?.city            || '',
-      state:           v?.state           || '',
-      email:           v?.email           || '',
-      phone:           v?.phone           || '',
-      website:         v?.website         || '',
-      venue_type:      v?.venue_type      || '',
-      booking_contact: v?.booking_contact || '',
-      capacity:        v?.capacity        || '',
-      backline:        v?.backline        ?? false,
-      backline_notes: v?.backline_notes || '',
-      pay_notes:      v?.pay_notes      || '',
-      notes:          v?.notes          || '',
-    });
-
-    if (aid) {
-      const [bookingsRes, toursRes] = await Promise.all([
-        supabase.from('bookings')
-          .select('id, status, show_date, fee, agreed_amount')
-          .eq('venue_id', vid)
-          .eq('act_id', aid)
-          .order('show_date', { ascending: false })
-          .limit(10),
-        supabase.from('tours').select('id').eq('act_id', aid),
+      const [venueRes, contactsRes] = await Promise.all([
+        supabase.from('venues').select('*').eq('id', vid).single(),
+        supabase.from('contacts').select('*').eq('venue_id', vid).order('last_name'),
       ]);
-      setBookings(bookingsRes.data || []);
 
-      const tourIds = toursRes.data?.map((t: any) => t.id) || [];
-      if (tourIds.length > 0) {
-        const tvRes = await supabase
-          .from('tour_venues')
-          .select('*, tour:tours(id, name, status)')
-          .eq('venue_id', vid)
-          .in('tour_id', tourIds)
-          .order('created_at', { ascending: false });
-        setTvs(tvRes.data || []);
-      } else {
-        setTvs([]);
+      const v = venueRes.data;
+      setVenue(v);
+      setContacts(contactsRes.data || []);
+      setForm({
+        name:            v?.name            || '',
+        address:         v?.address         || '',
+        city:            v?.city            || '',
+        state:           v?.state           || '',
+        email:           v?.email           || '',
+        phone:           v?.phone           || '',
+        website:         v?.website         || '',
+        venue_type:      v?.venue_type      || '',
+        booking_contact: v?.booking_contact || '',
+        capacity:        v?.capacity        || '',
+        backline:        v?.backline        ?? false,
+        backline_notes: v?.backline_notes || '',
+        pay_notes:      v?.pay_notes      || '',
+        notes:          v?.notes          || '',
+      });
+
+      if (aid) {
+        const [bookingsRes, toursRes] = await Promise.all([
+          supabase.from('bookings')
+            .select('id, status, show_date, fee, agreed_amount')
+            .eq('venue_id', vid)
+            .eq('act_id', aid)
+            .order('show_date', { ascending: false })
+            .limit(10),
+          supabase.from('tours').select('id').eq('act_id', aid),
+        ]);
+        setBookings(bookingsRes.data || []);
+
+        const tourIds = toursRes.data?.map((t: any) => t.id) || [];
+        if (tourIds.length > 0) {
+          const tvRes = await supabase
+            .from('tour_venues')
+            .select('*, tour:tours(id, name, status)')
+            .eq('venue_id', vid)
+            .in('tour_id', tourIds)
+            .order('created_at', { ascending: false });
+          setTvs(tvRes.data || []);
+        } else {
+          setTvs([]);
+        }
       }
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const saveVenue = async () => {
