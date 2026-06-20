@@ -4,8 +4,6 @@
   "features": {
     "ghcr.io/anthropics/claude-code/claude-code:1.0": {}
   },
-  "mounts": [
-    "source=claude-code-config,target=/home/node/.claude,type=volume"
-  ],
+  
   "remoteUser": "node"
 }
