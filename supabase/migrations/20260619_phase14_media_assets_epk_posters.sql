@@ -1,12 +1,12 @@
 -- Phase 14 (revised): EPK Settings, Generated Posters, Media Library Extensions
 -- Run manually in Supabase SQL Editor. Review before executing.
--- Dependencies: Phase 1 (user_profiles, acts, bookings) and Phase 4 (media_library) must be applied first.
+-- Dependencies: Phase 1 (acts, bookings, profiles) and Phase 4 (media_library) must be applied first.
 --
 -- WHAT CHANGED FROM ORIGINAL DRAFT:
 --   • media_assets table removed — media_library already serves this purpose
 --   • media-assets storage bucket and its policies removed
 --   • generated_posters FKs now reference media_library(id) instead of media_assets(id)
---   • created_by FK corrected to user_profiles(id) (profiles table does not exist)
+--   • All RLS subqueries and FKs reference profiles — the live application table
 --   • Additive columns added to media_library: is_featured, epk_order, is_public, caption
 --   • file_type on media_library has no CHECK constraint (comment-only in phase4) — no change needed
 --   • media-library storage bucket switched from public to private
@@ -46,7 +46,7 @@ create policy "Act admins can manage own EPK settings"
   on epk_settings for all
   using (
     exists (
-      select 1 from user_profiles p
+      select 1 from profiles p
       where p.id = auth.uid()
         and p.act_id = epk_settings.act_id
         and p.role in ('band_admin', 'superadmin')
@@ -54,7 +54,7 @@ create policy "Act admins can manage own EPK settings"
   )
   with check (
     exists (
-      select 1 from user_profiles p
+      select 1 from profiles p
       where p.id = auth.uid()
         and p.act_id = epk_settings.act_id
         and p.role in ('band_admin', 'superadmin')
@@ -80,7 +80,7 @@ create table if not exists generated_posters (
   included_fields         jsonb       not null default '{}',
   output_media_asset_id   uuid        references media_library(id) on delete set null,
   created_at              timestamptz not null default now(),
-  created_by              uuid        references user_profiles(id) on delete set null
+  created_by              uuid        references profiles(id) on delete set null
 );
 
 alter table generated_posters enable row level security;
@@ -90,7 +90,7 @@ create policy "Act admins can manage own generated posters"
   on generated_posters for all
   using (
     exists (
-      select 1 from user_profiles p
+      select 1 from profiles p
       where p.id = auth.uid()
         and p.act_id = generated_posters.act_id
         and p.role in ('band_admin', 'superadmin')
@@ -98,7 +98,7 @@ create policy "Act admins can manage own generated posters"
   )
   with check (
     exists (
-      select 1 from user_profiles p
+      select 1 from profiles p
       where p.id = auth.uid()
         and p.act_id = generated_posters.act_id
         and p.role in ('band_admin', 'superadmin')
@@ -141,7 +141,7 @@ create policy "Act members can read media-library"
   using (
     bucket_id = 'media-library'
     and split_part(name, '/', 1) in (
-      select act_id::text from user_profiles where id = auth.uid()
+      select act_id::text from profiles where id = auth.uid()
     )
   );
 
@@ -152,7 +152,7 @@ create policy "Act admins can upload to media-library"
   with check (
     bucket_id = 'media-library'
     and split_part(name, '/', 1) in (
-      select act_id::text from user_profiles
+      select act_id::text from profiles
       where id = auth.uid()
         and role in ('band_admin', 'superadmin')
     )
@@ -165,7 +165,7 @@ create policy "Act admins can update media-library"
   using (
     bucket_id = 'media-library'
     and split_part(name, '/', 1) in (
-      select act_id::text from user_profiles
+      select act_id::text from profiles
       where id = auth.uid()
         and role in ('band_admin', 'superadmin')
     )
@@ -178,7 +178,7 @@ create policy "Act admins can delete from media-library"
   using (
     bucket_id = 'media-library'
     and split_part(name, '/', 1) in (
-      select act_id::text from user_profiles
+      select act_id::text from profiles
       where id = auth.uid()
         and role in ('band_admin', 'superadmin')
     )
