@@ -60,9 +60,11 @@ function formatShowDate(dateStr: string | null): string {
 
 // ─── MediaCard ────────────────────────────────────────────────────────────────
 
-function MediaCard({ item, signedUrl, onDelete, onToggleFeatured }: {
+function MediaCard({ item, signedUrl, urlLoading, urlFailed, onDelete, onToggleFeatured }: {
   item: MediaItem;
   signedUrl?: string;
+  urlLoading: boolean;
+  urlFailed: boolean;
   onDelete: (id: string) => void;
   onToggleFeatured: (id: string, featured: boolean) => void;
 }) {
@@ -98,12 +100,23 @@ function MediaCard({ item, signedUrl, onDelete, onToggleFeatured }: {
     }}>
       <div style={{ width: '100%', paddingBottom: '66%', position: 'relative', background: 'rgba(0,0,0,0.3)' }}>
         {isImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={signedUrl || item.public_url}
-            alt={item.alt_text || item.file_name}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-          />
+          urlLoading ? (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Loading…</span>
+            </div>
+          ) : urlFailed ? (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}>
+              <span style={{ fontSize: '1.2rem', opacity: 0.5 }}>⚠</span>
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.62rem', color: '#f87171', letterSpacing: '0.04em' }}>Unavailable</span>
+            </div>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={signedUrl}
+              alt={item.alt_text || item.file_name}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          )
         ) : (
           <div style={{
             position: 'absolute', inset: 0, display: 'flex',
@@ -156,15 +169,25 @@ function MediaCard({ item, signedUrl, onDelete, onToggleFeatured }: {
         </div>
 
         <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.35rem', flexWrap: 'wrap' }}>
-          <a
-            href={signedUrl || item.public_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-ghost btn-sm"
-            style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', textDecoration: 'none' }}
-          >
-            View
-          </a>
+          {signedUrl ? (
+            <a
+              href={signedUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-ghost btn-sm"
+              style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', textDecoration: 'none' }}
+            >
+              View
+            </a>
+          ) : (
+            <span
+              className="btn btn-ghost btn-sm"
+              style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', opacity: 0.35, cursor: urlFailed ? 'not-allowed' : 'wait' }}
+              title={urlFailed ? 'URL unavailable' : 'Loading…'}
+            >
+              View
+            </span>
+          )}
 
           {!confirmDelete ? (
             <button
@@ -208,10 +231,12 @@ export default function MediaLibraryPage() {
   // ── Media library state ──────────────────────────────────────────────────
   const [items, setItems] = useState<MediaItem[]>([]);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  const [failedUrlIds, setFailedUrlIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
   const [uploadState, setUploadState] = useState<UploadState>('idle');
   const [uploadError, setUploadError] = useState('');
+  const [featuredError, setFeaturedError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
@@ -261,6 +286,7 @@ export default function MediaLibraryPage() {
       setItems(rows);
 
       const urlMap: Record<string, string> = {};
+      const failedIds = new Set<string>();
       await Promise.all(
         rows.map(async (row) => {
           const res = await fetch(`/api/media/signed-url?id=${row.id}`, {
@@ -269,10 +295,13 @@ export default function MediaLibraryPage() {
           if (res.ok) {
             const { signedUrl } = await res.json();
             urlMap[row.id] = signedUrl;
+          } else {
+            failedIds.add(row.id);
           }
         })
       );
       setSignedUrls(urlMap);
+      setFailedUrlIds(failedIds);
     } catch (err) {
       console.error('media load:', err);
     } finally {
@@ -554,6 +583,12 @@ export default function MediaLibraryPage() {
 
       const record: MediaItem = await res.json();
       setItems(prev => [record, ...prev]);
+      fetch(`/api/media/signed-url?id=${record.id}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      }).then(r => r.ok ? r.json() : null).then(data => {
+        if (data?.signedUrl) setSignedUrls(prev => ({ ...prev, [record.id]: data.signedUrl }));
+        else setFailedUrlIds(prev => new Set([...prev, record.id]));
+      });
       setUploadState('done');
       setUploadProgress('');
       setTimeout(() => {
@@ -571,10 +606,15 @@ export default function MediaLibraryPage() {
   };
 
   const handleToggleFeatured = async (id: string, featured: boolean) => {
-    setItems(prev => prev.map(i => i.id === id ? { ...i, is_featured: featured } : i));
+    const previousFeatured = items.find(i => i.id === id)?.is_featured ?? !featured;
+    setItems(cur => cur.map(i => i.id === id ? { ...i, is_featured: featured } : i));
+    setFeaturedError(null);
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    await fetch(`/api/media/${id}`, {
+    if (!session) {
+      setItems(cur => cur.map(i => i.id === id ? { ...i, is_featured: previousFeatured } : i));
+      return;
+    }
+    const res = await fetch(`/api/media/${id}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -582,6 +622,11 @@ export default function MediaLibraryPage() {
       },
       body: JSON.stringify({ is_featured: featured }),
     });
+    if (!res.ok) {
+      setItems(cur => cur.map(i => i.id === id ? { ...i, is_featured: previousFeatured } : i));
+      setFeaturedError('Star not saved — try again');
+      setTimeout(() => setFeaturedError(null), 3000);
+    }
   };
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -669,11 +714,26 @@ export default function MediaLibraryPage() {
               </div>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
-              {filtered.map(item => (
-                <MediaCard key={item.id} item={item} signedUrl={signedUrls[item.id]} onDelete={handleDelete} onToggleFeatured={handleToggleFeatured} />
-              ))}
-            </div>
+            <>
+              {featuredError && (
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#f87171', marginBottom: '0.6rem' }}>
+                  {featuredError}
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
+                {filtered.map(item => (
+                  <MediaCard
+                    key={item.id}
+                    item={item}
+                    signedUrl={signedUrls[item.id]}
+                    urlLoading={loading || (!signedUrls[item.id] && !failedUrlIds.has(item.id))}
+                    urlFailed={failedUrlIds.has(item.id)}
+                    onDelete={handleDelete}
+                    onToggleFeatured={handleToggleFeatured}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
 

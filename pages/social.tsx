@@ -69,6 +69,7 @@ export default function SocialQueue() {
   const [imagePickerPost, setImagePickerPost] = useState<string | null>(null);
   const [mediaItems, setMediaItems] = useState<any[]>([]);
   const [mediaSignedUrls, setMediaSignedUrls] = useState<Record<string, string>>({});
+  const [mediaFailedIds, setMediaFailedIds] = useState<Set<string>>(new Set());
   const [mediaLoading, setMediaLoading] = useState(false);
 
   useEffect(() => { loadActs(); }, []);
@@ -184,6 +185,7 @@ export default function SocialQueue() {
     const rows = data || [];
     setMediaItems(rows);
 
+    const failedIds = new Set<string>();
     if (session && rows.length > 0) {
       const urlMap: Record<string, string> = {};
       await Promise.all(
@@ -194,11 +196,16 @@ export default function SocialQueue() {
           if (res.ok) {
             const { signedUrl } = await res.json();
             urlMap[row.id] = signedUrl;
+          } else {
+            failedIds.add(row.id);
           }
         })
       );
       setMediaSignedUrls(urlMap);
+    } else if (rows.length > 0) {
+      rows.forEach((r: any) => failedIds.add(r.id));
     }
+    setMediaFailedIds(failedIds);
     setMediaLoading(false);
   };
 
@@ -711,22 +718,30 @@ export default function SocialQueue() {
                 {mediaItems.map(img => (
                   <div
                     key={img.id}
-                    onClick={() => attachImage(imagePickerPost, mediaSignedUrls[img.id] || img.public_url)}
+                    onClick={() => { if (mediaSignedUrls[img.id]) attachImage(imagePickerPost, mediaSignedUrls[img.id]); }}
                     style={{
-                      cursor: 'pointer',
+                      cursor: mediaSignedUrls[img.id] ? 'pointer' : (mediaFailedIds.has(img.id) ? 'not-allowed' : 'default'),
                       border: '2px solid rgba(255,255,255,0.08)',
                       borderRadius: 6, overflow: 'hidden',
                       transition: 'border-color 0.15s',
+                      opacity: mediaFailedIds.has(img.id) ? 0.4 : 1,
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                    onMouseEnter={e => { if (mediaSignedUrls[img.id]) e.currentTarget.style.borderColor = 'var(--accent)'; }}
                     onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}
                   >
                     <div style={{ width: '100%', paddingBottom: '66%', position: 'relative', background: 'rgba(0,0,0,0.3)' }}>
-                      <img
-                        src={mediaSignedUrls[img.id] || img.public_url}
-                        alt={img.file_name}
-                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
+                      {mediaSignedUrls[img.id] ? (
+                        <img
+                          src={mediaSignedUrls[img.id]}
+                          alt={img.file_name}
+                          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : mediaFailedIds.has(img.id) ? (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
+                          <span style={{ fontSize: '1rem', opacity: 0.5 }}>⚠</span>
+                          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.6rem', color: '#f87171' }}>Unavailable</span>
+                        </div>
+                      ) : null}
                     </div>
                     <div style={{ padding: '0.3rem 0.4rem', fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {img.file_name}
