@@ -59,7 +59,7 @@ function formatShowDate(dateStr: string | null): string {
 
 // ─── MediaCard ────────────────────────────────────────────────────────────────
 
-function MediaCard({ item, onDelete }: { item: MediaItem; onDelete: (id: string) => void }) {
+function MediaCard({ item, signedUrl, onDelete }: { item: MediaItem; signedUrl?: string; onDelete: (id: string) => void }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -94,7 +94,7 @@ function MediaCard({ item, onDelete }: { item: MediaItem; onDelete: (id: string)
         {isImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={item.public_url}
+            src={signedUrl || item.public_url}
             alt={item.alt_text || item.file_name}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
           />
@@ -135,7 +135,7 @@ function MediaCard({ item, onDelete }: { item: MediaItem; onDelete: (id: string)
 
         <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.35rem', flexWrap: 'wrap' }}>
           <a
-            href={item.public_url}
+            href={signedUrl || item.public_url}
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-ghost btn-sm"
@@ -185,6 +185,7 @@ export default function MediaLibraryPage() {
 
   // ── Media library state ──────────────────────────────────────────────────
   const [items, setItems] = useState<MediaItem[]>([]);
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
   const [uploadState, setUploadState] = useState<UploadState>('idle');
@@ -234,7 +235,22 @@ export default function MediaLibraryPage() {
         .from('media_library')
         .select('*')
         .order('created_at', { ascending: false });
-      setItems(data || []);
+      const rows = data || [];
+      setItems(rows);
+
+      const urlMap: Record<string, string> = {};
+      await Promise.all(
+        rows.map(async (row) => {
+          const res = await fetch(`/api/media/signed-url?id=${row.id}`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+          if (res.ok) {
+            const { signedUrl } = await res.json();
+            urlMap[row.id] = signedUrl;
+          }
+        })
+      );
+      setSignedUrls(urlMap);
     } catch (err) {
       console.error('media load:', err);
     } finally {
@@ -619,7 +635,7 @@ export default function MediaLibraryPage() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
               {filtered.map(item => (
-                <MediaCard key={item.id} item={item} onDelete={handleDelete} />
+                <MediaCard key={item.id} item={item} signedUrl={signedUrls[item.id]} onDelete={handleDelete} />
               ))}
             </div>
           )}

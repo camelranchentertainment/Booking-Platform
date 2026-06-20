@@ -68,6 +68,7 @@ export default function SocialQueue() {
   const [copyDone, setCopyDone]     = useState<string | null>(null);
   const [imagePickerPost, setImagePickerPost] = useState<string | null>(null);
   const [mediaItems, setMediaItems] = useState<any[]>([]);
+  const [mediaSignedUrls, setMediaSignedUrls] = useState<Record<string, string>>({});
   const [mediaLoading, setMediaLoading] = useState(false);
 
   useEffect(() => { loadActs(); }, []);
@@ -174,12 +175,30 @@ export default function SocialQueue() {
   const loadMedia = async () => {
     if (mediaItems.length > 0) return;
     setMediaLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
     const { data } = await supabase
       .from('media_library')
-      .select('id, public_url, file_name, file_type, mime_type')
+      .select('id, public_url, file_name, file_type, mime_type, storage_path')
       .in('file_type', ['image', 'logo'])
       .order('created_at', { ascending: false });
-    setMediaItems(data || []);
+    const rows = data || [];
+    setMediaItems(rows);
+
+    if (session && rows.length > 0) {
+      const urlMap: Record<string, string> = {};
+      await Promise.all(
+        rows.map(async (row) => {
+          const res = await fetch(`/api/media/signed-url?id=${row.id}`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+          if (res.ok) {
+            const { signedUrl } = await res.json();
+            urlMap[row.id] = signedUrl;
+          }
+        })
+      );
+      setMediaSignedUrls(urlMap);
+    }
     setMediaLoading(false);
   };
 
@@ -692,7 +711,7 @@ export default function SocialQueue() {
                 {mediaItems.map(img => (
                   <div
                     key={img.id}
-                    onClick={() => attachImage(imagePickerPost, img.public_url)}
+                    onClick={() => attachImage(imagePickerPost, mediaSignedUrls[img.id] || img.public_url)}
                     style={{
                       cursor: 'pointer',
                       border: '2px solid rgba(255,255,255,0.08)',
@@ -704,7 +723,7 @@ export default function SocialQueue() {
                   >
                     <div style={{ width: '100%', paddingBottom: '66%', position: 'relative', background: 'rgba(0,0,0,0.3)' }}>
                       <img
-                        src={img.public_url}
+                        src={mediaSignedUrls[img.id] || img.public_url}
                         alt={img.file_name}
                         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                       />
