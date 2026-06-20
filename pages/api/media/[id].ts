@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'DELETE') return res.status(405).end();
+  if (!['DELETE', 'PATCH'].includes(req.method || '')) return res.status(405).end();
 
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
@@ -34,13 +34,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!record) return res.status(404).json({ error: 'Not found' });
   if (record.act_id !== profile.act_id) return res.status(403).json({ error: 'Forbidden' });
 
-  // Remove from storage
-  await service.storage.from('media-library').remove([record.storage_path]);
+  if (req.method === 'PATCH') {
+    const { is_featured } = req.body as { is_featured?: boolean };
+    if (typeof is_featured !== 'boolean') {
+      return res.status(400).json({ error: 'is_featured must be boolean' });
+    }
 
-  // Remove DB record
+    const { data: updated, error } = await service
+      .from('media_library')
+      .update({ is_featured })
+      .eq('id', id)
+      .select('id, is_featured')
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json(updated);
+  }
+
+  // DELETE
+  await service.storage.from('media-library').remove([record.storage_path]);
   await service.from('media_library').delete().eq('id', id);
 
-  // If this was the primary logo, clear acts.logo_url
   if (record.is_primary_logo) {
     await service.from('acts').update({ logo_url: null }).eq('id', profile.act_id);
   }

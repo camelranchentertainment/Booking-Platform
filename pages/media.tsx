@@ -14,6 +14,7 @@ type MediaItem = {
   public_url: string;
   alt_text: string | null;
   is_primary_logo: boolean;
+  is_featured: boolean;
   created_at: string;
 };
 
@@ -59,7 +60,12 @@ function formatShowDate(dateStr: string | null): string {
 
 // ─── MediaCard ────────────────────────────────────────────────────────────────
 
-function MediaCard({ item, signedUrl, onDelete }: { item: MediaItem; signedUrl?: string; onDelete: (id: string) => void }) {
+function MediaCard({ item, signedUrl, onDelete, onToggleFeatured }: {
+  item: MediaItem;
+  signedUrl?: string;
+  onDelete: (id: string) => void;
+  onToggleFeatured: (id: string, featured: boolean) => void;
+}) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -121,6 +127,22 @@ function MediaCard({ item, signedUrl, onDelete }: { item: MediaItem; signedUrl?:
             Logo
           </div>
         )}
+        <button
+          onClick={() => onToggleFeatured(item.id, !item.is_featured)}
+          title={item.is_featured ? 'Remove from EPK' : 'Mark as EPK feature'}
+          style={{
+            position: 'absolute', top: 6, right: 6,
+            background: item.is_featured ? 'var(--accent)' : 'rgba(0,0,0,0.55)',
+            border: 'none', borderRadius: '50%',
+            width: 26, height: 26,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', fontSize: '0.85rem', lineHeight: 1,
+            transition: 'background 0.15s',
+            color: item.is_featured ? '#000' : 'rgba(255,255,255,0.7)',
+          }}
+        >
+          {item.is_featured ? '★' : '☆'}
+        </button>
       </div>
 
       <div style={{ padding: '0.65rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.3rem', flex: 1 }}>
@@ -548,6 +570,20 @@ export default function MediaLibraryPage() {
     setItems(prev => prev.filter(i => i.id !== id));
   };
 
+  const handleToggleFeatured = async (id: string, featured: boolean) => {
+    setItems(prev => prev.map(i => i.id === id ? { ...i, is_featured: featured } : i));
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    await fetch(`/api/media/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ is_featured: featured }),
+    });
+  };
+
   // ── Derived ───────────────────────────────────────────────────────────────
 
   const filtered = filter === 'all' ? items : items.filter(i => i.file_type === filter);
@@ -635,7 +671,7 @@ export default function MediaLibraryPage() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
               {filtered.map(item => (
-                <MediaCard key={item.id} item={item} signedUrl={signedUrls[item.id]} onDelete={handleDelete} />
+                <MediaCard key={item.id} item={item} signedUrl={signedUrls[item.id]} onDelete={handleDelete} onToggleFeatured={handleToggleFeatured} />
               ))}
             </div>
           )}
