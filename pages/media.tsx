@@ -10,7 +10,7 @@ type MediaItem = {
   file_name: string;
   file_type: string;
   mime_type: string;
-  file_size: number;
+  file_size_bytes: number;
   public_url: string;
   alt_text: string | null;
   is_primary_logo: boolean;
@@ -130,7 +130,7 @@ function MediaCard({ item, onDelete }: { item: MediaItem; onDelete: (id: string)
         <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', gap: '0.5rem' }}>
           <span>{FILE_TYPE_LABELS[item.file_type] || item.file_type}</span>
           <span>·</span>
-          <span>{formatBytes(item.file_size)}</span>
+          <span>{formatBytes(item.file_size_bytes)}</span>
         </div>
 
         <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.35rem', flexWrap: 'wrap' }}>
