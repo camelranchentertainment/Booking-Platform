@@ -1,73 +1,19 @@
--- Phase 14: Media Assets, EPK Settings, Generated Posters
+-- Phase 14 (revised): EPK Settings, Generated Posters, Media Library Extensions
 -- Run manually in Supabase SQL Editor. Review before executing.
--- Dependencies: Phase 1 migration (profiles, acts, bookings) must be applied first.
+-- Dependencies: Phase 1 (user_profiles, acts, bookings) and Phase 4 (media_library) must be applied first.
 --
--- STORAGE BUCKET:
---   This migration includes an INSERT into storage.buckets for the
---   private 'media-assets' bucket. If your Supabase role lacks storage
---   admin permissions, create the bucket manually first:
---     Dashboard → Storage → New Bucket
---     Name: media-assets  |  Public: OFF  |  File size limit: 50 MB
---   Then run the rest of this file (the INSERT is idempotent via ON CONFLICT).
+-- WHAT CHANGED FROM ORIGINAL DRAFT:
+--   • media_assets table removed — media_library already serves this purpose
+--   • media-assets storage bucket and its policies removed
+--   • generated_posters FKs now reference media_library(id) instead of media_assets(id)
+--   • created_by FK corrected to user_profiles(id) (profiles table does not exist)
+--   • Additive columns added to media_library: is_featured, epk_order, is_public, caption
+--   • file_type on media_library has no CHECK constraint (comment-only in phase4) — no change needed
+--   • media-library storage bucket switched from public to private
+--   • storage.objects RLS policies added for media-library bucket (phase4 added none)
 
 -- ============================================================
--- 1. media_assets
--- ============================================================
-create table if not exists media_assets (
-  id                  uuid        primary key default gen_random_uuid(),
-  act_id              uuid        not null references acts(id) on delete cascade,
-  uploaded_by         uuid        references profiles(id) on delete set null,
-  label               text,
-  category            text        not null
-                        check (category in ('photo','video','audio','document','brand','poster')),
-  storage_path        text,
-  file_name           text,
-  file_size           integer,
-  mime_type           text,
-  external_url        text,
-  embed_type          text,
-  tags                text[]      not null default '{}',
-  alt_text            text,
-  caption             text,
-  is_featured         boolean     not null default false,
-  is_public           boolean     not null default false,
-  epk_order           integer,
-  width               integer,
-  height              integer,
-  created_at          timestamptz not null default now(),
-  updated_at          timestamptz not null default now(),
-  deleted_at          timestamptz
-);
-
-alter table media_assets enable row level security;
-
-drop policy if exists "Act admins can manage own media assets" on media_assets;
-create policy "Act admins can manage own media assets"
-  on media_assets for all
-  using (
-    exists (
-      select 1 from profiles p
-      where p.id = auth.uid()
-        and p.act_id = media_assets.act_id
-        and p.role in ('band_admin', 'superadmin')
-    )
-  )
-  with check (
-    exists (
-      select 1 from profiles p
-      where p.id = auth.uid()
-        and p.act_id = media_assets.act_id
-        and p.role in ('band_admin', 'superadmin')
-    )
-  );
-
-drop trigger if exists media_assets_updated_at on media_assets;
-create trigger media_assets_updated_at
-  before update on media_assets
-  for each row execute function update_updated_at_column();
-
--- ============================================================
--- 2. epk_settings  (one row per act, enforced by UNIQUE on act_id)
+-- 1. epk_settings  (one row per act, enforced by UNIQUE on act_id)
 -- ============================================================
 create table if not exists epk_settings (
   id                  uuid        primary key default gen_random_uuid(),
@@ -100,7 +46,7 @@ create policy "Act admins can manage own EPK settings"
   on epk_settings for all
   using (
     exists (
-      select 1 from profiles p
+      select 1 from user_profiles p
       where p.id = auth.uid()
         and p.act_id = epk_settings.act_id
         and p.role in ('band_admin', 'superadmin')
@@ -108,7 +54,7 @@ create policy "Act admins can manage own EPK settings"
   )
   with check (
     exists (
-      select 1 from profiles p
+      select 1 from user_profiles p
       where p.id = auth.uid()
         and p.act_id = epk_settings.act_id
         and p.role in ('band_admin', 'superadmin')
@@ -121,19 +67,20 @@ create trigger epk_settings_updated_at
   for each row execute function update_updated_at_column();
 
 -- ============================================================
--- 3. generated_posters
+-- 2. generated_posters
+--    FKs point to media_library(id) — media_assets table was removed.
 -- ============================================================
 create table if not exists generated_posters (
   id                      uuid        primary key default gen_random_uuid(),
   act_id                  uuid        not null references acts(id) on delete cascade,
   booking_id              uuid        not null references bookings(id) on delete cascade,
-  media_asset_id          uuid        references media_assets(id) on delete set null,
+  media_asset_id          uuid        references media_library(id) on delete set null,
   style                   text        not null
                             check (style in ('americana','electric','western')),
   included_fields         jsonb       not null default '{}',
-  output_media_asset_id   uuid        references media_assets(id) on delete set null,
+  output_media_asset_id   uuid        references media_library(id) on delete set null,
   created_at              timestamptz not null default now(),
-  created_by              uuid        references profiles(id) on delete set null
+  created_by              uuid        references user_profiles(id) on delete set null
 );
 
 alter table generated_posters enable row level security;
@@ -143,7 +90,7 @@ create policy "Act admins can manage own generated posters"
   on generated_posters for all
   using (
     exists (
-      select 1 from profiles p
+      select 1 from user_profiles p
       where p.id = auth.uid()
         and p.act_id = generated_posters.act_id
         and p.role in ('band_admin', 'superadmin')
@@ -151,7 +98,7 @@ create policy "Act admins can manage own generated posters"
   )
   with check (
     exists (
-      select 1 from profiles p
+      select 1 from user_profiles p
       where p.id = auth.uid()
         and p.act_id = generated_posters.act_id
         and p.role in ('band_admin', 'superadmin')
@@ -159,63 +106,79 @@ create policy "Act admins can manage own generated posters"
   );
 
 -- ============================================================
--- 4. Storage bucket: media-assets (private)
+-- 3. Extend media_library with EPK / poster metadata columns
+--    file_type has NO CHECK constraint in phase4 (comment only),
+--    so file_type = 'poster' is already valid — no schema change needed.
 -- ============================================================
--- Idempotent — safe to run even if bucket already exists.
-insert into storage.buckets (id, name, public)
-values ('media-assets', 'media-assets', false)
-on conflict (id) do nothing;
+alter table media_library
+  add column if not exists is_featured boolean default false,
+  add column if not exists epk_order   integer,
+  add column if not exists is_public   boolean default false,
+  add column if not exists caption     text;
 
--- Storage paths must follow the pattern: {act_id}/{filename}
--- The first path segment is always the act_id (as text/UUID).
--- All four DML operations are covered separately so the USING /
--- WITH CHECK sides can be expressed correctly per operation.
+-- ============================================================
+-- 4. Switch media-library storage bucket from public to private
+--    Uses the name column — bucket was created manually via Dashboard
+--    and Supabase sets id = name for dashboard-created buckets, but
+--    name is the safe identifier here in case id was customised.
+-- ============================================================
+update storage.buckets
+  set public = false
+  where name = 'media-library';
+
+-- ============================================================
+-- 5. Storage RLS policies for the media-library bucket
+--    Phase 4 added zero storage.objects policies (bucket was public).
+--    Storage paths must follow the pattern: {act_id}/{filename}
+--    bucket_id = 'media-library' matches storage.buckets.id, which
+--    equals the name for dashboard-created buckets.
+-- ============================================================
 
 -- SELECT: any member of the act can read their act's files
-drop policy if exists "Act members can read own act media" on storage.objects;
-create policy "Act members can read own act media"
+drop policy if exists "Act members can read media-library" on storage.objects;
+create policy "Act members can read media-library"
   on storage.objects for select
   using (
-    bucket_id = 'media-assets'
+    bucket_id = 'media-library'
     and split_part(name, '/', 1) in (
-      select act_id::text from profiles where id = auth.uid()
+      select act_id::text from user_profiles where id = auth.uid()
     )
   );
 
 -- INSERT: only band_admin / superadmin can upload
-drop policy if exists "Act admins can upload to own act media" on storage.objects;
-create policy "Act admins can upload to own act media"
+drop policy if exists "Act admins can upload to media-library" on storage.objects;
+create policy "Act admins can upload to media-library"
   on storage.objects for insert
   with check (
-    bucket_id = 'media-assets'
+    bucket_id = 'media-library'
     and split_part(name, '/', 1) in (
-      select act_id::text from profiles
+      select act_id::text from user_profiles
       where id = auth.uid()
         and role in ('band_admin', 'superadmin')
     )
   );
 
 -- UPDATE: only band_admin / superadmin can overwrite
-drop policy if exists "Act admins can update own act media" on storage.objects;
-create policy "Act admins can update own act media"
+drop policy if exists "Act admins can update media-library" on storage.objects;
+create policy "Act admins can update media-library"
   on storage.objects for update
   using (
-    bucket_id = 'media-assets'
+    bucket_id = 'media-library'
     and split_part(name, '/', 1) in (
-      select act_id::text from profiles
+      select act_id::text from user_profiles
       where id = auth.uid()
         and role in ('band_admin', 'superadmin')
     )
   );
 
 -- DELETE: only band_admin / superadmin can remove
-drop policy if exists "Act admins can delete own act media" on storage.objects;
-create policy "Act admins can delete own act media"
+drop policy if exists "Act admins can delete from media-library" on storage.objects;
+create policy "Act admins can delete from media-library"
   on storage.objects for delete
   using (
-    bucket_id = 'media-assets'
+    bucket_id = 'media-library'
     and split_part(name, '/', 1) in (
-      select act_id::text from profiles
+      select act_id::text from user_profiles
       where id = auth.uid()
         and role in ('band_admin', 'superadmin')
     )
