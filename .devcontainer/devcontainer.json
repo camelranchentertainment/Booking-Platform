@@ -2,7 +2,7 @@
   "name": "Camel Ranch Booking",
   "image": "mcr.microsoft.com/devcontainers/typescript-node:18",
   "features": {
-    "ghcr.io/anthropics/claude-code/claude-code:1.0": {}
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
   },
   
   "remoteUser": "node"
