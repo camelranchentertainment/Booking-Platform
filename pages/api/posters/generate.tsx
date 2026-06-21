@@ -640,13 +640,21 @@ export default async function handler(req: Request): Promise<Response> {
     : style === 'electric' ? electric(params)
     : western(params);
 
-  return new ImageResponse(jsx, {
-    width: W,
-    height: H,
-    fonts: [
-      { name: 'Bebas', data: bebasFont, weight: 400, style: 'normal' },
-      { name: 'Playfair', data: playfairFont, weight: 400, style: 'normal' },
-      { name: 'Playfair', data: playfairBoldFont, weight: 700, style: 'normal' },
-    ],
-  });
+  try {
+    return new ImageResponse(jsx, {
+      width: W,
+      height: H,
+      fonts: [
+        { name: 'Bebas', data: bebasFont, weight: 400, style: 'normal' },
+        { name: 'Playfair', data: playfairFont, weight: 400, style: 'normal' },
+        { name: 'Playfair', data: playfairBoldFont, weight: 700, style: 'normal' },
+      ],
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ error: 'Poster generation failed', detail: message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 }
