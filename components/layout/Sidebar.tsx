@@ -66,16 +66,13 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
 
   const loadNotifs = useCallback(async () => {
     if (!profile) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
 
     const collected: Notif[] = [];
-    const authEmail = user.email || profile?.email || null;
-    if (authEmail) {
+    if (profile.email) {
       const { data: invites } = await supabase
         .from('act_invitations')
         .select('id, role, token, act:act_id(act_name)')
-        .eq('email', authEmail)
+        .eq('email', profile.email)
         .eq('status', 'pending');
       (invites || []).forEach(i => collected.push({ type: 'act_invitation', ...i, act: i.act as any }));
     }
@@ -84,12 +81,12 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
     const { data: sys } = await supabase
       .from('notifications')
       .select('id, type, message, action_url, created_at')
-      .eq('user_id', user.id)
+      .eq('user_id', profile.id)
       .eq('read', false)
       .order('created_at', { ascending: false })
       .limit(10);
     setSysNotifs((sys || []) as SysNotif[]);
-  }, [profile]);
+  }, [profile?.id]);
 
   useEffect(() => { loadNotifs(); }, [loadNotifs]);
 
