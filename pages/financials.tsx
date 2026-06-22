@@ -63,11 +63,10 @@ export default function Financials() {
     const { data: { session: sess } } = await supabase.auth.getSession();
     const token = sess?.access_token ?? '';
     setSession(token);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!sess?.user) return;
     await loadBookings();
     if (token) loadExpenses(token);
-    const actId = await getActId(supabase, user.id);
+    const actId = await getActId(supabase, sess.user.id);
     if (actId) {
       const { data: toursData } = await supabase
         .from('tours')
