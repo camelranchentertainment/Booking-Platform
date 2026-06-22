@@ -7,7 +7,7 @@ interface PendingInvite {
   id: string;
   email: string;
   role: string;
-  invited_at: string;
+  created_at: string;
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -78,7 +78,7 @@ export default function BandMembers() {
 
     const [membersRes, invitesRes] = await Promise.all([
       supabase.from('profiles').select('id, display_name, email, role, created_at').eq('act_id', foundActId),
-      supabase.from('act_invitations').select('id, email, role, invited_at').eq('act_id', foundActId).eq('status', 'pending'),
+      supabase.from('act_invitations').select('id, email, role, created_at').eq('act_id', foundActId).eq('status', 'pending'),
     ]);
 
     const membersList: any[] = membersRes.data || [];
