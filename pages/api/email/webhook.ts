@@ -24,29 +24,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const rawBody = await getRawBody(req);
   const rawBodyString = rawBody.toString('utf8');
 
-  // Verify Svix signature
+  // Verify Svix signature — uses the same svix library Resend wraps internally
   const secret = process.env.RESEND_WEBHOOK_SECRET;
-  if (false && secret) {
-    const svixId        = req.headers['svix-id'] as string;
-    const svixTimestamp = req.headers['svix-timestamp'] as string;
-    const svixSignature = req.headers['svix-signature'] as string;
+  if (!secret) {
+    // Secret not configured — reject without processing to avoid unauthenticated ingestion.
+    // Set RESEND_WEBHOOK_SECRET in Vercel env vars to enable this route.
+    console.error('[email/webhook] RESEND_WEBHOOK_SECRET not set; request rejected without processing');
+    return res.status(200).json({ ok: true });
+  }
 
-    if (!svixId || !svixTimestamp || !svixSignature) {
-      return res.status(400).json({ error: 'Missing Svix headers' });
-    }
+  const svixId        = req.headers['svix-id'] as string;
+  const svixTimestamp = req.headers['svix-timestamp'] as string;
+  const svixSignature = req.headers['svix-signature'] as string;
 
-    console.log('Webhook secret prefix:', secret?.substring(0, 10));
-    console.log('Svix headers present:', !!svixId, !!svixTimestamp, !!svixSignature);
-    try {
-      const wh = new Webhook(secret!);
-      wh.verify(rawBodyString, {
-        'svix-id':        svixId,
-        'svix-timestamp': svixTimestamp,
-        'svix-signature': svixSignature,
-      });
-    } catch {
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
+  if (!svixId || !svixTimestamp || !svixSignature) {
+    // Missing headers — return 200 to avoid Resend retry loops
+    return res.status(200).json({ ok: true });
+  }
+
+  try {
+    const wh = new Webhook(secret);
+    wh.verify(rawBodyString, {
+      'svix-id':        svixId,
+      'svix-timestamp': svixTimestamp,
+      'svix-signature': svixSignature,
+    });
+  } catch {
+    // Invalid signature — return 200 to avoid Resend retry loops
+    return res.status(200).json({ ok: true });
   }
 
   const event = JSON.parse(rawBodyString);
@@ -57,16 +62,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const subject = inbound?.subject ?? '';
     const body = inbound?.text ?? inbound?.html ?? '';
 
-    // Try to find matching act by looking up outbound emails to this sender
+    // Try to find matching act by looking up outbound emails sent to this sender's domain
     const domain = fromAddress.split('@')[1];
     let actId = null;
     let venueId = null;
 
     if (domain) {
       const { data: logs } = await supabase
-        .from('email_logs')
+        .from('email_log')
         .select('act_id, venue_id')
-        .ilike('to_address', `%@${domain}`)
+        .ilike('recipient', `%@${domain}`)
+        .neq('direction', 'received')
         .order('sent_at', { ascending: false })
         .limit(1);
 
@@ -76,14 +82,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    await supabase.from('email_logs').insert({
+    // Resend may deliver to_address as a JSON array or a plain string
+    const toRaw = inbound?.to;
+    const recipient = Array.isArray(toRaw) ? toRaw[0] : (typeof toRaw === 'string' ? toRaw : '');
+
+    await supabase.from('email_log').insert({
       act_id:       actId,
       venue_id:     venueId,
       direction:    'received',
       from_address: fromAddress,
-      to_address:   inbound?.to ?? '',
-      subject:      subject,
-      body:         body,
+      recipient,
+      subject,
+      body:         body || null,
+      status:       'delivered',
       sent_at:      new Date().toISOString(),
       is_draft:     false,
     });
