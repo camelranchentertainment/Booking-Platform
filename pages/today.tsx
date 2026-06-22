@@ -632,19 +632,16 @@ export default function TodayPage() {
   const load = async (td: string, tm: string) => {
     setLoading(true);
     try {
-      const [{ data: { user } }, { data: { session: sess } }] = await Promise.all([
-        supabase.auth.getUser(),
-        supabase.auth.getSession(),
-      ]);
-      if (!user || !sess) return;
+      const { data: { session: sess } } = await supabase.auth.getSession();
+      if (!sess) return;
 
-      setUserId(user.id);
+      setUserId(sess.user.id);
       setSession(sess.access_token);
 
       const { data: prof } = await supabase
         .from('profiles')
         .select('role, act_id')
-        .eq('id', user.id)
+        .eq('id', sess.user.id)
         .maybeSingle();
 
       const userRole = prof?.role || 'member';

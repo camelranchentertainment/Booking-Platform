@@ -70,11 +70,10 @@ export default function HistoryPage() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       setToken(session?.access_token || '');
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+      if (!session?.user) return;
+      const { data: prof } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
       setRole(prof?.role || '');
-      const actId = await getActId(supabase, user.id);
+      const actId = await getActId(supabase, session.user.id);
       if (!actId) return;
       const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
