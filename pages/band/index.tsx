@@ -328,11 +328,12 @@ export default function BandDashboard() {
     if (messages.length === 0 || agentLoading) return;
     const { data: { session } } = await supabase.auth.getSession();
     const noteContent = messages.map(m => `${m.role === 'user' ? 'Q' : 'A'}: ${m.content}`).join('\n\n');
-    await fetch('/api/notes', {
+    const res = await fetch('/api/notes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ content: noteContent, note_date: today, visibility: 'agent_only' }),
+      body: JSON.stringify({ content: noteContent, note_date: today, visibility: 'admin_only' }),
     });
+    if (!res.ok) { setAgentError('Failed to save note — please try again.'); return; }
     setNoteSaved(true);
   };
 

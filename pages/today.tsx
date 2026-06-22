@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type Visibility = 'private' | 'band_admin' | 'all_members';
+type Visibility = 'admin_only' | 'band_admin' | 'all_members';
 
 interface DailyNote {
   id: string;
@@ -215,8 +215,8 @@ interface NotesPanelProps {
 function NotesPanel({ userId, actId, tourId, tourName, todayStr, role, session }: NotesPanelProps) {
   const [noteId,     setNoteId]     = useState<string | null>(null);
   const [content,    setContent]    = useState('');
-  const [visibility, setVisibility] = useState<Visibility>('private');
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [visibility, setVisibility] = useState<Visibility>('admin_only');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   // Past notes modal
   const [showPast,      setShowPast]      = useState(false);
@@ -231,7 +231,7 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, role, session }
 
   // Refs so debounced save always uses the latest values (avoids stale closures)
   const contentRef    = useRef('');
-  const visibilityRef = useRef<Visibility>('private');
+  const visibilityRef = useRef<Visibility>('admin_only');
   const saveTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const authHeaders = {
@@ -252,9 +252,9 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, role, session }
       if (mine) {
         setNoteId(mine.id);
         contentRef.current    = mine.content ?? '';
-        visibilityRef.current = mine.visibility ?? 'private';
+        visibilityRef.current = mine.visibility ?? 'admin_only';
         setContent(mine.content ?? '');
-        setVisibility(mine.visibility ?? 'private');
+        setVisibility(mine.visibility ?? 'admin_only');
         setSaveStatus('saved');
       }
     })();
@@ -273,7 +273,7 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, role, session }
         visibility: visibilityRef.current,
       }),
     });
-    if (!res.ok) { setSaveStatus('idle'); return; }
+    if (!res.ok) { setSaveStatus('error'); return; }
     const { note } = await res.json();
     setNoteId(note.id);
     setSaveStatus('saved');
@@ -368,6 +368,9 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, role, session }
         {saveStatus === 'saved' && (
           <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: '#34d399', letterSpacing: '0.04em' }}>✓ Saved</span>
         )}
+        {saveStatus === 'error' && (
+          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: '#f87171', letterSpacing: '0.04em' }}>✕ Save failed</span>
+        )}
       </div>
 
       {/* Date + active tour context */}
@@ -425,7 +428,7 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, role, session }
             cursor:       'pointer',
           }}
         >
-          <option value="agent_only">Only me</option>
+          <option value="admin_only">Only me</option>
           <option value="band_admin">Band Admin can see</option>
           <option value="all_members">Whole band can see</option>
         </select>

@@ -25,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       visibility?: string;
     };
 
-    if (visibility !== undefined && !['private', 'band_admin', 'all_members'].includes(visibility)) {
+    if (visibility !== undefined && !['admin_only', 'band_admin', 'all_members'].includes(visibility)) {
       return res.status(400).json({ error: 'Invalid visibility' });
     }
 

@@ -258,7 +258,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const todayStr = new Date().toISOString().split('T')[0];
       const thread = [...history.map((m: any) => `${m.role === 'user' ? 'Q' : 'A'}: ${typeof m.content === 'string' ? m.content : ''}`), `Q: ${message}`, `A: ${reply}`].join('\n');
       await service.from('daily_notes').upsert(
-        { user_id: user.id, note_date: todayStr, content: thread, act_id: actId, visibility: 'agent_only', updated_at: new Date().toISOString() },
+        { user_id: user.id, note_date: todayStr, content: thread, act_id: actId, visibility: 'admin_only', updated_at: new Date().toISOString() },
         { onConflict: 'user_id,note_date' },
       );
     }
