@@ -65,7 +65,7 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function NotifBell({ userId, email }: { userId: string; email: string }) {
+function NotifBell({ userId, email, displayName }: { userId: string; email: string; displayName: string }) {
   const router = useRouter();
   const [open, setOpen]           = useState(false);
   const [sysNotifs, setSys]       = useState<SysNotif[]>([]);
@@ -129,7 +129,7 @@ function NotifBell({ userId, email }: { userId: string; email: string }) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ token: inv.token, displayName: profile?.display_name || '' }),
+      body: JSON.stringify({ token: inv.token, displayName }),
     });
     setResponding('');
     setOpen(false);
@@ -429,7 +429,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
           {/* Bell — only when logged in */}
           {user ? (
             <div style={{ position: 'relative', zIndex: 201 }}>
-              <NotifBell userId={user.id} email={user.email ?? ''} />
+              <NotifBell userId={user.id} email={user.email ?? ''} displayName={profile?.display_name || ''} />
             </div>
           ) : (
             <div style={{ width: 36, flexShrink: 0 }} />
