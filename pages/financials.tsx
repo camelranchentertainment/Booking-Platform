@@ -64,7 +64,7 @@ export default function Financials() {
     const token = sess?.access_token ?? '';
     setSession(token);
     if (!sess?.user) return;
-    await loadBookings();
+    await loadBookings(sess.user.id);
     if (token) loadExpenses(token);
     const actId = await getActId(supabase, sess.user.id);
     if (actId) {
@@ -102,12 +102,10 @@ export default function Financials() {
     setExpLoading(false);
   };
 
-  const loadBookings = async () => {
+  const loadBookings = async (userId: string) => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const actId = await getActId(supabase, user.id);
+      const actId = await getActId(supabase, userId);
       if (!actId) return;
       const { data, error } = await supabase
         .from('bookings')
