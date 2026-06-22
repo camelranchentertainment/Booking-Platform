@@ -32,7 +32,7 @@ export default function Join() {
     setError('');
     setSaving(true);
 
-    let userId: string;
+    let accessToken: string;
 
     if (mode === 'register') {
       const { data, error: err } = await supabase.auth.signUp({
@@ -41,19 +41,19 @@ export default function Join() {
         options: { data: { role: invite?.role || 'member' } },
       });
       if (err) { setError(err.message); setSaving(false); return; }
-      if (!data.user) { setError('Registration failed'); setSaving(false); return; }
-      userId = data.user.id;
+      if (!data.user || !data.session) { setError('Registration failed'); setSaving(false); return; }
+      accessToken = data.session.access_token;
     } else {
       const { data, error: err } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
       if (err) { setError(err.message); setSaving(false); return; }
-      userId = data.user!.id;
+      accessToken = data.session.access_token;
     }
 
     // Accept invite via API
     const res = await fetch('/api/accept-invite', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, userId, displayName: form.displayName }),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ token, displayName: form.displayName }),
     });
     const result = await res.json();
     if (!res.ok) { setError(result.error || 'Failed to accept invite'); setSaving(false); return; }
