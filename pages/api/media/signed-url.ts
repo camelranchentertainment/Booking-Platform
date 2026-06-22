@@ -24,15 +24,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { data: record } = await service
     .from('media_library')
-    .select('id, act_id, storage_path')
+    .select('id, act_id, storage_path, document_category')
     .eq('id', id)
     .maybeSingle();
 
   if (!record) return res.status(404).json({ error: 'Not found' });
   if (record.act_id !== profile.act_id) return res.status(403).json({ error: 'Forbidden' });
 
+  // document_category non-null → file lives in private 'band-documents' bucket;
+  // null → public 'media-library' bucket. No separate column needed.
+  const bucket = record.document_category ? 'band-documents' : 'media-library';
+
   const { data: signed, error } = await service.storage
-    .from('media-library')
+    .from(bucket)
     .createSignedUrl(record.storage_path, 300); // 5-minute TTL
 
   if (error || !signed) {
