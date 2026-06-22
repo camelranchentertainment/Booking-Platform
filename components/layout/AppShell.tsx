@@ -121,13 +121,15 @@ function NotifBell({ userId, email }: { userId: string; email: string }) {
 
   const acceptInvite = async (inv: InviteNotif) => {
     setResponding(inv.id);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setResponding(''); return; }
-    const { data: prof } = await supabase.from('profiles').select('display_name').eq('id', user.id).single();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setResponding(''); return; }
     await fetch('/api/accept-invite', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: inv.token, userId: user.id, displayName: prof?.display_name || '' }),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ token: inv.token, displayName: profile?.display_name || '' }),
     });
     setResponding('');
     setOpen(false);

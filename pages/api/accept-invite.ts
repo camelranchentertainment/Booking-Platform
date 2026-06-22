@@ -5,10 +5,18 @@ import { createNotification } from '../../lib/notifications';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { token, userId, displayName } = req.body;
-  if (!token || !userId) return res.status(400).json({ error: 'token and userId required' });
+  const { token, displayName } = req.body;
+  if (!token) return res.status(400).json({ error: 'token required' });
+
+  const bearerToken = req.headers.authorization?.replace('Bearer ', '');
+  if (!bearerToken) return res.status(401).json({ error: 'Unauthorized' });
 
   const supabase = getServiceClient();
+
+  const { data: { user } } = await supabase.auth.getUser(bearerToken);
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+  const userId = user.id;
 
   // Superadmin guard — superadmins must never have their role or act_id changed.
   const { data: currentProfile } = await supabase
