@@ -21,7 +21,7 @@ export default function MemberView() {
         if (act) setActName(act.act_name);
 
         const { data: bookings } = await supabase.from('bookings')
-          .select(`id, status, show_date, set_time, set_length_min, load_in_time, door_time, advance_notes,
+          .select(`id, status, show_date, set_time, set_length_min, load_in_time, door_time,
             soundcheck_time, end_time, meals_provided, drinks_provided, hotel_booked, sound_system,
             special_requirements, venue_contact_name,
             venue:venues(name, city, state, address, phone)`)
@@ -150,11 +150,6 @@ function ShowCard({ booking: b }: { booking: any }) {
       {b.special_requirements && (
         <div style={{ marginBottom: '0.4rem', fontSize: '0.8rem', color: '#f59e0b' }}>
           ⚠ {b.special_requirements}
-        </div>
-      )}
-      {b.advance_notes && (
-        <div style={{ marginTop: '0.6rem', padding: '0.6rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-          {b.advance_notes}
         </div>
       )}
     </div>
