@@ -33,7 +33,29 @@ type EpkPhoto = {
   thumbnailUrl: string | null;
 };
 
+type DocRow = {
+  id: string;
+  file_name: string;
+  file_size_bytes: number;
+  created_at: string;
+  document_category: string;
+  is_current_version: boolean;
+  mime_type: string;
+};
+
 type UploadState = 'idle' | 'uploading' | 'done' | 'error';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DOC_CATEGORIES: { key: string; label: string }[] = [
+  { key: 'stage_plot_input_list', label: 'Stage Plot & Input List' },
+  { key: 'technical_rider',       label: 'Technical Rider' },
+  { key: 'hospitality_rider',     label: 'Hospitality Rider' },
+  { key: 'w9',                    label: 'W-9' },
+  { key: 'coi_insurance',         label: 'COI / Insurance' },
+  { key: 'contact_sheet',         label: 'Contact Sheet' },
+  { key: 'bio_one_sheet',         label: 'Bio / One-Sheet' },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +76,12 @@ function formatBytes(b: number) {
 function formatShowDate(dateStr: string | null): string {
   if (!dateStr) return 'Date TBD';
   return new Date(dateStr + 'T12:00:00Z').toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  });
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
   });
 }
@@ -243,7 +271,18 @@ export default function MediaLibraryPage() {
   const [altText, setAltText] = useState('');
   const [isPrimaryLogo, setIsPrimaryLogo] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingDocCategory, setPendingDocCategory] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const docFileInputRef = useRef<HTMLInputElement>(null);
+  const pendingDocCategoryRef = useRef<string | null>(null);
+
+  // ── Document section state ───────────────────────────────────────────────
+  const [docSlots, setDocSlots] = useState<Record<string, DocRow | null>>({});
+  const [docHistory, setDocHistory] = useState<Record<string, DocRow[]>>({});
+  const [docHistoryOpen, setDocHistoryOpen] = useState<Record<string, boolean>>({});
+  const [docsLoading, setDocsLoading] = useState(true);
+  const [docFetchingUrl, setDocFetchingUrl] = useState<string | null>(null);
+  const [docViewError, setDocViewError] = useState<string | null>(null);
 
   // ── Poster section state ─────────────────────────────────────────────────
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -258,7 +297,7 @@ export default function MediaLibraryPage() {
   const [savingToLibrary, setSavingToLibrary] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
-  // Optional fields
+  // Optional poster fields
   const [showTicketPrice, setShowTicketPrice] = useState(false);
   const [ticketPrice, setTicketPrice] = useState('');
   const [showOpener, setShowOpener] = useState(false);
@@ -268,7 +307,6 @@ export default function MediaLibraryPage() {
   const [showTicketUrl, setShowTicketUrl] = useState(false);
   const [ticketUrl, setTicketUrl] = useState('');
 
-  // Ref to track blob URL so we can revoke it on unmount / regeneration
   const generatedUrlRef = useRef<string | null>(null);
 
   // ── Media library data ────────────────────────────────────────────────────
@@ -281,6 +319,7 @@ export default function MediaLibraryPage() {
       const { data } = await supabase
         .from('media_library')
         .select('*')
+        .is('document_category', null)
         .order('created_at', { ascending: false });
       const rows = data || [];
       setItems(rows);
@@ -309,7 +348,42 @@ export default function MediaLibraryPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  // ── Document data ─────────────────────────────────────────────────────────
+
+  const loadDocs = async () => {
+    setDocsLoading(true);
+    try {
+      const { data: rows } = await supabase
+        .from('media_library')
+        .select('id, file_name, file_size_bytes, created_at, document_category, is_current_version, mime_type')
+        .not('document_category', 'is', null)
+        .order('created_at', { ascending: false });
+
+      const slots: Record<string, DocRow | null> = {};
+      const history: Record<string, DocRow[]> = {};
+      for (const cat of DOC_CATEGORIES) {
+        slots[cat.key] = null;
+        history[cat.key] = [];
+      }
+      for (const row of rows || []) {
+        const cat = row.document_category as string;
+        if (!cat) continue;
+        if (row.is_current_version) {
+          slots[cat] = row as DocRow;
+        } else {
+          history[cat] = [...(history[cat] || []), row as DocRow];
+        }
+      }
+      setDocSlots(slots);
+      setDocHistory(history);
+    } catch (err) {
+      console.error('docs load:', err);
+    } finally {
+      setDocsLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); loadDocs(); }, []);
 
   // ── Poster section data ───────────────────────────────────────────────────
 
@@ -319,7 +393,6 @@ export default function MediaLibraryPage() {
   }, [profile?.act_id]);
 
   async function fetchPosterData(actId: string) {
-    // Fetch non-cancelled shows with a date, soonest first
     const { data: bookingRows } = await supabase
       .from('bookings')
       .select('id, show_date, status, venue:venues(name, city, state)')
@@ -329,8 +402,6 @@ export default function MediaLibraryPage() {
       .order('show_date', { ascending: true });
     setBookings((bookingRows || []) as unknown as Booking[]);
 
-    // Fetch EPK-marked photos (media_assets with is_featured=true, category=photo)
-    // Wrapped in try/catch — table may not exist if Phase 14 migration hasn't run yet.
     try {
       const { data: assetRows, error } = await supabase
         .from('media_assets')
@@ -341,15 +412,10 @@ export default function MediaLibraryPage() {
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
-      if (error || !assetRows?.length) {
-        setEpkPhotos([]);
-        return;
-      }
+      if (error || !assetRows?.length) { setEpkPhotos([]); return; }
 
-      // Batch-fetch signed URLs for thumbnails (60-minute TTL)
       const paths = assetRows.map(r => r.storage_path).filter(Boolean);
       let signedMap: Record<string, string> = {};
-
       if (paths.length > 0) {
         const { data: signed } = await supabase.storage
           .from('media-assets')
@@ -367,40 +433,27 @@ export default function MediaLibraryPage() {
         }))
       );
     } catch {
-      // media_assets table not yet available — swallow silently
       setEpkPhotos([]);
     }
   }
 
-  // Auto-select most recent EPK photo when the list first loads
   useEffect(() => {
     if (epkPhotos.length > 0 && selectedPhotoId === null) {
       setSelectedPhotoId(epkPhotos[0].id);
     }
   }, [epkPhotos]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Revoke blob URL when a new one is set, and on unmount
   useEffect(() => {
-    return () => {
-      if (generatedUrlRef.current) URL.revokeObjectURL(generatedUrlRef.current);
-    };
+    return () => { if (generatedUrlRef.current) URL.revokeObjectURL(generatedUrlRef.current); };
   }, []);
 
   // ── Poster handlers ───────────────────────────────────────────────────────
 
   const handleGenerate = async () => {
     if (!posterBookingId) return;
-
-    // Revoke previous blob URL before replacing it
-    if (generatedUrlRef.current) {
-      URL.revokeObjectURL(generatedUrlRef.current);
-      generatedUrlRef.current = null;
-    }
-    setGeneratedUrl(null);
-    setGeneratedBlob(null);
-    setSaveMsg('');
-    setGenerating(true);
-    setGenerateError('');
+    if (generatedUrlRef.current) { URL.revokeObjectURL(generatedUrlRef.current); generatedUrlRef.current = null; }
+    setGeneratedUrl(null); setGeneratedBlob(null); setSaveMsg('');
+    setGenerating(true); setGenerateError('');
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -414,16 +467,8 @@ export default function MediaLibraryPage() {
 
       const res = await fetch('/api/posters/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          bookingId:      posterBookingId,
-          style:          posterStyle,
-          mediaAssetId:   selectedPhotoId || undefined,
-          includedFields,
-        }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ bookingId: posterBookingId, style: posterStyle, mediaAssetId: selectedPhotoId || undefined, includedFields }),
       });
 
       if (!res.ok) {
@@ -451,64 +496,45 @@ export default function MediaLibraryPage() {
     const dateStr  = booking?.show_date?.replace(/-/g, '') || 'poster';
     a.download = `poster-${posterStyle}-${dateStr}.png`;
     a.click();
-    // Revoke after a tick so the browser has time to start the download
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
 
   const handleSaveToLibrary = async () => {
     if (!generatedBlob || !profile?.act_id || !user?.id || !posterBookingId) return;
-    setSavingToLibrary(true);
-    setSaveMsg('');
-
+    setSavingToLibrary(true); setSaveMsg('');
     try {
       const fileName = `poster-${posterStyle}-${Date.now()}.png`;
       const storagePath = `${profile.act_id}/${fileName}`;
 
-      // 1. Upload PNG to media-assets private bucket
       const { error: uploadErr } = await supabase.storage
         .from('media-assets')
         .upload(storagePath, generatedBlob, { contentType: 'image/png' });
       if (uploadErr) throw new Error(`Storage upload: ${uploadErr.message}`);
 
-      // 2. Create media_assets metadata row (category: poster)
       const { data: assetRow, error: assetErr } = await supabase
         .from('media_assets')
         .insert({
-          act_id:       profile.act_id,
-          uploaded_by:  user.id,
-          label:        `Poster — ${posterStyle} — ${formatShowDate(bookings.find(b => b.id === posterBookingId)?.show_date ?? null)}`,
-          category:     'poster',
-          storage_path: storagePath,
-          file_name:    fileName,
-          file_size:    generatedBlob.size,
-          mime_type:    'image/png',
-          is_public:    false,
-          is_featured:  false,
-          width:        1080,
-          height:       1512,
+          act_id: profile.act_id, uploaded_by: user.id,
+          label: `Poster — ${posterStyle} — ${formatShowDate(bookings.find(b => b.id === posterBookingId)?.show_date ?? null)}`,
+          category: 'poster', storage_path: storagePath, file_name: fileName,
+          file_size: generatedBlob.size, mime_type: 'image/png',
+          is_public: false, is_featured: false, width: 1080, height: 1512,
         })
-        .select('id')
-        .single();
+        .select('id').single();
       if (assetErr) throw new Error(`media_assets insert: ${assetErr.message}`);
 
-      // 3. Create generated_posters record
       const includedFieldsObj: Record<string, string> = {};
       if (showTicketPrice && ticketPrice.trim()) includedFieldsObj.ticketPrice = ticketPrice.trim();
       if (showOpener && openerName.trim())       includedFieldsObj.openerName  = openerName.trim();
       if (showAgeRestriction && ageRestriction.trim()) includedFieldsObj.ageRestriction = ageRestriction.trim();
       if (showTicketUrl && ticketUrl.trim())     includedFieldsObj.ticketUrl   = ticketUrl.trim();
 
-      const { error: posterErr } = await supabase
-        .from('generated_posters')
-        .insert({
-          act_id:               profile.act_id,
-          booking_id:           posterBookingId,
-          media_asset_id:       selectedPhotoId || null,
-          style:                posterStyle,
-          included_fields:      includedFieldsObj,
-          output_media_asset_id: assetRow?.id || null,
-          created_by:           user.id,
-        });
+      const { error: posterErr } = await supabase.from('generated_posters').insert({
+        act_id: profile.act_id, booking_id: posterBookingId,
+        media_asset_id: selectedPhotoId || null, style: posterStyle,
+        included_fields: includedFieldsObj,
+        output_media_asset_id: assetRow?.id || null, created_by: user.id,
+      });
       if (posterErr) throw new Error(`generated_posters insert: ${posterErr.message}`);
 
       setSaveMsg('Saved to library ✓');
@@ -521,11 +547,12 @@ export default function MediaLibraryPage() {
 
   // ── Media library handlers ────────────────────────────────────────────────
 
-  const openModal = (file?: File) => {
+  const openModal = (file?: File, documentCategory?: string) => {
     setUploadState('idle');
     setUploadError('');
     setAltText('');
     setIsPrimaryLogo(false);
+    setPendingDocCategory(documentCategory ?? null);
     setPendingFile(file || null);
     setShowUploadModal(true);
   };
@@ -546,6 +573,49 @@ export default function MediaLibraryPage() {
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setDragOver(true); };
   const handleDragLeave = () => setDragOver(false);
 
+  // ── Document upload handlers ──────────────────────────────────────────────
+
+  const openDocUpload = (categoryKey: string) => {
+    pendingDocCategoryRef.current = categoryKey;
+    docFileInputRef.current?.click();
+  };
+
+  const handleDocFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const category = pendingDocCategoryRef.current;
+    pendingDocCategoryRef.current = null;
+    e.target.value = '';
+    if (file && category) openModal(file, category);
+  };
+
+  const fetchDocSignedUrl = async (rowId: string) => {
+    setDocFetchingUrl(rowId);
+    setDocViewError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`/api/media/signed-url?id=${rowId}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const { signedUrl } = await res.json();
+        window.open(signedUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        setDocViewError('Could not load file — try again');
+        setTimeout(() => setDocViewError(null), 3000);
+      }
+    } catch {
+      setDocViewError('Could not load file — try again');
+      setTimeout(() => setDocViewError(null), 3000);
+    } finally {
+      setDocFetchingUrl(null);
+    }
+  };
+
+  const toggleDocHistory = (category: string) => {
+    setDocHistoryOpen(prev => ({ ...prev, [category]: !prev[category] }));
+  };
+
   const upload = async () => {
     if (!pendingFile) return;
     setUploadState('uploading');
@@ -553,16 +623,14 @@ export default function MediaLibraryPage() {
     setUploadProgress(`Uploading ${pendingFile.name}…`);
 
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      setUploadState('error');
-      setUploadError('Not authenticated');
-      return;
-    }
+    if (!session) { setUploadState('error'); setUploadError('Not authenticated'); return; }
 
     const fd = new FormData();
     fd.append('file', pendingFile);
     if (altText) fd.append('alt_text', altText);
-    if (isPrimaryLogo) {
+    if (pendingDocCategory) {
+      fd.append('document_category', pendingDocCategory);
+    } else if (isPrimaryLogo) {
       fd.append('is_primary_logo', 'true');
       fd.append('file_type', 'logo');
     }
@@ -581,19 +649,25 @@ export default function MediaLibraryPage() {
         return;
       }
 
-      const record: MediaItem = await res.json();
-      setItems(prev => [record, ...prev]);
-      fetch(`/api/media/signed-url?id=${record.id}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      }).then(r => r.ok ? r.json() : null).then(data => {
-        if (data?.signedUrl) setSignedUrls(prev => ({ ...prev, [record.id]: data.signedUrl }));
-        else setFailedUrlIds(prev => new Set([...prev, record.id]));
-      });
+      if (pendingDocCategory) {
+        await loadDocs();
+      } else {
+        const record: MediaItem = await res.json();
+        setItems(prev => [record, ...prev]);
+        fetch(`/api/media/signed-url?id=${record.id}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }).then(r => r.ok ? r.json() : null).then(data => {
+          if (data?.signedUrl) setSignedUrls(prev => ({ ...prev, [record.id]: data.signedUrl }));
+          else setFailedUrlIds(prev => new Set([...prev, record.id]));
+        });
+      }
+
       setUploadState('done');
       setUploadProgress('');
       setTimeout(() => {
         setShowUploadModal(false);
         setPendingFile(null);
+        setPendingDocCategory(null);
       }, 800);
     } catch (err: any) {
       setUploadState('error');
@@ -616,10 +690,7 @@ export default function MediaLibraryPage() {
     }
     const res = await fetch(`/api/media/${id}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
       body: JSON.stringify({ is_featured: featured }),
     });
     if (!res.ok) {
@@ -640,14 +711,16 @@ export default function MediaLibraryPage() {
     t => t === 'all' || (typeCounts[t] || 0) > 0
   );
 
+  const photoCount = items.filter(i => i.mime_type?.startsWith('image/')).length;
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <AppShell requireRole="band_admin">
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem' }}>
 
-        {/* ── Media Library header ───────────────────────────────────────── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        {/* ── Media Library ──────────────────────────────────────────────── */}
+        <div id="section-media" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', color: 'var(--text-primary)', margin: 0, lineHeight: 1 }}>
               MEDIA LIBRARY
@@ -660,9 +733,9 @@ export default function MediaLibraryPage() {
             + Upload
           </button>
           <input ref={fileInputRef} type="file" accept="image/*,.pdf,audio/*,video/*" onChange={handleFilePick} style={{ display: 'none' }} />
+          <input ref={docFileInputRef} type="file" accept=".pdf,.doc,.docx" onChange={handleDocFilePick} style={{ display: 'none' }} />
         </div>
 
-        {/* ── Filter tabs ────────────────────────────────────────────────── */}
         {filterTabs.length > 1 && (
           <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
             {filterTabs.map(t => (
@@ -680,7 +753,6 @@ export default function MediaLibraryPage() {
           </div>
         )}
 
-        {/* ── Drop zone + grid ───────────────────────────────────────────── */}
         <div
           onDrop={handleDrop}
           onDragOver={handleDragOver}
@@ -740,7 +812,7 @@ export default function MediaLibraryPage() {
         {/* ══════════════════════════════════════════════════════════════════
             SHOW POSTERS
         ══════════════════════════════════════════════════════════════════ */}
-        <div style={{ marginTop: '3.5rem', paddingTop: '2.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+        <div id="section-posters" style={{ marginTop: '3.5rem', paddingTop: '2.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
           <div style={{ marginBottom: '1.5rem' }}>
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.9rem', color: 'var(--text-primary)', margin: '0 0 0.25rem', lineHeight: 1 }}>
               SHOW POSTERS
@@ -752,10 +824,8 @@ export default function MediaLibraryPage() {
 
           <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
 
-            {/* ── Config column ────────────────────────────────────────────── */}
             <div style={{ flex: '1 1 360px', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
-              {/* Show selector */}
               <div className="field">
                 <label className="field-label">Show</label>
                 <select
@@ -781,7 +851,6 @@ export default function MediaLibraryPage() {
                 )}
               </div>
 
-              {/* Style selector */}
               <div className="field">
                 <label className="field-label">Style</label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -803,13 +872,10 @@ export default function MediaLibraryPage() {
                 </div>
               </div>
 
-              {/* Photo picker */}
               <div className="field">
                 <label className="field-label">
                   Photo
-                  <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.4rem' }}>
-                    (EPK-marked photos)
-                  </span>
+                  <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.4rem' }}>(EPK-marked photos)</span>
                 </label>
                 {epkPhotos.length === 0 ? (
                   <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.5 }}>
@@ -824,43 +890,25 @@ export default function MediaLibraryPage() {
                           onClick={() => setSelectedPhotoId(photo.id)}
                           title={photo.file_name}
                           style={{
-                            flexShrink: 0,
-                            width: 76,
-                            height: 76,
-                            padding: 0,
-                            border: selectedPhotoId === photo.id
-                              ? '2px solid var(--accent)'
-                              : '2px solid rgba(255,255,255,0.12)',
-                            borderRadius: 6,
-                            overflow: 'hidden',
-                            cursor: 'pointer',
-                            background: 'rgba(0,0,0,0.3)',
-                            transition: 'border-color 0.15s',
+                            flexShrink: 0, width: 76, height: 76, padding: 0,
+                            border: selectedPhotoId === photo.id ? '2px solid var(--accent)' : '2px solid rgba(255,255,255,0.12)',
+                            borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
+                            background: 'rgba(0,0,0,0.3)', transition: 'border-color 0.15s',
                             outline: selectedPhotoId === photo.id ? '2px solid rgba(200,146,26,0.4)' : 'none',
                             outlineOffset: 1,
                           }}
                         >
                           {photo.thumbnailUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={photo.thumbnailUrl}
-                              alt={photo.file_name}
-                              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                            />
+                            <img src={photo.thumbnailUrl} alt={photo.file_name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                           ) : (
-                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.65rem', fontFamily: 'var(--font-body)' }}>
-                              img
-                            </div>
+                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.65rem', fontFamily: 'var(--font-body)' }}>img</div>
                           )}
                         </button>
                       ))}
                     </div>
                     {selectedPhotoId && (
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => setSelectedPhotoId(null)}
-                        style={{ fontSize: '0.7rem', alignSelf: 'flex-start', padding: '0.15rem 0.5rem' }}
-                      >
+                      <button className="btn btn-ghost btn-sm" onClick={() => setSelectedPhotoId(null)} style={{ fontSize: '0.7rem', alignSelf: 'flex-start', padding: '0.15rem 0.5rem' }}>
                         Use no photo
                       </button>
                     )}
@@ -868,147 +916,53 @@ export default function MediaLibraryPage() {
                 )}
               </div>
 
-              {/* Optional fields */}
               <div className="field">
                 <label className="field-label">Optional fields</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-
-                  {/* Ticket price */}
+                  {[
+                    { show: showTicketPrice, setShow: setShowTicketPrice, label: 'Ticket price / door cover', value: ticketPrice, setValue: setTicketPrice, placeholder: 'e.g. $15 advance · $20 door', type: 'text' },
+                    { show: showOpener, setShow: setShowOpener, label: 'Opener / support act', value: openerName, setValue: setOpenerName, placeholder: 'e.g. The Desert Sons', type: 'text' },
+                    { show: showAgeRestriction, setShow: setShowAgeRestriction, label: 'Age restriction', value: ageRestriction, setValue: setAgeRestriction, placeholder: 'e.g. 21+ · All ages', type: 'text' },
+                  ].map(({ show, setShow, label, value, setValue, placeholder, type }) => (
+                    <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={show} onChange={e => setShow(e.target.checked)} />
+                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>{label}</span>
+                      </label>
+                      {show && <input className="input" type={type} placeholder={placeholder} value={value} onChange={e => setValue(e.target.value)} style={{ marginLeft: '1.4rem' }} />}
+                    </div>
+                  ))}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={showTicketPrice}
-                        onChange={e => setShowTicketPrice(e.target.checked)}
-                      />
+                      <input type="checkbox" checked={showTicketUrl} onChange={e => setShowTicketUrl(e.target.checked)} />
                       <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-                        Ticket price / door cover
+                        Ticket link{' '}<span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>(generates QR code)</span>
                       </span>
                     </label>
-                    {showTicketPrice && (
-                      <input
-                        className="input"
-                        placeholder="e.g. $15 advance · $20 door"
-                        value={ticketPrice}
-                        onChange={e => setTicketPrice(e.target.value)}
-                        style={{ marginLeft: '1.4rem' }}
-                      />
-                    )}
-                  </div>
-
-                  {/* Opener */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={showOpener}
-                        onChange={e => setShowOpener(e.target.checked)}
-                      />
-                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-                        Opener / support act
-                      </span>
-                    </label>
-                    {showOpener && (
-                      <input
-                        className="input"
-                        placeholder="e.g. The Desert Sons"
-                        value={openerName}
-                        onChange={e => setOpenerName(e.target.value)}
-                        style={{ marginLeft: '1.4rem' }}
-                      />
-                    )}
-                  </div>
-
-                  {/* Age restriction */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={showAgeRestriction}
-                        onChange={e => setShowAgeRestriction(e.target.checked)}
-                      />
-                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-                        Age restriction
-                      </span>
-                    </label>
-                    {showAgeRestriction && (
-                      <input
-                        className="input"
-                        placeholder="e.g. 21+ · All ages"
-                        value={ageRestriction}
-                        onChange={e => setAgeRestriction(e.target.value)}
-                        style={{ marginLeft: '1.4rem' }}
-                      />
-                    )}
-                  </div>
-
-                  {/* Ticket URL → QR code */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={showTicketUrl}
-                        onChange={e => setShowTicketUrl(e.target.checked)}
-                      />
-                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-                        Ticket link{' '}
-                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>(generates QR code)</span>
-                      </span>
-                    </label>
-                    {showTicketUrl && (
-                      <input
-                        className="input"
-                        type="url"
-                        placeholder="https://..."
-                        value={ticketUrl}
-                        onChange={e => setTicketUrl(e.target.value)}
-                        style={{ marginLeft: '1.4rem' }}
-                      />
-                    )}
+                    {showTicketUrl && <input className="input" type="url" placeholder="https://..." value={ticketUrl} onChange={e => setTicketUrl(e.target.value)} style={{ marginLeft: '1.4rem' }} />}
                   </div>
                 </div>
               </div>
 
-              {generateError && (
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#f87171' }}>
-                  {generateError}
-                </div>
-              )}
+              {generateError && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#f87171' }}>{generateError}</div>}
 
-              <button
-                className="btn btn-primary"
-                onClick={handleGenerate}
-                disabled={!posterBookingId || generating}
-              >
+              <button className="btn btn-primary" onClick={handleGenerate} disabled={!posterBookingId || generating}>
                 {generating ? 'Generating…' : 'Generate Poster'}
               </button>
             </div>
 
-            {/* ── Preview column ───────────────────────────────────────────── */}
             <div style={{ flex: '1 1 280px', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-
-              {/* Preview frame — maintains 1080:1512 aspect ratio */}
               <div style={{
-                position: 'relative',
-                width: '100%',
-                paddingBottom: `${(1512 / 1080) * 100}%`,
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 8,
-                overflow: 'hidden',
-                background: 'rgba(0,0,0,0.25)',
+                position: 'relative', width: '100%', paddingBottom: `${(1512 / 1080) * 100}%`,
+                border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8,
+                overflow: 'hidden', background: 'rgba(0,0,0,0.25)',
               }}>
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {generating ? (
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                      Generating…
-                    </div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>Generating…</div>
                   ) : generatedUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={generatedUrl}
-                      alt="Generated poster preview"
-                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                    />
+                    <img src={generatedUrl} alt="Generated poster preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   ) : (
                     <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem', lineHeight: 1.6 }}>
                       Select a show and click<br />Generate Poster
@@ -1017,36 +971,17 @@ export default function MediaLibraryPage() {
                 </div>
               </div>
 
-              {/* Download + Save actions */}
               {generatedUrl && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                  <button className="btn btn-ghost btn-sm" onClick={handleDownload} style={{ fontSize: '0.78rem' }}>↓ Download PNG</button>
                   <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleDownload}
-                    style={{ fontSize: '0.78rem' }}
-                  >
-                    ↓ Download PNG
-                  </button>
-                  <button
-                    className="btn btn-sm"
-                    onClick={handleSaveToLibrary}
-                    disabled={savingToLibrary}
-                    style={{
-                      fontSize: '0.78rem',
-                      background: 'var(--accent)',
-                      color: '#000',
-                      border: 'none',
-                      opacity: savingToLibrary ? 0.6 : 1,
-                    }}
+                    className="btn btn-sm" onClick={handleSaveToLibrary} disabled={savingToLibrary}
+                    style={{ fontSize: '0.78rem', background: 'var(--accent)', color: '#000', border: 'none', opacity: savingToLibrary ? 0.6 : 1 }}
                   >
                     {savingToLibrary ? 'Saving…' : 'Save to Library'}
                   </button>
                   {saveMsg && (
-                    <span style={{
-                      fontFamily: 'var(--font-body)',
-                      fontSize: '0.73rem',
-                      color: saveMsg.startsWith('Error') ? '#f87171' : '#4ade80',
-                    }}>
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.73rem', color: saveMsg.startsWith('Error') ? '#f87171' : '#4ade80' }}>
                       {saveMsg}
                     </span>
                   )}
@@ -1057,9 +992,184 @@ export default function MediaLibraryPage() {
           </div>
         </div>
 
+        {/* ══════════════════════════════════════════════════════════════════
+            DOCUMENTS
+        ══════════════════════════════════════════════════════════════════ */}
+        <div style={{ marginTop: '3.5rem', paddingTop: '2.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.9rem', color: 'var(--text-primary)', margin: '0 0 0.25rem', lineHeight: 1 }}>
+              DOCUMENTS
+            </h2>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              Riders, legal docs, and press materials — stored privately
+            </div>
+          </div>
+
+          {docViewError && (
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#f87171', marginBottom: '0.75rem' }}>
+              ⚠ {docViewError}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
+
+            {DOC_CATEGORIES.map(cat => {
+              const slot = docSlots[cat.key] ?? null;
+              const history = docHistory[cat.key] ?? [];
+              const historyOpen = !!docHistoryOpen[cat.key];
+
+              return (
+                <div key={cat.key} style={{
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: 8,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: '1rem',
+                  gap: '0.5rem',
+                }}>
+                  <div style={{
+                    fontFamily: 'var(--font-display)', fontSize: '0.78rem',
+                    letterSpacing: '0.1em', color: 'var(--accent)',
+                    textTransform: 'uppercase', lineHeight: 1.2,
+                  }}>
+                    {cat.label}
+                  </div>
+
+                  {docsLoading ? (
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>Loading…</div>
+                  ) : slot ? (
+                    <>
+                      <div style={{ flex: 1 }}>
+                        <div style={{
+                          fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-primary)',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }} title={slot.file_name}>
+                          {slot.file_name}
+                        </div>
+                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                          {formatDate(slot.created_at)} · {formatBytes(slot.file_size_bytes)}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
+                          onClick={() => fetchDocSignedUrl(slot.id)}
+                          disabled={docFetchingUrl === slot.id}
+                        >
+                          {docFetchingUrl === slot.id ? 'Loading…' : 'View'}
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
+                          onClick={() => openDocUpload(cat.key)}
+                        >
+                          Replace
+                        </button>
+                      </div>
+
+                      {history.length > 0 && (
+                        <div>
+                          <button
+                            onClick={() => toggleDocHistory(cat.key)}
+                            style={{
+                              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                              fontFamily: 'var(--font-body)', fontSize: '0.68rem',
+                              color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem',
+                            }}
+                          >
+                            {historyOpen ? '▲' : '▼'} {history.length} older version{history.length !== 1 ? 's' : ''}
+                          </button>
+                          {historyOpen && (
+                            <div style={{ marginTop: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                              {history.map(h => (
+                                <div key={h.id} style={{
+                                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                  padding: '0.3rem 0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 4, gap: '0.4rem',
+                                }}>
+                                  <span style={{
+                                    fontFamily: 'var(--font-body)', fontSize: '0.67rem', color: 'var(--text-muted)',
+                                    flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                  }}>
+                                    {formatDate(h.created_at)}
+                                  </span>
+                                  <button
+                                    className="btn btn-ghost btn-sm"
+                                    style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', flexShrink: 0 }}
+                                    onClick={() => fetchDocSignedUrl(h.id)}
+                                    disabled={docFetchingUrl === h.id}
+                                  >
+                                    {docFetchingUrl === h.id ? '…' : 'View'}
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ flex: 1, fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.5 }}>
+                        No {cat.label.toLowerCase()} uploaded yet
+                      </div>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem', alignSelf: 'flex-start' }}
+                        onClick={() => openDocUpload(cat.key)}
+                      >
+                        + Upload
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Press Photos shortcut */}
+            <div style={{
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px dashed rgba(255,255,255,0.12)',
+              borderRadius: 8, display: 'flex', flexDirection: 'column', padding: '1rem', gap: '0.5rem',
+            }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.78rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', lineHeight: 1.2 }}>
+                Press Photos
+              </div>
+              <div style={{ flex: 1, fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                {loading ? 'Loading…' : photoCount > 0
+                  ? `${photoCount} photo${photoCount !== 1 ? 's' : ''} in Media Library`
+                  : 'No photos uploaded yet'}
+              </div>
+              <a href="#section-media" style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--accent)', textDecoration: 'none', alignSelf: 'flex-start' }}>
+                ↑ Go to Media Library
+              </a>
+            </div>
+
+            {/* Show Posters shortcut */}
+            <div style={{
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px dashed rgba(255,255,255,0.12)',
+              borderRadius: 8, display: 'flex', flexDirection: 'column', padding: '1rem', gap: '0.5rem',
+            }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.78rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', lineHeight: 1.2 }}>
+                Show Posters
+              </div>
+              <div style={{ flex: 1, fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                Generate 1080 × 1512 px show posters
+              </div>
+              <a href="#section-posters" style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--accent)', textDecoration: 'none', alignSelf: 'flex-start' }}>
+                ↑ Go to Posters
+              </a>
+            </div>
+
+          </div>
+        </div>
+
       </div>
 
-      {/* ── Upload Modal ─────────────────────────────────────────────────── */}
+      {/* ── Upload Modal ───────────────────────────────────────────────────── */}
       {showUploadModal && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
@@ -1074,8 +1184,20 @@ export default function MediaLibraryPage() {
             display: 'flex', flexDirection: 'column', gap: '1rem',
           }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--text-primary)', lineHeight: 1 }}>
-              UPLOAD FILE
+              {pendingDocCategory ? 'UPLOAD DOCUMENT' : 'UPLOAD FILE'}
             </div>
+
+            {pendingDocCategory && (
+              <div style={{
+                fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)',
+                background: 'rgba(200,146,26,0.08)', border: '1px solid rgba(200,146,26,0.2)',
+                padding: '0.45rem 0.7rem', borderRadius: 5,
+              }}>
+                Category: <span style={{ color: 'var(--accent)' }}>
+                  {DOC_CATEGORIES.find(c => c.key === pendingDocCategory)?.label ?? pendingDocCategory}
+                </span>
+              </div>
+            )}
 
             {pendingFile && (
               <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', padding: '0.6rem 0.75rem', borderRadius: 6 }}>
@@ -1109,36 +1231,32 @@ export default function MediaLibraryPage() {
               />
             </div>
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-              <input
-                type="checkbox"
-                checked={isPrimaryLogo}
-                onChange={e => setIsPrimaryLogo(e.target.checked)}
-                disabled={uploadState === 'uploading'}
-              />
-              Set as primary act logo
-            </label>
+            {!pendingDocCategory && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>
+                <input
+                  type="checkbox"
+                  checked={isPrimaryLogo}
+                  onChange={e => setIsPrimaryLogo(e.target.checked)}
+                  disabled={uploadState === 'uploading'}
+                />
+                Set as primary act logo
+              </label>
+            )}
 
             {uploadState === 'error' && (
-              <div style={{ color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>
-                {uploadError}
-              </div>
+              <div style={{ color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>{uploadError}</div>
             )}
             {uploadState === 'uploading' && (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>
-                {uploadProgress}
-              </div>
+              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>{uploadProgress}</div>
             )}
             {uploadState === 'done' && (
-              <div style={{ color: '#4ade80', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>
-                Uploaded successfully.
-              </div>
+              <div style={{ color: '#4ade80', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>Uploaded successfully.</div>
             )}
 
             <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
               <button
                 className="btn btn-ghost"
-                onClick={() => { setShowUploadModal(false); setPendingFile(null); }}
+                onClick={() => { setShowUploadModal(false); setPendingFile(null); setPendingDocCategory(null); }}
                 disabled={uploadState === 'uploading'}
               >
                 Cancel
