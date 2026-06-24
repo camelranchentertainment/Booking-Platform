@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+
+  "permissions": {
+    "defaultMode": "acceptEdits",
+
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git branch)",
+      "Bash(git branch -v)",
+
+      "Bash(npm run lint)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run test)",
+      "Bash(npm run test:*)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run build)",
+      "Bash(npx tsc --noEmit)",
+
+      "Bash(git add *)",
+      "Bash(git commit *)",
+
+      "Edit(pages/**)",
+      "Edit(components/**)",
+      "Edit(lib/**)",
+      "Edit(utils/**)",
+      "Edit(types/**)",
+      "Edit(styles/**)",
+      "Edit(public/**)",
+      "Write(pages/**)",
+      "Write(components/**)",
+      "Write(lib/**)",
+      "Write(utils/**)",
+      "Write(types/**)",
+
+      "mcp__supabase__list_tables",
+      "mcp__supabase__get_advisors",
+      "mcp__supabase__list_migrations",
+      "mcp__supabase__list_extensions",
+      "mcp__supabase__get_logs",
+      "mcp__supabase__list_branches",
+      "mcp__supabase__get_project",
+      "mcp__supabase__get_project_url",
+      "mcp__supabase__generate_typescript_types",
+      "mcp__supabase__search_docs",
+
+      "mcp__vercel__list_deployments",
+      "mcp__vercel__get_deployment",
+      "mcp__vercel__get_deployment_build_logs",
+      "mcp__vercel__get_runtime_errors",
+      "mcp__vercel__get_runtime_logs",
+      "mcp__vercel__get_project",
+      "mcp__vercel__search_vercel_documentation",
+      "mcp__vercel__list_projects",
+
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:supabase.com)",
+      "WebFetch(domain:nextjs.org)",
+      "WebFetch(domain:vercel.com)"
+    ],
+
+    "ask": [
+      "Bash(git push *)",
+      "Bash(git merge *)",
+      "Bash(git rebase *)",
+      "Bash(git checkout *)",
+      "Bash(git stash *)",
+      "Bash(npm install *)",
+      "Bash(npm uninstall *)",
+      "Bash(npm publish *)",
+
+      "Edit(pages/api/accept-invite.ts)",
+      "Edit(pages/api/**)",
+      "Write(pages/api/**)",
+
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__create_branch",
+      "mcp__supabase__merge_branch",
+      "mcp__supabase__rebase_branch",
+      "mcp__supabase__reset_branch",
+      "mcp__supabase__delete_branch",
+      "mcp__supabase__deploy_edge_function",
+      "mcp__supabase__create_project",
+      "mcp__supabase__pause_project",
+      "mcp__supabase__restore_project",
+
+      "mcp__vercel__deploy_to_vercel",
+      "mcp__vercel__get_access_to_vercel_url"
+    ],
+
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(./secrets/**)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+      "Write(./.env)",
+      "Write(./.env.*)",
+
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(curl * | bash)",
+      "Bash(curl * | sh)",
+      "Bash(wget * | bash)",
+      "Bash(wget * | sh)",
+
+      "mcp__supabase__confirm_cost"
+    ],
+
+    "additionalDirectories": []
+  }
+}
