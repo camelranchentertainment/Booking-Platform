@@ -1,3 +1,13 @@
+/**
+ * ORPHANED PAGE — NOT LINKED FROM ANY NAVIGATION.
+ * Confirmed unreachable from the live UI as of 2026-06-24 — no Sidebar entry,
+ * no router.push, no <a href> anywhere in the codebase points here.
+ * Kept temporarily in case its features (AI Import modal, venue counts) are
+ * ported into pages/tours/index.tsx later. Do not assume this page reflects
+ * current behavior — it received the same end_date filter fix as /tours on
+ * 2026-06-24 purely to keep it from drifting further, not because it's in use.
+ * See DEVLOG.md for context.
+ */
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
