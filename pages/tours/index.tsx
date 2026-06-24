@@ -4,7 +4,6 @@ import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { getActId } from '../../lib/bookingQueries';
 type ActPick = { id: string; act_name: string };
-import Link from 'next/link';
 
 export default function ToursPage() {
   const router = useRouter();
@@ -14,7 +13,7 @@ export default function ToursPage() {
   const [form, setForm]     = useState({ name: '', act_id: '', description: '', start_date: '', end_date: '' });
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => { loadAll(); }, []); // eslint-disable-line react-hooks/immutability
 
   const loadAll = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -22,9 +21,27 @@ export default function ToursPage() {
     if (!user) return;
     const actId = await getActId(supabase, user.id);
     if (!actId) return;
+
+    // UTC "today" as YYYY-MM-DD, matching the `date` type of tours.end_date.
+    // Built from Date.UTC parts (not toISOString on a local Date) so this is
+    // correct regardless of the server/browser's local timezone offset.
+    const now = new Date();
+    const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+      .toISOString()
+      .slice(0, 10);
+
     const [actRes, toursRes] = await Promise.all([
       supabase.from('acts').select('id, act_name').eq('id', actId).single(),
-      supabase.from('tours').select('*, act:acts(act_name)').eq('act_id', actId).order('created_at', { ascending: false }),
+      supabase
+        .from('tours')
+        .select('*, act:acts(act_name)')
+        .eq('act_id', actId)
+        // A tour falls off the Tours page once it has fully concluded:
+        // end_date < today (UTC). Tours with no end_date set are treated
+        // as still upcoming/ongoing and always shown — per Scott's call,
+        // missing data should never silently hide a tour.
+        .or(`end_date.is.null,end_date.gte.${todayUTC}`)
+        .order('end_date', { ascending: true, nullsFirst: false }),
     ]);
     if (actRes.data) {
       setActs([actRes.data]);
@@ -33,7 +50,7 @@ export default function ToursPage() {
     setTours(toursRes.data || []);
   };
 
-  const save = async (e: React.FormEvent) => {
+  const save = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!form.act_id) return;
     setSaving(true);
