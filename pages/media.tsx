@@ -516,12 +516,11 @@ export default function MediaLibraryPage() {
 
     try {
       const { data: assetRows, error } = await supabase
-        .from('media_assets')
+        .from('media_library')
         .select('id, file_name, storage_path, mime_type')
         .eq('act_id', actId)
-        .eq('category', 'photo')
         .eq('is_featured', true)
-        .is('deleted_at', null)
+        .like('mime_type', 'image/%')
         .order('created_at', { ascending: false });
 
       if (error || !assetRows?.length) { setEpkPhotos([]); return; }
@@ -530,7 +529,7 @@ export default function MediaLibraryPage() {
       let signedMap: Record<string, string> = {};
       if (paths.length > 0) {
         const { data: signed } = await supabase.storage
-          .from('media-assets')
+          .from('media-library')
           .createSignedUrls(paths, 3600);
         (signed || []).forEach(s => { if (s.signedUrl && s.path) signedMap[s.path] = s.signedUrl; });
       }
@@ -619,21 +618,23 @@ export default function MediaLibraryPage() {
       const storagePath = `${profile.act_id}/${fileName}`;
 
       const { error: uploadErr } = await supabase.storage
-        .from('media-assets')
+        .from('media-library')
         .upload(storagePath, generatedBlob, { contentType: 'image/png' });
       if (uploadErr) throw new Error(`Storage upload: ${uploadErr.message}`);
 
+      // media-library is a private bucket — no public_url; the grid and EPK
+      // picker resolve display URLs on demand via /api/media/signed-url.
       const { data: assetRow, error: assetErr } = await supabase
-        .from('media_assets')
+        .from('media_library')
         .insert({
           act_id: profile.act_id, uploaded_by: user.id,
-          label: `Poster — ${posterStyle} — ${formatShowDate(bookings.find(b => b.id === posterBookingId)?.show_date ?? null)}`,
-          category: 'poster', storage_path: storagePath, file_name: fileName,
-          file_size: generatedBlob.size, mime_type: 'image/png',
-          is_public: false, is_featured: false, width: 1080, height: 1512,
+          file_name: `Poster — ${posterStyle} — ${formatShowDate(bookings.find(b => b.id === posterBookingId)?.show_date ?? null)}.png`,
+          file_type: 'poster', storage_path: storagePath, public_url: null,
+          file_size_bytes: generatedBlob.size, mime_type: 'image/png',
+          is_featured: false, width_px: 1080, height_px: 1512,
         })
         .select('id').single();
-      if (assetErr) throw new Error(`media_assets insert: ${assetErr.message}`);
+      if (assetErr) throw new Error(`media_library insert: ${assetErr.message}`);
 
       const includedFieldsObj: Record<string, string> = {};
       if (showTicketPrice && ticketPrice.trim()) includedFieldsObj.ticketPrice = ticketPrice.trim();
