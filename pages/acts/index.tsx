@@ -13,7 +13,8 @@ export default function BandsPage() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
       if (!user) return;
 
       const { data: myBands } = await supabase.from('acts').select('*').eq('owner_id', user.id).order('act_name');

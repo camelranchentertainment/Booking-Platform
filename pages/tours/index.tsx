@@ -17,7 +17,8 @@ export default function ToursPage() {
   useEffect(() => { loadAll(); }, []);
 
   const loadAll = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (!user) return;
     const actId = await getActId(supabase, user.id);
     if (!actId) return;
@@ -36,7 +37,8 @@ export default function ToursPage() {
     e.preventDefault();
     if (!form.act_id) return;
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     const { data } = await supabase.from('tours').insert({
       created_by: user!.id,
       act_id:      form.act_id,

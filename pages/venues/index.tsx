@@ -152,7 +152,8 @@ export default function VenuesPage() {
     if (!form.name.trim()) { setSaveError('Venue name is required'); return; }
     if (!form.city.trim()) { setSaveError('City is required'); return; }
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     const actId = user ? await import('../../lib/bookingQueries').then(m => m.getActId(supabase, user.id)) : null;
     const genreArr = form.music_genres ? form.music_genres.split(',').map(g => g.trim()).filter(Boolean) : null;
     await supabase.from('venues').insert({
@@ -241,7 +242,8 @@ export default function VenuesPage() {
   };
 
   const runImport = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (!user) return;
     const actId = await import('../../lib/bookingQueries').then(m => m.getActId(supabase, user.id));
     setImportSaving(true);
@@ -320,7 +322,8 @@ export default function VenuesPage() {
     setTourTarget(venue);
     setAddTourDone(null);
     if (!toursLoaded) {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
       const actId = await getActId(supabase, user!.id);
       if (actId) {
         const { data } = await supabase
@@ -454,7 +457,7 @@ export default function VenuesPage() {
     setStatus('saving');
 
     // Step 2: Insert venue with full details
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = session?.user ?? null;
     const actId = user ? await import('../../lib/bookingQueries').then(m => m.getActId(supabase, user.id)) : null;
     const { data: newVenue } = await supabase.from('venues').insert({
       act_id:          actId,

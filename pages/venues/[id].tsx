@@ -52,7 +52,8 @@ export default function VenueDetail() {
   useEffect(() => { if (id) loadAll(); }, [id]);
 
   const loadAll = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     const [venueRes, bookingsRes, contactsRes, actsRes] = await Promise.all([
       supabase.from('venues').select('*').eq('id', id).single(),
       supabase.from('bookings').select('id, status, show_date, fee, agreed_amount, deal_type, actual_amount_received, payment_status, rebook_flag, post_show_notes, act:acts(act_name)')
@@ -90,7 +91,8 @@ export default function VenueDetail() {
   const saveContact = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingContact(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     const { data: vp } = await supabase.from('profiles').select('act_id').eq('id', user!.id).single();
     await supabase.from('contacts').insert({
       act_id:     vp?.act_id,

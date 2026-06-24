@@ -21,7 +21,8 @@ export default function NewBooking() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
       if (!user) return;
 
       // Get profile first to get act_id
@@ -61,7 +62,8 @@ export default function NewBooking() {
     e.preventDefault();
     if (!form.act_id) { setError('Please select an act'); return; }
     setError(''); setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     const { data, error: err } = await supabase.from('bookings').insert({
       created_by: user!.id,
       act_id:     form.act_id,

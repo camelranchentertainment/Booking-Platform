@@ -116,7 +116,8 @@ export default function Settings() {
   }, [router.isReady, router.query]);
 
   const load = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (!user) return;
     const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
     if (data) {
@@ -171,7 +172,8 @@ export default function Settings() {
   };
 
   const loadTeam = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (!user) return;
     const { data: prof } = await supabase.from('profiles').select('act_id, notification_preferences').eq('id', user.id).single();
     if (!prof?.act_id) return;
@@ -220,7 +222,8 @@ export default function Settings() {
   };
 
   const loadFollowupRule = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (!user) return;
     const { data: prof } = await supabase.from('profiles').select('act_id, role').eq('id', user.id).single();
     if (!prof?.act_id || !['band_admin', 'superadmin'].includes(prof.role)) return;
@@ -242,7 +245,8 @@ export default function Settings() {
   };
 
   const saveFollowupRule = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (!user) return;
     const { data: prof } = await supabase.from('profiles').select('act_id').eq('id', user.id).single();
     if (!prof?.act_id) return;
@@ -263,7 +267,8 @@ export default function Settings() {
   };
 
   const saveNotifPrefs = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (!user) return;
     setNotifSaving(true);
     await supabase.from('profiles').update({ notification_preferences: notifPrefs }).eq('id', user.id);

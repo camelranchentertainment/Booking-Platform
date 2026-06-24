@@ -77,7 +77,8 @@ export default function SocialQueue() {
   useEffect(() => { if (selAct) loadAccounts(); }, [selAct]);
 
   const loadActs = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (!user) return;
     const { data } = await supabase.from('acts').select('id, act_name').eq('owner_id', user.id).order('act_name');
     setActs(data || []);

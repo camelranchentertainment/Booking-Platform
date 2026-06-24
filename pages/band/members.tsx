@@ -51,7 +51,8 @@ export default function BandMembers() {
   useEffect(() => { load(); }, []);
 
   const load = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (!user) return;
 
     let foundActId: string | null = null;

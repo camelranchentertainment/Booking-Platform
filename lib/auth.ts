@@ -2,9 +2,12 @@ import { supabase } from './supabase';
 import { UserProfile } from './types';
 
 export async function getCurrentUser() {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return null;
-  return user;
+  // getSession() reads from local storage — no network round-trip.
+  // getUser() re-validates against the Auth server on every call, which
+  // was the source of intermittent forced logouts across the app when
+  // this pattern was used directly in page components.
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user ?? null;
 }
 
 export async function getCurrentProfile(): Promise<UserProfile | null> {

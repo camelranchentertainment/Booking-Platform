@@ -74,7 +74,8 @@ export default function BookingDetail() {
   useEffect(() => { if (id) loadAll(); }, [id]);
 
   const loadAll = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (!user) return;
     const [bookingRes, actsRes, venuesRes] = await Promise.all([
       supabase.from('bookings').select(`*, act:acts(*), venue:venues(*), tour:tours(id, name), contact:contacts(*)`).eq('id', id).single(),

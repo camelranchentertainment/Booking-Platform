@@ -7,8 +7,13 @@ export default function DashboardRedirect() {
 
   useEffect(() => {
     const redirect = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace('/login'); return; }
+      // getSession() reads the already-validated session from local
+      // storage — no network round-trip. getUser() re-validates against
+      // the Auth server on every call, so a single slow network response
+      // here was bouncing freshly-logged-in users straight back to /login.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) { router.replace('/login'); return; }
+      const user = session.user;
 
       const { data: profile } = await supabase
         .from('profiles').select('role').eq('id', user.id).maybeSingle();

@@ -19,8 +19,11 @@ export default function Onboarding() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace('/login'); return; }
+      // getSession() avoids the network round-trip getUser() makes on
+      // every call, which was the source of spurious forced logouts.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) { router.replace('/login'); return; }
+      const user = session.user;
       setUserId(user.id);
 
       const { data: profile } = await supabase

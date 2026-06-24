@@ -51,7 +51,8 @@ export default function AgentCalendar() {
   const load = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
       if (!user) return;
       const aid = await getActId(supabase, user.id);
       if (!aid) return;
@@ -117,7 +118,8 @@ export default function AgentCalendar() {
     setSaveErr('');
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
       const { data, error } = await supabase.from('bookings').insert({
         act_id:     actId,
         created_by: user!.id,

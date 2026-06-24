@@ -755,7 +755,8 @@ export default function Home() {
 
   // Redirect logged-in users — runs after render, never blocks the page
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const user = session?.user;
       if (!user) return;
       supabase.from('profiles').select('role').eq('id', user.id).maybeSingle().then(({ data }) => {
         const role = data?.role || 'band_admin';

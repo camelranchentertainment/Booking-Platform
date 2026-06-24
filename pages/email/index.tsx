@@ -174,7 +174,7 @@ export default function EmailPage() {
     const tok = session?.access_token || '';
     setToken(tok);
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = session?.user ?? null;
     if (!user) return;
 
     const aid = await getActId(supabase, user.id);
@@ -246,7 +246,8 @@ export default function EmailPage() {
   };
 
   const loadArchived = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (!user) return;
     const { data } = await supabase.from('email_log')
       .select('id, from_address, recipient, subject, body, sent_at, archived_at, direction, venue_id, venue:venues(name)')

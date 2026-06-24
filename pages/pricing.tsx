@@ -52,8 +52,8 @@ export default function PricingPage() {
   const [trialMessage, setTrialMessage] = useState('');
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setIsAuthed(!!user);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAuthed(!!session?.user);
     });
     if (router.query.trial === 'expired') {
       setTrialMessage('Your 14-day trial has ended. Choose a plan to continue.');

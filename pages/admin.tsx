@@ -107,16 +107,23 @@ export default function AdminPage() {
 
   const init = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace('/login'); return; }
+      // getSession() reads from local storage — no network call, so a
+      // slow/flaky connection can't be misread as "not logged in." The
+      // previous getUser() call hit the Auth server on every load, and
+      // any hiccup (including this catch block below) forced a logout.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) { router.replace('/login'); return; }
+      const user = session.user;
       const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
       if (prof?.role !== 'superadmin') { router.replace('/band'); return; }
       setAuthorized(true);
       await loadData();
       await loadSysStatus();
     } catch (err) {
+      // A thrown error here (e.g. a failed profile/data fetch) is not
+      // proof the user is logged out — don't bounce them to /login for
+      // what may be a transient network or query failure.
       console.error('admin init:', err);
-      router.replace('/login');
     } finally {
       setLoading(false);
     }

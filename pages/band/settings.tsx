@@ -52,7 +52,8 @@ export default function BandSettings() {
   useEffect(() => { load(); }, []);
 
   const load = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (!user) return;
 
     // Load personal display_name from profile
@@ -99,7 +100,8 @@ export default function BandSettings() {
     e.preventDefault();
     setSavingProfile(true);
     setSavedProfile(false);
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (!user) return;
     await supabase.from('profiles').update({ display_name: displayName.trim(), personal_gmail: personalGmail.trim() || null } as any).eq('id', user.id);
     setSavingProfile(false);
@@ -163,7 +165,8 @@ export default function BandSettings() {
 
   const acceptInvite = async (invite: PendingInvite) => {
     setAccepting(invite.id);
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
     if (!user) { setAccepting(''); return; }
     const { data: prof } = await supabase.from('profiles').select('display_name').eq('id', user.id).single();
     const res = await fetch('/api/accept-invite', {
