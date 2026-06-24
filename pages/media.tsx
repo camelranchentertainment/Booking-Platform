@@ -86,6 +86,115 @@ function formatDate(dateStr: string): string {
   });
 }
 
+// ─── DocCategoryIcon ─────────────────────────────────────────────────────────
+// One distinct glyph per document category, drawn flat in the act's accent
+// color so the folder grid is scannable at a glance rather than a wall of
+// identical text labels. Kept as inline SVG (no icon-library dependency) and
+// sized to a fixed 28x28 box so they align cleanly across the grid.
+
+function DocCategoryIcon({ categoryKey }: { categoryKey: string }) {
+  const common = {
+    width: 28,
+    height: 28,
+    viewBox: '0 0 28 28',
+    fill: 'none',
+    stroke: 'var(--accent)',
+    strokeWidth: 1.6,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  };
+
+  switch (categoryKey) {
+    case 'stage_plot_input_list':
+      // Stage footprint with numbered input markers
+      return (
+        <svg {...common}>
+          <rect x="3" y="5" width="22" height="16" rx="1.5" />
+          <circle cx="9" cy="11" r="1.4" fill="var(--accent)" stroke="none" />
+          <circle cx="14" cy="15" r="1.4" fill="var(--accent)" stroke="none" />
+          <circle cx="19" cy="11" r="1.4" fill="var(--accent)" stroke="none" />
+          <path d="M3 21 L11 5" strokeWidth="1" opacity="0.4" />
+        </svg>
+      );
+    case 'technical_rider':
+      // Mixer channel strip — sliders at different heights
+      return (
+        <svg {...common}>
+          <line x1="7" y1="4" x2="7" y2="24" />
+          <line x1="14" y1="4" x2="14" y2="24" />
+          <line x1="21" y1="4" x2="21" y2="24" />
+          <rect x="4.5" y="9" width="5" height="3" rx="1" fill="var(--accent)" stroke="none" />
+          <rect x="11.5" y="16" width="5" height="3" rx="1" fill="var(--accent)" stroke="none" />
+          <rect x="18.5" y="6" width="5" height="3" rx="1" fill="var(--accent)" stroke="none" />
+        </svg>
+      );
+    case 'hospitality_rider':
+      // Fork & plate
+      return (
+        <svg {...common}>
+          <circle cx="17" cy="14" r="7" />
+          <line x1="6" y1="4" x2="6" y2="24" />
+          <line x1="3.5" y1="4" x2="3.5" y2="11" />
+          <line x1="8.5" y1="4" x2="8.5" y2="11" />
+          <path d="M3.5 11 Q6 13 8.5 11" />
+        </svg>
+      );
+    case 'w9':
+      // Document with a tax/seal stamp
+      return (
+        <svg {...common}>
+          <path d="M7 3 H18 L22 7 V25 H7 Z" />
+          <path d="M18 3 V7 H22" />
+          <circle cx="14.5" cy="16" r="4" />
+          <path d="M12.8 16 L14 17.2 L16.3 14.5" strokeWidth="1.3" />
+        </svg>
+      );
+    case 'coi_insurance':
+      // Shield with checkmark
+      return (
+        <svg {...common}>
+          <path d="M14 3 L23 6.5 V14 C23 20 19 24 14 25.5 C9 24 5 20 5 14 V6.5 Z" />
+          <path d="M10.3 14.2 L13 17 L18 11" strokeWidth="1.5" />
+        </svg>
+      );
+    case 'contact_sheet':
+      // Rolodex / contact card
+      return (
+        <svg {...common}>
+          <rect x="4" y="6" width="20" height="15" rx="1.5" />
+          <circle cx="10.5" cy="12.5" r="2.2" />
+          <path d="M7 18 Q10.5 14.5 14 18" />
+          <line x1="17.5" y1="10.5" x2="21" y2="10.5" />
+          <line x1="17.5" y1="14" x2="21" y2="14" />
+          <line x1="17.5" y1="17.5" x2="20" y2="17.5" />
+        </svg>
+      );
+    case 'bio_one_sheet':
+      // Portrait card with text lines
+      return (
+        <svg {...common}>
+          <rect x="4" y="4" width="20" height="20" rx="1.5" />
+          <circle cx="10.5" cy="11" r="2.8" />
+          <path d="M6.5 17.5 Q10.5 13 14.5 17.5" />
+          <line x1="17.5" y1="8" x2="21" y2="8" />
+          <line x1="17.5" y1="11" x2="21" y2="11" />
+          <line x1="6" y1="21" x2="22" y2="21" opacity="0.5" />
+        </svg>
+      );
+    default:
+      // Fallback generic document glyph — should not occur with the 7
+      // category keys above, but keeps the grid from breaking if the
+      // category set is ever extended without updating this component.
+      return (
+        <svg {...common}>
+          <path d="M7 3 H18 L22 7 V25 H7 Z" />
+          <path d="M18 3 V7 H22" />
+        </svg>
+      );
+  }
+}
+
+
 // ─── MediaCard ────────────────────────────────────────────────────────────────
 
 function MediaCard({ item, signedUrl, urlLoading, urlFailed, onDelete, onToggleFeatured }: {
@@ -843,189 +952,6 @@ export default function MediaLibraryPage() {
         </div>
 
         {/* ══════════════════════════════════════════════════════════════════
-            SHOW POSTERS
-        ══════════════════════════════════════════════════════════════════ */}
-        <div id="section-posters" style={{ marginTop: '3.5rem', paddingTop: '2.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.9rem', color: 'var(--text-primary)', margin: '0 0 0.25rem', lineHeight: 1 }}>
-              SHOW POSTERS
-            </h2>
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Generate 1080 × 1512 px PNG posters for your shows
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-
-            <div style={{ flex: '1 1 360px', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-
-              <div className="field">
-                <label className="field-label">Show</label>
-                <select
-                  className="input"
-                  value={posterBookingId}
-                  onChange={e => { setPosterBookingId(e.target.value); setSaveMsg(''); }}
-                >
-                  <option value="">— Select a show —</option>
-                  {bookings.map(b => {
-                    const venue = b.venue as any;
-                    const label = [venue?.name, venue?.city].filter(Boolean).join(', ');
-                    return (
-                      <option key={b.id} value={b.id}>
-                        {label || 'Unnamed venue'} · {formatShowDate(b.show_date)}
-                      </option>
-                    );
-                  })}
-                </select>
-                {bookings.length === 0 && (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-                    No upcoming shows found. Add shows on the Bookings page.
-                  </div>
-                )}
-              </div>
-
-              <div className="field">
-                <label className="field-label">Style</label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  {(['americana', 'electric', 'western'] as const).map(s => (
-                    <button
-                      key={s}
-                      className={`btn btn-sm ${posterStyle === s ? 'btn-primary' : 'btn-ghost'}`}
-                      onClick={() => setPosterStyle(s)}
-                      style={{ flex: 1, textTransform: 'capitalize' }}
-                    >
-                      {s.charAt(0).toUpperCase() + s.slice(1)}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                  {posterStyle === 'americana' && 'Deep sepia tones · gold frame · Bebas Neue headline'}
-                  {posterStyle === 'electric'  && 'Full-bleed photo · dark/orange gradient · high contrast'}
-                  {posterStyle === 'western'   && 'Nested border frame · desaturated photo · Playfair serif'}
-                </div>
-              </div>
-
-              <div className="field">
-                <label className="field-label">
-                  Photo
-                  <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.4rem' }}>(EPK-marked photos)</span>
-                </label>
-                {epkPhotos.length === 0 ? (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.5 }}>
-                    No EPK photos yet. Upload photos to Media Assets and mark them as Featured.
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-                      {epkPhotos.map(photo => (
-                        <button
-                          key={photo.id}
-                          onClick={() => setSelectedPhotoId(photo.id)}
-                          title={photo.file_name}
-                          style={{
-                            flexShrink: 0, width: 76, height: 76, padding: 0,
-                            border: selectedPhotoId === photo.id ? '2px solid var(--accent)' : '2px solid rgba(255,255,255,0.12)',
-                            borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
-                            background: 'rgba(0,0,0,0.3)', transition: 'border-color 0.15s',
-                            outline: selectedPhotoId === photo.id ? '2px solid rgba(200,146,26,0.4)' : 'none',
-                            outlineOffset: 1,
-                          }}
-                        >
-                          {photo.thumbnailUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={photo.thumbnailUrl} alt={photo.file_name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                          ) : (
-                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.65rem', fontFamily: 'var(--font-body)' }}>img</div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                    {selectedPhotoId && (
-                      <button className="btn btn-ghost btn-sm" onClick={() => setSelectedPhotoId(null)} style={{ fontSize: '0.7rem', alignSelf: 'flex-start', padding: '0.15rem 0.5rem' }}>
-                        Use no photo
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="field">
-                <label className="field-label">Optional fields</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {[
-                    { show: showTicketPrice, setShow: setShowTicketPrice, label: 'Ticket price / door cover', value: ticketPrice, setValue: setTicketPrice, placeholder: 'e.g. $15 advance · $20 door', type: 'text' },
-                    { show: showOpener, setShow: setShowOpener, label: 'Opener / support act', value: openerName, setValue: setOpenerName, placeholder: 'e.g. The Desert Sons', type: 'text' },
-                    { show: showAgeRestriction, setShow: setShowAgeRestriction, label: 'Age restriction', value: ageRestriction, setValue: setAgeRestriction, placeholder: 'e.g. 21+ · All ages', type: 'text' },
-                  ].map(({ show, setShow, label, value, setValue, placeholder, type }) => (
-                    <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={show} onChange={e => setShow(e.target.checked)} />
-                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>{label}</span>
-                      </label>
-                      {show && <input className="input" type={type} placeholder={placeholder} value={value} onChange={e => setValue(e.target.value)} style={{ marginLeft: '1.4rem' }} />}
-                    </div>
-                  ))}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={showTicketUrl} onChange={e => setShowTicketUrl(e.target.checked)} />
-                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-                        Ticket link{' '}<span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>(generates QR code)</span>
-                      </span>
-                    </label>
-                    {showTicketUrl && <input className="input" type="url" placeholder="https://..." value={ticketUrl} onChange={e => setTicketUrl(e.target.value)} style={{ marginLeft: '1.4rem' }} />}
-                  </div>
-                </div>
-              </div>
-
-              {generateError && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#f87171' }}>{generateError}</div>}
-
-              <button className="btn btn-primary" onClick={handleGenerate} disabled={!posterBookingId || generating}>
-                {generating ? 'Generating…' : 'Generate Poster'}
-              </button>
-            </div>
-
-            <div style={{ flex: '1 1 280px', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div style={{
-                position: 'relative', width: '100%', paddingBottom: `${(1512 / 1080) * 100}%`,
-                border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8,
-                overflow: 'hidden', background: 'rgba(0,0,0,0.25)',
-              }}>
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {generating ? (
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>Generating…</div>
-                  ) : generatedUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={generatedUrl} alt="Generated poster preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                  ) : (
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem', lineHeight: 1.6 }}>
-                      Select a show and click<br />Generate Poster
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {generatedUrl && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
-                  <button className="btn btn-ghost btn-sm" onClick={handleDownload} style={{ fontSize: '0.78rem' }}>↓ Download PNG</button>
-                  <button
-                    className="btn btn-sm" onClick={handleSaveToLibrary} disabled={savingToLibrary}
-                    style={{ fontSize: '0.78rem', background: 'var(--accent)', color: '#000', border: 'none', opacity: savingToLibrary ? 0.6 : 1 }}
-                  >
-                    {savingToLibrary ? 'Saving…' : 'Save to Library'}
-                  </button>
-                  {saveMsg && (
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.73rem', color: saveMsg.startsWith('Error') ? '#f87171' : '#4ade80' }}>
-                      {saveMsg}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-
-          </div>
-        </div>
-
-        {/* ══════════════════════════════════════════════════════════════════
             DOCUMENTS
         ══════════════════════════════════════════════════════════════════ */}
         <div style={{ marginTop: '3.5rem', paddingTop: '2.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
@@ -1066,12 +992,17 @@ export default function MediaLibraryPage() {
                   padding: '1rem',
                   gap: '0.5rem',
                 }}>
-                  <div style={{
-                    fontFamily: 'var(--font-display)', fontSize: '0.78rem',
-                    letterSpacing: '0.1em', color: 'var(--accent)',
-                    textTransform: 'uppercase', lineHeight: 1.2,
-                  }}>
-                    {cat.label}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem' }}>
+                    <div style={{ flexShrink: 0, marginTop: '0.1rem' }}>
+                      <DocCategoryIcon categoryKey={cat.key} />
+                    </div>
+                    <div style={{
+                      fontFamily: 'var(--font-display)', fontSize: '0.78rem',
+                      letterSpacing: '0.1em', color: 'var(--accent)',
+                      textTransform: 'uppercase', lineHeight: 1.3,
+                    }}>
+                      {cat.label}
+                    </div>
                   </div>
 
                   {docsLoading ? (
@@ -1257,6 +1188,189 @@ export default function MediaLibraryPage() {
               <a href="#section-posters" style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--accent)', textDecoration: 'none', alignSelf: 'flex-start' }}>
                 ↑ Go to Posters
               </a>
+            </div>
+
+          </div>
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════════════
+            SHOW POSTERS
+        ══════════════════════════════════════════════════════════════════ */}
+        <div id="section-posters" style={{ marginTop: '3.5rem', paddingTop: '2.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.9rem', color: 'var(--text-primary)', margin: '0 0 0.25rem', lineHeight: 1 }}>
+              SHOW POSTERS
+            </h2>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              Generate 1080 × 1512 px PNG posters for your shows
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+
+            <div style={{ flex: '1 1 360px', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+              <div className="field">
+                <label className="field-label">Show</label>
+                <select
+                  className="input"
+                  value={posterBookingId}
+                  onChange={e => { setPosterBookingId(e.target.value); setSaveMsg(''); }}
+                >
+                  <option value="">— Select a show —</option>
+                  {bookings.map(b => {
+                    const venue = b.venue as any;
+                    const label = [venue?.name, venue?.city].filter(Boolean).join(', ');
+                    return (
+                      <option key={b.id} value={b.id}>
+                        {label || 'Unnamed venue'} · {formatShowDate(b.show_date)}
+                      </option>
+                    );
+                  })}
+                </select>
+                {bookings.length === 0 && (
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                    No upcoming shows found. Add shows on the Bookings page.
+                  </div>
+                )}
+              </div>
+
+              <div className="field">
+                <label className="field-label">Style</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {(['americana', 'electric', 'western'] as const).map(s => (
+                    <button
+                      key={s}
+                      className={`btn btn-sm ${posterStyle === s ? 'btn-primary' : 'btn-ghost'}`}
+                      onClick={() => setPosterStyle(s)}
+                      style={{ flex: 1, textTransform: 'capitalize' }}
+                    >
+                      {s.charAt(0).toUpperCase() + s.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                  {posterStyle === 'americana' && 'Deep sepia tones · gold frame · Bebas Neue headline'}
+                  {posterStyle === 'electric'  && 'Full-bleed photo · dark/orange gradient · high contrast'}
+                  {posterStyle === 'western'   && 'Nested border frame · desaturated photo · Playfair serif'}
+                </div>
+              </div>
+
+              <div className="field">
+                <label className="field-label">
+                  Photo
+                  <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.4rem' }}>(EPK-marked photos)</span>
+                </label>
+                {epkPhotos.length === 0 ? (
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.5 }}>
+                    No EPK photos yet. Upload photos to Media Assets and mark them as Featured.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                      {epkPhotos.map(photo => (
+                        <button
+                          key={photo.id}
+                          onClick={() => setSelectedPhotoId(photo.id)}
+                          title={photo.file_name}
+                          style={{
+                            flexShrink: 0, width: 76, height: 76, padding: 0,
+                            border: selectedPhotoId === photo.id ? '2px solid var(--accent)' : '2px solid rgba(255,255,255,0.12)',
+                            borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
+                            background: 'rgba(0,0,0,0.3)', transition: 'border-color 0.15s',
+                            outline: selectedPhotoId === photo.id ? '2px solid rgba(200,146,26,0.4)' : 'none',
+                            outlineOffset: 1,
+                          }}
+                        >
+                          {photo.thumbnailUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={photo.thumbnailUrl} alt={photo.file_name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          ) : (
+                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.65rem', fontFamily: 'var(--font-body)' }}>img</div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    {selectedPhotoId && (
+                      <button className="btn btn-ghost btn-sm" onClick={() => setSelectedPhotoId(null)} style={{ fontSize: '0.7rem', alignSelf: 'flex-start', padding: '0.15rem 0.5rem' }}>
+                        Use no photo
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="field">
+                <label className="field-label">Optional fields</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {[
+                    { show: showTicketPrice, setShow: setShowTicketPrice, label: 'Ticket price / door cover', value: ticketPrice, setValue: setTicketPrice, placeholder: 'e.g. $15 advance · $20 door', type: 'text' },
+                    { show: showOpener, setShow: setShowOpener, label: 'Opener / support act', value: openerName, setValue: setOpenerName, placeholder: 'e.g. The Desert Sons', type: 'text' },
+                    { show: showAgeRestriction, setShow: setShowAgeRestriction, label: 'Age restriction', value: ageRestriction, setValue: setAgeRestriction, placeholder: 'e.g. 21+ · All ages', type: 'text' },
+                  ].map(({ show, setShow, label, value, setValue, placeholder, type }) => (
+                    <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={show} onChange={e => setShow(e.target.checked)} />
+                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>{label}</span>
+                      </label>
+                      {show && <input className="input" type={type} placeholder={placeholder} value={value} onChange={e => setValue(e.target.value)} style={{ marginLeft: '1.4rem' }} />}
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={showTicketUrl} onChange={e => setShowTicketUrl(e.target.checked)} />
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>
+                        Ticket link{' '}<span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>(generates QR code)</span>
+                      </span>
+                    </label>
+                    {showTicketUrl && <input className="input" type="url" placeholder="https://..." value={ticketUrl} onChange={e => setTicketUrl(e.target.value)} style={{ marginLeft: '1.4rem' }} />}
+                  </div>
+                </div>
+              </div>
+
+              {generateError && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#f87171' }}>{generateError}</div>}
+
+              <button className="btn btn-primary" onClick={handleGenerate} disabled={!posterBookingId || generating}>
+                {generating ? 'Generating…' : 'Generate Poster'}
+              </button>
+            </div>
+
+            <div style={{ flex: '1 1 280px', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{
+                position: 'relative', width: '100%', paddingBottom: `${(1512 / 1080) * 100}%`,
+                border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8,
+                overflow: 'hidden', background: 'rgba(0,0,0,0.25)',
+              }}>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {generating ? (
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>Generating…</div>
+                  ) : generatedUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={generatedUrl} alt="Generated poster preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  ) : (
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem', lineHeight: 1.6 }}>
+                      Select a show and click<br />Generate Poster
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {generatedUrl && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                  <button className="btn btn-ghost btn-sm" onClick={handleDownload} style={{ fontSize: '0.78rem' }}>↓ Download PNG</button>
+                  <button
+                    className="btn btn-sm" onClick={handleSaveToLibrary} disabled={savingToLibrary}
+                    style={{ fontSize: '0.78rem', background: 'var(--accent)', color: '#000', border: 'none', opacity: savingToLibrary ? 0.6 : 1 }}
+                  >
+                    {savingToLibrary ? 'Saving…' : 'Save to Library'}
+                  </button>
+                  {saveMsg && (
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.73rem', color: saveMsg.startsWith('Error') ? '#f87171' : '#4ade80' }}>
+                      {saveMsg}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
           </div>
