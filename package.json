@@ -2,6 +2,9 @@
   "name": "camel-ranch-booking",
   "version": "1.0.0",
   "description": "",
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
