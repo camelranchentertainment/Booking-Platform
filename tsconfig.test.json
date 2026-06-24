@@ -4,7 +4,8 @@
     "module": "commonjs",
     "moduleResolution": "node",
     "types": ["jest", "node"],
-    "rootDir": "."
+    "rootDir": ".",
+    "ignoreDeprecations": "6.0"
   },
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "supabase/functions", ".next"]
