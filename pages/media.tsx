@@ -1264,7 +1264,7 @@ export default function MediaLibraryPage() {
                 </label>
                 {epkPhotos.length === 0 ? (
                   <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.5 }}>
-                    No EPK photos yet. Upload photos to Media Assets and mark them as Featured.
+                    No EPK photos yet — star (★) any photo in the Media Assets section above to make it available here.
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
