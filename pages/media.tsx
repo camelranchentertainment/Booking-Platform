@@ -283,6 +283,9 @@ export default function MediaLibraryPage() {
   const [docsLoading, setDocsLoading] = useState(true);
   const [docFetchingUrl, setDocFetchingUrl] = useState<string | null>(null);
   const [docViewError, setDocViewError] = useState<string | null>(null);
+  const [docConfirmDeleteId, setDocConfirmDeleteId] = useState<string | null>(null);
+  const [docDeletingId, setDocDeletingId] = useState<string | null>(null);
+  const [docDeleteError, setDocDeleteError] = useState<string | null>(null);
 
   // ── Poster section state ─────────────────────────────────────────────────
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -616,6 +619,36 @@ export default function MediaLibraryPage() {
     setDocHistoryOpen(prev => ({ ...prev, [category]: !prev[category] }));
   };
 
+  // Deletes a single media_library row (current slot or a history entry) by id.
+  // Works for both because the API resolves bucket from document_category server-side.
+  const handleDocDelete = async (rowId: string, category: string) => {
+    setDocDeletingId(rowId);
+    setDocDeleteError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setDocDeleteError('Not authenticated'); return; }
+      const res = await fetch(`/api/media/${rowId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        setDocDeleteError('Could not delete — try again');
+        setTimeout(() => setDocDeleteError(null), 3000);
+        return;
+      }
+      // Update whichever bucket (slot or history) this row lived in, locally —
+      // avoids a full reload round-trip for a single-row removal.
+      setDocSlots(prev => prev[category]?.id === rowId ? { ...prev, [category]: null } : prev);
+      setDocHistory(prev => ({
+        ...prev,
+        [category]: (prev[category] || []).filter(h => h.id !== rowId),
+      }));
+    } finally {
+      setDocDeletingId(null);
+      setDocConfirmDeleteId(null);
+    }
+  };
+
   const upload = async () => {
     if (!pendingFile) return;
     setUploadState('uploading');
@@ -733,7 +766,7 @@ export default function MediaLibraryPage() {
             + Upload
           </button>
           <input ref={fileInputRef} type="file" accept="image/*,.pdf,audio/*,video/*" onChange={handleFilePick} style={{ display: 'none' }} />
-          <input ref={docFileInputRef} type="file" accept=".pdf,.doc,.docx" onChange={handleDocFilePick} style={{ display: 'none' }} />
+          <input ref={docFileInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" onChange={handleDocFilePick} style={{ display: 'none' }} />
         </div>
 
         {filterTabs.length > 1 && (
@@ -1010,6 +1043,11 @@ export default function MediaLibraryPage() {
               ⚠ {docViewError}
             </div>
           )}
+          {docDeleteError && (
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#f87171', marginBottom: '0.75rem' }}>
+              ⚠ {docDeleteError}
+            </div>
+          )}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
 
@@ -1065,9 +1103,38 @@ export default function MediaLibraryPage() {
                           className="btn btn-ghost btn-sm"
                           style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
                           onClick={() => openDocUpload(cat.key)}
+                          disabled={docConfirmDeleteId === slot.id}
                         >
                           Replace
                         </button>
+                        {docConfirmDeleteId !== slot.id ? (
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', color: '#f87171' }}
+                            onClick={() => setDocConfirmDeleteId(slot.id)}
+                          >
+                            Delete
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              className="btn btn-sm"
+                              style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', background: '#f87171', color: '#000', border: 'none' }}
+                              onClick={() => handleDocDelete(slot.id, cat.key)}
+                              disabled={docDeletingId === slot.id}
+                            >
+                              {docDeletingId === slot.id ? 'Deleting…' : 'Confirm'}
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
+                              onClick={() => setDocConfirmDeleteId(null)}
+                              disabled={docDeletingId === slot.id}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
                       </div>
 
                       {history.length > 0 && (
@@ -1103,6 +1170,34 @@ export default function MediaLibraryPage() {
                                   >
                                     {docFetchingUrl === h.id ? '…' : 'View'}
                                   </button>
+                                  {docConfirmDeleteId !== h.id ? (
+                                    <button
+                                      className="btn btn-ghost btn-sm"
+                                      style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', flexShrink: 0, color: '#f87171' }}
+                                      onClick={() => setDocConfirmDeleteId(h.id)}
+                                    >
+                                      Delete
+                                    </button>
+                                  ) : (
+                                    <>
+                                      <button
+                                        className="btn btn-sm"
+                                        style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', flexShrink: 0, background: '#f87171', color: '#000', border: 'none' }}
+                                        onClick={() => handleDocDelete(h.id, cat.key)}
+                                        disabled={docDeletingId === h.id}
+                                      >
+                                        {docDeletingId === h.id ? '…' : 'Confirm'}
+                                      </button>
+                                      <button
+                                        className="btn btn-ghost btn-sm"
+                                        style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', flexShrink: 0 }}
+                                        onClick={() => setDocConfirmDeleteId(null)}
+                                        disabled={docDeletingId === h.id}
+                                      >
+                                        ✕
+                                      </button>
+                                    </>
+                                  )}
                                 </div>
                               ))}
                             </div>

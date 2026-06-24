@@ -27,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { data: record } = await service
     .from('media_library')
-    .select('id, act_id, storage_path, is_primary_logo')
+    .select('id, act_id, storage_path, is_primary_logo, document_category')
     .eq('id', id)
     .maybeSingle();
 
@@ -52,7 +52,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // DELETE
-  await service.storage.from('media-library').remove([record.storage_path]);
+  // Documents live in the private `band-documents` bucket; everything else
+  // (photos, logos, posters) lives in `media-library`. Always deleting from
+  // `media-library` regardless of category orphaned document files in storage.
+  const bucket = record.document_category ? 'band-documents' : 'media-library';
+  await service.storage.from(bucket).remove([record.storage_path]);
   await service.from('media_library').delete().eq('id', id);
 
   if (record.is_primary_logo) {

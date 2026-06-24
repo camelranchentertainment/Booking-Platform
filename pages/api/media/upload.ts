@@ -16,6 +16,8 @@ const ALLOWED_TYPES: Record<string, string> = {
   'application/pdf':      'document',
   'application/msword':   'document',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'document',
+  'application/vnd.ms-excel': 'document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'document',
   'audio/mpeg':    'audio',
   'audio/wav':     'audio',
   'video/mp4':     'video',
