@@ -42,10 +42,16 @@ export default function BandTours() {
       if (!act) return;
       setActId(act.id);
 
+      const now = new Date();
+      const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+        .toISOString()
+        .slice(0, 10);
+
       const { data } = await supabase
         .from('tours')
         .select('id, name, status, start_date, end_date, description, tour_venues(count)')
         .or(`act_id.eq.${act.id},created_by.eq.${user.id}`)
+        .or(`end_date.is.null,end_date.gte.${todayUTC}`)
         .order('start_date', { ascending: false });
 
       setTours(data || []);
