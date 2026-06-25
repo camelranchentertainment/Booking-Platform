@@ -10,6 +10,10 @@ type ActPick   = { id: string; act_name: string };
 type VenuePick = { id: string; name: string; city: string; state: string };
 type TourPick  = { id: string; name: string; act_id: string };
 
+type RosterMember     = { id: string; name: string; instrument_role: string | null; default_pay_amount: number | null };
+type LoadedAssignment = { expenseId: string; personnel_id: string; amount: number; name: string; instrument_role: string | null };
+type PersonnelFormRow = { personnel_id: string; name: string; instrument_role: string; pay_amount: string };
+
 const DEAL_OPTIONS = [
   { value: 'guarantee',  label: 'Guarantee' },
   { value: 'door_split', label: 'Door Split' },
@@ -71,6 +75,14 @@ export default function BookingDetail() {
   const [settling, setSettling]     = useState(false);
   const [settleError, setSettleError] = useState('');
 
+  // Band Lineup modal
+  const [roster, setRoster]                         = useState<RosterMember[]>([]);
+  const [loadedAssignments, setLoadedAssignments]   = useState<LoadedAssignment[]>([]);
+  const [showPersonnelModal, setShowPersonnelModal] = useState(false);
+  const [personnelForm, setPersonnelForm]           = useState<PersonnelFormRow[]>([]);
+  const [savingPersonnel, setSavingPersonnel]       = useState(false);
+  const [personnelError, setPersonnelError]         = useState('');
+
   useEffect(() => { if (id) loadAll(); }, [id]);
 
   const loadAll = async () => {
@@ -102,6 +114,26 @@ export default function BookingDetail() {
         .neq('status', 'cancelled')
         .order('name');
       setTours(toursData || []);
+    }
+    if (bookingActId) {
+      const [rosterRes, expensesRes] = await Promise.all([
+        supabase.from('act_personnel')
+          .select('id, name, instrument_role, default_pay_amount')
+          .eq('act_id', bookingActId).eq('is_active', true).order('name'),
+        supabase.from('expenses')
+          .select('id, personnel_id, amount, act_personnel(name, instrument_role)')
+          .eq('booking_id', id as string).not('personnel_id', 'is', null).eq('category', 'band_pay'),
+      ]);
+      setRoster((rosterRes.data || []) as RosterMember[]);
+      setLoadedAssignments(
+        ((expensesRes.data || []) as any[]).map(e => ({
+          expenseId:       e.id,
+          personnel_id:    e.personnel_id,
+          amount:          Number(e.amount),
+          name:            (e.act_personnel as any)?.name || '',
+          instrument_role: (e.act_personnel as any)?.instrument_role || null,
+        }))
+      );
     }
   };
 
@@ -171,6 +203,60 @@ export default function BookingDetail() {
     await loadAll();
     setEditFinancial(false);
     setSavingFinancial(false);
+  };
+
+  const savePersonnel = async () => {
+    setSavingPersonnel(true);
+    setPersonnelError('');
+    const { data: { session } } = await supabase.auth.getSession();
+    const currentUserId = session?.user?.id;
+
+    const loadedMap   = new Map(loadedAssignments.map(a => [a.personnel_id, a]));
+    const selectedMap = new Map(personnelForm.map(p => [p.personnel_id, p]));
+
+    const toInsert = personnelForm.filter(p => !loadedMap.has(p.personnel_id));
+    const toUpdate = personnelForm.filter(p => {
+      const existing = loadedMap.get(p.personnel_id);
+      return existing !== undefined && Number(p.pay_amount) !== existing.amount;
+    });
+    const toDelete = loadedAssignments.filter(a => !selectedMap.has(a.personnel_id));
+
+    const errors: string[] = [];
+
+    const phase1 = await Promise.all([
+      ...toDelete.map(a => supabase.from('expenses').delete().eq('id', a.expenseId)),
+      ...toUpdate.map(p => supabase.from('expenses')
+        .update({ amount: Number(p.pay_amount) })
+        .eq('id', loadedMap.get(p.personnel_id)!.expenseId)),
+    ]);
+    for (const r of phase1) {
+      if (r.error) errors.push(r.error.message);
+    }
+
+    const phase2 = await Promise.all(
+      toInsert.map(p => supabase.from('expenses').insert({
+        booking_id:   id as string,
+        act_id:       booking.act_id,
+        personnel_id: p.personnel_id,
+        category:     'band_pay',
+        amount:       Number(p.pay_amount) || 0,
+        expense_date: booking.show_date || null,
+        user_id:      currentUserId,
+      }))
+    );
+    for (const r of phase2) {
+      if (r.error) errors.push(r.error.message);
+    }
+
+    if (errors.length > 0) {
+      setPersonnelError(`Save incomplete — ${errors.join('; ')}`);
+      setSavingPersonnel(false);
+      return;
+    }
+
+    setShowPersonnelModal(false);
+    setSavingPersonnel(false);
+    await loadAll();
   };
 
   const settle = async () => {
@@ -444,6 +530,54 @@ export default function BookingDetail() {
                   </div>
                 )}
               </div>
+
+              {/* LINEUP */}
+              <div className="card">
+                <div className="card-header">
+                  <span className="card-title">LINEUP</span>
+                  <button className="btn btn-ghost btn-sm" onClick={() => {
+                    setPersonnelForm(
+                      loadedAssignments.map(a => ({
+                        personnel_id:    a.personnel_id,
+                        name:            a.name,
+                        instrument_role: a.instrument_role || '',
+                        pay_amount:      String(a.amount),
+                      }))
+                    );
+                    setPersonnelError('');
+                    setShowPersonnelModal(true);
+                  }}>
+                    {loadedAssignments.length === 0 ? 'Add Lineup' : 'Edit Lineup'}
+                  </button>
+                </div>
+                {loadedAssignments.length === 0 ? (
+                  <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem', padding: '0.5rem 0' }}>
+                    No lineup recorded.
+                  </div>
+                ) : (
+                  <div>
+                    {loadedAssignments.map(a => (
+                      <div key={a.personnel_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--border)' }}>
+                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.86rem', color: 'var(--text-secondary)' }}>
+                          {a.name || 'Unknown'}
+                          {a.instrument_role && (
+                            <span style={{ color: 'var(--text-muted)', marginLeft: '0.35rem' }}>({a.instrument_role})</span>
+                          )}
+                        </span>
+                        <span style={{ fontSize: '0.86rem', color: 'var(--text-primary)' }}>
+                          ${Number(a.amount).toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0 0.25rem' }}>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Total</span>
+                      <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--accent)' }}>
+                        ${loadedAssignments.reduce((sum, a) => sum + Number(a.amount), 0).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* RIGHT: Notes */}
@@ -589,6 +723,84 @@ export default function BookingDetail() {
                   {settling ? 'Saving...' : 'Mark as Played'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Band Lineup Modal ── */}
+      {showPersonnelModal && (
+        <div className="modal-backdrop" onClick={() => setShowPersonnelModal(false)}>
+          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setShowPersonnelModal(false)}>✕</button>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--accent)', marginBottom: '0.25rem' }}>
+              Who Played This Show
+            </div>
+            <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.8rem', marginBottom: '1.25rem' }}>
+              {booking.venue?.name}{booking.show_date ? ` · ${new Date(booking.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
+            </div>
+            {roster.length === 0 ? (
+              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.86rem', padding: '0.5rem 0' }}>
+                No active roster members. Add members in Band Settings → Members.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {roster.map(member => {
+                  const selected = personnelForm.find(p => p.personnel_id === member.id);
+                  return (
+                    <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!selected}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            const existing = loadedAssignments.find(a => a.personnel_id === member.id);
+                            setPersonnelForm(prev => [...prev, {
+                              personnel_id:    member.id,
+                              name:            member.name,
+                              instrument_role: member.instrument_role || '',
+                              pay_amount:      existing ? String(existing.amount) : String(member.default_pay_amount ?? ''),
+                            }]);
+                          } else {
+                            setPersonnelForm(prev => prev.filter(p => p.personnel_id !== member.id));
+                          }
+                        }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.88rem', color: 'var(--text-primary)' }}>{member.name}</div>
+                        {member.instrument_role && (
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{member.instrument_role}</div>
+                        )}
+                      </div>
+                      {selected && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>$</span>
+                          <input
+                            className="input"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            style={{ width: 88, padding: '0.3rem 0.5rem', fontSize: '0.86rem' }}
+                            value={selected.pay_amount}
+                            onChange={e => setPersonnelForm(prev => prev.map(p =>
+                              p.personnel_id === member.id ? { ...p, pay_amount: e.target.value } : p
+                            ))}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {personnelError && (
+              <div style={{ color: '#f87171', fontSize: '0.83rem', marginTop: '0.75rem' }}>{personnelError}</div>
+            )}
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
+              <button className="btn btn-secondary" onClick={() => setShowPersonnelModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={savePersonnel} disabled={savingPersonnel || roster.length === 0}>
+                {savingPersonnel ? 'Saving...' : 'Save Lineup'}
+              </button>
             </div>
           </div>
         </div>
