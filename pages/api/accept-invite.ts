@@ -72,6 +72,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await supabase.from('acts').update({ owner_id: userId }).eq('id', invite.act_id);
   }
 
+  // Link the roster entry that originated this invite
+  if (invite.personnel_id) {
+    const { error: personnelErr } = await supabase
+      .from('act_personnel')
+      .update({ linked_user_id: userId })
+      .eq('id', invite.personnel_id);
+    if (personnelErr) console.error('Failed to link personnel record:', personnelErr.message);
+  }
+
   // Mark invite accepted
   await supabase.from('act_invitations').update({ status: 'accepted' }).eq('id', invite.id);
 

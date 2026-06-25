@@ -11,7 +11,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: { user } } = await service.auth.getUser(token || '');
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { actId, email, role } = req.body;
+  const { actId, email, role: rawRole, personnel_id: personnelId } = req.body;
+  // Roster invites are always member — enforce server-side regardless of what the client sends
+  const role = personnelId ? 'member' : rawRole;
   if (!actId || !email || !role) return res.status(400).json({ error: 'actId, email, role required' });
   if (!['band_admin', 'member'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
 
@@ -51,6 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       email:      email.trim().toLowerCase(),
       role,
       invited_by: user.id,
+      ...(personnelId ? { personnel_id: personnelId } : {}),
     })
     .select('token')
     .single();
