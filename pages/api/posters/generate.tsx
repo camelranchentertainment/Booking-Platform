@@ -588,22 +588,35 @@ export default async function handler(req: Request): Promise<Response> {
   ]);
 
   // Fetch and inline media asset as base64 data URI (scoped to caller's act)
+  // NOTE: table/bucket fixed from legacy 'media_assets' → 'media_library' —
+  // 'media_assets' was dropped in the media-library migration; this lookup
+  // was silently returning no rows, so photoDataUri always stayed null and
+  // every poster style fell back to the empty "LIVE" placeholder box.
   let photoDataUri: string | null = null;
   if (mediaAssetId) {
-    const { data: asset } = await service
-      .from('media_assets')
+    const { data: asset, error: assetError } = await service
+      .from('media_library')
       .select('storage_path, mime_type')
       .eq('id', mediaAssetId)
       .eq('act_id', profile.act_id)
       .single();
+    // DIAG-1
+    console.error('[poster-diag] mediaAssetId:', mediaAssetId, '| profile.act_id:', profile.act_id, '| asset:', JSON.stringify(asset), '| assetError:', JSON.stringify(assetError));
     if (asset?.storage_path) {
-      const { data: signed } = await service.storage
-        .from('media-assets')
+      const { data: signed, error: signedError } = await service.storage
+        .from('media-library')
         .createSignedUrl(asset.storage_path, 300);
+      // DIAG-2
+      console.error('[poster-diag] storage_path:', asset.storage_path, '| signed:', JSON.stringify(signed), '| signedError:', JSON.stringify(signedError));
       if (signed?.signedUrl) {
-        const imgBuf = await fetch(signed.signedUrl).then(r => r.arrayBuffer());
-        const mime = asset.mime_type || 'image/jpeg';
-        photoDataUri = `data:${mime};base64,${ab2b64(imgBuf)}`;
+        try {
+          const imgBuf = await fetch(signed.signedUrl).then(r => r.arrayBuffer());
+          const mime = asset.mime_type || 'image/jpeg';
+          photoDataUri = `data:${mime};base64,${ab2b64(imgBuf)}`;
+        } catch (fetchErr) {
+          // DIAG-3
+          console.error('[poster-diag] fetch signedUrl failed:', fetchErr);
+        }
       }
     }
   }
