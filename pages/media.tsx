@@ -30,6 +30,7 @@ type EpkPhoto = {
   file_name: string;
   storage_path: string;
   mime_type: string | null;
+  is_featured: boolean;
   thumbnailUrl: string | null;
 };
 
@@ -517,15 +518,15 @@ export default function MediaLibraryPage() {
     try {
       const { data: assetRows, error } = await supabase
         .from('media_library')
-        .select('id, file_name, storage_path, mime_type')
+        .select('id, file_name, storage_path, mime_type, is_featured')
         .eq('act_id', actId)
-        .eq('is_featured', true)
         .like('mime_type', 'image/%')
+        .is('document_category', null)
         .order('created_at', { ascending: false });
 
-      if (error || !assetRows?.length) { setEpkPhotos([]); return; }
+      if (error) { setEpkPhotos([]); return; }
 
-      const paths = assetRows.map(r => r.storage_path).filter(Boolean);
+      const paths = (assetRows || []).map(r => r.storage_path).filter(Boolean);
       let signedMap: Record<string, string> = {};
       if (paths.length > 0) {
         const { data: signed } = await supabase.storage
@@ -534,12 +535,16 @@ export default function MediaLibraryPage() {
         (signed || []).forEach(s => { if (s.signedUrl && s.path) signedMap[s.path] = s.signedUrl; });
       }
 
+      const sorted = [...(assetRows || [])].sort((a, b) =>
+        (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0)
+      );
       setEpkPhotos(
-        assetRows.map(r => ({
+        sorted.map(r => ({
           id:           r.id,
           file_name:    r.file_name,
           storage_path: r.storage_path,
           mime_type:    r.mime_type,
+          is_featured:  r.is_featured ?? false,
           thumbnailUrl: signedMap[r.storage_path] ?? null,
         }))
       );
@@ -1260,11 +1265,11 @@ export default function MediaLibraryPage() {
               <div className="field">
                 <label className="field-label">
                   Photo
-                  <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.4rem' }}>(EPK-marked photos)</span>
+                  <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.4rem' }}>(all photos · ★ starred first)</span>
                 </label>
                 {epkPhotos.length === 0 ? (
                   <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.5 }}>
-                    No EPK photos yet — star (★) any photo in the Media Assets section above to make it available here.
+                    No photos yet — upload photos in the Media Assets section above.
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -1275,7 +1280,7 @@ export default function MediaLibraryPage() {
                           onClick={() => setSelectedPhotoId(photo.id)}
                           title={photo.file_name}
                           style={{
-                            flexShrink: 0, width: 76, height: 76, padding: 0,
+                            position: 'relative', flexShrink: 0, width: 76, height: 76, padding: 0,
                             border: selectedPhotoId === photo.id ? '2px solid var(--accent)' : '2px solid rgba(255,255,255,0.12)',
                             borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
                             background: 'rgba(0,0,0,0.3)', transition: 'border-color 0.15s',
@@ -1288,6 +1293,9 @@ export default function MediaLibraryPage() {
                             <img src={photo.thumbnailUrl} alt={photo.file_name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                           ) : (
                             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.65rem', fontFamily: 'var(--font-body)' }}>img</div>
+                          )}
+                          {photo.is_featured && (
+                            <span style={{ position: 'absolute', top: 3, right: 4, fontSize: '0.65rem', color: '#C8921A', lineHeight: 1, pointerEvents: 'none' }}>★</span>
                           )}
                         </button>
                       ))}
