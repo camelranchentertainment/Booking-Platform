@@ -4,6 +4,10 @@
 
 Poster generator photo rendering confirmed fixed end-to-end on 2026-06-25, after the earlier false "already fixed" reports were traced to a misattributed commit (beb8c31 touched media.tsx, not generate.tsx) and the real fix landed in 8de577e.
 
+### Session-drop investigation — interim mitigation
+
+Scott raised the JWT/session expiry setting to 3600s in the Supabase dashboard as an interim mitigation — this reduces how often the refresh cycle runs and may reduce how often the bug is hit, but does not address the underlying gap in contexts/AuthContext.tsx's onAuthStateChange fallthrough behavior. The dedicated fix session noted above is still needed.
+
 ## 2026-06-24
 
 ### pages/band/tours.tsx — orphaned page, kept intentionally
