@@ -1,5 +1,9 @@
 # Dev Log
 
+## 2026-06-25
+
+Poster generator photo rendering confirmed fixed end-to-end on 2026-06-25, after the earlier false "already fixed" reports were traced to a misattributed commit (beb8c31 touched media.tsx, not generate.tsx) and the real fix landed in 8de577e.
+
 ## 2026-06-24
 
 ### pages/band/tours.tsx — orphaned page, kept intentionally
