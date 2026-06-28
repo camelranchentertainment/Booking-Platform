@@ -12,6 +12,7 @@ type TourPick  = { id: string; name: string; act_id: string };
 
 type RosterMember     = { id: string; name: string; instrument_role: string | null; default_pay_amount: number | null };
 type LoadedAssignment = { expenseId: string; personnel_id: string; amount: number; name: string; instrument_role: string | null };
+type LoadedRosterEntry = { id: string; personnel_id: string };
 type PersonnelFormRow = { personnel_id: string; name: string; instrument_role: string; pay_amount: string };
 
 const DEAL_OPTIONS = [
@@ -78,10 +79,12 @@ export default function BookingDetail() {
   // Band Lineup modal
   const [roster, setRoster]                         = useState<RosterMember[]>([]);
   const [loadedAssignments, setLoadedAssignments]   = useState<LoadedAssignment[]>([]);
+  const [loadedRoster, setLoadedRoster]             = useState<LoadedRosterEntry[]>([]);
   const [showPersonnelModal, setShowPersonnelModal] = useState(false);
   const [personnelForm, setPersonnelForm]           = useState<PersonnelFormRow[]>([]);
   const [savingPersonnel, setSavingPersonnel]       = useState(false);
   const [personnelError, setPersonnelError]         = useState('');
+  const [personnelSuccess, setPersonnelSuccess]     = useState('');
 
   useEffect(() => { if (id) loadAll(); }, [id]);
 
@@ -116,15 +119,19 @@ export default function BookingDetail() {
       setTours(toursData || []);
     }
     if (bookingActId) {
-      const [rosterRes, expensesRes] = await Promise.all([
+      const [rosterRes, expensesRes, bpRes] = await Promise.all([
         supabase.from('act_personnel')
           .select('id, name, instrument_role, default_pay_amount')
           .eq('act_id', bookingActId).eq('is_active', true).order('name'),
         supabase.from('expenses')
           .select('id, personnel_id, amount, act_personnel(name, instrument_role)')
           .eq('booking_id', id as string).not('personnel_id', 'is', null).eq('category', 'band_pay'),
+        supabase.from('booking_personnel')
+          .select('id, personnel_id')
+          .eq('booking_id', id as string),
       ]);
       setRoster((rosterRes.data || []) as RosterMember[]);
+      setLoadedRoster((bpRes.data || []) as LoadedRosterEntry[]);
       setLoadedAssignments(
         ((expensesRes.data || []) as any[]).map(e => ({
           expenseId:       e.id,
@@ -208,6 +215,7 @@ export default function BookingDetail() {
   const savePersonnel = async () => {
     setSavingPersonnel(true);
     setPersonnelError('');
+    setPersonnelSuccess('');
     const { data: { session } } = await supabase.auth.getSession();
     const currentUserId = session?.user?.id;
 
@@ -220,6 +228,11 @@ export default function BookingDetail() {
       return existing !== undefined && Number(p.pay_amount) !== existing.amount;
     });
     const toDelete = loadedAssignments.filter(a => !selectedMap.has(a.personnel_id));
+
+    // booking_personnel diff
+    const rosterMap    = new Map(loadedRoster.map(r => [r.personnel_id, r]));
+    const toInsertBP   = personnelForm.filter(p => !rosterMap.has(p.personnel_id));
+    const toDeleteBP   = loadedRoster.filter(r => !selectedMap.has(r.personnel_id));
 
     const errors: string[] = [];
 
@@ -248,15 +261,27 @@ export default function BookingDetail() {
       if (r.error) errors.push(r.error.message);
     }
 
+    const phase3 = await Promise.all([
+      ...toDeleteBP.map(r => supabase.from('booking_personnel').delete().eq('id', r.id)),
+      ...toInsertBP.map(p => supabase.from('booking_personnel').insert({
+        booking_id:   id as string,
+        personnel_id: p.personnel_id,
+        act_id:       booking.act_id,
+      })),
+    ]);
+    for (const r of phase3) {
+      if (r.error) errors.push(r.error.message);
+    }
+
     if (errors.length > 0) {
       setPersonnelError(`Save incomplete — ${errors.join('; ')}`);
       setSavingPersonnel(false);
       return;
     }
 
-    setShowPersonnelModal(false);
-    setSavingPersonnel(false);
     await loadAll();
+    setPersonnelSuccess('Lineup saved.');
+    setSavingPersonnel(false);
   };
 
   const settle = async () => {
@@ -545,6 +570,7 @@ export default function BookingDetail() {
                       }))
                     );
                     setPersonnelError('');
+                    setPersonnelSuccess('');
                     setShowPersonnelModal(true);
                   }}>
                     {loadedAssignments.length === 0 ? 'Add Lineup' : 'Edit Lineup'}
@@ -795,6 +821,9 @@ export default function BookingDetail() {
             )}
             {personnelError && (
               <div style={{ color: '#f87171', fontSize: '0.83rem', marginTop: '0.75rem' }}>{personnelError}</div>
+            )}
+            {personnelSuccess && (
+              <div style={{ color: '#34d399', fontSize: '0.83rem', marginTop: '0.75rem' }}>{personnelSuccess}</div>
             )}
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
               <button className="btn btn-secondary" onClick={() => setShowPersonnelModal(false)}>Cancel</button>
