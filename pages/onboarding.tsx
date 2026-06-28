@@ -46,7 +46,8 @@ export default function Onboarding() {
       }
     };
     load();
-  }, [router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const saveActName = async () => {
     if (!actId || !actName.trim()) return;
