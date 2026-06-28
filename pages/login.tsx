@@ -63,7 +63,7 @@ export default function Login() {
     }
 
     if (role === 'superadmin') window.location.href = '/admin';
-    else if (role === 'member') window.location.href = '/member';
+    else if (role === 'member') window.location.href = '/member/calendar';
     else window.location.href = '/band';
   };
 

@@ -336,7 +336,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
     const allowedRoles = Array.isArray(requireRole) ? requireRole : requireRole ? [requireRole] : null;
     if (profile.role !== 'superadmin' && allowedRoles && !allowedRoles.includes(profile.role as any)) {
       if (profile.role === 'band_admin') router.replace('/band');
-      else router.replace('/member');
+      else router.replace('/member/calendar');
     }
   }, [authLoading, user, profile, requireRole, router.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
