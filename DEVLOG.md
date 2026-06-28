@@ -8,6 +8,12 @@ Poster generator photo rendering confirmed fixed end-to-end on 2026-06-25, after
 
 Scott raised the JWT/session expiry setting to 3600s in the Supabase dashboard as an interim mitigation — this reduces how often the refresh cycle runs and may reduce how often the bug is hit, but does not address the underlying gap in contexts/AuthContext.tsx's onAuthStateChange fallthrough behavior. The dedicated fix session noted above is still needed.
 
+### Session-drop fix landed — 2026-06-28
+
+Root cause confirmed: the `onAuthStateChange` fallthrough in `contexts/AuthContext.tsx` was calling `setUser(session?.user ?? null)` unconditionally for every non-`SIGNED_OUT` event. Events like `TOKEN_REFRESHED`, `USER_UPDATED`, `INITIAL_SESSION`, and `PASSWORD_RECOVERY` can fire with `session === null` even when the Supabase session is still valid (false-negative read of session state, not an actual logout). This wiped `user` and `profile` from React state mid-navigation, logging the user out of the UI while Supabase's own session remained intact.
+
+Fix (commit `f534bcb`): removed the unconditional `setUser(null)` write. The handler now only updates state when `session?.user` is present; a null session on any non-`SIGNED_OUT` event is silently ignored. `SIGNED_OUT` continues to clear state via the existing early-return guard. The 3600s JWT expiry mitigation can remain in place — it does no harm — but the underlying fallthrough is now closed.
+
 ## 2026-06-24
 
 ### pages/band/tours.tsx — orphaned page, kept intentionally
