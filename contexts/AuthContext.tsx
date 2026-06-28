@@ -86,8 +86,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           resolve();
           return;
         }
-        setUser(session?.user ?? null);
+        // Only SIGNED_OUT should ever clear the user (handled above with early return).
+        // Other events (TOKEN_REFRESHED, USER_UPDATED, INITIAL_SESSION, PASSWORD_RECOVERY)
+        // should update state when a session is present, but must never wipe a logged-in
+        // user just because this particular event happened to fire with session === null —
+        // confirmed via Supabase auth logs that no real sign-out/token-revocation occurred
+        // when this was observed, meaning the session was still valid and this was a
+        // false-negative read of session state, not an actual logout.
         if (session?.user) {
+          setUser(session.user);
           await loadProfile(session.user);
         }
         resolve();
