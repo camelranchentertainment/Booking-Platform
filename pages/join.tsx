@@ -42,24 +42,43 @@ export default function Join() {
       });
       if (err) { setError(err.message); setSaving(false); return; }
       if (!data.user) { setError('Registration failed'); setSaving(false); return; }
-      if (!data.session) {
-        // Confirm Email is enabled — invite token proves ownership; confirm server-side then retry.
+
+      if (data.session) {
+        // Confirm-email is off, or this project allows immediate sessions.
+        accessToken = data.session.access_token;
+      } else {
+        // Confirm-email is on — signUp() created the user but withheld a
+        // session pending email confirmation. The invite link itself is
+        // sufficient proof of email ownership (accept-invite.ts re-checks
+        // invite.email === user.email regardless), so we force-confirm
+        // server-side using the invite token as authorization, then sign in.
         const confirmRes = await fetch('/api/auth/confirm-invited-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token }),
         });
         const confirmResult = await confirmRes.json();
-        if (!confirmRes.ok) { setError(confirmResult.error || 'Failed to confirm account'); setSaving(false); return; }
-        const { data: retryData, error: retryErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
-        if (retryErr || !retryData.session) { setError(retryErr?.message || 'Sign-in failed after confirmation'); setSaving(false); return; }
-        accessToken = retryData.session.access_token;
-      } else {
-        accessToken = data.session.access_token;
+        if (!confirmRes.ok) {
+          setError(confirmResult.error || 'Failed to confirm account');
+          setSaving(false);
+          return;
+        }
+
+        const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+          email: form.email,
+          password: form.password,
+        });
+        if (signInErr || !signInData.session) {
+          setError(signInErr?.message || 'Account created, but automatic sign-in failed. Please use "Sign In" above.');
+          setSaving(false);
+          return;
+        }
+        accessToken = signInData.session.access_token;
       }
     } else {
       const { data, error: err } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
       if (err) { setError(err.message); setSaving(false); return; }
+      if (!data.session) { setError('Sign in failed'); setSaving(false); return; }
       accessToken = data.session.access_token;
     }
 
