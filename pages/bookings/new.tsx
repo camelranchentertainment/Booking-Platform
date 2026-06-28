@@ -14,7 +14,7 @@ export default function NewBooking() {
   const [tours, setTours] = useState<TourPick[]>([]);
   const [form, setForm]   = useState({
     act_id: '', venue_id: '', tour_id: '', status: 'pitch' as BookingStatus,
-    show_date: '', fee: '', deal_notes: '', internal_notes: '',
+    show_date: '', deal_notes: '', internal_notes: '',
   });
   const [error, setError]   = useState('');
   const [saving, setSaving] = useState(false);
@@ -71,7 +71,6 @@ export default function NewBooking() {
       tour_id:    form.tour_id  || null,
       status:     form.status,
       show_date:  form.show_date || null,
-      agreed_amount: form.fee ? Number(form.fee) : null,
       deal_notes: form.deal_notes || null,
       internal_notes: form.internal_notes || null,
       pitched_at: form.status === 'pitch' ? new Date().toISOString() : null,
@@ -147,15 +146,9 @@ export default function NewBooking() {
                 </div>
               </div>
 
-              <div className="grid-2">
-                <div className="field">
-                  <label className="field-label">Show Date</label>
-                  <input className="input" type="date" value={form.show_date} onChange={set('show_date')} />
-                </div>
-                <div className="field">
-                  <label className="field-label">Fee ($)</label>
-                  <input className="input" type="number" value={form.fee} onChange={set('fee')} placeholder="0.00" />
-                </div>
+              <div className="field">
+                <label className="field-label">Show Date</label>
+                <input className="input" type="date" value={form.show_date} onChange={set('show_date')} />
               </div>
 
               <div className="field">
