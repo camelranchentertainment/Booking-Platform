@@ -41,8 +41,22 @@ export default function Join() {
         options: { data: { role: invite?.role || 'member' } },
       });
       if (err) { setError(err.message); setSaving(false); return; }
-      if (!data.user || !data.session) { setError('Registration failed'); setSaving(false); return; }
-      accessToken = data.session.access_token;
+      if (!data.user) { setError('Registration failed'); setSaving(false); return; }
+      if (!data.session) {
+        // Confirm Email is enabled — invite token proves ownership; confirm server-side then retry.
+        const confirmRes = await fetch('/api/auth/confirm-invited-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+        const confirmResult = await confirmRes.json();
+        if (!confirmRes.ok) { setError(confirmResult.error || 'Failed to confirm account'); setSaving(false); return; }
+        const { data: retryData, error: retryErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
+        if (retryErr || !retryData.session) { setError(retryErr?.message || 'Sign-in failed after confirmation'); setSaving(false); return; }
+        accessToken = retryData.session.access_token;
+      } else {
+        accessToken = data.session.access_token;
+      }
     } else {
       const { data, error: err } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
       if (err) { setError(err.message); setSaving(false); return; }
