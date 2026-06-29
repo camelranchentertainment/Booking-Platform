@@ -324,14 +324,6 @@ export default function AppShell({ children, requireRole = null }: Props) {
       return;
     }
 
-    if (
-      profile.role === 'band_admin' &&
-      (profile as any).onboarding_completed === false &&
-      router.pathname !== '/onboarding'
-    ) {
-      router.replace('/onboarding');
-      return;
-    }
 
     const allowedRoles = Array.isArray(requireRole) ? requireRole : requireRole ? [requireRole] : null;
     if (profile.role !== 'superadmin' && allowedRoles && !allowedRoles.includes(profile.role as any)) {
