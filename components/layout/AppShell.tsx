@@ -28,8 +28,10 @@ function needsSubscription(profile: UserProfile): boolean {
 type SysNotif = {
   id: string;
   type: string;
+  title: string | null;
   message: string;
   action_url: string | null;
+  link: string | null;
   created_at: string;
 };
 
@@ -41,18 +43,20 @@ type InviteNotif = {
 };
 
 const TYPE_COLOR: Record<string, string> = {
-  bulk_send:     '#34d399',
-  advance_due:   '#f97316',
-  thank_you_due: '#a78bfa',
-  follow_up_due: '#fbbf24',
-  system:        'var(--accent)',
+  bulk_send:        '#34d399',
+  advance_due:      '#f97316',
+  thank_you_due:    '#a78bfa',
+  follow_up_due:    '#fbbf24',
+  post_show_review: '#E8602A',
+  system:           'var(--accent)',
 };
 const TYPE_LABEL: Record<string, string> = {
-  bulk_send:     'Bulk Send',
-  advance_due:   'Advance Due',
-  thank_you_due: 'Thank You Due',
-  follow_up_due: 'Follow Up',
-  system:        'Notice',
+  bulk_send:        'Bulk Send',
+  advance_due:      'Advance Due',
+  thank_you_due:    'Thank You Due',
+  follow_up_due:    'Follow Up',
+  post_show_review: 'Post-Show',
+  system:           'Notice',
 };
 
 function timeAgo(iso: string): string {
@@ -77,7 +81,7 @@ function NotifBell({ userId, email, displayName }: { userId: string; email: stri
     const [sysRes, invRes] = await Promise.all([
       supabase
         .from('notifications')
-        .select('id, type, message, action_url, created_at')
+        .select('id, type, title, message, action_url, link, created_at')
         .eq('user_id', userId)
         .eq('read', false)
         .order('created_at', { ascending: false })
@@ -108,15 +112,26 @@ function NotifBell({ userId, email, displayName }: { userId: string; email: stri
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  const dismiss = async (id: string) => {
-    await supabase.from('notifications').update({ read: true }).eq('id', id);
-    setSys(prev => prev.filter(n => n.id !== id));
+  const dismissNotification = async (notifId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    await supabase
+      .from('notifications')
+      .update({ read: true, read_at: new Date().toISOString() })
+      .eq('id', notifId);
+    setSys(prev => prev.filter(n => n.id !== notifId));
   };
 
   const dismissAll = async () => {
     const ids = sysNotifs.map(n => n.id);
-    if (ids.length) await supabase.from('notifications').update({ read: true }).in('id', ids);
+    if (ids.length) await supabase.from('notifications').update({ read: true, read_at: new Date().toISOString() }).in('id', ids);
     setSys([]);
+  };
+
+  const handleNotifClick = async (notif: SysNotif) => {
+    await dismissNotification(notif.id);
+    const url = notif.action_url || notif.link;
+    if (url) router.push(url);
+    setOpen(false);
   };
 
   const acceptInvite = async (inv: InviteNotif) => {
@@ -213,46 +228,67 @@ function NotifBell({ userId, email, displayName }: { userId: string; email: stri
 
               {/* System notifications */}
               {sysNotifs.map(n => (
-                <div key={n.id} style={{
-                  padding: '0.65rem 0.75rem',
-                  borderRadius: 'var(--radius-sm)',
-                  border: `1px solid ${(TYPE_COLOR[n.type] || 'var(--accent)') + '30'}`,
-                  background: 'var(--bg-overlay)',
-                  marginBottom: '0.4rem',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                    <span style={{
-                      fontFamily: 'var(--font-mono)', fontSize: '0.6rem', letterSpacing: '0.1em',
-                      textTransform: 'uppercase', color: TYPE_COLOR[n.type] || 'var(--accent)',
-                    }}>
-                      {TYPE_LABEL[n.type] || n.type}
-                    </span>
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      {timeAgo(n.created_at)}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-primary)', lineHeight: 1.45, marginBottom: '0.45rem' }}>
-                    {n.message}
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.35rem' }}>
-                    {n.action_url && (
-                      <Link
-                        href={n.action_url}
-                        onClick={() => { dismiss(n.id); setOpen(false); }}
-                        className="btn btn-sm btn-primary"
-                        style={{ fontSize: '0.7rem', padding: '0.2rem 0.6rem', flex: 1, justifyContent: 'center' }}
-                      >
-                        Open
-                      </Link>
+                <div
+                  key={n.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.5rem',
+                    padding: '0.75rem 1rem',
+                    borderBottom: '1px solid rgba(255,255,255,0.06)',
+                    cursor: (n.action_url || n.link) ? 'pointer' : 'default',
+                    background: 'rgba(232,96,42,0.06)',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => {
+                    if (n.action_url || n.link)
+                      (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)';
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLDivElement).style.background = 'rgba(232,96,42,0.06)';
+                  }}
+                  onClick={() => handleNotifClick(n)}
+                >
+                  {/* Unread dot */}
+                  <div style={{
+                    width: '6px', height: '6px', borderRadius: '50%',
+                    background: '#E8602A', flexShrink: 0, marginTop: '6px',
+                  }} />
+
+                  {/* Message body */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {n.title && (
+                      <div style={{
+                        fontWeight: 600, fontSize: '0.8125rem', color: '#F5EDD9',
+                        marginBottom: '0.2rem', whiteSpace: 'nowrap',
+                        overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {n.title}
+                      </div>
                     )}
-                    <button
-                      onClick={() => dismiss(n.id)}
-                      className="btn btn-sm"
-                      style={{ fontSize: '0.7rem', padding: '0.2rem 0.6rem', color: 'var(--text-muted)', background: 'transparent', borderColor: 'var(--border)', flex: n.action_url ? 0 : 1, justifyContent: 'center' }}
-                    >
-                      Dismiss
-                    </button>
+                    <div style={{ fontSize: '0.8rem', color: '#B0C4D8', lineHeight: 1.4 }}>
+                      {n.message}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'rgba(107,143,181,0.6)', marginTop: '0.25rem' }}>
+                      {timeAgo(n.created_at)}
+                    </div>
                   </div>
+
+                  {/* Individual dismiss × */}
+                  <button
+                    onClick={e => dismissNotification(n.id, e)}
+                    title="Dismiss"
+                    style={{
+                      background: 'none', border: 'none',
+                      color: 'rgba(107,143,181,0.5)', cursor: 'pointer',
+                      fontSize: '1rem', padding: '0 2px', lineHeight: 1,
+                      flexShrink: 0, borderRadius: '4px', transition: 'color 0.15s',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#E8602A')}
+                    onMouseLeave={e => (e.currentTarget.style.color = 'rgba(107,143,181,0.5)')}
+                  >
+                    ×
+                  </button>
                 </div>
               ))}
 
