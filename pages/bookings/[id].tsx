@@ -67,14 +67,18 @@ export default function BookingDetail() {
   // Post-Show / Settle modal (Item 5)
   const [showSettle, setShowSettle] = useState(false);
   const [settleForm, setSettleForm] = useState<any>({
-    actual_amount_received: '',
-    payment_status: 'received',
-    post_show_notes: '',
-    rebook_flag: 'maybe',
-    issue_notes: '',
+    actual_amount_received:  '',
+    final_payment_received:  '',
+    payment_status:          'received',
+    post_show_notes:         '',
+    issue_notes:             '',
+    rating:                  0,
+    attendance:              '',
   });
-  const [settling, setSettling]     = useState(false);
-  const [settleError, setSettleError] = useState('');
+  const [wouldReturn, setWouldReturn]   = useState<boolean | null>(null);
+  const [memberPay, setMemberPay]       = useState<Record<string, string>>({});
+  const [settling, setSettling]         = useState(false);
+  const [settleError, setSettleError]   = useState('');
 
   // Band Lineup modal
   const [roster, setRoster]                         = useState<RosterMember[]>([]);
@@ -131,6 +135,11 @@ export default function BookingDetail() {
           .eq('booking_id', id as string),
       ]);
       setRoster((rosterRes.data || []) as RosterMember[]);
+      const prefill: Record<string, string> = {};
+      for (const m of (rosterRes.data || []) as RosterMember[]) {
+        prefill[m.id] = m.default_pay_amount != null ? String(m.default_pay_amount) : '';
+      }
+      setMemberPay(prefill);
       setLoadedRoster((bpRes.data || []) as LoadedRosterEntry[]);
       setLoadedAssignments(
         ((expensesRes.data || []) as any[]).map(e => ({
@@ -288,13 +297,46 @@ export default function BookingDetail() {
     setSettling(true);
     setSettleError('');
     const { data: { session } } = await supabase.auth.getSession();
+    const rebook_flag = wouldReturn === true ? 'yes' : wouldReturn === false ? 'no' : 'maybe';
     const res = await fetch('/api/bookings/settle', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ bookingId: id, ...settleForm }),
+      body: JSON.stringify({
+        bookingId: id,
+        ...settleForm,
+        would_return: wouldReturn,
+        rebook_flag,
+      }),
     });
     const data = await res.json();
     if (!res.ok) { setSettleError(data.error || 'Failed to settle'); setSettling(false); return; }
+
+    // Upsert member pay into expenses
+    for (const member of roster) {
+      const amount = parseFloat(memberPay[member.id] ?? '0');
+      if (amount <= 0) continue;
+      const { data: existing } = await supabase
+        .from('expenses')
+        .select('id')
+        .eq('booking_id', id as string)
+        .eq('personnel_id', member.id)
+        .eq('category', 'member_pay')
+        .maybeSingle();
+      if (existing) {
+        await supabase.from('expenses').update({ amount }).eq('id', existing.id);
+      } else {
+        await supabase.from('expenses').insert({
+          act_id:       booking.act_id,
+          booking_id:   id as string,
+          personnel_id: member.id,
+          category:     'member_pay',
+          amount,
+          expense_date: booking.show_date || null,
+          notes:        `Member pay — ${member.name}`,
+        });
+      }
+    }
+
     await loadAll();
     setShowSettle(false);
     setSettling(false);
@@ -710,7 +752,7 @@ export default function BookingDetail() {
       {/* ── Post-Show / Settle Modal (Item 5) ── */}
       {showSettle && (
         <div className="modal-backdrop" onClick={() => setShowSettle(false)}>
-          <div className="modal" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setShowSettle(false)}>✕</button>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--accent)', marginBottom: '0.25rem' }}>
               Post-Show Record
@@ -718,32 +760,129 @@ export default function BookingDetail() {
             <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.8rem', marginBottom: '1.25rem' }}>
               {booking.venue?.name}{booking.show_date ? ` · ${new Date(booking.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+              {/* Section 1 — Show outcome */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {/* Rating */}
+                <div className="field">
+                  <label className="field-label">Rating</label>
+                  <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.25rem' }}>
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <button
+                        key={star}
+                        onClick={() => setSettleForm((f: any) => ({ ...f, rating: f.rating === star ? 0 : star }))}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          fontSize: '1.4rem', lineHeight: 1, padding: '0 2px',
+                          color: star <= settleForm.rating ? '#fbbf24' : 'rgba(255,255,255,0.2)',
+                          transition: 'color 0.1s',
+                        }}
+                      >★</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid-2">
+                  {/* Attendance */}
+                  <div className="field">
+                    <label className="field-label">Attendance</label>
+                    <input className="input" type="number" min="0" step="1"
+                      placeholder="# of people"
+                      value={settleForm.attendance}
+                      onChange={e => setSettleForm((f: any) => ({ ...f, attendance: e.target.value }))} />
+                  </div>
+
+                  {/* Would return */}
+                  <div className="field">
+                    <label className="field-label">Would Return?</label>
+                    <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.25rem' }}>
+                      {(['Yes', 'Maybe', 'No'] as const).map(opt => {
+                        const val = opt === 'Yes' ? true : opt === 'No' ? false : null;
+                        const active = wouldReturn === val;
+                        return (
+                          <button
+                            key={opt}
+                            onClick={() => setWouldReturn(active ? null : val)}
+                            style={{
+                              padding: '0.4rem 0.85rem', borderRadius: '8px', border: '2px solid',
+                              borderColor: active ? '#E8602A' : 'rgba(255,255,255,0.15)',
+                              background: active ? 'rgba(232,96,42,0.15)' : 'transparent',
+                              color: '#F5EDD9', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem',
+                            }}
+                          >{opt}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2 — Financials */}
               <div className="grid-2">
-                <div className="field"><label className="field-label">Actual Pay Received ($)</label>
+                <div className="field">
+                  <label className="field-label">Final Payment Received ($)</label>
+                  <input className="input" type="number" min="0" step="0.01"
+                    value={settleForm.final_payment_received}
+                    onChange={e => setSettleForm((f: any) => ({ ...f, final_payment_received: e.target.value }))} />
+                </div>
+                <div className="field">
+                  <label className="field-label">Actual Amount Received ($)</label>
                   <input className="input" type="number" min="0" step="0.01"
                     value={settleForm.actual_amount_received}
-                    onChange={e => setSettleForm((f: any) => ({ ...f, actual_amount_received: e.target.value }))} /></div>
-                <div className="field"><label className="field-label">Payment Status</label>
-                  <select className="select" value={settleForm.payment_status} onChange={e => setSettleForm((f: any) => ({ ...f, payment_status: e.target.value }))}>
-                    <option value="received">Received</option>
-                    <option value="partial">Partial</option>
-                    <option value="waived">Waived</option>
-                    <option value="pending">Pending / Unpaid</option>
-                  </select></div>
+                    onChange={e => setSettleForm((f: any) => ({ ...f, actual_amount_received: e.target.value }))} />
+                </div>
               </div>
-              <div className="field"><label className="field-label">Post-Show Notes</label>
-                <textarea className="textarea" rows={3} value={settleForm.post_show_notes} onChange={e => setSettleForm((f: any) => ({ ...f, post_show_notes: e.target.value }))} placeholder="How did it go? Crowd size, sound quality, notable moments..." /></div>
-              <div className="field"><label className="field-label">Re-book This Venue?</label>
-                <select className="select" value={settleForm.rebook_flag} onChange={e => setSettleForm((f: any) => ({ ...f, rebook_flag: e.target.value }))}>
-                  <option value="yes">Yes — definitely</option>
-                  <option value="maybe">Maybe</option>
-                  <option value="no">No</option>
-                </select></div>
-              <div className="field"><label className="field-label">Issues to Flag</label>
-                <textarea className="textarea" rows={2} value={settleForm.issue_notes} onChange={e => setSettleForm((f: any) => ({ ...f, issue_notes: e.target.value }))} placeholder="Any problems for future reference..." /></div>
+
+              {/* Section 3 — Member Pay */}
+              {roster.length > 0 && (
+                <div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+                    Member Pay
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                    {roster.map(member => (
+                      <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.88rem', color: 'var(--text-primary)' }}>{member.name}</div>
+                          {member.instrument_role && (
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{member.instrument_role}</div>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>$</span>
+                          <input
+                            className="input"
+                            type="number" min="0" step="0.01"
+                            style={{ width: 90, padding: '0.3rem 0.5rem', fontSize: '0.86rem' }}
+                            value={memberPay[member.id] ?? ''}
+                            onChange={e => setMemberPay(prev => ({ ...prev, [member.id]: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Section 4 — Notes */}
+              <div className="field">
+                <label className="field-label">Post-Show Notes</label>
+                <textarea className="textarea" rows={3}
+                  value={settleForm.post_show_notes}
+                  onChange={e => setSettleForm((f: any) => ({ ...f, post_show_notes: e.target.value }))}
+                  placeholder="How did it go? Crowd size, sound quality, notable moments..." />
+              </div>
+              <div className="field">
+                <label className="field-label">Issues to Flag</label>
+                <textarea className="textarea" rows={2}
+                  value={settleForm.issue_notes}
+                  onChange={e => setSettleForm((f: any) => ({ ...f, issue_notes: e.target.value }))}
+                  placeholder="Any problems for future reference..." />
+              </div>
+
               {settleError && <div style={{ color: '#f87171', fontSize: '0.83rem' }}>{settleError}</div>}
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
                 <button className="btn btn-secondary" onClick={() => setShowSettle(false)}>Cancel</button>
                 <button className="btn btn-primary" onClick={settle} disabled={settling}>
                   {settling ? 'Saving...' : 'Mark as Played'}

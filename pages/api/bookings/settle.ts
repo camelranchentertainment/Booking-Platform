@@ -11,7 +11,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: { user } } = await service.auth.getUser(token);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-  const { bookingId, actual_amount_received, payment_status, post_show_notes, rebook_flag, issue_notes } = req.body;
+  const {
+    bookingId, actual_amount_received, final_payment_received,
+    payment_status, post_show_notes, rebook_flag, issue_notes,
+    would_return, rating, attendance,
+  } = req.body;
   if (!bookingId) return res.status(400).json({ error: 'bookingId required' });
 
   // Resolve caller's act and verify booking ownership before any mutation.
@@ -32,13 +36,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!booking) return res.status(403).json({ error: 'Forbidden' });
 
   const { error: updateErr } = await service.from('bookings').update({
-    status:                 'completed',
-    settled_by:             user.id,
-    actual_amount_received: actual_amount_received ? parseFloat(actual_amount_received) : null,
-    payment_status:         payment_status || 'received',
-    post_show_notes:        post_show_notes  || null,
-    rebook_flag:            rebook_flag      || null,
-    issue_notes:            issue_notes      || null,
+    status:                  'completed',
+    settled_by:              user.id,
+    actual_amount_received:  actual_amount_received  ? parseFloat(actual_amount_received)  : null,
+    final_payment_received:  final_payment_received  ? parseFloat(final_payment_received)  : null,
+    payment_status:          payment_status          || 'received',
+    post_show_notes:         post_show_notes         || null,
+    rebook_flag:             rebook_flag             || null,
+    issue_notes:             issue_notes             || null,
+    would_return:            would_return != null    ? Boolean(would_return) : null,
+    rating:                  rating                  ? parseInt(rating, 10) : null,
+    attendance:              attendance              ? parseInt(attendance, 10) : null,
+    updated_at:              new Date().toISOString(),
   }).eq('id', bookingId).eq('act_id', profile.act_id);
 
   if (updateErr) return res.status(500).json({ error: updateErr.message });
