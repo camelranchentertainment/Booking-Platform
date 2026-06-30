@@ -154,7 +154,7 @@ function NotifBell({ userId, email, displayName }: { userId: string; email: stri
   const total = sysNotifs.length + invites.length;
 
   return (
-    <div ref={panelRef} style={{ position: 'relative' }}>
+    <div ref={panelRef} style={{ position: 'relative', zIndex: 9999 }}>
       {/* Bell button — icon only, no box */}
       <button
         onClick={() => setOpen(v => !v)}
@@ -198,7 +198,7 @@ function NotifBell({ userId, email, displayName }: { userId: string; email: stri
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius)',
           boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
-          zIndex: 200,
+          zIndex: 9999,
         }}>
           {/* Header */}
           <div style={{
