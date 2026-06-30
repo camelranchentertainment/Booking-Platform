@@ -40,6 +40,7 @@ const bandAdminNav = [
   { label: 'Socials',    href: '/social',       icon: '✦' },
   { label: 'Members',    href: '/band/members', icon: '♟' },
   { label: 'Settings',   href: '/settings',     icon: '⚙' },
+  { label: 'Help',       href: '/help',         icon: '?' },
 ];
 
 const memberNav = [
