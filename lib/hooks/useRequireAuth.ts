@@ -8,21 +8,39 @@ export function useRequireAuth(requiredRole?: UserRole) {
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) return;
+    if (!router.isReady || loading) {
+      return;
+    }
 
     if (!user) {
       router.replace('/login');
       return;
     }
 
-    if (requiredRole && profile?.role !== requiredRole && profile?.role !== 'superadmin') {
+    // The session exists, but the profile may still be loading.
+    if (requiredRole && !profile) {
+      return;
+    }
+
+    if (
+      requiredRole &&
+      profile?.role !== requiredRole &&
+      profile?.role !== 'superadmin'
+    ) {
       if (profile?.role === 'band_admin') {
         router.replace('/band');
       } else {
         router.replace('/member');
       }
     }
-  }, [user, profile, loading, requiredRole, router]);
+  }, [
+    router.isReady,
+    user,
+    profile,
+    loading,
+    requiredRole,
+    router,
+  ]);
 
   return { user, profile, loading };
 }

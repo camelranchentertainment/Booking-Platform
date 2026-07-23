@@ -334,15 +334,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
   const { user, profile, loading: authLoading } = useAuth();
   const [actName, setActName] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
-  const [profileTimedOut, setProfileTimedOut] = useState(false);
 
-  // Escape hatch: auth resolved with a user but profile never loaded — stop spinning after 2s
-  useEffect(() => {
-    if (!authLoading && user && !profile) {
-      const escape = setTimeout(() => setProfileTimedOut(true), 2000);
-      return () => clearTimeout(escape);
-    }
-  }, [authLoading, user, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Redirect to login when auth resolves with no session
   useEffect(() => {
@@ -384,15 +376,32 @@ export default function AppShell({ children, requireRole = null }: Props) {
     router.replace('/login');
   };
 
-  if (authLoading || (!profile && !profileTimedOut)) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg-base)' }}>
-        <div style={{ fontFamily: 'var(--font-body)', fontWeight: 500, fontSize: '0.85rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-          Loading...
-        </div>
+  if (authLoading || (user && !profile)) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        background: 'var(--bg-base)',
+      }}
+    >
+      <div
+        style={{
+          fontFamily: 'var(--font-body)',
+          fontWeight: 500,
+          fontSize: '0.85rem',
+          letterSpacing: '0.1em',
+          color: 'var(--text-muted)',
+          textTransform: 'uppercase',
+        }}
+      >
+        Loading...
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   if (!profile) {
     router.replace('/login');
