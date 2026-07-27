@@ -85,27 +85,38 @@ useEffect(() => {
       resolve();
     });
 
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_OUT') {
-      setUser(null);
-      setProfile(null);
-      resolve();
-      return;
-    }
-
-    if (session?.user) {
-      setUser(session.user);
-      await loadProfile(session.user);
-    }
-
+ const {
+  data: { subscription },
+} = supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_OUT') {
+    setUser(null);
+    setProfile(null);
     resolve();
-  });
+    return;
+  }
 
-  return () => {
-    subscription.unsubscribe();
-  };
+  if (session?.user) {
+    const sessionUser = session.user;
+
+    setUser(sessionUser);
+
+    if (
+      event === 'SIGNED_IN' ||
+      event === 'USER_UPDATED' ||
+      event === 'PASSWORD_RECOVERY'
+    ) {
+      setTimeout(() => {
+        void loadProfile(sessionUser);
+      }, 0);
+    }
+  }
+
+  resolve();
+});
+
+return () => {
+  subscription.unsubscribe();
+};
 }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSignOut = async () => {
