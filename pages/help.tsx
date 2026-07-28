@@ -13,6 +13,23 @@ interface Message {
   timestamp: Date;
 }
 
+interface StagedAction {
+  staged_action_id: string;
+  proposal: {
+    venue_name: string;
+    venue_city: string;
+    venue_state: string;
+    show_date: string;
+    status?: string;
+    fee?: number;
+    deal_notes?: string;
+    load_in_time?: string;
+    set_time?: string;
+    booking_id?: string;
+  };
+  conflicts: { id: string; status: string; venues: { name: string; city: string; state: string } | null }[];
+}
+
 // Suggested starter questions shown before first message
 const SUGGESTED_QUESTIONS = [
   'How do I add a new venue?',
@@ -34,6 +51,9 @@ export default function HelpPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [authError, setAuthError] = useState(false);
+  const [stagedAction, setStagedAction] = useState<StagedAction | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<(() => void) | null>(null);
@@ -144,6 +164,13 @@ export default function HelpPage() {
                 accumulated += parsed.token;
                 setStreamingContent(accumulated);
               }
+              if (parsed.type === 'staged_action') {
+                setStagedAction({
+                  staged_action_id: parsed.staged_action_id,
+                  proposal: parsed.proposal,
+                  conflicts: parsed.conflicts ?? [],
+                });
+              }
               if (parsed.done) {
                 // Commit the completed assistant message
                 const assistantMessage: Message = {
@@ -185,6 +212,44 @@ export default function HelpPage() {
     },
     [input, isLoading, messages, sessionToken]
   );
+
+  // ── Staged action confirm/cancel ──────────────────────────────────────────
+  const handleConfirmAction = async () => {
+    if (!stagedAction || !sessionToken) return;
+    setConfirmLoading(true);
+    setConfirmError(null);
+    try {
+      const res = await fetch('/api/help/actions/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({ staged_action_id: stagedAction.staged_action_id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setStagedAction(null);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `Show saved! Booking ID: \`${data.booking.id}\``,
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (err: unknown) {
+      setConfirmError(err instanceof Error ? err.message : 'Failed to save booking.');
+    } finally {
+      setConfirmLoading(false);
+    }
+  };
+
+  const handleCancelAction = () => {
+    setStagedAction(null);
+    setConfirmError(null);
+  };
 
   // ── Keyboard handler ──────────────────────────────────────────────────────
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -303,6 +368,86 @@ export default function HelpPage() {
                   )}
                 </div>
               ))}
+
+              {/* Staged action confirm card */}
+              {stagedAction && (
+                <div style={styles.stagedCard}>
+                  <div style={styles.stagedCardTitle}>
+                    {stagedAction.proposal.booking_id ? 'Update Show' : 'New Show Proposal'}
+                  </div>
+                  <div style={styles.stagedCardBody}>
+                    <div style={styles.stagedCardRow}>
+                      <span style={styles.stagedCardLabel}>Venue</span>
+                      <span>{stagedAction.proposal.venue_name} — {stagedAction.proposal.venue_city}, {stagedAction.proposal.venue_state}</span>
+                    </div>
+                    <div style={styles.stagedCardRow}>
+                      <span style={styles.stagedCardLabel}>Date</span>
+                      <span>{stagedAction.proposal.show_date}</span>
+                    </div>
+                    {stagedAction.proposal.status && (
+                      <div style={styles.stagedCardRow}>
+                        <span style={styles.stagedCardLabel}>Status</span>
+                        <span style={styles.stagedCardBadge}>{stagedAction.proposal.status}</span>
+                      </div>
+                    )}
+                    {stagedAction.proposal.fee != null && (
+                      <div style={styles.stagedCardRow}>
+                        <span style={styles.stagedCardLabel}>Fee</span>
+                        <span>${stagedAction.proposal.fee.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {stagedAction.proposal.load_in_time && (
+                      <div style={styles.stagedCardRow}>
+                        <span style={styles.stagedCardLabel}>Load-in</span>
+                        <span>{stagedAction.proposal.load_in_time}</span>
+                      </div>
+                    )}
+                    {stagedAction.proposal.set_time && (
+                      <div style={styles.stagedCardRow}>
+                        <span style={styles.stagedCardLabel}>Set time</span>
+                        <span>{stagedAction.proposal.set_time}</span>
+                      </div>
+                    )}
+                    {stagedAction.proposal.deal_notes && (
+                      <div style={styles.stagedCardRow}>
+                        <span style={styles.stagedCardLabel}>Notes</span>
+                        <span style={{ fontStyle: 'italic', color: '#A0AABB' }}>{stagedAction.proposal.deal_notes}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {stagedAction.conflicts.length > 0 && (
+                    <div style={styles.conflictBanner}>
+                      <strong>Date conflict:</strong> you already have{' '}
+                      {stagedAction.conflicts.map((c) =>
+                        c.venues ? `${c.venues.name} (${c.status})` : `a show (${c.status})`
+                      ).join(', ')}{' '}
+                      on this date. Confirm anyway if intentional.
+                    </div>
+                  )}
+
+                  {confirmError && (
+                    <div style={styles.confirmError}>{confirmError}</div>
+                  )}
+
+                  <div style={styles.stagedCardActions}>
+                    <button
+                      style={{ ...styles.confirmBtn, opacity: confirmLoading ? 0.6 : 1 }}
+                      onClick={handleConfirmAction}
+                      disabled={confirmLoading}
+                    >
+                      {confirmLoading ? 'Saving…' : 'Confirm & Save'}
+                    </button>
+                    <button
+                      style={styles.cancelBtn}
+                      onClick={handleCancelAction}
+                      disabled={confirmLoading}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Streaming / in-progress bubble */}
               {streamingContent && (
@@ -783,5 +928,92 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center' as const,
     marginTop: '0.5rem',
     margin: '0.5rem 0 0',
+  },
+
+  // Staged action confirm card
+  stagedCard: {
+    background: 'rgba(200,146,26,0.08)',
+    border: '1px solid rgba(200,146,26,0.35)',
+    borderRadius: '14px',
+    padding: '1rem 1.25rem',
+    maxWidth: '520px',
+    alignSelf: 'flex-start',
+  },
+  stagedCardTitle: {
+    color: '#C8921A',
+    fontWeight: 700,
+    fontSize: '0.9375rem',
+    marginBottom: '0.75rem',
+    letterSpacing: '0.02em',
+  },
+  stagedCardBody: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '0.4rem',
+    marginBottom: '0.875rem',
+  },
+  stagedCardRow: {
+    display: 'flex',
+    gap: '0.5rem',
+    fontSize: '0.875rem',
+    color: '#F5EDD9',
+    alignItems: 'flex-start',
+  },
+  stagedCardLabel: {
+    color: '#6B8FB5',
+    minWidth: '72px',
+    flexShrink: 0,
+    fontWeight: 500,
+  },
+  stagedCardBadge: {
+    background: 'rgba(200,146,26,0.2)',
+    color: '#C8921A',
+    padding: '1px 8px',
+    borderRadius: '999px',
+    fontSize: '0.8125rem',
+    fontWeight: 600,
+  },
+  conflictBanner: {
+    background: 'rgba(232,96,42,0.12)',
+    border: '1px solid rgba(232,96,42,0.35)',
+    borderRadius: '8px',
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.8125rem',
+    color: '#F5EDD9',
+    marginBottom: '0.75rem',
+  },
+  confirmError: {
+    background: 'rgba(200,0,0,0.12)',
+    border: '1px solid rgba(200,0,0,0.3)',
+    borderRadius: '8px',
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.8125rem',
+    color: '#FF8080',
+    marginBottom: '0.75rem',
+  },
+  stagedCardActions: {
+    display: 'flex',
+    gap: '0.625rem',
+  },
+  confirmBtn: {
+    background: '#C8921A',
+    border: 'none',
+    borderRadius: '8px',
+    color: '#0E0603',
+    fontWeight: 700,
+    fontSize: '0.875rem',
+    padding: '0.5rem 1.125rem',
+    cursor: 'pointer',
+    transition: 'opacity 0.15s',
+  },
+  cancelBtn: {
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: '8px',
+    color: '#6B8FB5',
+    fontWeight: 500,
+    fontSize: '0.875rem',
+    padding: '0.5rem 1rem',
+    cursor: 'pointer',
   },
 };
