@@ -319,7 +319,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 500,
+      max_tokens: 2000,
       system: [
         { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
         { type: 'text', text: `Current pipeline context:\n\n${context}` },
@@ -328,6 +328,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     const raw = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
+    const wasTruncated = response.stop_reason === 'max_tokens';
 
     // Strip markdown code fences if present, then look for a JSON object
     // anywhere in the response — don't require the whole response to be bare JSON.
@@ -335,7 +336,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const jsonMatch = stripped.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       let parsed: any;
-      try { parsed = JSON.parse(jsonMatch[0]); } catch { /* fall through to plain text */ }
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch {
+        // The JSON is malformed — almost always because the response was cut off
+        // mid-object. Never show broken JSON to the user; ask them to retry with
+        // a smaller request instead.
+        if (wasTruncated) {
+          return res.status(200).json({
+            reply: "That was a lot to process in one go and my response got cut off. Could you split it into a couple of smaller messages — for example, the shows first, then travel days and notes separately?",
+          });
+        }
+        /* fall through to plain text for any other parse failure */
+      }
 
       if (parsed?.action?.type === 'tour_outreach') {
         const result = await resolveTourOutreach(service, actId, parsed.action.tourName || '', anthropicKey);
