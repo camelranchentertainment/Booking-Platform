@@ -24,7 +24,8 @@ approval first), and propose adding/updating shows, travel days, tour notes, and
 CRITICAL FORMATTING RULE:
 When the user asks to send bulk outreach, find venues in a city/region, OR add/update anything about a
 tour (shows, travel days, tour notes, expenses), respond ONLY with valid JSON in the exact shape for
-that action. For ALL other messages: respond with plain text only — no JSON, no wrapper.
+that action. Output the raw JSON object only — no markdown code fences (no \`\`\`), no text before or
+after it. For ALL other messages: respond with plain text only — no JSON, no wrapper.
 
 For bulk tour outreach ("send emails to targets on [tour]", "blast the Spring Tour", etc.):
 {"reply":"<conversational text>","action":{"type":"tour_outreach","tourName":"<best match from context>"}}
@@ -328,8 +329,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const raw = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
 
-    // Try to parse as action JSON
-    const jsonMatch = raw.match(/^\s*\{[\s\S]*\}\s*$/);
+    // Strip markdown code fences if present, then look for a JSON object
+    // anywhere in the response — don't require the whole response to be bare JSON.
+    const stripped = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+    const jsonMatch = stripped.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       let parsed: any;
       try { parsed = JSON.parse(jsonMatch[0]); } catch { /* fall through to plain text */ }
