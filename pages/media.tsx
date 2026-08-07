@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { useRequireAuth } from '../lib/hooks/useRequireAuth';
+import { parseLocalDate } from '../lib/formatDate';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,7 +77,7 @@ function formatBytes(b: number) {
 
 function formatShowDate(dateStr: string | null): string {
   if (!dateStr) return 'Date TBD';
-  return new Date(dateStr + 'T12:00:00Z').toLocaleDateString('en-US', {
+  return parseLocalDate(dateStr).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
   });
 }

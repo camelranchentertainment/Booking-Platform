@@ -4,6 +4,7 @@ import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BOOKING_STATUS_LABELS, OutreachStatus } from '../../lib/types';
 import { STATUS_LABELS } from '../../lib/statusSync';
+import { formatShowDate } from '../../lib/formatDate';
 import EmailComposer from '../../components/email/EmailComposer';
 import VenueDrawer from '../../components/VenueDrawer';
 import Link from 'next/link';
@@ -346,9 +347,9 @@ const loadPool = async () => {
           <h1 className="page-title">{tour.name}</h1>
           {(tour.start_date || tour.end_date) && (
             <div className="page-sub">
-              {tour.start_date ? new Date(tour.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '?'}
+              {tour.start_date ? formatShowDate(tour.start_date, { month: 'short', day: 'numeric', year: 'numeric' }) : '?'}
               {' — '}
-              {tour.end_date ? new Date(tour.end_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD'}
+              {tour.end_date ? formatShowDate(tour.end_date, { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD'}
             </div>
           )}
         </div>
@@ -425,7 +426,7 @@ const loadPool = async () => {
                   <div>
                     <div style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 500 }}>{b.venue?.name || 'TBD'}</div>
                     <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>
-                      {b.show_date ? new Date(b.show_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                      {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                       {b.venue?.city ? ` · ${b.venue.city}, ${b.venue.state}` : ''}
                     </div>
                   </div>
@@ -496,7 +497,7 @@ const loadPool = async () => {
                     <div>
                       <div style={{ fontSize: '0.84rem', color: 'var(--text-primary)', fontWeight: 500 }}>{e.category}</div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
-                        {new Date(e.expense_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {formatShowDate(e.expense_date, { month: 'short', day: 'numeric' })}
                         {e.notes ? ` · ${e.notes}` : ''}
                       </div>
                     </div>

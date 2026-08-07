@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
+import { formatShowDate } from '../../../lib/formatDate';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -62,7 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Create thank-you reminder notification
   const showDate = booking.show_date
-    ? new Date(booking.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    ? formatShowDate(booking.show_date, { month: 'short', day: 'numeric' })
     : '';
   const venueName = (booking.venue as any)?.name || 'venue';
 

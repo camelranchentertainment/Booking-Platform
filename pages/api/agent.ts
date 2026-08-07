@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { getServiceClient } from '../../lib/supabase';
 import { getSetting } from '../../lib/platformSettings';
+import { formatShowDate } from '../../lib/formatDate';
 
 export const config = { api: { bodyParser: { sizeLimit: '5mb' } } };
 
@@ -98,7 +99,7 @@ async function resolveTourOutreach(
   const { data: act } = await service.from('acts').select('act_name, genre, bio, website, spotify, instagram').eq('id', actId).single();
 
   // Generate one shared draft email via AI
-  const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const fmt = (d: string) => formatShowDate(d, { month: 'long', day: 'numeric', year: 'numeric' });
   const dateRange = tour.start_date
     ? `${fmt(tour.start_date)}${tour.end_date ? ` through ${fmt(tour.end_date)}` : ''}`
     : '[dates TBD]';

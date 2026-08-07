@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import Anthropic from '@anthropic-ai/sdk';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
+import { formatShowDate } from '../../../lib/formatDate';
 
 const SYSTEM_PROMPT = `You are an expert music booking assistant for Camel Ranch Booking.
 You draft professional, concise cold pitch emails to venues on behalf of bands and their management.
@@ -64,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       service.from('bookings').select('show_date').eq('tour_id', booking.tour_id).neq('status', 'cancelled').not('show_date', 'is', null),
     ]);
     if (tourRes.data?.start_date) {
-      const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      const fmt = (d: string) => formatShowDate(d, { month: 'long', day: 'numeric', year: 'numeric' });
       const booked = (bookedRes.data || []).filter(r => r.show_date !== booking.show_date).map(r => fmt(r.show_date));
       tourDateRange = `${fmt(tourRes.data.start_date)} through ${tourRes.data.end_date ? fmt(tourRes.data.end_date) : 'TBD'}`;
       if (booked.length) tourDateRange += ` (${booked.join(', ')} already booked)`;

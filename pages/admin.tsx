@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
+import { parseLocalDate } from '../lib/formatDate';
 import Link from 'next/link';
 
 const GOLD  = '#E07820';
@@ -478,7 +479,7 @@ export default function AdminPage() {
                         <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{b.bandAdminEmail}</td>
                         <td>{b.venueName}{b.venueCity ? ` · ${b.venueCity}` : ''}</td>
                         <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
-                          {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString() : '—'}
+                          {b.show_date ? parseLocalDate(b.show_date).toLocaleDateString() : '—'}
                         </td>
                         <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>{b.deal_type || '—'}</td>
                         <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#34d399' }}>

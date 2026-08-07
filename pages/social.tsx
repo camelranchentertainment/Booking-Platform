@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
+import { formatShowDate } from '../lib/formatDate';
 
 type SocialStatus = 'pending' | 'approved' | 'posted' | 'dismissed';
 type Platform = 'instagram' | 'facebook' | 'youtube' | 'tiktok' | 'discord';
@@ -390,7 +391,7 @@ export default function SocialQueue() {
                     </div>
                     <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                       {post.venue?.name} · {post.venue?.city}, {post.venue?.state}
-                      {post.show_date && ` · ${new Date(post.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                      {post.show_date && ` · ${formatShowDate(post.show_date, { month: 'short', day: 'numeric', year: 'numeric' })}`}
                     </div>
                   </div>
                   {meta && (

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
+import { parseLocalDate, formatShowDate } from '../../lib/formatDate';
 import { STATUS_COLORS } from '../../lib/statusSync';
 import { buildIcal, downloadIcal } from '../../lib/ical';
 import EmailComposer from '../../components/email/EmailComposer';
@@ -186,7 +187,7 @@ export default function BandCalendar() {
             <div className="card">
               <div className="card-header">
                 <span className="card-title" style={{ fontSize: '0.85rem' }}>
-                  {new Date(selected + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  {formatShowDate(selected, { weekday: 'long', month: 'long', day: 'numeric' })}
                 </span>
               </div>
               {selectedShows.map((s: any) => (
@@ -221,10 +222,10 @@ export default function BandCalendar() {
               >
                 <div style={{ minWidth: 32, textAlign: 'center', flexShrink: 0 }}>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem', color: 'var(--accent)', lineHeight: 1 }}>
-                    {new Date(s.show_date + 'T12:00:00').getDate()}
+                    {parseLocalDate(s.show_date).getDate()}
                   </div>
                   <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.66rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    {new Date(s.show_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })}
+                    {formatShowDate(s.show_date, { month: 'short' })}
                   </div>
                 </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -249,7 +250,7 @@ export default function BandCalendar() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               {([
-                ['Date',       detailBooking.show_date ? new Date(detailBooking.show_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : '—'],
+                ['Date',       detailBooking.show_date ? formatShowDate(detailBooking.show_date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : '—'],
                 ['Status',     BOOKING_STATUS_LABELS[detailBooking.status as keyof typeof BOOKING_STATUS_LABELS] || detailBooking.status],
                 ['Fee',        (detailBooking.agreed_amount ?? detailBooking.fee) ? `$${Number(detailBooking.agreed_amount ?? detailBooking.fee).toLocaleString()}` : '—'],
                 ['Door',       detailBooking.door_time || '—'],

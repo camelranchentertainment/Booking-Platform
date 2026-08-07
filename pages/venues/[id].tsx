@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { Venue, BOOKING_STATUS_LABELS } from '../../lib/types';
+import { formatShowDate } from '../../lib/formatDate';
 import { useLookup } from '../../lib/hooks/useLookup';
 import Link from 'next/link';
 import EmailComposer from '../../components/email/EmailComposer';
@@ -359,7 +360,7 @@ export default function VenueDetail() {
                           <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => router.push(`/bookings/${b.id}`)}>
                             <td style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.85rem' }}>{b.act?.act_name || '—'}</td>
                             <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                              {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
+                              {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
                             </td>
                             <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>{(b.agreed_amount ?? b.fee) ? `$${Number(b.agreed_amount ?? b.fee).toLocaleString()}` : '—'}</td>
                             <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{b.deal_type || '—'}</td>
@@ -382,7 +383,7 @@ export default function VenueDetail() {
                       {bookings.filter((b: any) => b.post_show_notes).map((b: any) => (
                         <div key={b.id} style={{ background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', padding: '0.5rem 0.65rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
                           <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', marginRight: '0.5rem' }}>
-                            {b.act?.act_name} · {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : ''}
+                            {b.act?.act_name} · {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric', year: '2-digit' }) : ''}
                           </span>
                           {b.post_show_notes}
                         </div>

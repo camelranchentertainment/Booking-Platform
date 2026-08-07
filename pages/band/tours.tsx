@@ -13,6 +13,7 @@ import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import ImportModal from '../../components/ImportModal';
+import { formatShowDate } from '../../lib/formatDate';
 
 const STATUS_COLOR: Record<string, string> = {
   active:    '#34d399',
@@ -161,9 +162,9 @@ export default function BandTours() {
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', letterSpacing: '0.04em', color: 'var(--text-primary)', marginBottom: '0.15rem' }}>{t.name}</div>
                     {(t.start_date || t.end_date) && (
                       <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.1rem' }}>
-                        {t.start_date ? new Date(t.start_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '?'}
+                        {t.start_date ? formatShowDate(t.start_date, { month: 'short', day: 'numeric', year: 'numeric' }) : '?'}
                         {' → '}
-                        {t.end_date ? new Date(t.end_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD'}
+                        {t.end_date ? formatShowDate(t.end_date, { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD'}
                       </div>
                     )}
                     {t.description && (

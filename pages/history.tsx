@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { getActId } from '../lib/bookingQueries';
+import { formatShowDate } from '../lib/formatDate';
 
 const DEAL_LABELS: Record<string, string> = {
   guarantee:  'Guarantee',
@@ -313,7 +314,7 @@ export default function HistoryPage() {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                      {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                     </div>
                     {amount && (
                       <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)', marginTop: '0.1rem' }}>

@@ -1,6 +1,7 @@
 import { ImageResponse } from '@vercel/og';
 import { createClient } from '@supabase/supabase-js';
 import QRCode from 'qrcode';
+import { formatShowDate } from '../../../lib/formatDate';
 
 export const config = { runtime: 'edge' };
 
@@ -571,7 +572,7 @@ export default async function handler(req: Request): Promise<Response> {
   const venueName = (venue?.name || '').toUpperCase();
   const venueCity = [venue?.city, venue?.state].filter(Boolean).join(', ');
   const showDate = booking.show_date
-    ? new Date(booking.show_date + 'T12:00:00Z').toLocaleDateString('en-US', {
+    ? formatShowDate(booking.show_date, {
         weekday: 'long',
         month: 'long',
         day: 'numeric',

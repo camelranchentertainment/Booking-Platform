@@ -4,6 +4,7 @@ import { updateBookingStatus } from '../../../lib/statusSync';
 import type { BookingStatus } from '../../../lib/types';
 import { AppError, withHandler } from '../../../lib/apiError';
 import { notifyActMembers } from '../../../lib/notifications';
+import { formatShowDate } from '../../../lib/formatDate';
 
 export default withHandler(async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') throw new AppError(405, 'Method not allowed');
@@ -41,7 +42,7 @@ export default withHandler(async function handler(req: NextApiRequest, res: Next
     const venueName = (booking.venue as any)?.name || 'venue';
     const city = (booking.venue as any)?.city || '';
     const dateStr = booking.show_date
-      ? new Date(booking.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      ? formatShowDate(booking.show_date, { month: 'short', day: 'numeric', year: 'numeric' })
       : '';
     await notifyActMembers({
       actId:     profile.act_id,

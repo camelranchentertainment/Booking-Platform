@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { Act, ActInvitation, UserProfile, BOOKING_STATUS_LABELS, Booking } from '../../lib/types';
+import { formatShowDate } from '../../lib/formatDate';
 import Link from 'next/link';
 
 export default function BandDetail() {
@@ -190,7 +191,7 @@ export default function BandDetail() {
                     <div>
                       <div style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 500 }}>{b.venue?.name || 'TBD'}</div>
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>
-                        {b.show_date ? new Date(b.show_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                        {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                       </div>
                     </div>
                     <span className={`badge badge-${b.status}`}>{BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}</span>
