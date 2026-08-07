@@ -236,6 +236,7 @@ export async function execStageBookingUpsert(
   if (stageErr) throw new Error(`Failed to stage proposal: ${stageErr.message}`);
 
   return {
+    action_type: 'booking_upsert' as const,
     staged_action_id: staged.id,
     proposal: payload,
     conflicts: conflicts ?? [],
@@ -264,7 +265,7 @@ export async function execStageTourNotesUpdate(
     .single();
   if (stageErr) throw new Error(`Failed to stage proposal: ${stageErr.message}`);
 
-  return { staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
+  return { action_type: 'tour_notes_update' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
 }
 
 export async function execStageExpense(
@@ -290,5 +291,5 @@ export async function execStageExpense(
     .single();
   if (stageErr) throw new Error(`Failed to stage proposal: ${stageErr.message}`);
 
-  return { staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
+  return { action_type: 'expense_insert' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
 }
