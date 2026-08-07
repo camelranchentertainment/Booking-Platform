@@ -3,6 +3,13 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { getServiceClient } from '../../lib/supabase';
 import { getSetting } from '../../lib/platformSettings';
+import {
+  execFindVenue,
+  execFindTour,
+  execStageBookingUpsert,
+  execStageTourNotesUpdate,
+  execStageExpense,
+} from '../../lib/aiAgentTools';
 
 export const config = { api: { bodyParser: { sizeLimit: '5mb' } } };
 
@@ -10,20 +17,34 @@ export const config = { api: { bodyParser: { sizeLimit: '5mb' } } };
 const SYSTEM_PROMPT = `You are an AI booking agent for Camel Ranch Booking. You help DIY bands book shows.
 Be direct, confident, and concise. Music industry voice. Bold key numbers with **asterisks**.
 
-You can: answer pipeline questions, draft outreach, find venues, queue bulk email batches (with user approval first).
+You can: answer pipeline questions, draft outreach, find venues, queue bulk email batches (with user
+approval first), and propose adding/updating shows, travel days, tour notes, and projected expenses
+(with user approval first — you never write directly).
 
 CRITICAL FORMATTING RULE:
-When the user asks to send bulk outreach OR find venues in a city/region, respond ONLY with valid JSON in this exact shape:
+When the user asks to send bulk outreach, find venues in a city/region, OR add/update anything about a
+tour (shows, travel days, tour notes, expenses), respond ONLY with valid JSON in the exact shape for
+that action. For ALL other messages: respond with plain text only — no JSON, no wrapper.
 
 For bulk tour outreach ("send emails to targets on [tour]", "blast the Spring Tour", etc.):
-{"reply":"<your conversational text describing what you found>","action":{"type":"tour_outreach","tourName":"<best match from context>"}}
+{"reply":"<conversational text>","action":{"type":"tour_outreach","tourName":"<best match from context>"}}
 
 For city venue search ("find venues in Tulsa", "what clubs are in Nashville for July 4th", etc.):
-{"reply":"<your conversational text>","action":{"type":"city_search","city":"<city>","state":"<2-letter state>","dateRange":"<parsed human-readable date range or empty string>"}}
+{"reply":"<conversational text>","action":{"type":"city_search","city":"<city>","state":"<2-letter state>","dateRange":"<parsed range or empty>"}}
 
-For ALL other messages: respond with plain text only — no JSON, no wrapper.
+For adding/updating a tour's itinerary, notes, or budget ("add a show at X on Y", "add a travel day",
+"log the Sturgis tour notes", "add a projected expense for groceries"), respond with an array so a user
+can describe several things (4 shows, 2 travel days, notes, a budget line) in one message:
+{"reply":"<conversational text summarizing what you're proposing>","action":{"type":"stage_items","tourName":"<tour name, required — ask the user if unclear>","items":[
+  {"kind":"show","venueName":"<venue name>","date":"YYYY-MM-DD","setTime":"HH:MM","loadInTime":"HH:MM","soundcheckTime":"HH:MM","endTime":"HH:MM","notes":"<optional>"},
+  {"kind":"travel","date":"YYYY-MM-DD","notes":"<travel plan text>"},
+  {"kind":"tour_notes","notes":"<full replacement text for the tour's notes>"},
+  {"kind":"expense","category":"<e.g. Groceries>","amount":123.45,"date":"YYYY-MM-DD","status":"potential","notes":"<optional>"}
+]}}
+Only include the fields you actually have values for on each item (all fields except kind/date are
+optional per item). Never invent a venue_id or tour_id — those get resolved server-side by name.
 
-Always confirm the list BEFORE sending anything. Wait for explicit approval.`;
+Always confirm the list BEFORE sending or saving anything. Wait for explicit approval.`;
 
 // ── Build context string from live DB data ─────────────────────────────────────
 async function buildContext(service: ReturnType<typeof getServiceClient>, actId: string): Promise<string> {
@@ -176,6 +197,88 @@ async function resolveCitySearch(
   return { city, state, venues, activeTour };
 }
 
+// ── Resolve stage_items action — look up venue/tour by name, stage each item ───
+async function resolveStageItems(
+  actId: string,
+  userId: string,
+  tourName: string,
+  items: Array<{
+    kind: 'show' | 'travel' | 'tour_notes' | 'expense';
+    venueName?: string;
+    date?: string;
+    setTime?: string;
+    loadInTime?: string;
+    soundcheckTime?: string;
+    endTime?: string;
+    category?: string;
+    amount?: number;
+    status?: string;
+    notes?: string;
+  }>,
+): Promise<{ staged: any[]; errors: string[] }> {
+  const tours = await execFindTour(actId, tourName);
+  const tour = tours[0];
+  if (!tour) {
+    return { staged: [], errors: [`No tour found matching "${tourName}". Create it first, or check the name.`] };
+  }
+
+  const staged: any[] = [];
+  const errors: string[] = [];
+
+  for (const item of items) {
+    try {
+      if (item.kind === 'show' || item.kind === 'travel') {
+        let venue_id: string | undefined;
+        if (item.kind === 'show') {
+          if (!item.venueName) { errors.push('A show item is missing a venue name.'); continue; }
+          const venues = await execFindVenue(actId, { name: item.venueName });
+          if (!venues.length) {
+            errors.push(`No venue found matching "${item.venueName}" — add it to the venue list first.`);
+            continue;
+          }
+          venue_id = venues[0].id;
+        }
+        if (!item.date) { errors.push('A date is required for every show/travel item.'); continue; }
+        const result = await execStageBookingUpsert(actId, userId, {
+          venue_id,
+          show_date: item.date,
+          status: 'confirmed',
+          entry_type: item.kind === 'travel' ? 'travel' : 'show',
+          load_in_time: item.loadInTime,
+          set_time: item.setTime,
+          soundcheck_time: item.soundcheckTime,
+          end_time: item.endTime,
+          notes: item.notes,
+          tour_id: tour.id,
+        });
+        staged.push({ kind: item.kind, ...result });
+      } else if (item.kind === 'tour_notes') {
+        if (!item.notes) { errors.push('Tour notes item has no text.'); continue; }
+        const result = await execStageTourNotesUpdate(actId, userId, { tour_id: tour.id, notes: item.notes });
+        staged.push({ kind: 'tour_notes', ...result });
+      } else if (item.kind === 'expense') {
+        if (!item.category || item.amount == null || !item.date) {
+          errors.push('An expense item is missing category, amount, or date.');
+          continue;
+        }
+        const result = await execStageExpense(actId, userId, {
+          tour_id: tour.id,
+          category: item.category,
+          amount: item.amount,
+          expense_date: item.date,
+          status: item.status ?? 'potential',
+          notes: item.notes,
+        });
+        staged.push({ kind: 'expense', ...result });
+      }
+    } catch (e: any) {
+      errors.push(e.message || 'Failed to stage an item.');
+    }
+  }
+
+  return { staged, errors };
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -246,6 +349,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ? (parsed.reply || `Found **${result.venues.length}** venues in ${city}, ${state}.${result.activeTour ? ` I can add them to your "${result.activeTour.name}" tour.` : ''}`)
           : `No venues found in ${city}${state ? `, ${state}` : ''} that aren't already on your tour.`;
         return res.status(200).json({ reply: replyText, action: { type: 'city_search', ...result, dateRange: dateRange || '' } });
+      }
+
+      if (parsed?.action?.type === 'stage_items') {
+        const { tourName, items } = parsed.action;
+        const { staged, errors } = await resolveStageItems(actId, user.id, tourName || '', items || []);
+        const replyText = staged.length
+          ? (parsed.reply || `Staged ${staged.length} item${staged.length !== 1 ? 's' : ''} for review.`)
+          : (errors[0] || 'Nothing could be staged.');
+        return res.status(200).json({ reply: replyText, action: { type: 'stage_items', staged, errors } });
       }
 
       // Valid JSON but not a recognized action — use reply field or raw
