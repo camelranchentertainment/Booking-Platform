@@ -64,7 +64,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const summary     = `${act} @ ${venue}`;
       const location    = [venue, city, state].filter(Boolean).join(', ');
       const showDate    = booking.show_date as string;
-      const endDate     = showDate; // all-day event, end = same day
+      // Google Calendar's all-day event `end.date` is EXCLUSIVE — it must be the
+      // day AFTER the event's last day, or Google treats it as a zero-duration
+      // event and some views render it as spilling into the next day. Add 1 day.
+      const endDate = (() => {
+        const d = new Date(showDate + 'T00:00:00');
+        d.setDate(d.getDate() + 1);
+        return d.toISOString().slice(0, 10);
+      })();
 
       const googleEventId = await createOrUpdateEvent(
         accessToken,
