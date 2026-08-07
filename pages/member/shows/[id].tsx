@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import AppShell from '../../../components/layout/AppShell';
 import { supabase } from '../../../lib/supabase';
+import { formatShowDate } from '../../../lib/formatDate';
 
 type Show = {
   id: string;
@@ -126,9 +127,7 @@ export default function MemberShowDetail() {
   }
 
   const showDateFormatted = show.show_date
-    ? new Date(show.show_date + 'T12:00:00').toLocaleDateString('en-US', {
-        weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
-      })
+    ? formatShowDate(show.show_date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
     : 'Date TBD';
 
   const statusColor = RSVP_COLOR[show.status] || '#64748b';

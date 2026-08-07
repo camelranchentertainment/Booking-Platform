@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { getActId } from '../../lib/bookingQueries';
+import { formatShowDate } from '../../lib/formatDate';
 type ActPick = { id: string; act_name: string };
 
 export default function ToursPage() {
@@ -109,9 +110,9 @@ export default function ToursPage() {
               </div>
               {(t.start_date || t.end_date) && (
                 <div style={{ marginTop: '0.5rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                  {t.start_date ? new Date(t.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '?'}
+                  {t.start_date ? formatShowDate(t.start_date, { month: 'short', day: 'numeric', year: 'numeric' }) : '?'}
                   {' → '}
-                  {t.end_date ? new Date(t.end_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD'}
+                  {t.end_date ? formatShowDate(t.end_date, { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD'}
                 </div>
               )}
               {t.description && <p style={{ marginTop: '0.5rem', fontSize: '0.83rem', color: 'var(--text-secondary)' }}>{t.description}</p>}

@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { getActId } from '../../lib/bookingQueries';
+import { parseLocalDate, formatShowDate } from '../../lib/formatDate';
 import EmailComposer from '../../components/email/EmailComposer';
 import VenueDrawer from '../../components/VenueDrawer';
 
@@ -38,7 +39,7 @@ const BK_STAGE_COLORS: Record<string, string> = {
 
 function daysSince(d: string | null): number {
   if (!d) return 999;
-  return Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000);
+  return Math.floor((Date.now() - parseLocalDate(d).getTime()) / 86_400_000);
 }
 function dayCellColor(n: number): string {
   if (n <= 7)  return '#34d399';
@@ -47,7 +48,7 @@ function dayCellColor(n: number): string {
 }
 function fmtDate(d: string | null): string {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return formatShowDate(d, { month: 'short', day: 'numeric' });
 }
 function fmtDateFull(d: string | null): string {
   if (!d) return '—';
@@ -57,7 +58,7 @@ function fmtDateFull(d: string | null): string {
 function getActionInfo(b: any) {
   const stage = b.email_stage;
   const since = daysSince(b.last_contact_date);
-  const until = b.show_date ? Math.floor((new Date(b.show_date).getTime() - Date.now()) / 86_400_000) : 999;
+  const until = b.show_date ? Math.floor((parseLocalDate(b.show_date).getTime() - Date.now()) / 86_400_000) : 999;
   if (!stage) {
     if (['completed', 'cancelled'].includes(b.status)) return { label: 'Archived', color: '#6b7280', next: null };
     return { label: 'Send cold pitch', color: '#60a5fa', next: 'target' };

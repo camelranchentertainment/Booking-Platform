@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BookingStatus, BOOKING_STATUS_LABELS, BOOKING_STATUS_ORDER } from '../../lib/types';
+import { formatShowDate } from '../../lib/formatDate';
 import Link from 'next/link';
 import EmailComposer from '../../components/email/EmailComposer';
 
@@ -497,7 +498,7 @@ export default function BookingDetail() {
                   <Row label="Band"      value={booking.act?.act_name} />
                   <Row label="Venue"     value={booking.venue ? `${booking.venue.name}, ${booking.venue.city} ${booking.venue.state}` : null} />
                   <Row label="Tour"      value={booking.tour?.name} />
-                  <Row label="Show Date" value={booking.show_date ? new Date(booking.show_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : null} />
+                  <Row label="Show Date" value={booking.show_date ? formatShowDate(booking.show_date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : null} />
                   <Row label="Load-in"       value={fmt(booking.load_in_time)} />
                   <Row label="Soundcheck"    value={fmt(booking.soundcheck_time)} />
                   <Row label="Set Time"      value={fmt(booking.set_time)} />
@@ -576,7 +577,7 @@ export default function BookingDetail() {
                           {booking.payment_status}
                         </span>
                       ) : null} />
-                    <Row label="Date Paid"    value={booking.date_paid ? new Date(booking.date_paid + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null} />
+                    <Row label="Date Paid"    value={booking.date_paid ? formatShowDate(booking.date_paid, { month: 'short', day: 'numeric', year: 'numeric' }) : null} />
                     {booking.expense_notes && (
                       <div style={{ marginTop: '0.5rem', padding: '0.5rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                         <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Expenses</div>
@@ -758,7 +759,7 @@ export default function BookingDetail() {
               Post-Show Record
             </div>
             <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.8rem', marginBottom: '1.25rem' }}>
-              {booking.venue?.name}{booking.show_date ? ` · ${new Date(booking.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
+              {booking.venue?.name}{booking.show_date ? ` · ${formatShowDate(booking.show_date, { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
@@ -902,7 +903,7 @@ export default function BookingDetail() {
               Who Played This Show
             </div>
             <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.8rem', marginBottom: '1.25rem' }}>
-              {booking.venue?.name}{booking.show_date ? ` · ${new Date(booking.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
+              {booking.venue?.name}{booking.show_date ? ` · ${formatShowDate(booking.show_date, { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
             </div>
             {roster.length === 0 ? (
               <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.86rem', padding: '0.5rem 0' }}>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { getActId } from '../lib/bookingQueries';
+import { parseLocalDate, formatShowDate } from '../lib/formatDate';
 
 type Booking = {
   id: string;
@@ -139,9 +140,9 @@ export default function Financials() {
 
   // Monthly breakdown for the selected year
   const monthly = MONTHS.map((month, idx) => {
-    const mbs = yearBookings.filter(b => b.show_date && new Date(b.show_date + 'T00:00:00').getMonth() === idx);
+    const mbs = yearBookings.filter(b => b.show_date && parseLocalDate(b.show_date).getMonth() === idx);
     const monthExpenses = expenses.filter(e => {
-      const d = new Date(e.expense_date + 'T00:00:00');
+      const d = parseLocalDate(e.expense_date);
       return d.getMonth() === idx && d.getFullYear() === year;
     });
     return {
@@ -363,7 +364,7 @@ export default function Financials() {
                       return (
                         <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => window.location.href = `/bookings/${b.id}`}>
                           <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                            {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                            {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric' }) : '—'}
                           </td>
                           <td style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 500 }}>{b.act?.act_name || '—'}</td>
                           <td style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
@@ -459,7 +460,7 @@ export default function Financials() {
                     {expenses.map(e => (
                       <tr key={e.id}>
                         <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                          {new Date(e.expense_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {formatShowDate(e.expense_date, { month: 'short', day: 'numeric', year: 'numeric' })}
                         </td>
                         <td style={{ fontSize: '0.85rem' }}>{e.category}</td>
                         <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#f87171', fontWeight: 600 }}>

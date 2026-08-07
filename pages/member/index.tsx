@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
+import { parseLocalDate, formatShowDate } from '../../lib/formatDate';
 
 export default function MemberView() {
   const [shows, setShows]   = useState<any[]>([]);
@@ -78,7 +79,7 @@ export default function MemberView() {
                 <div>
                   <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{b.venue?.name || 'TBD'}</span>
                   <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem', marginLeft: '0.75rem' }}>
-                    {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                    {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                   </span>
                 </div>
                 <span className={`badge badge-${b.status}`}>{BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}</span>
@@ -98,10 +99,10 @@ function ShowCard({ booking: b }: { booking: any }) {
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <div style={{ minWidth: 52, textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', color: 'var(--accent)', lineHeight: 1 }}>
-              {b.show_date ? new Date(b.show_date + 'T00:00:00').getDate() : '?'}
+              {b.show_date ? parseLocalDate(b.show_date).getDate() : '?'}
             </div>
             <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              {b.show_date ? new Date(b.show_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : ''}
+              {b.show_date ? formatShowDate(b.show_date, { month: 'short', year: 'numeric' }) : ''}
             </div>
           </div>
           <div>

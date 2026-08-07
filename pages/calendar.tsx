@@ -4,6 +4,7 @@ import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { getActId, getBandBookings } from '../lib/bookingQueries';
 import { BOOKING_STATUS_LABELS } from '../lib/types';
+import { parseLocalDate, formatShowDate } from '../lib/formatDate';
 import { STATUS_COLORS } from '../lib/statusSync';
 import { buildIcal, downloadIcal } from '../lib/ical';
 import Link from 'next/link';
@@ -224,7 +225,7 @@ export default function AgentCalendar() {
                 {[...filtered].sort((a, b) => a.show_date < b.show_date ? -1 : 1).map(s => (
                   <tr key={s.id} style={{ opacity: s.show_date < todayStr ? 0.55 : 1 }}>
                     <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                      {new Date(s.show_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                      {formatShowDate(s.show_date, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
                     <td style={{ fontWeight: 700 }}>{s.venue?.name || 'TBD'}</td>
                     <td style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
@@ -375,7 +376,7 @@ export default function AgentCalendar() {
               <div className="card">
                 <div className="card-header">
                   <span className="card-title" style={{ fontSize: '0.85rem' }}>
-                    {new Date(selected + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                    {formatShowDate(selected, { weekday: 'long', month: 'long', day: 'numeric' })}
                   </span>
                   <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>✕</button>
                 </div>
@@ -430,10 +431,10 @@ export default function AgentCalendar() {
                 }}>
                   <div style={{ minWidth: 36, textAlign: 'center', flexShrink: 0 }}>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', color: tileColor(s.status), lineHeight: 1, fontWeight: 700 }}>
-                      {new Date(s.show_date + 'T12:00:00').getDate()}
+                      {parseLocalDate(s.show_date).getDate()}
                     </div>
                     <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      {new Date(s.show_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })}
+                      {formatShowDate(s.show_date, { month: 'short' })}
                     </div>
                   </div>
                   <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -548,7 +549,7 @@ export default function AgentCalendar() {
               <button className="btn btn-ghost btn-sm" onClick={() => setAddDate(null)}>✕</button>
             </div>
             <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.92rem', color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '1.25rem', fontWeight: 700 }}>
-              {new Date(addDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              {formatShowDate(addDate, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
             </div>
             <form onSubmit={saveShow} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <div className="field">
