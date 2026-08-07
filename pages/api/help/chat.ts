@@ -10,8 +10,14 @@ import { HELP_SYSTEM_PROMPT } from '../../../lib/helpSystemPrompt';
 import {
   FIND_VENUE_TOOL,
   BOOKING_UPSERT_TOOL,
+  FIND_TOUR_TOOL,
+  TOUR_NOTES_UPDATE_TOOL,
+  STAGE_EXPENSE_TOOL,
   execFindVenue,
+  execFindTour,
   execStageBookingUpsert,
+  execStageTourNotesUpdate,
+  execStageExpense,
 } from '../../../lib/aiAgentTools';
 
 const supabase = createClient(
@@ -126,12 +132,14 @@ export default async function handler(
     res.setHeader('X-Accel-Buffering', 'no'); // disable Nginx buffering on Vercel
 
     // Agentic loop: keep going until stop_reason is 'end_turn' (no more tool calls).
-    const tools = actId ? [FIND_VENUE_TOOL, BOOKING_UPSERT_TOOL] : [];
+    const tools = actId
+      ? [FIND_VENUE_TOOL, BOOKING_UPSERT_TOOL, FIND_TOUR_TOOL, TOUR_NOTES_UPDATE_TOOL, STAGE_EXPENSE_TOOL]
+      : [];
     let loopMessages: Anthropic.MessageParam[] = trimmedMessages.map((m) => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
     }));
-    let stagedActionEvent: object | null = null;
+    const stagedActionEvents: Array<{ action_type: string } & Record<string, unknown>> = [];
 
     while (true) {
       const stream = await anthropic.messages.stream({
@@ -167,10 +175,23 @@ export default async function handler(
             toolResult = await execFindVenue(actId!, toolUse.input as { name?: string; city?: string });
           } else if (toolUse.name === 'stage_booking_upsert') {
             toolResult = await execStageBookingUpsert(actId!, userId!, toolUse.input as any);
-            // If staging succeeded, capture it so we can emit a confirm card event.
             const r = toolResult as any;
             if (r?.requires_confirmation) {
-              stagedActionEvent = r;
+              stagedActionEvents.push(r);
+            }
+          } else if (toolUse.name === 'find_tour') {
+            toolResult = await execFindTour(actId!, (toolUse.input as { name: string }).name);
+          } else if (toolUse.name === 'stage_tour_notes_update') {
+            toolResult = await execStageTourNotesUpdate(actId!, userId!, toolUse.input as { tour_id: string; notes: string });
+            const r = toolResult as any;
+            if (r?.requires_confirmation) {
+              stagedActionEvents.push(r);
+            }
+          } else if (toolUse.name === 'stage_expense') {
+            toolResult = await execStageExpense(actId!, userId!, toolUse.input as any);
+            const r = toolResult as any;
+            if (r?.requires_confirmation) {
+              stagedActionEvents.push(r);
             }
           } else {
             toolResult = { error: `Unknown tool: ${toolUse.name}` };
@@ -194,9 +215,9 @@ export default async function handler(
       ];
     }
 
-    // Emit staged action card event so the UI can render a confirm button.
-    if (stagedActionEvent) {
-      res.write(`data: ${JSON.stringify({ type: 'staged_action', ...stagedActionEvent as object })}\n\n`);
+    // Emit staged action card events so the UI can render confirm buttons.
+    for (const ev of stagedActionEvents) {
+      res.write(`data: ${JSON.stringify({ type: 'staged_action', ...ev as object })}\n\n`);
     }
 
     // Signal stream completion
