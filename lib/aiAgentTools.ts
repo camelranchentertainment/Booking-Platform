@@ -24,7 +24,8 @@ export const BOOKING_UPSERT_TOOL = {
     "Propose creating a new show or travel day, or updating an existing booking. Does NOT write to the " +
     "database — validates the request, checks for conflicts, and returns a staged proposal the user must " +
     "confirm. For shows (entry_type 'show'), always call find_venue first to get a real venue_id; never " +
-    "invent one. For travel/logistics days (entry_type 'travel'), venue_id is not required.",
+    "invent one. For travel/logistics days (entry_type 'travel'), venue_id is not required. " +
+    "tour_id is OPTIONAL — omit it entirely when no tour was mentioned or the show is standalone.",
   input_schema: {
     type: 'object',
     properties: {
@@ -70,12 +71,15 @@ export const BOOKING_UPSERT_TOOL = {
 export const FIND_TOUR_TOOL = {
   name: 'find_tour',
   description:
-    "Search this band's tours by name to get a tour_id. Read-only, safe to call freely. Always call " +
-    "this before staging anything tied to a specific tour (shows, travel days, tour notes, expenses).",
+    "Search this band's tours. Omit name to list all tours; pass a partial name to filter. " +
+    "Only call this when the user explicitly mentions a tour. Skip entirely for standalone shows " +
+    "where no tour was mentioned.",
   input_schema: {
     type: 'object',
-    properties: { name: { type: 'string' } },
-    required: ['name'],
+    properties: {
+      name: { type: 'string', description: 'Partial tour name to search for. Omit to list all tours.' },
+    },
+    required: [],
   },
 };
 
@@ -129,7 +133,9 @@ export const STAGE_VENUE_AND_BOOKING_TOOL = {
     "returned no match AND the user has provided at minimum a venue name, city, AND state. If city " +
     "or state are missing, ask the user for them first — never call this tool with blank city or " +
     "state, as both are NOT NULL in the database. Does NOT write to the database — stages a combined " +
-    "proposal the user must confirm. If tour context is needed, call find_tour first.",
+    "proposal the user must confirm. If the user mentioned an EXISTING tour, call find_tour first " +
+    "and pass tour_id. If the user wants to create a NEW tour at the same time, pass new_tour_name " +
+    "instead of tour_id. Tour is always optional — omit both if no tour was mentioned.",
   input_schema: {
     type: 'object',
     properties: {
@@ -167,8 +173,37 @@ export const STAGE_VENUE_AND_BOOKING_TOOL = {
       lodging_details:       { type: 'string' },
       special_requirements:  { type: 'string' },
       notes:                 { type: 'string' },
+      new_tour_name: {
+        type: 'string',
+        description: 'Create a new tour with this name and attach the show to it. Use INSTEAD OF tour_id when the tour does not exist yet.',
+      },
+      new_tour_description: { type: 'string' },
+      new_tour_start_date:  { type: 'string', description: 'ISO date YYYY-MM-DD.' },
+      new_tour_end_date:    { type: 'string', description: 'ISO date YYYY-MM-DD.' },
     },
     required: ['venue_name', 'venue_city', 'venue_state', 'show_date'],
+  },
+};
+
+export const STAGE_TOUR_INSERT_TOOL = {
+  name: 'stage_tour_insert',
+  description:
+    'Propose creating a new tour. Does NOT write to the database — stages a proposal the user must confirm. ' +
+    'Only ask for description, dates, routing_notes, target_regions, cities, or radius if the user volunteered them. ' +
+    'name is the only required field.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      name:            { type: 'string', description: 'Tour name. Required.' },
+      description:     { type: 'string' },
+      start_date:      { type: 'string', description: 'ISO date YYYY-MM-DD.' },
+      end_date:        { type: 'string', description: 'ISO date YYYY-MM-DD.' },
+      routing_notes:   { type: 'string' },
+      target_regions:  { type: 'array', items: { type: 'string' } },
+      cities:          { type: 'array', items: { type: 'string' } },
+      radius:          { type: 'number', description: 'Search radius in miles. Defaults to 10.' },
+    },
+    required: ['name'],
   },
 };
 
@@ -181,13 +216,14 @@ export async function execFindVenue(actId: string, args: { name?: string; city?:
   return data ?? [];
 }
 
-export async function execFindTour(actId: string, name: string) {
-  const { data, error } = await supabase
+export async function execFindTour(actId: string, name?: string) {
+  let query = supabase
     .from('tours')
     .select('id, name, start_date, end_date, status')
     .eq('act_id', actId)
-    .ilike('name', `%${name}%`)
     .limit(5);
+  if (name) query = query.ilike('name', `%${name}%`);
+  const { data, error } = await query;
   if (error) throw new Error(`Tour search failed: ${error.message}`);
   return data ?? [];
 }
@@ -349,16 +385,23 @@ export async function execStageVenueAndBooking(
     lodging_details?: string;
     special_requirements?: string;
     notes?: string;
+    new_tour_name?: string;
+    new_tour_description?: string;
+    new_tour_start_date?: string;
+    new_tour_end_date?: string;
   }
 ) {
   if (!args.venue_name?.trim()) throw new Error('venue_name is required.');
   if (!args.venue_city?.trim()) throw new Error('venue_city is required (NOT NULL). Ask the user for the city first.');
   if (!args.venue_state?.trim()) throw new Error('venue_state is required (NOT NULL). Ask the user for the state first.');
+  if (args.new_tour_name && args.tour_id) throw new Error('Pass new_tour_name OR tour_id, not both.');
 
   let tourName: string | null = null;
   if (args.tour_id) {
     const tour = await verifyTourOwnership(actId, args.tour_id);
     tourName = tour.name;
+  } else if (args.new_tour_name?.trim()) {
+    tourName = args.new_tour_name.trim();
   }
 
   const { data: conflicts, error: conflictErr } = await supabase
@@ -387,6 +430,10 @@ export async function execStageVenueAndBooking(
     status:     args.status ?? 'hold',
     ...(args.tour_id              && { tour_id: args.tour_id }),
     ...(tourName                  && { tour_name: tourName }),
+    ...(args.new_tour_name?.trim() && { new_tour_name: args.new_tour_name.trim() }),
+    ...(args.new_tour_description  && { new_tour_description: args.new_tour_description }),
+    ...(args.new_tour_start_date   && { new_tour_start_date: args.new_tour_start_date }),
+    ...(args.new_tour_end_date     && { new_tour_end_date: args.new_tour_end_date }),
     ...(args.fee != null          && { fee: args.fee }),
     ...(args.deal_notes           && { deal_notes: args.deal_notes }),
     ...(args.load_in_time         && { load_in_time: args.load_in_time }),
@@ -412,6 +459,49 @@ export async function execStageVenueAndBooking(
     staged_action_id: staged.id,
     proposal: payload,
     conflicts: conflicts ?? [],
+    requires_confirmation: true,
+  };
+}
+
+export async function execStageTourInsert(
+  actId: string,
+  userId: string,
+  args: {
+    name: string;
+    description?: string;
+    start_date?: string;
+    end_date?: string;
+    routing_notes?: string;
+    target_regions?: string[];
+    cities?: string[];
+    radius?: number;
+  }
+) {
+  if (!args.name?.trim()) throw new Error('name is required for a new tour.');
+
+  const payload = {
+    name: args.name.trim(),
+    status: 'planning',
+    ...(args.description             && { description: args.description }),
+    ...(args.start_date              && { start_date: args.start_date }),
+    ...(args.end_date                && { end_date: args.end_date }),
+    ...(args.routing_notes           && { routing_notes: args.routing_notes }),
+    ...(args.target_regions?.length  && { target_regions: args.target_regions }),
+    ...(args.cities?.length          && { cities: args.cities }),
+    ...(args.radius != null          && { radius: args.radius }),
+  };
+
+  const { data: staged, error: stageErr } = await supabase
+    .from('ai_staged_actions')
+    .insert({ act_id: actId, created_by: userId, action_type: 'tour_insert', payload })
+    .select()
+    .single();
+  if (stageErr) throw new Error(`Failed to stage tour proposal: ${stageErr.message}`);
+
+  return {
+    action_type: 'tour_insert' as const,
+    staged_action_id: staged.id,
+    proposal: payload,
     requires_confirmation: true,
   };
 }

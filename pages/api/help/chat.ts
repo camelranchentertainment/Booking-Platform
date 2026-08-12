@@ -14,12 +14,14 @@ import {
   TOUR_NOTES_UPDATE_TOOL,
   STAGE_EXPENSE_TOOL,
   STAGE_VENUE_AND_BOOKING_TOOL,
+  STAGE_TOUR_INSERT_TOOL,
   execFindVenue,
   execFindTour,
   execStageBookingUpsert,
   execStageTourNotesUpdate,
   execStageExpense,
   execStageVenueAndBooking,
+  execStageTourInsert,
 } from '../../../lib/aiAgentTools';
 
 const supabase = createClient(
@@ -135,7 +137,7 @@ export default async function handler(
 
     // Agentic loop: keep going until stop_reason is 'end_turn' (no more tool calls).
     const tools = actId
-      ? [FIND_VENUE_TOOL, BOOKING_UPSERT_TOOL, FIND_TOUR_TOOL, TOUR_NOTES_UPDATE_TOOL, STAGE_EXPENSE_TOOL, STAGE_VENUE_AND_BOOKING_TOOL]
+      ? [FIND_VENUE_TOOL, BOOKING_UPSERT_TOOL, FIND_TOUR_TOOL, TOUR_NOTES_UPDATE_TOOL, STAGE_EXPENSE_TOOL, STAGE_VENUE_AND_BOOKING_TOOL, STAGE_TOUR_INSERT_TOOL]
       : [];
     let loopMessages: Anthropic.MessageParam[] = trimmedMessages.map((m) => ({
       role: m.role as 'user' | 'assistant',
@@ -182,7 +184,7 @@ export default async function handler(
               stagedActionEvents.push(r);
             }
           } else if (toolUse.name === 'find_tour') {
-            toolResult = await execFindTour(actId!, (toolUse.input as { name: string }).name);
+            toolResult = await execFindTour(actId!, (toolUse.input as { name?: string }).name);
           } else if (toolUse.name === 'stage_tour_notes_update') {
             toolResult = await execStageTourNotesUpdate(actId!, userId!, toolUse.input as { tour_id: string; notes: string });
             const r = toolResult as any;
@@ -197,6 +199,12 @@ export default async function handler(
             }
           } else if (toolUse.name === 'stage_venue_and_booking') {
             toolResult = await execStageVenueAndBooking(actId!, userId!, toolUse.input as any);
+            const r = toolResult as any;
+            if (r?.requires_confirmation) {
+              stagedActionEvents.push(r);
+            }
+          } else if (toolUse.name === 'stage_tour_insert') {
+            toolResult = await execStageTourInsert(actId!, userId!, toolUse.input as any);
             const r = toolResult as any;
             if (r?.requires_confirmation) {
               stagedActionEvents.push(r);

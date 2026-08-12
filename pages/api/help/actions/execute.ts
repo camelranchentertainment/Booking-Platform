@@ -115,10 +115,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (error) throw error;
           result = data;
         }
+      } else if (staged.action_type === 'tour_insert') {
+        const { data, error } = await supabase
+          .from('tours')
+          .insert({
+            act_id:       profile.act_id,
+            created_by:   user.id,
+            name:         p.name,
+            status:       p.status ?? 'planning',
+            ...(p.description    != null && { description: p.description }),
+            ...(p.start_date     != null && { start_date: p.start_date }),
+            ...(p.end_date       != null && { end_date: p.end_date }),
+            ...(p.routing_notes  != null && { routing_notes: p.routing_notes }),
+            ...(p.target_regions != null && { target_regions: p.target_regions }),
+            ...(p.cities         != null && { cities: p.cities }),
+            ...(p.radius         != null && { radius: p.radius }),
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        result = data;
       } else if (staged.action_type === 'venue_and_booking_upsert') {
-        // Insert venue first, then booking. If booking insert fails, delete the
-        // venue to avoid a dangling row (compensating rollback — Supabase JS client
-        // does not support multi-statement transactions natively).
+        // Optional: create a new tour first if requested.
+        // Rollback chain: tour → venue → booking (each step rolls back all prior on failure).
+        let createdTourId: string | null = null;
+        if (p.new_tour_name) {
+          const { data: tour, error: tourErr } = await supabase
+            .from('tours')
+            .insert({
+              act_id:     profile.act_id,
+              created_by: user.id,
+              name:       p.new_tour_name,
+              status:     'planning',
+              ...(p.new_tour_description && { description: p.new_tour_description }),
+              ...(p.new_tour_start_date  && { start_date: p.new_tour_start_date }),
+              ...(p.new_tour_end_date    && { end_date: p.new_tour_end_date }),
+            })
+            .select('id, name')
+            .single();
+          if (tourErr) throw tourErr;
+          createdTourId = tour.id;
+        }
+
+        // Insert venue. On failure, roll back the tour if we just created one.
         const { data: venue, error: venueErr } = await supabase
           .from('venues')
           .insert({
@@ -139,7 +178,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           })
           .select('id, name, city, state')
           .single();
-        if (venueErr) throw venueErr;
+        if (venueErr) {
+          if (createdTourId) await supabase.from('tours').delete().eq('id', createdTourId);
+          throw venueErr;
+        }
 
         let booking: unknown;
         try {
@@ -151,7 +193,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               venue_id:             venue.id,
               show_date:            p.show_date,
               entry_type:           p.entry_type           ?? 'show',
-              tour_id:              p.tour_id              ?? null,
+              tour_id:              createdTourId ?? p.tour_id ?? null,
               status:               p.status               ?? 'hold',
               fee:                  p.fee                  ?? null,
               deal_notes:           p.deal_notes           ?? null,
@@ -171,12 +213,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (bkErr) throw bkErr;
           booking = bk;
         } catch (bookingErr) {
-          // Compensating delete — remove the venue we just inserted.
           await supabase.from('venues').delete().eq('id', venue.id);
+          if (createdTourId) await supabase.from('tours').delete().eq('id', createdTourId);
           throw bookingErr;
         }
 
-        result = { venue, booking };
+        result = {
+          ...(createdTourId && { tour: { id: createdTourId, name: p.new_tour_name } }),
+          venue,
+          booking,
+        };
       } else if (staged.action_type === 'tour_notes_update') {
         const { data, error } = await supabase
           .from('tours')

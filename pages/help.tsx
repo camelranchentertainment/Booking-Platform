@@ -73,8 +73,22 @@ type StagedAction =
         load_in_time?: string;
         set_time?: string;
         tour_name?: string;
+        new_tour_name?: string;
+        new_tour_start_date?: string;
+        new_tour_end_date?: string;
       };
       conflicts: { id: string; status: string; venues: { name: string; city: string; state: string } | null }[];
+    }
+  | {
+      action_type: 'tour_insert';
+      staged_action_id: string;
+      proposal: {
+        name: string;
+        description?: string;
+        start_date?: string;
+        end_date?: string;
+        status: string;
+      };
     };
 
 // Suggested starter questions shown before first message
@@ -284,9 +298,14 @@ export default function HelpPage() {
         const id = data.data?.id ?? data.booking?.id ?? '';
         successMsg = `Show saved!${id ? ` Booking ID: \`${id}\`` : ''}`;
       } else if (actionType === 'venue_and_booking_upsert') {
+        const tourId = data.data?.tour?.id ?? '';
+        const tourName = data.data?.tour?.name ?? '';
         const venueId = data.data?.venue?.id ?? '';
         const bookingId = data.data?.booking?.id ?? '';
-        successMsg = `Venue and show saved!${venueId ? ` Venue ID: \`${venueId}\`` : ''}${bookingId ? ` · Booking ID: \`${bookingId}\`` : ''}`;
+        successMsg = `${tourId ? `Tour "${tourName}" created! ` : ''}Venue and show saved!${venueId ? ` Venue ID: \`${venueId}\`` : ''}${bookingId ? ` · Booking ID: \`${bookingId}\`` : ''}`;
+      } else if (actionType === 'tour_insert') {
+        const tourName = data.data?.name ?? '';
+        successMsg = `Tour${tourName ? ` "${tourName}"` : ''} created!`;
       } else if (actionType === 'tour_notes_update') {
         successMsg = 'Tour notes updated!';
       } else if (actionType === 'expense_insert') {
@@ -440,7 +459,9 @@ export default function HelpPage() {
                       : stagedAction.action_type === 'tour_notes_update'
                       ? 'Update Tour Notes'
                       : stagedAction.action_type === 'venue_and_booking_upsert'
-                      ? 'New Venue + Show'
+                      ? (stagedAction.proposal.new_tour_name ? 'New Tour + Venue + Show' : 'New Venue + Show')
+                      : stagedAction.action_type === 'tour_insert'
+                      ? 'New Tour'
                       : 'New Expense'}
                   </div>
                   <div style={styles.stagedCardBody}>
@@ -536,7 +557,45 @@ export default function HelpPage() {
                         </div>
                       )}
                     </>)}
+                    {stagedAction.action_type === 'tour_insert' && (<>
+                      <div style={styles.stagedCardRow}>
+                        <span style={styles.stagedCardLabel}>Name</span>
+                        <span style={{ fontWeight: 600 }}>{stagedAction.proposal.name}</span>
+                      </div>
+                      {stagedAction.proposal.start_date && (
+                        <div style={styles.stagedCardRow}>
+                          <span style={styles.stagedCardLabel}>Start</span>
+                          <span>{stagedAction.proposal.start_date}</span>
+                        </div>
+                      )}
+                      {stagedAction.proposal.end_date && (
+                        <div style={styles.stagedCardRow}>
+                          <span style={styles.stagedCardLabel}>End</span>
+                          <span>{stagedAction.proposal.end_date}</span>
+                        </div>
+                      )}
+                      {stagedAction.proposal.description && (
+                        <div style={styles.stagedCardRow}>
+                          <span style={styles.stagedCardLabel}>Description</span>
+                          <span style={{ fontStyle: 'italic', color: '#A0AABB' }}>{stagedAction.proposal.description}</span>
+                        </div>
+                      )}
+                      <div style={styles.stagedCardRow}>
+                        <span style={styles.stagedCardLabel}>Status</span>
+                        <span style={styles.stagedCardBadge}>{stagedAction.proposal.status}</span>
+                      </div>
+                    </>)}
                     {stagedAction.action_type === 'venue_and_booking_upsert' && (<>
+                      {stagedAction.proposal.new_tour_name && (
+                        <div style={{ ...styles.stagedCardRow, marginBottom: '0.25rem' }}>
+                          <span style={{ ...styles.stagedCardLabel, color: '#6BAA9F', fontWeight: 700 }}>New Tour</span>
+                          <span style={{ fontWeight: 600 }}>
+                            {stagedAction.proposal.new_tour_name}
+                            {stagedAction.proposal.new_tour_start_date ? ` · ${stagedAction.proposal.new_tour_start_date}` : ''}
+                            {stagedAction.proposal.new_tour_end_date ? ` – ${stagedAction.proposal.new_tour_end_date}` : ''}
+                          </span>
+                        </div>
+                      )}
                       <div style={{ ...styles.stagedCardRow, marginBottom: '0.25rem' }}>
                         <span style={{ ...styles.stagedCardLabel, color: '#C8921A', fontWeight: 700 }}>New Venue</span>
                         <span style={{ fontWeight: 600 }}>
