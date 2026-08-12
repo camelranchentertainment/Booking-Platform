@@ -23,7 +23,12 @@ type CitySearchAction = {
   venues: { id: string; name: string; city: string; state: string; email?: string | null; venue_type?: string | null; capacity?: number | null }[];
   activeTour: { id: string; name: string } | null;
 };
-type AgentAction = TourOutreachAction | CitySearchAction;
+type StageItemsAction = {
+  type: 'stage_items';
+  staged: Array<{ kind: string; staged_action_id: string; proposal: any; conflicts?: any[] }>;
+  errors: string[];
+};
+type AgentAction = TourOutreachAction | CitySearchAction | StageItemsAction;
 
 const QUICK_CHIPS: { label: string; href?: string; prompt?: string }[] = [
   { label: 'Show my targets',       href: '/tours' },
@@ -283,6 +288,30 @@ export default function BandDashboard() {
 
   const approveSend = async () => {
     if (!pendingAction || sending || !myAct) return;
+
+    if (pendingAction.type === 'stage_items') {
+      setSending(true);
+      setSendResult(null);
+      const { data: { session } } = await supabase.auth.getSession();
+      try {
+        const res = await fetch('/api/help/actions/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ staged_action_ids: pendingAction.staged.map(s => s.staged_action_id) }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Save failed');
+        setMessages(prev => [...prev, { role: 'assistant', content: `Saved ${pendingAction.staged.length} item${pendingAction.staged.length !== 1 ? 's' : ''} to the tour.` }]);
+        setPendingAction(null);
+        load();
+      } catch (err: any) {
+        setAgentError(err.message);
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
     setSending(true);
     setSendResult(null);
     const { data: { session } } = await supabase.auth.getSession();
@@ -524,7 +553,50 @@ export default function BandDashboard() {
               {agentLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontFamily: 'var(--font-mono)', alignSelf: 'flex-start' }}>thinking…</div>}
 
               {/* Approval panel */}
-              {pendingAction && (
+              {pendingAction && pendingAction.type === 'stage_items' && (
+                <div style={{ background: 'var(--bg-overlay)', border: '1px solid var(--accent)', padding: '0.85rem 1rem', fontSize: 13, display: 'flex', flexDirection: 'column', gap: '0.65rem', alignSelf: 'stretch' }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)' }}>
+                    {`STAGING ${pendingAction.staged.length} ITEM${pendingAction.staged.length !== 1 ? 'S' : ''}${pendingAction.staged[0]?.proposal?.tour_name ? ` — ${pendingAction.staged[0].proposal.tour_name.toUpperCase()}` : ''}`}
+                  </div>
+
+                  {/* Item list */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    {pendingAction.staged.map((item: any, i: number) => {
+                      const p = item.proposal;
+                      let summary = '';
+                      if (item.kind === 'show') summary = `Show: ${p.venue_name || 'TBD'} — ${p.show_date}`;
+                      else if (item.kind === 'travel') summary = `Travel: ${p.show_date}${p.notes ? ` · ${String(p.notes).slice(0, 40)}` : ''}`;
+                      else if (item.kind === 'tour_notes') { const n = p.new_notes || ''; summary = `Tour notes: ${n.slice(0, 60)}${n.length > 60 ? '…' : ''}`; }
+                      else if (item.kind === 'expense') summary = `Expense: ${p.category} — $${p.amount} (${p.status})`;
+                      else if (item.kind === 'venue_and_booking') summary = `New venue + show: ${p.venue_name} (${p.venue_city}, ${p.venue_state}) — ${p.show_date}`;
+                      const hasConflicts = item.conflicts?.length > 0;
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{summary}</span>
+                          {hasConflicts && <span style={{ color: '#f59e0b', fontSize: 11 }}>⚠ conflict</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {pendingAction.errors.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                      {pendingAction.errors.map((e: string, i: number) => (
+                        <div key={i} style={{ fontSize: 12, color: '#f87171' }}>⚠ {e}</div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={approveSend} disabled={sending || pendingAction.staged.length === 0}>
+                      {sending ? 'Saving…' : `Confirm & Save All (${pendingAction.staged.length})`}
+                    </button>
+                    <button className="btn btn-secondary" style={{ fontSize: 13 }} onClick={() => { setPendingAction(null); setSendResult(null); }} disabled={sending}>Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              {pendingAction && (pendingAction.type === 'tour_outreach' || pendingAction.type === 'city_search') && (
                 <div style={{ background: 'var(--bg-overlay)', border: '1px solid var(--accent)', padding: '0.85rem 1rem', fontSize: 13, display: 'flex', flexDirection: 'column', gap: '0.65rem', alignSelf: 'stretch' }}>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)' }}>
                     {pendingAction.type === 'tour_outreach'
@@ -534,7 +606,7 @@ export default function BandDashboard() {
 
                   {/* Venue checklist */}
                   <div className="dash-appr-grid">
-                    {(pendingAction.type === 'tour_outreach' ? pendingAction.venues : pendingAction.venues).map((v: any) => {
+                    {pendingAction.venues.map((v: any) => {
                       const id = pendingAction.type === 'tour_outreach' ? v.tourVenueId : v.id;
                       const hasEmail = !!v.email;
                       return (

@@ -5,7 +5,29 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import Anthropic from '@anthropic-ai/sdk';
+import { createClient } from '@supabase/supabase-js';
 import { HELP_SYSTEM_PROMPT } from '../../../lib/helpSystemPrompt';
+import {
+  FIND_VENUE_TOOL,
+  BOOKING_UPSERT_TOOL,
+  FIND_TOUR_TOOL,
+  TOUR_NOTES_UPDATE_TOOL,
+  STAGE_EXPENSE_TOOL,
+  STAGE_VENUE_AND_BOOKING_TOOL,
+  STAGE_TOUR_INSERT_TOOL,
+  execFindVenue,
+  execFindTour,
+  execStageBookingUpsert,
+  execStageTourNotesUpdate,
+  execStageExpense,
+  execStageVenueAndBooking,
+  execStageTourInsert,
+} from '../../../lib/aiAgentTools';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 // Shape of a single message in the conversation history
 interface ChatMessage {
@@ -49,6 +71,20 @@ export default async function handler(
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
+  }
+  const token = authHeader.replace('Bearer ', '');
+  const { data: { user } } = await supabase.auth.getUser(token);
+  const userId = user?.id ?? null;
+
+  // Resolve act_id so tool calls can be scoped to this band.
+  let actId: string | null = null;
+  if (userId) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('act_id')
+      .eq('id', userId)
+      .single();
+    actId = profile?.act_id ?? null;
   }
 
   // Rate limit by IP
@@ -99,21 +135,105 @@ export default async function handler(
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no'); // disable Nginx buffering on Vercel
 
-    const stream = await anthropic.messages.stream({
-      model: 'claude-haiku-4-5',
-      max_tokens: 1024,
-      system: HELP_SYSTEM_PROMPT,
-      messages: trimmedMessages,
-    });
+    // Agentic loop: keep going until stop_reason is 'end_turn' (no more tool calls).
+    const tools = actId
+      ? [FIND_VENUE_TOOL, BOOKING_UPSERT_TOOL, FIND_TOUR_TOOL, TOUR_NOTES_UPDATE_TOOL, STAGE_EXPENSE_TOOL, STAGE_VENUE_AND_BOOKING_TOOL, STAGE_TOUR_INSERT_TOOL]
+      : [];
+    let loopMessages: Anthropic.MessageParam[] = trimmedMessages.map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }));
+    const stagedActionEvents: Array<{ action_type: string } & Record<string, unknown>> = [];
 
-    for await (const chunk of stream) {
-      if (
-        chunk.type === 'content_block_delta' &&
-        chunk.delta.type === 'text_delta'
-      ) {
-        // Send each token as a Server-Sent Event
-        res.write(`data: ${JSON.stringify({ token: chunk.delta.text })}\n\n`);
+    while (true) {
+      const stream = await anthropic.messages.stream({
+        model: 'claude-haiku-4-5',
+        max_tokens: 1024,
+        system: HELP_SYSTEM_PROMPT,
+        messages: loopMessages,
+        ...(tools.length > 0 && { tools: tools as Anthropic.Tool[] }),
+      });
+
+      const response = await stream.finalMessage();
+
+      // Stream any text blocks to the client as they're in the final message.
+      for (const block of response.content) {
+        if (block.type === 'text') {
+          // Stream token-by-token isn't available after finalMessage; send as one chunk.
+          res.write(`data: ${JSON.stringify({ token: block.text })}\n\n`);
+        }
       }
+
+      if (response.stop_reason === 'end_turn' || response.stop_reason !== 'tool_use') {
+        break;
+      }
+
+      // Handle tool calls.
+      const toolUseBlocks = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+
+      for (const toolUse of toolUseBlocks) {
+        let toolResult: unknown;
+        try {
+          if (toolUse.name === 'find_venue') {
+            toolResult = await execFindVenue(actId!, toolUse.input as { name?: string; city?: string });
+          } else if (toolUse.name === 'stage_booking_upsert') {
+            toolResult = await execStageBookingUpsert(actId!, userId!, toolUse.input as any);
+            const r = toolResult as any;
+            if (r?.requires_confirmation) {
+              stagedActionEvents.push(r);
+            }
+          } else if (toolUse.name === 'find_tour') {
+            toolResult = await execFindTour(actId!, (toolUse.input as { name?: string }).name);
+          } else if (toolUse.name === 'stage_tour_notes_update') {
+            toolResult = await execStageTourNotesUpdate(actId!, userId!, toolUse.input as { tour_id: string; notes: string });
+            const r = toolResult as any;
+            if (r?.requires_confirmation) {
+              stagedActionEvents.push(r);
+            }
+          } else if (toolUse.name === 'stage_expense') {
+            toolResult = await execStageExpense(actId!, userId!, toolUse.input as any);
+            const r = toolResult as any;
+            if (r?.requires_confirmation) {
+              stagedActionEvents.push(r);
+            }
+          } else if (toolUse.name === 'stage_venue_and_booking') {
+            toolResult = await execStageVenueAndBooking(actId!, userId!, toolUse.input as any);
+            const r = toolResult as any;
+            if (r?.requires_confirmation) {
+              stagedActionEvents.push(r);
+            }
+          } else if (toolUse.name === 'stage_tour_insert') {
+            toolResult = await execStageTourInsert(actId!, userId!, toolUse.input as any);
+            const r = toolResult as any;
+            if (r?.requires_confirmation) {
+              stagedActionEvents.push(r);
+            }
+          } else {
+            toolResult = { error: `Unknown tool: ${toolUse.name}` };
+          }
+        } catch (toolErr: any) {
+          toolResult = { error: toolErr.message ?? 'Tool call failed' };
+        }
+
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: toolUse.id,
+          content: JSON.stringify(toolResult),
+        });
+      }
+
+      // Append assistant turn + tool results and loop.
+      loopMessages = [
+        ...loopMessages,
+        { role: 'assistant', content: response.content },
+        { role: 'user', content: toolResults },
+      ];
+    }
+
+    // Emit staged action card events so the UI can render confirm buttons.
+    for (const ev of stagedActionEvents) {
+      res.write(`data: ${JSON.stringify({ type: 'staged_action', ...ev as object })}\n\n`);
     }
 
     // Signal stream completion
