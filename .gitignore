@@ -31,3 +31,5 @@ dev-debug.log
 # tasks.json
 # tasks/ 
 tsconfig.test.tsbuildinfo
+.vercel
+.env*
