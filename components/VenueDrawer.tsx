@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { getActId } from '../lib/bookingQueries';
+import { formatShowDate } from '../lib/formatDate';
 import EmailComposer from './email/EmailComposer';
 import type { OutreachStatus } from '../lib/types';
 
@@ -229,7 +230,7 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
   const previousPay    = confirmedBk?.fee ?? confirmedBk?.agreed_amount ?? null;
 
   const fmtDate = (d: string) =>
-    new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    formatShowDate(d, { month: 'short', day: 'numeric', year: 'numeric' });
 
   const emailCategory = () => {
     if (!activeTv) return 'target';

@@ -1,6 +1,7 @@
 ﻿import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 import { updateVenueStatus } from '../../../lib/statusSync';
+import { formatShowDate } from '../../../lib/formatDate';
 import Anthropic from '@anthropic-ai/sdk';
 import { Resend } from 'resend';
 
@@ -373,7 +374,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const { apiKey, from } = await getResendConfig(service);
         if (apiKey) {
           const resend = new Resend(apiKey);
-          const confDate = new Date(effectiveDate + 'T00:00:00').toLocaleDateString('en-US', {
+          const confDate = formatShowDate(effectiveDate, {
             weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
           });
           const dealLabels: Record<string, string> = {
@@ -420,10 +421,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } catch { /* email failures don't block */ }
     }
 
-    const dateFormatted = new Date(effectiveDate + 'T00:00:00').toLocaleDateString('en-US', {
+    const dateFormatted = formatShowDate(effectiveDate, {
       weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
     });
-    const dateFallback = new Date(effectiveDate + 'T00:00:00').toLocaleDateString('en-US', {
+    const dateFallback = formatShowDate(effectiveDate, {
       month: 'long', day: 'numeric', year: 'numeric',
     });
     const genre = (act as any).genre as string | undefined;

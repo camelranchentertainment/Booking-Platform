@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { getActId, getBandBookings } from '../../lib/bookingQueries';
+import { formatShowDate } from '../../lib/formatDate';
 import { BookingStatus, BOOKING_STATUS_LABELS, BOOKING_STATUS_ORDER } from '../../lib/types';
 import Link from 'next/link';
 
@@ -75,7 +76,7 @@ export default function BookingsPage() {
                   <div className="kanban-card-venue">{b.venue?.name || 'No venue'}</div>
                   <div className="kanban-card-meta">
                     {b.venue?.city ? `${b.venue.city}, ${b.venue.state}` : ''}
-                    {b.show_date ? ` · ${new Date(b.show_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                    {b.show_date ? ` · ${formatShowDate(b.show_date, { month: 'short', day: 'numeric' })}` : ''}
                     {(b.agreed_amount ?? b.fee) ? ` · $${Number(b.agreed_amount ?? b.fee).toLocaleString()}` : ''}
                   </div>
                 </div>

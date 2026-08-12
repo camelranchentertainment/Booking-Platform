@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
+import { parseLocalDate, formatShowDate } from '../../lib/formatDate';
 
 type Show = {
   id: string;
@@ -190,7 +191,7 @@ export default function MemberCalendar() {
             <div className="card">
               <div className="card-header">
                 <span className="card-title">
-                  {new Date(selected + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  {formatShowDate(selected, { weekday: 'long', month: 'long', day: 'numeric' })}
                 </span>
               </div>
               {selectedShows.map(s => (
@@ -231,10 +232,10 @@ export default function MemberCalendar() {
                 <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
                   <div style={{ minWidth: 36, textAlign: 'center' }}>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--accent)', lineHeight: 1 }}>
-                      {new Date(s.show_date! + 'T12:00:00').getDate()}
+                      {parseLocalDate(s.show_date!).getDate()}
                     </div>
                     <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                      {new Date(s.show_date! + 'T12:00:00').toLocaleDateString('en-US', { month: 'short' })}
+                      {formatShowDate(s.show_date!, { month: 'short' })}
                     </div>
                   </div>
                   <div style={{ flex: 1, overflow: 'hidden' }}>

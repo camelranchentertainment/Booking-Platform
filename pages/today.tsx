@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useRef } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
+import { formatShowDate } from '../lib/formatDate';
 import Link from 'next/link';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -350,7 +351,7 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, role, session }
   };
 
   const fmtDate = (d: string, opts?: Intl.DateTimeFormatOptions) =>
-    new Date(d + 'T00:00:00').toLocaleDateString('en-US', opts ?? { weekday: 'long', month: 'long', day: 'numeric' });
+    formatShowDate(d, opts ?? { weekday: 'long', month: 'long', day: 'numeric' });
 
   const authorLabel = (n: DailyNote) => {
     const name = n.author?.display_name || n.author?.email || 'Unknown';
@@ -714,7 +715,7 @@ export default function TodayPage() {
   };
 
   const dateLabel = (d: string) =>
-    new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    formatShowDate(d, { weekday: 'long', month: 'long', day: 'numeric' });
 
   return (
     <AppShell requireRole={['band_admin', 'member']}>

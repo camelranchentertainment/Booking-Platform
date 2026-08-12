@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
+import { formatShowDate } from '../../../lib/formatDate';
 
 const SYSTEM_PROMPT = `You are an expert music booking agent assistant for Camel Ranch Entertainment.
 You draft professional, concise emails for booking music acts at venues.
@@ -78,7 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           service.from('bookings').select('show_date').eq('tour_id', b.tour_id).neq('status', 'cancelled').not('show_date', 'is', null),
         ]);
         if (tourRes.data?.start_date) {
-          const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+          const fmt = (d: string) => formatShowDate(d, { month: 'long', day: 'numeric', year: 'numeric' });
           const start = fmt(tourRes.data.start_date);
           const end = tourRes.data.end_date ? fmt(tourRes.data.end_date) : 'TBD';
           const booked = (tourBookingsRes.data || []).filter(r => r.show_date !== b.show_date).map(r => fmt(r.show_date));
@@ -168,7 +169,7 @@ function buildPrompt({ category, act, venue, contact, booking, tourDateRange, ag
     : 'the booking manager';
 
   const showDate = booking?.show_date
-    ? new Date(booking.show_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    ? formatShowDate(booking.show_date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
     : null;
 
   const availableDates = tourDateRange

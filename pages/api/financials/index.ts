@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
+import { parseLocalDate } from '../../../lib/formatDate';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).end();
@@ -56,7 +57,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   for (const b of completed) {
     if (!b.show_date) continue;
-    const d = new Date(b.show_date + 'T00:00:00');
+    const d = parseLocalDate(b.show_date);
     if (d < cutoff) continue;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     if (!byMonthMap[key]) byMonthMap[key] = { month: d.getMonth() + 1, year: d.getFullYear(), earnings: 0, shows: 0 };
