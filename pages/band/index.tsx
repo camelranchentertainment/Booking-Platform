@@ -568,6 +568,7 @@ export default function BandDashboard() {
                       else if (item.kind === 'travel') summary = `Travel: ${p.show_date}${p.notes ? ` · ${String(p.notes).slice(0, 40)}` : ''}`;
                       else if (item.kind === 'tour_notes') { const n = p.new_notes || ''; summary = `Tour notes: ${n.slice(0, 60)}${n.length > 60 ? '…' : ''}`; }
                       else if (item.kind === 'expense') summary = `Expense: ${p.category} — $${p.amount} (${p.status})`;
+                      else if (item.kind === 'venue_and_booking') summary = `New venue + show: ${p.venue_name} (${p.venue_city}, ${p.venue_state}) — ${p.show_date}`;
                       const hasConflicts = item.conflicts?.length > 0;
                       return (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

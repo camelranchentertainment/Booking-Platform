@@ -53,6 +53,28 @@ type StagedAction =
         status: string;
         notes?: string;
       };
+    }
+  | {
+      action_type: 'venue_and_booking_upsert';
+      staged_action_id: string;
+      proposal: {
+        venue_name: string;
+        venue_city: string;
+        venue_state: string;
+        venue_address?: string;
+        venue_type?: string;
+        venue_capacity?: number;
+        venue_booking_contact?: string;
+        show_date: string;
+        entry_type?: string;
+        status?: string;
+        fee?: number;
+        deal_notes?: string;
+        load_in_time?: string;
+        set_time?: string;
+        tour_name?: string;
+      };
+      conflicts: { id: string; status: string; venues: { name: string; city: string; state: string } | null }[];
     };
 
 // Suggested starter questions shown before first message
@@ -194,7 +216,7 @@ export default function HelpPage() {
                   action_type: parsed.action_type,
                   staged_action_id: parsed.staged_action_id,
                   proposal: parsed.proposal,
-                  ...(parsed.action_type === 'booking_upsert' && { conflicts: parsed.conflicts ?? [] }),
+                  ...((parsed.action_type === 'booking_upsert' || parsed.action_type === 'venue_and_booking_upsert') && { conflicts: parsed.conflicts ?? [] }),
                 } as StagedAction);
               }
               if (parsed.done) {
@@ -261,6 +283,10 @@ export default function HelpPage() {
       if (actionType === 'booking_upsert') {
         const id = data.data?.id ?? data.booking?.id ?? '';
         successMsg = `Show saved!${id ? ` Booking ID: \`${id}\`` : ''}`;
+      } else if (actionType === 'venue_and_booking_upsert') {
+        const venueId = data.data?.venue?.id ?? '';
+        const bookingId = data.data?.booking?.id ?? '';
+        successMsg = `Venue and show saved!${venueId ? ` Venue ID: \`${venueId}\`` : ''}${bookingId ? ` · Booking ID: \`${bookingId}\`` : ''}`;
       } else if (actionType === 'tour_notes_update') {
         successMsg = 'Tour notes updated!';
       } else if (actionType === 'expense_insert') {
@@ -413,6 +439,8 @@ export default function HelpPage() {
                       ? (stagedAction.proposal.booking_id ? 'Update Show' : 'New Show Proposal')
                       : stagedAction.action_type === 'tour_notes_update'
                       ? 'Update Tour Notes'
+                      : stagedAction.action_type === 'venue_and_booking_upsert'
+                      ? 'New Venue + Show'
                       : 'New Expense'}
                   </div>
                   <div style={styles.stagedCardBody}>
@@ -508,9 +536,76 @@ export default function HelpPage() {
                         </div>
                       )}
                     </>)}
+                    {stagedAction.action_type === 'venue_and_booking_upsert' && (<>
+                      <div style={{ ...styles.stagedCardRow, marginBottom: '0.25rem' }}>
+                        <span style={{ ...styles.stagedCardLabel, color: '#C8921A', fontWeight: 700 }}>New Venue</span>
+                        <span style={{ fontWeight: 600 }}>
+                          {stagedAction.proposal.venue_name} — {stagedAction.proposal.venue_city}, {stagedAction.proposal.venue_state}
+                        </span>
+                      </div>
+                      {stagedAction.proposal.venue_type && (
+                        <div style={styles.stagedCardRow}>
+                          <span style={styles.stagedCardLabel}>Type</span>
+                          <span>{stagedAction.proposal.venue_type}</span>
+                        </div>
+                      )}
+                      {stagedAction.proposal.venue_capacity != null && (
+                        <div style={styles.stagedCardRow}>
+                          <span style={styles.stagedCardLabel}>Capacity</span>
+                          <span>{stagedAction.proposal.venue_capacity.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {stagedAction.proposal.venue_booking_contact && (
+                        <div style={styles.stagedCardRow}>
+                          <span style={styles.stagedCardLabel}>Contact</span>
+                          <span>{stagedAction.proposal.venue_booking_contact}</span>
+                        </div>
+                      )}
+                      <div style={{ height: '0.35rem' }} />
+                      <div style={{ ...styles.stagedCardRow, marginBottom: '0.25rem' }}>
+                        <span style={{ ...styles.stagedCardLabel, color: '#C8921A', fontWeight: 700 }}>Show</span>
+                        <span style={{ fontWeight: 600 }}>{stagedAction.proposal.show_date}</span>
+                      </div>
+                      {stagedAction.proposal.tour_name && (
+                        <div style={styles.stagedCardRow}>
+                          <span style={styles.stagedCardLabel}>Tour</span>
+                          <span>{stagedAction.proposal.tour_name}</span>
+                        </div>
+                      )}
+                      {stagedAction.proposal.status && (
+                        <div style={styles.stagedCardRow}>
+                          <span style={styles.stagedCardLabel}>Status</span>
+                          <span style={styles.stagedCardBadge}>{stagedAction.proposal.status}</span>
+                        </div>
+                      )}
+                      {stagedAction.proposal.fee != null && (
+                        <div style={styles.stagedCardRow}>
+                          <span style={styles.stagedCardLabel}>Fee</span>
+                          <span>${stagedAction.proposal.fee.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {stagedAction.proposal.load_in_time && (
+                        <div style={styles.stagedCardRow}>
+                          <span style={styles.stagedCardLabel}>Load-in</span>
+                          <span>{stagedAction.proposal.load_in_time}</span>
+                        </div>
+                      )}
+                      {stagedAction.proposal.set_time && (
+                        <div style={styles.stagedCardRow}>
+                          <span style={styles.stagedCardLabel}>Set time</span>
+                          <span>{stagedAction.proposal.set_time}</span>
+                        </div>
+                      )}
+                      {stagedAction.proposal.deal_notes && (
+                        <div style={styles.stagedCardRow}>
+                          <span style={styles.stagedCardLabel}>Notes</span>
+                          <span style={{ fontStyle: 'italic', color: '#A0AABB' }}>{stagedAction.proposal.deal_notes}</span>
+                        </div>
+                      )}
+                    </>)}
                   </div>
 
-                  {stagedAction.action_type === 'booking_upsert' && stagedAction.conflicts.length > 0 && (
+                  {(stagedAction.action_type === 'booking_upsert' || stagedAction.action_type === 'venue_and_booking_upsert') && stagedAction.conflicts.length > 0 && (
                     <div style={styles.conflictBanner}>
                       <strong>Date conflict:</strong> you already have{' '}
                       {stagedAction.conflicts.map((c) =>

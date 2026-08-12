@@ -122,6 +122,56 @@ export const STAGE_EXPENSE_TOOL = {
   },
 };
 
+export const STAGE_VENUE_AND_BOOKING_TOOL = {
+  name: 'stage_venue_and_booking',
+  description:
+    "Propose creating a NEW venue AND a show in one confirmed step. Use this ONLY when find_venue " +
+    "returned no match AND the user has provided at minimum a venue name, city, AND state. If city " +
+    "or state are missing, ask the user for them first — never call this tool with blank city or " +
+    "state, as both are NOT NULL in the database. Does NOT write to the database — stages a combined " +
+    "proposal the user must confirm. If tour context is needed, call find_tour first.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      venue_name:            { type: 'string', description: 'Full venue name. Required.' },
+      venue_city:            { type: 'string', description: 'City. Required — NOT NULL.' },
+      venue_state:           { type: 'string', description: 'State/province abbreviation. Required — NOT NULL.' },
+      venue_address:         { type: 'string' },
+      venue_zip:             { type: 'string' },
+      venue_phone:           { type: 'string' },
+      venue_email:           { type: 'string' },
+      venue_website:         { type: 'string' },
+      venue_type:            { type: 'string' },
+      venue_capacity:        { type: 'number' },
+      venue_booking_contact: { type: 'string' },
+      venue_notes:           { type: 'string' },
+      show_date:             { type: 'string', description: 'ISO date YYYY-MM-DD. Required.' },
+      entry_type: {
+        type: 'string',
+        enum: ['show', 'travel'],
+        description: 'Defaults to "show".',
+      },
+      status: {
+        type: 'string',
+        enum: ['pitch', 'followup', 'negotiation', 'hold', 'contract', 'confirmed', 'advancing', 'completed', 'cancelled'],
+      },
+      tour_id:               { type: 'string', description: 'UUID from find_tour.' },
+      fee:                   { type: 'number' },
+      deal_notes:            { type: 'string' },
+      load_in_time:          { type: 'string', description: 'HH:MM 24-hour.' },
+      soundcheck_time:       { type: 'string', description: 'HH:MM 24-hour.' },
+      set_time:              { type: 'string', description: 'HH:MM 24-hour.' },
+      end_time:              { type: 'string', description: 'HH:MM 24-hour.' },
+      venue_contact_name:    { type: 'string' },
+      sound_system:          { type: 'string' },
+      lodging_details:       { type: 'string' },
+      special_requirements:  { type: 'string' },
+      notes:                 { type: 'string' },
+    },
+    required: ['venue_name', 'venue_city', 'venue_state', 'show_date'],
+  },
+};
+
 export async function execFindVenue(actId: string, args: { name?: string; city?: string }) {
   let query = supabase.from('venues').select('id, name, city, state').eq('act_id', actId).limit(5);
   if (args.name) query = query.ilike('name', `%${args.name}%`);
@@ -266,6 +316,104 @@ export async function execStageTourNotesUpdate(
   if (stageErr) throw new Error(`Failed to stage proposal: ${stageErr.message}`);
 
   return { action_type: 'tour_notes_update' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
+}
+
+export async function execStageVenueAndBooking(
+  actId: string,
+  userId: string,
+  args: {
+    venue_name: string;
+    venue_city: string;
+    venue_state: string;
+    venue_address?: string;
+    venue_zip?: string;
+    venue_phone?: string;
+    venue_email?: string;
+    venue_website?: string;
+    venue_type?: string;
+    venue_capacity?: number;
+    venue_booking_contact?: string;
+    venue_notes?: string;
+    show_date: string;
+    entry_type?: string;
+    status?: string;
+    tour_id?: string;
+    fee?: number;
+    deal_notes?: string;
+    load_in_time?: string;
+    soundcheck_time?: string;
+    set_time?: string;
+    end_time?: string;
+    venue_contact_name?: string;
+    sound_system?: string;
+    lodging_details?: string;
+    special_requirements?: string;
+    notes?: string;
+  }
+) {
+  if (!args.venue_name?.trim()) throw new Error('venue_name is required.');
+  if (!args.venue_city?.trim()) throw new Error('venue_city is required (NOT NULL). Ask the user for the city first.');
+  if (!args.venue_state?.trim()) throw new Error('venue_state is required (NOT NULL). Ask the user for the state first.');
+
+  let tourName: string | null = null;
+  if (args.tour_id) {
+    const tour = await verifyTourOwnership(actId, args.tour_id);
+    tourName = tour.name;
+  }
+
+  const { data: conflicts, error: conflictErr } = await supabase
+    .from('bookings')
+    .select('id, status, venues:venue_id(name, city, state)')
+    .eq('act_id', actId)
+    .eq('show_date', args.show_date)
+    .neq('status', 'cancelled');
+  if (conflictErr) throw new Error(`Conflict check failed: ${conflictErr.message}`);
+
+  const payload = {
+    venue_name:    args.venue_name.trim(),
+    venue_city:    args.venue_city.trim(),
+    venue_state:   args.venue_state.trim(),
+    ...(args.venue_address         && { venue_address: args.venue_address }),
+    ...(args.venue_zip             && { venue_zip: args.venue_zip }),
+    ...(args.venue_phone           && { venue_phone: args.venue_phone }),
+    ...(args.venue_email           && { venue_email: args.venue_email }),
+    ...(args.venue_website         && { venue_website: args.venue_website }),
+    ...(args.venue_type            && { venue_type: args.venue_type }),
+    ...(args.venue_capacity != null && { venue_capacity: args.venue_capacity }),
+    ...(args.venue_booking_contact && { venue_booking_contact: args.venue_booking_contact }),
+    ...(args.venue_notes           && { venue_notes: args.venue_notes }),
+    show_date:  args.show_date,
+    entry_type: args.entry_type ?? 'show',
+    status:     args.status ?? 'hold',
+    ...(args.tour_id              && { tour_id: args.tour_id }),
+    ...(tourName                  && { tour_name: tourName }),
+    ...(args.fee != null          && { fee: args.fee }),
+    ...(args.deal_notes           && { deal_notes: args.deal_notes }),
+    ...(args.load_in_time         && { load_in_time: args.load_in_time }),
+    ...(args.soundcheck_time      && { soundcheck_time: args.soundcheck_time }),
+    ...(args.set_time             && { set_time: args.set_time }),
+    ...(args.end_time             && { end_time: args.end_time }),
+    ...(args.venue_contact_name   && { venue_contact_name: args.venue_contact_name }),
+    ...(args.sound_system         && { sound_system: args.sound_system }),
+    ...(args.lodging_details      && { lodging_details: args.lodging_details }),
+    ...(args.special_requirements && { special_requirements: args.special_requirements }),
+    ...(args.notes                && { notes: args.notes }),
+  };
+
+  const { data: staged, error: stageErr } = await supabase
+    .from('ai_staged_actions')
+    .insert({ act_id: actId, created_by: userId, action_type: 'venue_and_booking_upsert', payload })
+    .select()
+    .single();
+  if (stageErr) throw new Error(`Failed to stage proposal: ${stageErr.message}`);
+
+  return {
+    action_type: 'venue_and_booking_upsert' as const,
+    staged_action_id: staged.id,
+    proposal: payload,
+    conflicts: conflicts ?? [],
+    requires_confirmation: true,
+  };
 }
 
 export async function execStageExpense(

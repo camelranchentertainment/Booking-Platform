@@ -115,6 +115,68 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (error) throw error;
           result = data;
         }
+      } else if (staged.action_type === 'venue_and_booking_upsert') {
+        // Insert venue first, then booking. If booking insert fails, delete the
+        // venue to avoid a dangling row (compensating rollback — Supabase JS client
+        // does not support multi-statement transactions natively).
+        const { data: venue, error: venueErr } = await supabase
+          .from('venues')
+          .insert({
+            act_id:           profile.act_id,
+            name:             p.venue_name,
+            city:             p.venue_city,
+            state:            p.venue_state,
+            address:          p.venue_address   ?? null,
+            zip:              p.venue_zip        ?? null,
+            phone:            p.venue_phone      ?? null,
+            email:            p.venue_email      ?? null,
+            website:          p.venue_website    ?? null,
+            venue_type:       p.venue_type       ?? null,
+            capacity:         p.venue_capacity   ?? null,
+            booking_contact:  p.venue_booking_contact ?? null,
+            notes:            p.venue_notes      ?? null,
+            source:           'ai_agent',
+          })
+          .select('id, name, city, state')
+          .single();
+        if (venueErr) throw venueErr;
+
+        let booking: unknown;
+        try {
+          const { data: bk, error: bkErr } = await supabase
+            .from('bookings')
+            .insert({
+              act_id:               profile.act_id,
+              created_by:           user.id,
+              venue_id:             venue.id,
+              show_date:            p.show_date,
+              entry_type:           p.entry_type           ?? 'show',
+              tour_id:              p.tour_id              ?? null,
+              status:               p.status               ?? 'hold',
+              fee:                  p.fee                  ?? null,
+              deal_notes:           p.deal_notes           ?? null,
+              load_in_time:         p.load_in_time         ?? null,
+              soundcheck_time:      p.soundcheck_time      ?? null,
+              set_time:             p.set_time             ?? null,
+              end_time:             p.end_time             ?? null,
+              venue_contact_name:   p.venue_contact_name   ?? null,
+              sound_system:         p.sound_system         ?? null,
+              lodging_details:      p.lodging_details      ?? null,
+              special_requirements: p.special_requirements ?? null,
+              notes:                p.notes                ?? null,
+              source:               'ai_agent',
+            })
+            .select()
+            .single();
+          if (bkErr) throw bkErr;
+          booking = bk;
+        } catch (bookingErr) {
+          // Compensating delete — remove the venue we just inserted.
+          await supabase.from('venues').delete().eq('id', venue.id);
+          throw bookingErr;
+        }
+
+        result = { venue, booking };
       } else if (staged.action_type === 'tour_notes_update') {
         const { data, error } = await supabase
           .from('tours')
