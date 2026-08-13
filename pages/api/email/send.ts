@@ -3,6 +3,7 @@ import { Resend } from 'resend';
 import { getServiceClient } from '../../../lib/supabase';
 import { updateVenueStatus } from '../../../lib/statusSync';
 import type { OutreachStatus } from '../../../lib/types';
+import { sendViaGmail } from '../../../lib/gmailSend';
 
 async function getResendConfig(service: ReturnType<typeof getServiceClient>) {
   if (process.env.RESEND_API_KEY) {
@@ -84,13 +85,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let from = `Camel Ranch Booking <bookings@camelranchbooking.com>`;
   let replyTo: string | undefined;
 
+  let gmailConnected = false;
+
   if (effectiveActId) {
     // 1. Get act name + contact_email fallback
     const { data: act } = await service
       .from('acts')
-      .select('act_name, contact_email')
+      .select('act_name, contact_email, gmail_address, google_refresh_token')
       .eq('id', effectiveActId)
       .single();
+
+    gmailConnected = Boolean(
+       act?.gmail_address && act?.google_refresh_token
+    );  
 
     if (act?.act_name) {
       from = `${act.act_name} <bookings@camelranchbooking.com>`;
@@ -116,13 +123,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const resend = new Resend(apiKey);
 
-  try {
-    const sendPayload: Parameters<typeof resend.emails.send>[0] = { from, to, subject, html };
-    if (replyTo) sendPayload.replyTo = replyTo;
-    const { data, error } = await resend.emails.send(sendPayload);
-    if (error) return res.status(500).json({ error: error.message });
+try {
+  let providerMessageId: string | null = null;
 
-    const now = new Date().toISOString();
+  if (gmailConnected) {
+    await sendViaGmail(
+      effectiveActId,
+      to,
+      subject,
+      html,
+    );
+  } else {
+    const sendPayload: Parameters<typeof resend.emails.send>[0] = {
+      from,
+      to,
+      subject,
+      html,
+    };
+
+    if (replyTo) {
+      sendPayload.replyTo = replyTo;
+    }
+
+    const { data, error } = await resend.emails.send(sendPayload);
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    providerMessageId = data?.id ?? null;
+  }
+
+  const now = new Date().toISOString();
 
     // Step 1 — Log to email_log
     await service.from('email_log').insert({
@@ -134,7 +166,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       act_id:        effectiveActId || null,
       template_id:   templateId     || null,
       category:      category       || null,
-      resend_id:     data?.id       || null,
+      resend_id:     providerMessageId,
       subject,
       body:          bodyPreview  || null,
       recipient:     to,
@@ -260,7 +292,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       read:       false,
     });
 
-    return res.status(200).json({ ok: true, id: data?.id });
+    return res.status(200).json({
+  ok: true,
+  id: providerMessageId,
+  provider: gmailConnected ? 'gmail' : 'resend',
+});
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
