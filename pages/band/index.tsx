@@ -44,6 +44,7 @@ export default function BandDashboard() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [targetsCount, setTargetsCount]   = useState(0);
   const [confirmedCount, setConfirmedCount] = useState(0);
+  const [confirmedTotalCount, setConfirmedTotalCount] = useState(0);
   const [toursCount, setToursCount]     = useState(0);
   const [loading, setLoading]           = useState(true);
 
@@ -116,16 +117,19 @@ export default function BandDashboard() {
         const tourIdsRes = await supabase.from('tours').select('id').eq('act_id', actId).neq('status', 'cancelled');
         const tourIds = (tourIdsRes.data || []).map((t: any) => t.id);
 
-        const [tvTargetRes, confirmedRes, toursRes] = await Promise.all([
+        const today = new Date().toISOString().slice(0, 10);
+        const [tvTargetRes, confirmedRes, confirmedTotalRes, toursRes] = await Promise.all([
           tourIds.length
             ? supabase.from('tour_venues').select('id', { count: 'exact', head: true }).in('tour_id', tourIds).eq('status', 'target')
             : Promise.resolve({ count: 0 }),
+          supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('act_id', actId).eq('status', 'confirmed').gte('show_date', today),
           supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('act_id', actId).in('status', ['confirmed', 'completed']),
           supabase.from('tours').select('id', { count: 'exact', head: true }).eq('act_id', actId).in('status', ['planning', 'active']),
         ]);
 
         setTargetsCount((tvTargetRes as any).count ?? 0);
         setConfirmedCount((confirmedRes as any).count ?? 0);
+        setConfirmedTotalCount((confirmedTotalRes as any).count ?? 0);
         setToursCount((toursRes as any).count ?? 0);
       }
     } catch (err) {
@@ -501,7 +505,7 @@ export default function BandDashboard() {
           <div className="dash-stats-grid">
             {([
               { label: 'TARGETS',   value: targetsCount,   sub: 'venues in target list',   href: '/email?tab=outreach&status=target',    color: '#6B8FB5' },
-              { label: 'CONFIRMED', value: confirmedCount, sub: 'upcoming confirmed shows', href: '/email?tab=outreach&status=confirmed', color: '#4CAF50' },
+              { label: 'CONFIRMED', value: confirmedCount, sub: 'upcoming confirmed shows', href: '/email?tab=outreach&status=confirmed', color: '#4CAF50', total: confirmedTotalCount, totalSub: 'total confirmed + completed' },
               { label: 'TOURS',     value: toursCount,     sub: 'planning or active',       href: '/tours',                               color: '#60a5fa' },
             ] as any[]).map(card => (
               <Link key={card.label} href={card.href} style={{ textDecoration: 'none', display: 'block', padding: '1.25rem 1.5rem', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderTop: `3px solid ${card.color}`, position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s, box-shadow 0.15s', cursor: 'pointer' }}
@@ -514,6 +518,9 @@ export default function BandDashboard() {
                 }
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.5rem' }}>{card.label}</div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginTop: '0.2rem' }}>{card.sub}</div>
+                {card.total != null && !loading && (
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: '0.4rem' }}>{card.total} {card.totalSub}</div>
+                )}
               </Link>
             ))}
           </div>
