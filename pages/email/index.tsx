@@ -147,6 +147,7 @@ export default function EmailPage() {
   // Composers / drawers
   const [composerTourVenue, setComposerTourVenue] = useState<any>(null);
   const [composerBooking, setComposerBooking]     = useState<any>(null);
+  const [composerNew, setComposerNew] = useState(false);
   const [composerCategory, setComposerCategory]   = useState('target');
   const [drawerVenueId, setDrawerVenueId]         = useState<string | null>(null);
 
@@ -458,11 +459,20 @@ export default function EmailPage() {
   return (
     <AppShell requireRole="band_admin">
       <div className="page-header">
-        <div>
-          <h1 className="page-title">Email &amp; Pipeline</h1>
-          <div className="page-sub">{allTourVenues.length} venues in pipeline · {inboxCount} inbox</div>
-        </div>
-      </div>
+  <div>
+    <h1 className="page-title">Email &amp; Pipeline</h1>
+    <div className="page-sub">
+      {allTourVenues.length} venues in pipeline · {inboxCount} inbox
+    </div>
+  </div>
+
+  <button
+    className="btn btn-primary"
+    onClick={() => setComposerNew(true)}
+  >
+    + New Email
+  </button>
+</div>
 
       {/* ── Tab Bar ── */}
       <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
@@ -1109,6 +1119,17 @@ export default function EmailPage() {
       )}
 
       {/* ══ Composers ══ */}
+      {composerNew && actId && (
+  <EmailComposer
+    actId={actId}
+    defaultCategory="target"
+    onClose={() => {
+      setComposerNew(false);
+      loadAll();
+    }}
+  />
+)}
+
       {composerTourVenue && (
         <EmailComposer
           tourVenueId={composerTourVenue.id}
