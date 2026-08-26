@@ -531,3 +531,151 @@ export async function execStageExpense(
 
   return { action_type: 'expense_insert' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Calendar settings — sync toggle + display name ONLY.
+// NEVER read or write google_access_token, google_refresh_token,
+// calendar_api_key, or ical_url — those are credentials, not settings, and
+// must never pass through the AI agent in either direction.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const CALENDAR_SETTINGS_UPDATE_TOOL = {
+  name: 'stage_calendar_settings_update',
+  description:
+    "Propose turning this act's Google Calendar sync on/off, and/or changing its display calendar " +
+    "name. Does NOT write to the database — stages a proposal for the user to confirm. Never touches " +
+    "credentials or tokens; only sync_enabled and calendar_name are ever read or written.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      sync_enabled: { type: 'boolean', description: 'Turn calendar sync on (true) or off (false).' },
+      calendar_name: { type: 'string', description: 'Display name for the synced calendar.' },
+    },
+  },
+};
+
+export async function execStageCalendarSettingsUpdate(
+  actId: string,
+  userId: string,
+  args: { sync_enabled?: boolean; calendar_name?: string }
+) {
+  if (args.sync_enabled === undefined && args.calendar_name === undefined) {
+    throw new Error('Nothing to change — specify sync_enabled and/or calendar_name.');
+  }
+
+  const { data: current, error: curErr } = await supabase
+    .from('acts')
+    .select('sync_enabled, calendar_name')
+    .eq('id', actId)
+    .maybeSingle();
+  if (curErr) throw new Error(`Lookup failed: ${curErr.message}`);
+  if (!current) throw new Error('Act not found.');
+
+  // Explicit whitelist — only these two fields, ever, regardless of what args contains.
+  const payload = {
+    sync_enabled: args.sync_enabled !== undefined ? args.sync_enabled : current.sync_enabled,
+    calendar_name: args.calendar_name !== undefined ? args.calendar_name : current.calendar_name,
+    previous_sync_enabled: current.sync_enabled,
+    previous_calendar_name: current.calendar_name,
+  };
+
+  const { data: staged, error: stageErr } = await supabase
+    .from('ai_staged_actions')
+    .insert({ act_id: actId, created_by: userId, action_type: 'calendar_settings_update', payload })
+    .select()
+    .single();
+  if (stageErr) throw new Error(`Failed to stage proposal: ${stageErr.message}`);
+
+  return { action_type: 'calendar_settings_update' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Roster / personnel management — act_personnel only.
+// Deliberately excludes act_invitations: inviting someone to actually log
+// in and access the platform is a materially bigger action than adding a
+// roster entry, and stays a manual, explicit click on the Members page
+// (pages/band/members.tsx → "Invite to log in"), not something the AI
+// agent ever proposes or executes.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const FIND_PERSONNEL_TOOL = {
+  name: 'find_personnel',
+  description:
+    "Search this act's roster by name to get a personnel_id before updating an existing entry. " +
+    "Read-only, safe to call freely. Omit when adding someone new.",
+  input_schema: {
+    type: 'object',
+    properties: { name: { type: 'string' } },
+    required: ['name'],
+  },
+};
+
+export const PERSONNEL_UPSERT_TOOL = {
+  name: 'stage_personnel_upsert',
+  description:
+    "Propose adding a new roster member or updating an existing one's details (role, pay rate, " +
+    "contact info, active status). Does NOT write to the database, and does NOT invite anyone to log " +
+    "in or grant platform access — that stays a separate manual step on the Members page. Always call " +
+    "find_personnel first when updating an existing person.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      personnel_id: { type: 'string', description: 'UUID from find_personnel. Omit when adding someone new.' },
+      name: { type: 'string' },
+      instrument_role: { type: 'string', description: 'e.g. "Guitar", "Drums", "Sound Engineer".' },
+      default_pay_amount: { type: 'number' },
+      phone: { type: 'string' },
+      email: { type: 'string' },
+      is_active: { type: 'boolean' },
+    },
+  },
+};
+
+export async function execFindPersonnel(actId: string, name: string) {
+  const { data, error } = await supabase
+    .from('act_personnel')
+    .select('id, name, instrument_role, default_pay_amount, phone, email, is_active')
+    .eq('act_id', actId)
+    .ilike('name', `%${name}%`)
+    .limit(5);
+  if (error) throw new Error(`Roster search failed: ${error.message}`);
+  return data ?? [];
+}
+
+export async function execStagePersonnelUpsert(
+  actId: string,
+  userId: string,
+  args: {
+    personnel_id?: string;
+    name?: string;
+    instrument_role?: string;
+    default_pay_amount?: number;
+    phone?: string;
+    email?: string;
+    is_active?: boolean;
+  }
+) {
+  if (args.personnel_id) {
+    const { data: existing, error: existErr } = await supabase
+      .from('act_personnel')
+      .select('id')
+      .eq('id', args.personnel_id)
+      .eq('act_id', actId)
+      .maybeSingle();
+    if (existErr) throw new Error(`Lookup failed: ${existErr.message}`);
+    if (!existing) throw new Error("That roster entry wasn't found for this band.");
+  } else if (!args.name) {
+    throw new Error('A name is required when adding a new roster member.');
+  }
+
+  const payload = { ...args };
+
+  const { data: staged, error: stageErr } = await supabase
+    .from('ai_staged_actions')
+    .insert({ act_id: actId, created_by: userId, action_type: 'personnel_upsert', payload })
+    .select()
+    .single();
+  if (stageErr) throw new Error(`Failed to stage proposal: ${stageErr.message}`);
+
+  return { action_type: 'personnel_upsert' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
+}
