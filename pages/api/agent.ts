@@ -9,7 +9,10 @@ import {
   execStageBookingUpsert,
   execStageTourNotesUpdate,
   execStageExpense,
+  execStageTourInsert,
+  execStageVenueAndBooking,
 } from '../../lib/aiAgentTools';
+import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { formatShowDate } from '../../lib/formatDate';
 
 export const config = { api: { bodyParser: { sizeLimit: '5mb' } } };
@@ -18,8 +21,14 @@ export const config = { api: { bodyParser: { sizeLimit: '5mb' } } };
 const SYSTEM_PROMPT = `You are an AI booking agent for Camel Ranch Booking. You help DIY bands book shows.
 Be direct, confident, and concise. Music industry voice. Bold key numbers with **asterisks**.
 
-You can: answer pipeline questions, draft outreach, find venues, queue bulk email batches (with user
-approval first), and propose adding/updating shows, travel days, tour notes, and projected expenses
+You have full platform reference documentation in a separate system block below (feature guides, common
+workflows, troubleshooting). When the user asks a "how do I..." or "what is..." question about the
+platform itself, answer it directly and confidently in plain text using that documentation — do not
+deflect to a separate help page, and do not say you don't know how the platform works.
+
+You can: answer pipeline questions, answer platform how-to questions, draft outreach, find venues, queue
+bulk email batches (with user approval first), and propose creating tours and adding/updating shows,
+travel days, tour notes, and projected expenses
 (with user approval first — you never write directly).
 
 CRITICAL FORMATTING RULE:
@@ -34,17 +43,24 @@ For bulk tour outreach ("send emails to targets on [tour]", "blast the Spring To
 For city venue search ("find venues in Tulsa", "what clubs are in Nashville for July 4th", etc.):
 {"reply":"<conversational text>","action":{"type":"city_search","city":"<city>","state":"<2-letter state>","dateRange":"<parsed range or empty>"}}
 
+For creating a brand new tour ("create a tour called X", "start a new tour for these dates", or when the
+user wants to add shows/notes to a tour that doesn't exist yet):
+{"reply":"<conversational text confirming the new tour details>","action":{"type":"tour_create","name":"<tour name>","start_date":"YYYY-MM-DD","end_date":"YYYY-MM-DD","description":"<optional>"}}
+After the user confirms a tour_create proposal and it's saved, you can then use stage_items against that
+same tour name in a follow-up message — it will now be found.
+
 For adding/updating a tour's itinerary, notes, or budget ("add a show at X on Y", "add a travel day",
 "log the Sturgis tour notes", "add a projected expense for groceries"), respond with an array so a user
 can describe several things (4 shows, 2 travel days, notes, a budget line) in one message:
 {"reply":"<conversational text summarizing what you're proposing>","action":{"type":"stage_items","tourName":"<tour name, required — ask the user if unclear>","items":[
-  {"kind":"show","venueName":"<venue name>","date":"YYYY-MM-DD","setTime":"HH:MM","loadInTime":"HH:MM","soundcheckTime":"HH:MM","endTime":"HH:MM","notes":"<optional>"},
+  {"kind":"show","venueName":"<venue name>","venueCity":"<city, only if venue is new>","venueState":"<state, only if venue is new>","date":"YYYY-MM-DD","setTime":"HH:MM","loadInTime":"HH:MM","soundcheckTime":"HH:MM","endTime":"HH:MM","notes":"<optional>"},
   {"kind":"travel","date":"YYYY-MM-DD","notes":"<travel plan text>"},
   {"kind":"tour_notes","notes":"<full replacement text for the tour's notes>"},
   {"kind":"expense","category":"<e.g. Groceries>","amount":123.45,"date":"YYYY-MM-DD","status":"potential","notes":"<optional>"}
 ]}}
 Only include the fields you actually have values for on each item (all fields except kind/date are
-optional per item). Never invent a venue_id or tour_id — those get resolved server-side by name.
+optional per item). Never invent a venue_id or tour_id — those get resolved server-side by name. If a
+venue doesn't exist yet and you don't know its city/state, ask the user before staging that item.
 
 Always confirm the list BEFORE sending or saving anything. Wait for explicit approval.`;
 
@@ -207,6 +223,8 @@ async function resolveStageItems(
   items: Array<{
     kind: 'show' | 'travel' | 'tour_notes' | 'expense';
     venueName?: string;
+    venueCity?: string;
+    venueState?: string;
     date?: string;
     setTime?: string;
     loadInTime?: string;
@@ -235,7 +253,28 @@ async function resolveStageItems(
           if (!item.venueName) { errors.push('A show item is missing a venue name.'); continue; }
           const venues = await execFindVenue(actId, { name: item.venueName });
           if (!venues.length) {
-            errors.push(`No venue found matching "${item.venueName}" — add it to the venue list first.`);
+            if (item.venueCity && item.venueState) {
+              try {
+                const result = await execStageVenueAndBooking(actId, userId, {
+                  venue_name: item.venueName,
+                  venue_city: item.venueCity,
+                  venue_state: item.venueState,
+                  show_date: item.date || '',
+                  entry_type: 'show',
+                  set_time: item.setTime,
+                  load_in_time: item.loadInTime,
+                  soundcheck_time: item.soundcheckTime,
+                  end_time: item.endTime,
+                  notes: item.notes,
+                  tour_id: tour.id,
+                });
+                staged.push({ kind: 'venue_and_booking', ...result });
+              } catch (e: any) {
+                errors.push(e.message || `Couldn't stage "${item.venueName}".`);
+              }
+              continue;
+            }
+            errors.push(`No venue found matching "${item.venueName}" — what city and state is it in? I can add it and the show together.`);
             continue;
           }
           venue_id = venues[0].id;
@@ -323,6 +362,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       max_tokens: 2000,
       system: [
         { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+        { type: 'text', text: HELP_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
         { type: 'text', text: `Current pipeline context:\n\n${context}` },
       ],
       messages,
@@ -366,6 +406,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ? (parsed.reply || `Found **${result.venues.length}** venues in ${city}, ${state}.${result.activeTour ? ` I can add them to your "${result.activeTour.name}" tour.` : ''}`)
           : `No venues found in ${city}${state ? `, ${state}` : ''} that aren't already on your tour.`;
         return res.status(200).json({ reply: replyText, action: { type: 'city_search', ...result, dateRange: dateRange || '' } });
+      }
+
+      if (parsed?.action?.type === 'tour_create') {
+        const { name, start_date, end_date, description } = parsed.action;
+        try {
+          const result = await execStageTourInsert(actId, user.id, { name: name || '', start_date, end_date, description });
+          return res.status(200).json({
+            reply: parsed.reply || `Staged a new tour: "${name}"${start_date ? ` (${start_date}${end_date ? ` – ${end_date}` : ''})` : ''}. Confirm to save it.`,
+            action: { type: 'stage_items', staged: [{ kind: 'tour_create', ...result }], errors: [] },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that tour." });
+        }
       }
 
       if (parsed?.action?.type === 'stage_items') {
