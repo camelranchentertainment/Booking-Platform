@@ -35,6 +35,9 @@ const QUICK_CHIPS: { label: string; href?: string; prompt?: string }[] = [
   { label: 'Show confirmed shows',  href: '/bookings?filter=confirmed' },
   { label: 'Draft outreach email',  prompt: 'Help me draft a cold pitch outreach email for my next tour.' },
   { label: 'Help me plan a tour',   prompt: 'Help me plan a tour. What should I think about for routing, timing, and targeting venues?' },
+  { label: 'How do I invite a band member?', prompt: 'How do I invite a band member?' },
+  { label: 'How do I connect Google Calendar?', prompt: 'How do I connect Google Calendar?' },
+  { label: 'How do I set up email?', prompt: 'How do I set up email sending for outreach?' },
 ];
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -576,6 +579,7 @@ export default function BandDashboard() {
                       else if (item.kind === 'tour_notes') { const n = p.new_notes || ''; summary = `Tour notes: ${n.slice(0, 60)}${n.length > 60 ? '…' : ''}`; }
                       else if (item.kind === 'expense') summary = `Expense: ${p.category} — $${p.amount} (${p.status})`;
                       else if (item.kind === 'venue_and_booking') summary = `New venue + show: ${p.venue_name} (${p.venue_city}, ${p.venue_state}) — ${p.show_date}`;
+                      else if (item.kind === 'tour_create') summary = `New tour: ${p.name}${p.start_date ? ` (${p.start_date}${p.end_date ? ` – ${p.end_date}` : ''})` : ''}`;
                       const hasConflicts = item.conflicts?.length > 0;
                       return (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
