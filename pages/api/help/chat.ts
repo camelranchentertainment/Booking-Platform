@@ -2,27 +2,18 @@
 // Server-side API route for the Help AI chat bot.
 // Receives a conversation history and returns a streaming response
 // from Claude using the CRB platform knowledge base as the system prompt.
+//
+// NOTE: This endpoint is intentionally read-only / Q&A-only. It answers
+// "how do I..." questions about the platform. Write capability (creating
+// or updating bookings, tours, expenses, etc.) lives on the /band dashboard
+// agent (pages/api/agent.ts) instead — see that file for the tool-calling,
+// staged-write pattern. Do not add tools back to this endpoint; extend the
+// /band agent instead so there is one place users go to actually change data.
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { HELP_SYSTEM_PROMPT } from '../../../lib/helpSystemPrompt';
-import {
-  FIND_VENUE_TOOL,
-  BOOKING_UPSERT_TOOL,
-  FIND_TOUR_TOOL,
-  TOUR_NOTES_UPDATE_TOOL,
-  STAGE_EXPENSE_TOOL,
-  STAGE_VENUE_AND_BOOKING_TOOL,
-  STAGE_TOUR_INSERT_TOOL,
-  execFindVenue,
-  execFindTour,
-  execStageBookingUpsert,
-  execStageTourNotesUpdate,
-  execStageExpense,
-  execStageVenueAndBooking,
-  execStageTourInsert,
-} from '../../../lib/aiAgentTools';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -64,9 +55,6 @@ export default async function handler(
   }
 
   // Basic auth check — must have a valid session cookie or localStorage token.
-  // We use a lightweight check: require an Authorization header with the
-  // Supabase session token. The client sends this from getSession().
-  // This prevents unauthenticated access to the AI endpoint.
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Unauthorized' });
@@ -74,17 +62,9 @@ export default async function handler(
   }
   const token = authHeader.replace('Bearer ', '');
   const { data: { user } } = await supabase.auth.getUser(token);
-  const userId = user?.id ?? null;
-
-  // Resolve act_id so tool calls can be scoped to this band.
-  let actId: string | null = null;
-  if (userId) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('act_id')
-      .eq('id', userId)
-      .single();
-    actId = profile?.act_id ?? null;
+  if (!user) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
   }
 
   // Rate limit by IP
@@ -129,111 +109,28 @@ export default async function handler(
   });
 
   try {
-    // Use streaming so the UI can render tokens as they arrive
+    // True token-by-token streaming so the UI renders text as it arrives.
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no'); // disable Nginx buffering on Vercel
 
-    // Agentic loop: keep going until stop_reason is 'end_turn' (no more tool calls).
-    const tools = actId
-      ? [FIND_VENUE_TOOL, BOOKING_UPSERT_TOOL, FIND_TOUR_TOOL, TOUR_NOTES_UPDATE_TOOL, STAGE_EXPENSE_TOOL, STAGE_VENUE_AND_BOOKING_TOOL, STAGE_TOUR_INSERT_TOOL]
-      : [];
-    let loopMessages: Anthropic.MessageParam[] = trimmedMessages.map((m) => ({
+    const loopMessages: Anthropic.MessageParam[] = trimmedMessages.map((m) => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
     }));
-    const stagedActionEvents: Array<{ action_type: string } & Record<string, unknown>> = [];
 
-    while (true) {
-      const stream = await anthropic.messages.stream({
-        model: 'claude-haiku-4-5',
-        max_tokens: 1024,
-        system: HELP_SYSTEM_PROMPT,
-        messages: loopMessages,
-        ...(tools.length > 0 && { tools: tools as Anthropic.Tool[] }),
-      });
+    const stream = await anthropic.messages.stream({
+      model: 'claude-haiku-4-5',
+      max_tokens: 1024,
+      system: HELP_SYSTEM_PROMPT,
+      messages: loopMessages,
+    });
 
-      const response = await stream.finalMessage();
-
-      // Stream any text blocks to the client as they're in the final message.
-      for (const block of response.content) {
-        if (block.type === 'text') {
-          // Stream token-by-token isn't available after finalMessage; send as one chunk.
-          res.write(`data: ${JSON.stringify({ token: block.text })}\n\n`);
-        }
+    for await (const event of stream) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        res.write(`data: ${JSON.stringify({ token: event.delta.text })}\n\n`);
       }
-
-      if (response.stop_reason === 'end_turn' || response.stop_reason !== 'tool_use') {
-        break;
-      }
-
-      // Handle tool calls.
-      const toolUseBlocks = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
-
-      for (const toolUse of toolUseBlocks) {
-        let toolResult: unknown;
-        try {
-          if (toolUse.name === 'find_venue') {
-            toolResult = await execFindVenue(actId!, toolUse.input as { name?: string; city?: string });
-          } else if (toolUse.name === 'stage_booking_upsert') {
-            toolResult = await execStageBookingUpsert(actId!, userId!, toolUse.input as any);
-            const r = toolResult as any;
-            if (r?.requires_confirmation) {
-              stagedActionEvents.push(r);
-            }
-          } else if (toolUse.name === 'find_tour') {
-            toolResult = await execFindTour(actId!, (toolUse.input as { name?: string }).name);
-          } else if (toolUse.name === 'stage_tour_notes_update') {
-            toolResult = await execStageTourNotesUpdate(actId!, userId!, toolUse.input as { tour_id: string; notes: string });
-            const r = toolResult as any;
-            if (r?.requires_confirmation) {
-              stagedActionEvents.push(r);
-            }
-          } else if (toolUse.name === 'stage_expense') {
-            toolResult = await execStageExpense(actId!, userId!, toolUse.input as any);
-            const r = toolResult as any;
-            if (r?.requires_confirmation) {
-              stagedActionEvents.push(r);
-            }
-          } else if (toolUse.name === 'stage_venue_and_booking') {
-            toolResult = await execStageVenueAndBooking(actId!, userId!, toolUse.input as any);
-            const r = toolResult as any;
-            if (r?.requires_confirmation) {
-              stagedActionEvents.push(r);
-            }
-          } else if (toolUse.name === 'stage_tour_insert') {
-            toolResult = await execStageTourInsert(actId!, userId!, toolUse.input as any);
-            const r = toolResult as any;
-            if (r?.requires_confirmation) {
-              stagedActionEvents.push(r);
-            }
-          } else {
-            toolResult = { error: `Unknown tool: ${toolUse.name}` };
-          }
-        } catch (toolErr: any) {
-          toolResult = { error: toolErr.message ?? 'Tool call failed' };
-        }
-
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolUse.id,
-          content: JSON.stringify(toolResult),
-        });
-      }
-
-      // Append assistant turn + tool results and loop.
-      loopMessages = [
-        ...loopMessages,
-        { role: 'assistant', content: response.content },
-        { role: 'user', content: toolResults },
-      ];
-    }
-
-    // Emit staged action card events so the UI can render confirm buttons.
-    for (const ev of stagedActionEvents) {
-      res.write(`data: ${JSON.stringify({ type: 'staged_action', ...ev as object })}\n\n`);
     }
 
     // Signal stream completion
@@ -242,8 +139,6 @@ export default async function handler(
   } catch (err: unknown) {
     console.error('[help/chat] Anthropic API error:', err);
 
-    // If headers haven't been sent yet, send a JSON error.
-    // If streaming already started, send an error event and close.
     if (!res.headersSent) {
       res.status(500).json({ error: 'AI service error. Please try again.' });
     } else {
