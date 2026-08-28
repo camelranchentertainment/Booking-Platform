@@ -580,6 +580,8 @@ export default function BandDashboard() {
                       else if (item.kind === 'expense') summary = `Expense: ${p.category} — $${p.amount} (${p.status})`;
                       else if (item.kind === 'venue_and_booking') summary = `New venue + show: ${p.venue_name} (${p.venue_city}, ${p.venue_state}) — ${p.show_date}`;
                       else if (item.kind === 'tour_create') summary = `New tour: ${p.name}${p.start_date ? ` (${p.start_date}${p.end_date ? ` – ${p.end_date}` : ''})` : ''}`;
+                      else if (item.kind === 'calendar_settings_update') summary = `Calendar: ${p.sync_enabled !== undefined ? (p.sync_enabled ? 'sync ON' : 'sync OFF') : ''}${p.calendar_name ? ` · name: ${p.calendar_name}` : ''}`;
+                      else if (item.kind === 'personnel_upsert') summary = `Roster: ${p.name || '(unnamed)'}${p.instrument_role ? ` — ${p.instrument_role}` : ''}${p.default_pay_amount ? ` · $${p.default_pay_amount}` : ''}`;
                       const hasConflicts = item.conflicts?.length > 0;
                       return (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

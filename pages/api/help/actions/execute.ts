@@ -250,6 +250,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           .single();
         if (error) throw error;
         result = data;
+      } else if (staged.action_type === 'calendar_settings_update') {
+        // Explicit whitelist, defense in depth — these two fields ONLY. Never
+        // touch google_access_token, google_refresh_token, calendar_api_key, or
+        // ical_url here even if a future payload shape somehow included them.
+        const updatePayload: { sync_enabled?: boolean; calendar_name?: string } = {};
+        if (typeof p.sync_enabled === 'boolean') updatePayload.sync_enabled = p.sync_enabled;
+        if (typeof p.calendar_name === 'string') updatePayload.calendar_name = p.calendar_name;
+        const { data, error } = await supabase
+          .from('acts')
+          .update(updatePayload)
+          .eq('id', profile.act_id)
+          .select('id, sync_enabled, calendar_name')
+          .single();
+        if (error) throw error;
+        result = data;
+      } else if (staged.action_type === 'personnel_upsert') {
+        if (p.personnel_id) {
+          const { data, error } = await supabase
+            .from('act_personnel')
+            .update({
+              name: p.name ?? undefined,
+              instrument_role: p.instrument_role ?? undefined,
+              default_pay_amount: p.default_pay_amount ?? undefined,
+              phone: p.phone ?? undefined,
+              email: p.email ?? undefined,
+              is_active: typeof p.is_active === 'boolean' ? p.is_active : undefined,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', p.personnel_id)
+            .eq('act_id', profile.act_id)
+            .select()
+            .single();
+          if (error) throw error;
+          result = data;
+        } else {
+          const { data, error } = await supabase
+            .from('act_personnel')
+            .insert({
+              act_id: profile.act_id,
+              name: p.name,
+              instrument_role: p.instrument_role ?? null,
+              default_pay_amount: p.default_pay_amount ?? null,
+              phone: p.phone ?? null,
+              email: p.email ?? null,
+              is_active: p.is_active ?? true,
+            })
+            .select()
+            .single();
+          if (error) throw error;
+          result = data;
+        }
       } else {
         throw new Error(`Unknown action_type: ${staged.action_type}`);
       }

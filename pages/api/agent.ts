@@ -11,6 +11,9 @@ import {
   execStageExpense,
   execStageTourInsert,
   execStageVenueAndBooking,
+  execStageCalendarSettingsUpdate,
+  execFindPersonnel,
+  execStagePersonnelUpsert,
 } from '../../lib/aiAgentTools';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { formatShowDate } from '../../lib/formatDate';
@@ -61,6 +64,24 @@ can describe several things (4 shows, 2 travel days, notes, a budget line) in on
 Only include the fields you actually have values for on each item (all fields except kind/date are
 optional per item). Never invent a venue_id or tour_id — those get resolved server-side by name. If a
 venue doesn't exist yet and you don't know its city/state, ask the user before staging that item.
+
+For calendar sync settings ("turn on calendar sync", "disable sync", "rename my calendar to X"):
+{"reply":"<conversational text>","action":{"type":"calendar_settings_update","sync_enabled":true,"calendar_name":"<optional>"}}
+Only include the field(s) actually being changed. You never see and must never ask for or reference
+Google credentials, tokens, or API keys — those are configured outside this chat entirely.
+
+For roster/band member management ("add Jake as guitarist", "update Sarah's pay rate to $150",
+"add these 3 people to the roster", "mark Doc as inactive"):
+{"reply":"<conversational text>","action":{"type":"stage_personnel","items":[
+  {"personnel_id":"<uuid from find_personnel, only when updating someone existing>","name":"<required when adding new>","instrument_role":"<e.g. Guitar>","default_pay_amount":150,"phone":"<optional>","email":"<optional>","is_active":true}
+]}}
+Just give the person's name when updating someone existing — it's matched to their roster entry
+automatically; you don't need to look up an ID yourself. If more than one person matches that name,
+you'll be told and should ask the user to clarify. IMPORTANT: adding or updating a roster entry never invites that
+person to log in or grants them platform access — that is always a separate, manual step the user does
+themselves on the Members page. Never propose, offer, or claim to send an invite, a login link, or
+platform access of any kind, even if asked — tell the user to use "Invite to log in" on the Members
+page for that instead.
 
 Always confirm the list BEFORE sending or saving anything. Wait for explicit approval.`;
 
@@ -419,6 +440,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that tour." });
         }
+      }
+
+      if (parsed?.action?.type === 'calendar_settings_update') {
+        const { sync_enabled, calendar_name } = parsed.action;
+        try {
+          const result = await execStageCalendarSettingsUpdate(actId, user.id, { sync_enabled, calendar_name });
+          return res.status(200).json({
+            reply: parsed.reply || 'Staged that calendar settings change. Confirm to save it.',
+            action: { type: 'stage_items', staged: [{ kind: 'calendar_settings_update', ...result }], errors: [] },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that calendar change." });
+        }
+      }
+
+      if (parsed?.action?.type === 'stage_personnel') {
+        const items = (parsed.action.items || []) as Array<{
+          personnel_id?: string; name?: string; instrument_role?: string;
+          default_pay_amount?: number; phone?: string; email?: string; is_active?: boolean;
+        }>;
+        const staged: any[] = [];
+        const errors: string[] = [];
+        for (const item of items) {
+          try {
+            let personnel_id = item.personnel_id;
+            // Resolve name → existing entry server-side, same pattern as venue/tour lookups —
+            // the model doesn't call a separate tool for this in the JSON-action architecture.
+            if (!personnel_id && item.name) {
+              const matches = await execFindPersonnel(actId, item.name);
+              if (matches.length === 1) {
+                personnel_id = matches[0].id;
+              } else if (matches.length > 1) {
+                errors.push(`Multiple roster entries match "${item.name}" — which one did you mean?`);
+                continue;
+              }
+              // zero matches → falls through as a new addition, which is correct
+            }
+            const result = await execStagePersonnelUpsert(actId, user.id, { ...item, personnel_id });
+            staged.push({ kind: 'personnel_upsert', ...result });
+          } catch (e: any) {
+            errors.push(e.message || `Couldn't stage "${item.name || item.personnel_id}".`);
+          }
+        }
+        const replyText = staged.length
+          ? (parsed.reply || `Staged ${staged.length} roster change${staged.length !== 1 ? 's' : ''} for review.`)
+          : (errors[0] || 'Nothing could be staged.');
+        return res.status(200).json({ reply: replyText, action: { type: 'stage_items', staged, errors } });
       }
 
       if (parsed?.action?.type === 'stage_items') {
