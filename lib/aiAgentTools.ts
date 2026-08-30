@@ -265,10 +265,10 @@ export async function execStageBookingUpsert(
 ) {
   const entryType = args.entry_type ?? 'show';
 
-  // Venue lookup — required for shows, skipped for travel days.
+  // Venue lookup — required for NEW shows, skipped for travel days and for
+  // updates to an existing booking (booking_id present) where the venue isn't changing.
   let venueInfo: { name: string; city: string; state: string } | null = null;
-  if (entryType !== 'travel') {
-    if (!args.venue_id) throw new Error('venue_id is required for show entries. Call find_venue first.');
+  if (entryType !== 'travel' && args.venue_id) {
     const { data: venue, error: venueErr } = await supabase
       .from('venues')
       .select('id, name, city, state')
@@ -278,6 +278,8 @@ export async function execStageBookingUpsert(
     if (venueErr) throw new Error(`Venue lookup failed: ${venueErr.message}`);
     if (!venue) throw new Error("That venue wasn't found in this band's database.");
     venueInfo = { name: venue.name, city: venue.city, state: venue.state };
+  } else if (entryType !== 'travel' && !args.venue_id && !args.booking_id) {
+    throw new Error('venue_id is required for new show entries. Call find_venue first.');
   }
 
   // Verify tour ownership when a tour_id is provided.
@@ -290,12 +292,21 @@ export async function execStageBookingUpsert(
   if (args.booking_id) {
     const { data: existing, error: existingErr } = await supabase
       .from('bookings')
-      .select('id')
+      .select('id, show_date, venues:venue_id(name, city, state)')
       .eq('id', args.booking_id)
       .eq('act_id', actId)
       .maybeSingle();
     if (existingErr) throw new Error(`Booking lookup failed: ${existingErr.message}`);
     if (!existing) throw new Error("That booking wasn't found for this band.");
+    // If no new venue was supplied, use the existing show's venue for display purposes
+    // so the confirm card shows real details (e.g. what's actually being cancelled).
+    if (!venueInfo && existing.venues) {
+      const v = existing.venues as any;
+      venueInfo = { name: v.name, city: v.city, state: v.state };
+    }
+    if (!args.show_date && existing.show_date) {
+      args.show_date = existing.show_date;
+    }
   }
 
   const { data: conflicts, error: conflictErr } = await supabase

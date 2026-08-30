@@ -11,9 +11,6 @@ import {
   execStageExpense,
   execStageTourInsert,
   execStageVenueAndBooking,
-  execStageCalendarSettingsUpdate,
-  execFindPersonnel,
-  execStagePersonnelUpsert,
 } from '../../lib/aiAgentTools';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { formatShowDate } from '../../lib/formatDate';
@@ -65,23 +62,16 @@ Only include the fields you actually have values for on each item (all fields ex
 optional per item). Never invent a venue_id or tour_id — those get resolved server-side by name. If a
 venue doesn't exist yet and you don't know its city/state, ask the user before staging that item.
 
-For calendar sync settings ("turn on calendar sync", "disable sync", "rename my calendar to X"):
-{"reply":"<conversational text>","action":{"type":"calendar_settings_update","sync_enabled":true,"calendar_name":"<optional>"}}
-Only include the field(s) actually being changed. You never see and must never ask for or reference
-Google credentials, tokens, or API keys — those are configured outside this chat entirely.
+To CANCEL or UPDATE an existing show (not create a new one), find it in the "Tours" section of your
+context below — each show is listed with its real id (e.g. "id=abc123"). Include that as "booking_id"
+on a "show" item, along with "status":"cancelled" (or whatever's changing). Don't include venueName in
+that case unless the venue is actually changing.
 
-For roster/band member management ("add Jake as guitarist", "update Sarah's pay rate to $150",
-"add these 3 people to the roster", "mark Doc as inactive"):
-{"reply":"<conversational text>","action":{"type":"stage_personnel","items":[
-  {"personnel_id":"<uuid from find_personnel, only when updating someone existing>","name":"<required when adding new>","instrument_role":"<e.g. Guitar>","default_pay_amount":150,"phone":"<optional>","email":"<optional>","is_active":true}
-]}}
-Just give the person's name when updating someone existing — it's matched to their roster entry
-automatically; you don't need to look up an ID yourself. If more than one person matches that name,
-you'll be told and should ask the user to clarify. IMPORTANT: adding or updating a roster entry never invites that
-person to log in or grants them platform access — that is always a separate, manual step the user does
-themselves on the Members page. Never propose, offer, or claim to send an invite, a login link, or
-platform access of any kind, even if asked — tell the user to use "Invite to log in" on the Members
-page for that instead.
+If you don't have the specific data needed to answer something (a tour's shows aren't in your context,
+a number isn't available, etc.), say so plainly and ask the user for what's missing, or ask them to
+confirm the tour/show name so it can be found. Never invent a person to contact, a workaround, or a
+capability that isn't real — an honest "I don't have that in front of me" is always correct; a
+plausible-sounding guess is not.
 
 Always confirm the list BEFORE sending or saving anything. Wait for explicit approval.`;
 
@@ -90,12 +80,15 @@ async function buildContext(service: ReturnType<typeof getServiceClient>, actId:
   const today = new Date().toISOString().split('T')[0];
   const [actRes, bookingsRes, toursRes] = await Promise.all([
     service.from('acts').select('act_name, genre, bio, website').eq('id', actId).single(),
+    // Include cancelled bookings too — a "cancel this show" request needs to be able to
+    // find and reference a show even if it was already marked cancelled, and the model
+    // needs to see full tour rosters, not just a global next-5 cross-tour slice.
     service.from('bookings')
-      .select('status, show_date, venue:venues(name, city, state)')
-      .eq('act_id', actId).neq('status', 'cancelled').order('show_date').limit(30),
+      .select('id, status, show_date, entry_type, tour_id, venue:venues(name, city, state)')
+      .eq('act_id', actId).order('show_date').limit(100),
     service.from('tours')
-      .select('id, name, status, start_date, end_date')
-      .eq('act_id', actId).neq('status', 'cancelled').limit(8),
+      .select('id, name, status, start_date, end_date, routing_notes')
+      .eq('act_id', actId).neq('status', 'cancelled').limit(20),
   ]);
 
   const act = actRes.data;
@@ -104,20 +97,38 @@ async function buildContext(service: ReturnType<typeof getServiceClient>, actId:
   const upcoming = bookings.filter((b: any) => ['confirmed', 'advancing'].includes(b.status) && b.show_date >= today).slice(0, 5);
   const pipeline = bookings.filter((b: any) => ['pitch', 'negotiation', 'hold'].includes(b.status));
 
+  // Group every booking under its tour so a question about a specific tour can be
+  // answered fully from context, without needing a separate lookup step.
+  const tourLines: string[] = [];
+  for (const t of tours) {
+    const showsOnTour = bookings.filter((b: any) => b.tour_id === t.id);
+    tourLines.push(`  "${t.name}" id=${t.id} (${t.status})${t.start_date ? ` ${t.start_date}–${t.end_date || 'TBD'}` : ''}`);
+    if (t.routing_notes) tourLines.push(`    Notes: ${t.routing_notes}`);
+    if (showsOnTour.length === 0) {
+      tourLines.push(`    (no shows/travel days on this tour yet)`);
+    } else {
+      for (const b of showsOnTour as any[]) {
+        const label = b.entry_type === 'travel' ? 'Travel' : 'Show';
+        const venue = b.venue ? `${b.venue.name}${b.venue.city ? `, ${b.venue.city}` : ''}` : '';
+        tourLines.push(`    - id=${b.id} ${b.show_date} [${b.status}] ${label}${venue ? `: ${venue}` : ''}`);
+      }
+    }
+  }
+
   return [
     `Act: ${act?.act_name}${act?.genre ? ` (${act.genre})` : ''}`,
     act?.bio ? `Bio: ${act.bio}` : '',
     act?.website ? `Website: ${act.website}` : '',
     `Today: ${today}`,
     '',
-    `Upcoming confirmed shows (${upcoming.length}):`,
+    `Upcoming confirmed shows, next 5 across all tours (${upcoming.length}):`,
     ...upcoming.map((b: any) => `  - ${b.show_date}: ${b.venue?.name || 'TBD'}${b.venue?.city ? `, ${b.venue.city}` : ''}`),
     '',
     `Pipeline (${pipeline.length} pitching/negotiating):`,
     ...pipeline.slice(0, 5).map((b: any) => `  - ${b.venue?.name || 'TBD'}${b.venue?.city ? `, ${b.venue.city}` : ''} [${b.status}]`),
     '',
-    `Tours (${tours.length}):`,
-    ...tours.map((t: any) => `  - "${t.name}" id=${t.id} (${t.status})${t.start_date ? ` ${t.start_date}–${t.end_date || 'TBD'}` : ''}`),
+    `Tours (${tours.length}) — full show detail per tour:`,
+    ...tourLines,
   ].filter(s => s !== null).join('\n');
 }
 
@@ -243,6 +254,7 @@ async function resolveStageItems(
   tourName: string,
   items: Array<{
     kind: 'show' | 'travel' | 'tour_notes' | 'expense';
+    booking_id?: string;
     venueName?: string;
     venueCity?: string;
     venueState?: string;
@@ -270,7 +282,7 @@ async function resolveStageItems(
     try {
       if (item.kind === 'show' || item.kind === 'travel') {
         let venue_id: string | undefined;
-        if (item.kind === 'show') {
+        if (item.kind === 'show' && !item.booking_id) {
           if (!item.venueName) { errors.push('A show item is missing a venue name.'); continue; }
           const venues = await execFindVenue(actId, { name: item.venueName });
           if (!venues.length) {
@@ -300,11 +312,12 @@ async function resolveStageItems(
           }
           venue_id = venues[0].id;
         }
-        if (!item.date) { errors.push('A date is required for every show/travel item.'); continue; }
+        if (!item.date && !item.booking_id) { errors.push('A date is required for every show/travel item.'); continue; }
         const result = await execStageBookingUpsert(actId, userId, {
+          booking_id: item.booking_id,
           venue_id,
-          show_date: item.date,
-          status: 'confirmed',
+          show_date: item.date || '',
+          status: item.status || 'confirmed',
           entry_type: item.kind === 'travel' ? 'travel' : 'show',
           load_in_time: item.loadInTime,
           set_time: item.setTime,
@@ -440,53 +453,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that tour." });
         }
-      }
-
-      if (parsed?.action?.type === 'calendar_settings_update') {
-        const { sync_enabled, calendar_name } = parsed.action;
-        try {
-          const result = await execStageCalendarSettingsUpdate(actId, user.id, { sync_enabled, calendar_name });
-          return res.status(200).json({
-            reply: parsed.reply || 'Staged that calendar settings change. Confirm to save it.',
-            action: { type: 'stage_items', staged: [{ kind: 'calendar_settings_update', ...result }], errors: [] },
-          });
-        } catch (e: any) {
-          return res.status(200).json({ reply: e.message || "Couldn't stage that calendar change." });
-        }
-      }
-
-      if (parsed?.action?.type === 'stage_personnel') {
-        const items = (parsed.action.items || []) as Array<{
-          personnel_id?: string; name?: string; instrument_role?: string;
-          default_pay_amount?: number; phone?: string; email?: string; is_active?: boolean;
-        }>;
-        const staged: any[] = [];
-        const errors: string[] = [];
-        for (const item of items) {
-          try {
-            let personnel_id = item.personnel_id;
-            // Resolve name → existing entry server-side, same pattern as venue/tour lookups —
-            // the model doesn't call a separate tool for this in the JSON-action architecture.
-            if (!personnel_id && item.name) {
-              const matches = await execFindPersonnel(actId, item.name);
-              if (matches.length === 1) {
-                personnel_id = matches[0].id;
-              } else if (matches.length > 1) {
-                errors.push(`Multiple roster entries match "${item.name}" — which one did you mean?`);
-                continue;
-              }
-              // zero matches → falls through as a new addition, which is correct
-            }
-            const result = await execStagePersonnelUpsert(actId, user.id, { ...item, personnel_id });
-            staged.push({ kind: 'personnel_upsert', ...result });
-          } catch (e: any) {
-            errors.push(e.message || `Couldn't stage "${item.name || item.personnel_id}".`);
-          }
-        }
-        const replyText = staged.length
-          ? (parsed.reply || `Staged ${staged.length} roster change${staged.length !== 1 ? 's' : ''} for review.`)
-          : (errors[0] || 'Nothing could be staged.');
-        return res.status(200).json({ reply: replyText, action: { type: 'stage_items', staged, errors } });
       }
 
       if (parsed?.action?.type === 'stage_items') {
