@@ -59,6 +59,7 @@ export default function BandDashboard() {
   const [noteSaved, setNoteSaved]         = useState(false);
   const [pendingAction, setPendingAction] = useState<AgentAction | null>(null);
   const [greetingSent, setGreetingSent]   = useState(false);
+  const [conversationLoaded, setConversationLoaded] = useState(false);
   const [attachedFile, setAttachedFile]   = useState<{ name: string; content: string } | null>(null);
   const [fileLoading, setFileLoading]     = useState(false);
   const fileInputRef                      = useRef<HTMLInputElement>(null);
@@ -84,17 +85,78 @@ export default function BandDashboard() {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
   }, [messages, pendingAction]);
 
-  // Auto-greet once act data is loaded
+  // Load any previously saved conversation for this user+act before deciding whether
+  // to show the fresh greeting — this is what makes the chat survive navigating away
+  // and back, instead of resetting every time the component remounts.
   useEffect(() => {
-    if (myAct && userProfile && !greetingSent && !loading) {
-      setGreetingSent(true);
-      const hour = new Date().getHours();
-      const greetingWord = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-      const firstName = (userProfile.display_name || '').split(' ')[0] || myAct.act_name || 'there';
-      const greeting = `${greetingWord} ${firstName}! Currently you have ${toursCount} active tour${toursCount !== 1 ? 's' : ''} with ${confirmedCount} confirmed show${confirmedCount !== 1 ? 's' : ''} and ${targetsCount} target${targetsCount !== 1 ? 's' : ''}. What should we work on today?`;
-      setMessages([{ role: 'assistant', content: greeting }]);
+    if (!myAct || !userProfile || conversationLoaded) return;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch('/api/agent-conversation', {
+          headers: { Authorization: `Bearer ${session?.access_token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (Array.isArray(json.messages) && json.messages.length > 0) {
+            setMessages(json.messages);
+            setGreetingSent(true); // prevent the greeting effect from overwriting the restored chat
+          }
+        }
+      } catch {
+        // Non-fatal — if this fails, the user just gets a fresh greeting instead.
+      } finally {
+        setConversationLoaded(true);
+      }
+    })();
+  }, [myAct, userProfile, conversationLoaded]);
+
+  const buildGreeting = () => {
+    const hour = new Date().getHours();
+    const greetingWord = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    const firstName = (userProfile?.display_name || '').split(' ')[0] || myAct?.act_name || 'there';
+    return `${greetingWord} ${firstName}! Currently you have ${toursCount} active tour${toursCount !== 1 ? 's' : ''} with ${confirmedCount} confirmed show${confirmedCount !== 1 ? 's' : ''} and ${targetsCount} target${targetsCount !== 1 ? 's' : ''}. What should we work on today?`;
+  };
+
+  const saveConversationHistory = (msgs: Array<{ role: string; content: string }>) => {
+    // Fire-and-forget — a failed save shouldn't interrupt the chat itself.
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        await fetch('/api/agent-conversation', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ messages: msgs }),
+        });
+      } catch {
+        // Non-fatal.
+      }
+    })();
+  };
+
+  const startNewChat = async () => {
+    setMessages([{ role: 'assistant' as const, content: buildGreeting() }]);
+    setPendingAction(null);
+    setAgentError('');
+    setSendResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetch('/api/agent-conversation', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+    } catch {
+      // Non-fatal — the next auto-save will overwrite the old saved conversation anyway.
     }
-  }, [myAct, userProfile, loading, greetingSent, targetsCount, confirmedCount, toursCount]);
+  };
+
+  // Auto-greet once act data is loaded — only if nothing was restored from a saved conversation.
+  useEffect(() => {
+    if (myAct && userProfile && conversationLoaded && !greetingSent && !loading) {
+      setGreetingSent(true);
+      setMessages([{ role: 'assistant' as const, content: buildGreeting() }]);
+    }
+  }, [myAct, userProfile, loading, greetingSent, conversationLoaded, targetsCount, confirmedCount, toursCount]);
 
   const load = async () => {
     setLoading(true);
@@ -213,7 +275,9 @@ export default function BandDashboard() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Agent error');
 
-      setMessages([...next, { role: 'assistant', content: json.reply }]);
+      const updated = [...next, { role: 'assistant' as const, content: json.reply }];
+      setMessages(updated);
+      saveConversationHistory(updated);
 
       if (json.action) {
         const action: AgentAction = json.action;
@@ -308,7 +372,12 @@ export default function BandDashboard() {
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || 'Save failed');
-        setMessages(prev => [...prev, { role: 'assistant', content: `Saved ${pendingAction.staged.length} item${pendingAction.staged.length !== 1 ? 's' : ''} to the tour.` }]);
+        const confirmMsg = { role: 'assistant' as const, content: `Saved ${pendingAction.staged.length} item${pendingAction.staged.length !== 1 ? 's' : ''} to the tour.` };
+        setMessages(prev => {
+          const updated = [...prev, confirmMsg];
+          saveConversationHistory(updated);
+          return updated;
+        });
         setPendingAction(null);
         load();
       } catch (err: any) {
@@ -352,7 +421,7 @@ export default function BandDashboard() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Send failed');
       setSendResult({ sent: json.sent, noEmail: json.noEmail, errors: json.errors });
-      setMessages(prev => [...prev, { role: 'assistant', content: `Sent ${json.sent} email${json.sent !== 1 ? 's' : ''}${json.noEmail ? `, ${json.noEmail} skipped (no email on file)` : ''}${json.errors ? `, ${json.errors} failed` : ''}. Venues have been marked as reached out.` }]);
+      setMessages(prev => [...prev, { role: 'assistant' as const, content: `Sent ${json.sent} email${json.sent !== 1 ? 's' : ''}${json.noEmail ? `, ${json.noEmail} skipped (no email on file)` : ''}${json.errors ? `, ${json.errors} failed` : ''}. Venues have been marked as reached out.` }]);
       setPendingAction(null);
       // Refresh targets count
       load();
@@ -533,11 +602,18 @@ export default function BandDashboard() {
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>AI BOOKING AGENT</span>
-              {messages.length > 1 && (
-                <button onClick={saveConversation} className="btn btn-ghost btn-sm" style={{ color: noteSaved ? '#34d399' : 'var(--text-muted)' }} disabled={agentLoading}>
-                  {noteSaved ? '✓ Saved' : '↓ Save Note'}
-                </button>
-              )}
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {messages.length > 1 && (
+                  <button onClick={startNewChat} className="btn btn-ghost btn-sm" style={{ color: 'var(--text-muted)' }} disabled={agentLoading}>
+                    + New Chat
+                  </button>
+                )}
+                {messages.length > 1 && (
+                  <button onClick={saveConversation} className="btn btn-ghost btn-sm" style={{ color: noteSaved ? '#34d399' : 'var(--text-muted)' }} disabled={agentLoading}>
+                    {noteSaved ? '✓ Saved' : '↓ Save Note'}
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Thread */}
