@@ -62,7 +62,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const { data, error } = await supabase
             .from('bookings')
             .update({
-              venue_id: p.venue_id ?? null,
+              ...(p.venue_id !== undefined && { venue_id: p.venue_id }),
               show_date: p.show_date,
               entry_type: p.entry_type ?? 'show',
               ...(p.tour_id !== undefined && { tour_id: p.tour_id }),
