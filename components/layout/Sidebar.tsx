@@ -29,6 +29,7 @@ const superadminNav = [
 
 const bandAdminNav = [
   { label: 'Dashboard',  href: '/band',         icon: '◈' },
+  { label: 'Today',      href: '/today',        icon: '◉' },
   { label: 'Tours',      href: '/tours',        icon: '⟴' },
   { label: 'Venues',     href: '/venues',       icon: '⌂' },
   { label: 'Email',      href: '/email',        icon: '✉' },

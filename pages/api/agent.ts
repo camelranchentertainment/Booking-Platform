@@ -67,6 +67,11 @@ context below — each show is listed with its real id (e.g. "id=abc123"). Inclu
 on a "show" item, along with "status":"cancelled" (or whatever's changing). Don't include venueName in
 that case unless the venue is actually changing.
 
+Before staging any NEW show, check the "Tours" section of your context for an existing entry at the
+same venue and date. If one already exists, use its booking_id to update it — never stage a second show
+at the same venue on the same date. A same-date match at a different venue is fine (that's a real
+scheduling conflict, not a duplicate) and will surface to the user as a warning to review.
+
 If you don't have the specific data needed to answer something (a tour's shows aren't in your context,
 a number isn't available, etc.), say so plainly and ask the user for what's missing, or ask them to
 confirm the tour/show name so it can be found. Never invent a person to contact, a workaround, or a

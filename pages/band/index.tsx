@@ -659,10 +659,17 @@ export default function BandDashboard() {
                       else if (item.kind === 'calendar_settings_update') summary = `Calendar: ${p.sync_enabled !== undefined ? (p.sync_enabled ? 'sync ON' : 'sync OFF') : ''}${p.calendar_name ? ` · name: ${p.calendar_name}` : ''}`;
                       else if (item.kind === 'personnel_upsert') summary = `Roster: ${p.name || '(unnamed)'}${p.instrument_role ? ` — ${p.instrument_role}` : ''}${p.default_pay_amount ? ` · $${p.default_pay_amount}` : ''}`;
                       const hasConflicts = item.conflicts?.length > 0;
+                      const conflictDetail = hasConflicts
+                        ? item.conflicts.map((c: any) => `${c.venues?.name || 'another show'} [${c.status}]`).join(', ')
+                        : '';
                       return (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{summary}</span>
-                          {hasConflicts && <span style={{ color: '#f59e0b', fontSize: 11 }}>⚠ conflict</span>}
+                        <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{summary}</span>
+                          </div>
+                          {hasConflicts && (
+                            <span style={{ color: '#f59e0b', fontSize: 11 }}>⚠ same date as: {conflictDetail}</span>
+                          )}
                         </div>
                       );
                     })}
