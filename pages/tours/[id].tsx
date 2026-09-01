@@ -12,15 +12,20 @@ import Link from 'next/link';
 
 const STATUS_COLOR: Record<OutreachStatus, string> = {
   target:    'var(--text-muted)',
-  pitched:   '#E8602A',
-  waiting:   '#F5A623',
   follow_up: '#F5C842',
   confirmed: '#34d399',
   declined:  '#f87171',
+  thank_you: '#6b7280',
 };
 
-const FILTER_TABS: (OutreachStatus | 'all')[] = ['all', 'target', 'pitched', 'waiting', 'follow_up', 'confirmed', 'declined'];
-
+const FILTER_TABS: (OutreachStatus | 'all')[] = [
+  'all',
+  'target',
+  'follow_up',
+  'confirmed',
+  'declined',
+  'thank_you',
+];
 
 export default function TourDetail() {
   const router = useRouter();
@@ -62,7 +67,7 @@ export default function TourDetail() {
   const [composerTourVenue, setComposerTourVenue] = useState<any>(null);
   const tvEmailCategory = (status: OutreachStatus): string => {
     if (status === 'target') return 'target';
-    if (status === 'pitched' || status === 'waiting') return 'follow_up_1';
+    if (status === 'follow_up') return 'follow_up';
     return 'confirmation';
   };
 
@@ -141,14 +146,14 @@ const loadPool = async () => {
     const poolData = await res.json();
     setPool(poolData);
 
-    // ITEM 8: notify on pitched venues with no reply after 7 days
-    const user = session.user ?? null;
-    if (!user) return;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 7);
-    const overdue = (poolData as any[]).filter((tv: any) =>
-      tv.status === 'pitched' && tv.updated_at && new Date(tv.updated_at) < cutoff,
-    );
+    // Notify on follow-up venues with no reply after 7 days
+const user = session.user ?? null;
+if (!user) return;
+const cutoff = new Date();
+cutoff.setDate(cutoff.getDate() - 7);
+const overdue = (poolData as any[]).filter((tv: any) =>
+  tv.status === 'follow_up' && tv.updated_at && new Date(tv.updated_at) < cutoff,
+);
     for (const tv of overdue) {
       const venueName = tv.venue?.name || 'venue';
       const { data: existing } = await supabase
@@ -163,7 +168,7 @@ const loadPool = async () => {
         await supabase.from('notifications').insert({
           user_id:    user.id,
           type:       'follow_up_due',
-          message:    `Follow up with ${venueName}${tv.venue?.city ? ` (${tv.venue.city})` : ''} — pitched 7+ days ago`,
+          message: `Follow up with ${venueName}${tv.venue?.city ? ` (${tv.venue.city})` : ''} — no reply for 7+ days`,
           action_url: `/tours/${id}`,
           read:       false,
         });
@@ -575,8 +580,8 @@ const loadPool = async () => {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
             {filteredPool.map((tv: any) => {
-              const isOverdue = tv.status === 'pitched' && tv.updated_at &&
-                (Date.now() - new Date(tv.updated_at).getTime()) >= 7 * 24 * 60 * 60 * 1000;
+              const isOverdue = tv.status === 'follow_up' && tv.updated_at &&
+                  (Date.now() - new Date(tv.updated_at).getTime()) >= 7 * 24 * 60 * 60 * 1000;
               return (
               <div key={tv.id} style={{
                 display: 'grid',
@@ -959,14 +964,10 @@ const loadPool = async () => {
           venueId={composerTourVenue.venue?.id}
           contactEmail={composerTourVenue.venue?.email || ''}
           defaultCategory={tvEmailCategory(composerTourVenue.status)}
-          onClose={async (didSend?: boolean) => {
-            // Auto-advance status: target → pitched after sending initial email
-            if (didSend && composerTourVenue.status === 'target') {
-              await updateStatus(composerTourVenue.id, 'pitched');
-            }
-            setComposerTourVenue(null);
-            loadPool();
-          }}
+          onClose={async () => {
+  setComposerTourVenue(null);
+  loadPool();
+}}
         />
       )}
 

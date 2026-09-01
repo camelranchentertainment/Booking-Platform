@@ -3,11 +3,10 @@ import type { BookingStatus, OutreachStatus } from './types';
 
 const TOUR_VENUE_TO_BOOKING_STATUS: Record<OutreachStatus, BookingStatus> = {
   target:    'pitch',
-  pitched:   'pitch',
-  waiting:   'pitch',
   follow_up: 'negotiation',
   confirmed: 'confirmed',
   declined:  'cancelled',
+  thank_you: 'confirmed',
 };
 
 const BOOKING_TO_TOUR_VENUE_STATUS: Partial<Record<BookingStatus, OutreachStatus>> = {
@@ -26,25 +25,23 @@ export const STATUS_LABELS: Record<string, string> = {
   negotiation: 'Negotiation',
   hold:        'Hold',
   contract:    'Contract',
-  confirmed:   'Confirmed',
+  confirmed:   'Confirm',
   advancing:   'Advancing',
   completed:   'Completed',
   cancelled:   'Cancelled',
   target:      'Target',
-  pitched:     'Pitched',
-  waiting:     'Waiting on Response',
   follow_up:   'Follow Up',
   declined:    'Declined',
+  thank_you:   'Thank You',
 };
 
 export const STATUS_COLORS: Record<string, string> = {
   // Outreach statuses
   target:    '#6B8FB5',
-  pitched:   '#E8602A',
-  waiting:   '#F5A623',
   follow_up: '#F5C842',
   confirmed: '#4CAF50',
   declined:  '#888888',
+  thank_you: '#6b7280',
   // Booking pipeline statuses
   pitch:       '#6B8FB5',
   negotiation: '#F5C842',

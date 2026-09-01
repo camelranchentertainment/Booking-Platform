@@ -4,15 +4,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRequireAuth } from '../lib/hooks/useRequireAuth';
 import { supabase } from '../lib/supabase';
 
-type SortKey = 'state' | 'total' | 'waiting' | 'confirmed' | 'conversionRate' | 'responseRate';
+type SortKey = 'state' | 'total' | 'confirmed' | 'conversionRate' | 'responseRate';
 
-const STAGE_ORDER = ['target', 'pitched', 'waiting', 'follow_up', 'confirmed'] as const;
+const STAGE_ORDER = ['target', 'follow_up', 'confirmed', 'declined', 'thank_you'] as const;
+
 const STAGE_LABELS: Record<string, string> = {
   target:    'Target',
-  pitched:   'Pitched',
-  waiting:   'Waiting on Response',
   follow_up: 'Follow Up',
-  confirmed: 'Confirmed',
+  confirmed: 'Confirm',
+  declined:  'Declined',
+  thank_you: 'Thank You',
 };
 
 const DEAL_LABELS: Record<string, string> = {
@@ -257,12 +258,12 @@ export default function AnalyticsPage() {
             <StatCard
               label="Conversion Rate"
               value={`${conversionRate}%`}
-              sub="target → confirmed"
+              sub="target → confirm / thank you"
             />
             <StatCard
               label="Response Rate"
               value={`${responseRate}%`}
-              sub="reached out → replied"
+              sub="outreach receiving replies"
             />
             <StatCard
               label="Confirmed Shows"
@@ -335,24 +336,6 @@ export default function AnalyticsPage() {
                   );
                 })}
               </div>
-
-              {/* Declined pill */}
-              {pipeline.declined > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Also:</span>
-                  <span style={{
-                    background: 'rgba(112,128,144,0.15)',
-                    border:     '1px solid rgba(112,128,144,0.3)',
-                    borderRadius: 99,
-                    padding:    '0.2rem 0.65rem',
-                    fontFamily: 'var(--font-body)',
-                    fontSize:   '0.78rem',
-                    color:      '#708090',
-                  }}>
-                    {pipeline.declined} Declined
-                  </span>
-                </div>
-              )}
             </div>
           )}
         </div>

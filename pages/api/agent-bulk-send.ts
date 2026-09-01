@@ -168,15 +168,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sent_at:       now,
       });
 
-      // Update tour_venue status to 'pitched'
-      if (tourVenueId) {
-        await service.from('tour_venues').update({
-          status:            'pitched',
-          pitched_at:        now,
-          last_contacted_at: now,
-          updated_at:        now,
-        }).eq('id', tourVenueId);
-      }
+      // Record contact activity without changing outreach status.
+      // Outreach status is manually controlled by the user.
+if (tourVenueId) {
+  await service.from('tour_venues').update({
+    last_contacted_at: now,
+    updated_at:        now,
+  }).eq('id', tourVenueId);
+}
 
       results.push({ venue: v.name, status: 'sent' });
     } catch (err: any) {

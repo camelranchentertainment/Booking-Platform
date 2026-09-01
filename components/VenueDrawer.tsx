@@ -5,21 +5,19 @@ import { formatShowDate } from '../lib/formatDate';
 import EmailComposer from './email/EmailComposer';
 import type { OutreachStatus } from '../lib/types';
 
-const TV_STATUS_LABELS: Record<string, string> = {
-  target:    'Target',
-  pitched:   'Pitched',
-  waiting:   'Waiting on Response',
+const TV_STATUS_LABELS: Record<OutreachStatus, string> = {
+  target: 'Target',
   follow_up: 'Follow Up',
-  confirmed: 'Confirmed',
-  declined:  'Declined',
+  confirmed: 'Confirm',
+  declined: 'Declined',
+  thank_you: 'Thank You',
 };
-const TV_STATUS_COLOR: Record<string, string> = {
-  target:    'rgba(245,237,217,0.35)',
-  pitched:   '#E8602A',
-  waiting:   '#F5A623',
+const TV_STATUS_COLORS: Record<OutreachStatus, string> = {
+  target: '#6B8FB5',
   follow_up: '#F5C842',
-  confirmed: '#34d399',
-  declined:  '#f87171',
+  confirmed: '#4CAF50',
+  declined: '#888888',
+  thank_you: '#6b7280',
 };
 const BK_STATUS_COLOR: Record<string, string> = {
   pitch:       '#94a3b8',
@@ -233,11 +231,22 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
     formatShowDate(d, { month: 'short', day: 'numeric', year: 'numeric' });
 
   const emailCategory = () => {
-    if (!activeTv) return 'target';
-    if (activeTv.status === 'target')   return 'target';
-    if (activeTv.status === 'pitched')  return 'follow_up_1';
-    return 'confirmation';
-  };
+  if (!activeTv) return 'target';
+
+  switch (activeTv.status as OutreachStatus) {
+    case 'follow_up':
+      return 'follow_up';
+    case 'confirmed':
+      return 'confirmation';
+    case 'declined':
+      return 'declined';
+    case 'thank_you':
+      return 'thank_you';
+    case 'target':
+    default:
+      return 'target';
+  }
+};
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((f: any) => ({ ...f, [k]: e.target.value }));
@@ -605,7 +614,7 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
                             background: 'rgba(255,255,255,0.06)',
                             border: `1px solid ${BORDER}`,
                             borderRadius: 4,
-                            color: TV_STATUS_COLOR[tv.status] || TEXT_MUT,
+                            color: TV_STATUS_COLORS[tv.status] || TEXT_MUT,
                             fontSize: '0.76rem',
                             padding: '0.25rem 0.4rem',
                             cursor: 'pointer',
