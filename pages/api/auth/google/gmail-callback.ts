@@ -67,15 +67,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
     const gmailProfile = await profileRes.json();
 
-    await service
-      .from('acts')
-      .update({
-        google_access_token:  tokens.access_token,
-        google_refresh_token: tokens.refresh_token ?? null,
-        gmail_address:        gmailProfile.emailAddress ?? null,
-        gmail_connected_at:   new Date().toISOString(),
-      })
-      .eq('id', actId);
+    const { data: existingAct } = await service
+  .from('acts')
+  .select('google_refresh_token')
+  .eq('id', actId)
+  .maybeSingle();
+
+await service
+  .from('acts')
+  .update({
+    google_access_token: tokens.access_token,
+    google_refresh_token:
+      tokens.refresh_token ?? existingAct?.google_refresh_token ?? null,
+    gmail_address: gmailProfile.emailAddress ?? null,
+    gmail_connected_at: new Date().toISOString(),
+  })
+  .eq('id', actId);
 
     return res.redirect('/settings?gmail_connected=true');
   } catch (err) {

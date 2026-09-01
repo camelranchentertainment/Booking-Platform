@@ -127,6 +127,8 @@ export default function EmailPage() {
   // Inbox
   const [readIds, setReadIds]                 = useState<Set<string>>(new Set());
   const [expandedEmail, setExpandedEmail]     = useState<string | null>(null);
+  const [syncingInbox, setSyncingInbox] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
 
   // Outbox
   const [expandedOutbox, setExpandedOutbox]   = useState<string | null>(null);
@@ -260,6 +262,38 @@ export default function EmailPage() {
   };
 
   // ─── Actions ───────────────────────────────────────────────────────────────
+  const syncInbox = async () => {
+  if (!token) return;
+
+  setSyncingInbox(true);
+  setSyncMessage('');
+
+  try {
+    const response = await fetch('/api/email/gmail-sync', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Inbox sync failed');
+    }
+
+    setSyncMessage(
+      `Synced ${result.imported} new message${result.imported === 1 ? '' : 's'}`
+    );
+
+    await loadAll();
+  } catch (err: any) {
+    console.error('Inbox sync failed:', err);
+    setSyncMessage(err?.message || 'Inbox sync failed');
+  } finally {
+    setSyncingInbox(false);
+  }
+};
 
   const archiveEmail = async (id: string) => {
     await supabase.from('email_log').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id);
@@ -511,9 +545,51 @@ export default function EmailPage() {
       {/* ══ INBOX TAB ══ */}
       {view === 'inbox' && (
         <div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            {inboxCount} message{inboxCount !== 1 ? 's' : ''} · {unreadCount} unread
-          </div>
+          <div
+  style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '1rem',
+    marginBottom: '1rem',
+    flexWrap: 'wrap',
+  }}
+>
+  <div
+    style={{
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.75rem',
+      color: 'var(--text-muted)',
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase',
+    }}
+  >
+    {inboxCount} message{inboxCount !== 1 ? 's' : ''} · {unreadCount} unread
+  </div>
+
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+    {syncMessage && (
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.7rem',
+          color: 'var(--text-muted)',
+        }}
+      >
+        {syncMessage}
+      </span>
+    )}
+
+    <button
+      className="btn btn-secondary"
+      onClick={syncInbox}
+      disabled={syncingInbox}
+      style={{ fontSize: '0.75rem' }}
+    >
+      {syncingInbox ? 'Syncing…' : '↻ Sync Inbox'}
+    </button>
+  </div>
+</div>
           {inboxEmails.length === 0 && !loading ? (
             <div className="card" style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.88rem', lineHeight: 1.7 }}>
               No incoming messages yet. When venues reply to your outreach, they appear here.
