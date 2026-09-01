@@ -1,9 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { Resend } from 'resend';
 import { getServiceClient } from '../../../lib/supabase';
-import { updateVenueStatus } from '../../../lib/statusSync';
 import { sendViaGmail } from '../../../lib/gmailSend';
-import type { OutreachStatus } from '../../../lib/types';
 
 async function getResendConfig(service: ReturnType<typeof getServiceClient>) {
   if (process.env.RESEND_API_KEY) {
@@ -248,154 +246,52 @@ export default async function handler(
       direction: 'sent',
     });
 
-    // Step 2 — Update tour_venues status + timestamps
-    if (tourVenueId && category) {
-      // Verify tourVenueId belongs to caller's act before mutating.
-      const { data: tvLookup } = await service
-        .from('tour_venues')
-        .select('tour_id')
-        .eq('id', tourVenueId)
-        .single();
+// Step 2 — Record contact activity without changing outreach status.
+// Outreach status is manually controlled by the user.
+if (tourVenueId) {
+  // Verify tourVenueId belongs to caller's act before mutating.
+  const { data: tvLookup } = await service
+    .from('tour_venues')
+    .select('tour_id')
+    .eq('id', tourVenueId)
+    .single();
 
-      if (!tvLookup) {
-        return res.status(403).json({ error: 'Forbidden' });
-      }
+  if (!tvLookup) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
 
-      const { data: tourCheck } = await service
-        .from('tours')
-        .select('id')
-        .eq('id', tvLookup.tour_id)
-        .eq('act_id', effectiveActId)
-        .single();
+  const { data: tourCheck } = await service
+    .from('tours')
+    .select('id')
+    .eq('id', tvLookup.tour_id)
+    .eq('act_id', effectiveActId)
+    .single();
 
-      if (!tourCheck) {
-        return res.status(403).json({ error: 'Forbidden' });
-      }
+  if (!tourCheck) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
 
-      const isColdPitch = ['target', 'cold_pitch'].includes(
-        category
-      );
+  await service
+    .from('tour_venues')
+    .update({
+      last_contacted_at: now,
+      updated_at: now,
+    })
+    .eq('id', tourVenueId);
+}
 
-      const isFollowUp = [
-        'follow_up_1',
-        'follow_up_2',
-        'follow_up',
-      ].includes(category);
-
-      let newTvStatus: OutreachStatus | null = null;
-
-      const tvExtra: Record<string, any> = {
-        last_contacted_at: now,
-      };
-
-      if (isColdPitch) {
-        newTvStatus = 'pitched';
-        tvExtra.pitched_at = now;
-      } else if (isFollowUp) {
-        newTvStatus = 'waiting';
-        tvExtra.responded_at = now;
-      } else if (category === 'confirmation') {
-        newTvStatus = 'confirmed';
-      }
-
-      if (newTvStatus) {
-        try {
-          await updateVenueStatus(
-            service,
-            tourVenueId,
-            newTvStatus,
-            userId,
-            tvExtra
-          );
-        } catch (e: any) {
-          console.error(
-            '[email/send] tour_venues status update FAILED',
-            {
-              tourVenueId,
-              newTvStatus,
-              category,
-              error: e?.message,
-            }
-          );
-        }
-      } else {
-        await service
-          .from('tour_venues')
-          .update({
-            last_contacted_at: now,
-            updated_at: now,
-          })
-          .eq('id', tourVenueId);
-      }
-    }
-
-    // Step 3 — Update or create booking record
-    if (effectiveActId && (venueId || bookingId)) {
-      const isColdPitch = [
-        'target',
-        'cold_pitch',
-      ].includes(category || '');
-
-      const isFollowUp = [
-        'follow_up_1',
-        'follow_up_2',
-        'follow_up',
-      ].includes(category || '');
-
-      if (bookingId) {
-        const bkUpdate: Record<string, any> = {
-          email_stage: category,
-          last_contact_date: now,
-          updated_at: now,
-        };
-
-        if (category === 'follow_up_1') {
-          bkUpdate.follow_up_count = 1;
-        }
-
-        if (category === 'follow_up_2') {
-          bkUpdate.follow_up_count = 2;
-        }
-
-        if (isColdPitch) {
-          bkUpdate.status = 'pitch';
-          bkUpdate.pitched_at = now;
-        }
-
-        if (isFollowUp) {
-          bkUpdate.status = 'pitch';
-          bkUpdate.responded_at = now;
-        }
-
-        await service
-          .from('bookings')
-          .update(bkUpdate)
-          .eq('id', bookingId)
-          .eq('act_id', effectiveActId);
-      } else if (venueId && isColdPitch) {
-        const { data: existing } = await service
-          .from('bookings')
-          .select('id')
-          .eq('act_id', effectiveActId)
-          .eq('venue_id', venueId)
-          .not('status', 'in', '("completed","cancelled")')
-          .maybeSingle();
-
-        if (!existing) {
-          await service.from('bookings').insert({
-            created_by: userId,
-            act_id: effectiveActId,
-            venue_id: venueId,
-            contact_id: contactId || null,
-            status: 'pitch',
-            email_stage: 'target',
-            last_contact_date: now,
-            pitched_at: now,
-            source: 'email_pitch',
-          });
-        }
-      }
-    }
+// Step 3 — Record booking contact activity without changing booking status.
+// Booking pipeline status is managed separately from email outreach status.
+if (effectiveActId && bookingId) {
+  await service
+    .from('bookings')
+    .update({
+      last_contact_date: now,
+      updated_at: now,
+    })
+    .eq('id', bookingId)
+    .eq('act_id', effectiveActId);
+}
 
     // Step 4 — Fetch venue name for notification
     let venueName = 'the venue';
@@ -432,22 +328,7 @@ export default async function handler(
     }
 
     // Step 5 — Create notification
-    const isColdPitch = [
-      'target',
-      'cold_pitch',
-    ].includes(category || '');
-
-    const isFollowUp = [
-      'follow_up_1',
-      'follow_up_2',
-      'follow_up',
-    ].includes(category || '');
-
-    const notifMessage = isColdPitch
-      ? `Cold pitch sent to ${venueName}`
-      : isFollowUp
-        ? `Follow-up sent to ${venueName}`
-        : `Email sent to ${venueName}`;
+ const notifMessage = `Email sent to ${venueName}`;
 
     await service.from('notifications').insert({
       user_id: userId,

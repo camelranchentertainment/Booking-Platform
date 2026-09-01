@@ -47,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     service
       .from('email_log')
-      .select('id, sent_at, status, venue_id, tour_venue_id, act_id')
+      .select('id, sent_at, status, direction, venue_id, tour_venue_id, act_id')
       .eq('act_id', actId)
       .neq('status', 'failed'),
   ]);
@@ -58,24 +58,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // ── Pipeline funnel ──────────────────────────────────────────────────────
   const pipeline = {
-    target:    tourVenues.filter(v => v.status === 'target').length,
-    pitched:   tourVenues.filter(v => v.status === 'pitched').length,
-    waiting:   tourVenues.filter(v => v.status === 'waiting').length,
-    follow_up: tourVenues.filter(v => v.status === 'follow_up').length,
-    confirmed: tourVenues.filter(v => v.status === 'confirmed').length,
-    declined:  tourVenues.filter(v => v.status === 'declined').length,
-    total:     tourVenues.length,
-  };
+  target:    tourVenues.filter(v => v.status === 'target').length,
+  follow_up: tourVenues.filter(v => v.status === 'follow_up').length,
+  confirmed: tourVenues.filter(v => v.status === 'confirmed').length,
+  declined:  tourVenues.filter(v => v.status === 'declined').length,
+  thank_you: tourVenues.filter(v => v.status === 'thank_you').length,
+  total:     tourVenues.length,
+};
 
-  const activeOutreach = pipeline.pitched + pipeline.waiting + pipeline.follow_up + pipeline.confirmed;
-  const conversionRate = pipeline.total > 0
-    ? Math.round((pipeline.confirmed / pipeline.total) * 100)
-    : 0;
-  const responseRate = activeOutreach > 0
-    ? Math.round(
-        ((pipeline.waiting + pipeline.follow_up + pipeline.confirmed) / activeOutreach) * 100
-      )
-    : 0;
+// Confirmed + Thank You both represent successful conversions.
+const convertedCount = pipeline.confirmed + pipeline.thank_you;
+
+const conversionRate = pipeline.total > 0
+  ? Math.round((convertedCount / pipeline.total) * 100)
+  : 0;
+
+// Response rate is based on actual email activity rather than manual status.
+const sentVenueIds = new Set(
+  emailLogs
+    .filter(e => e.direction !== 'received' && e.venue_id)
+    .map(e => e.venue_id)
+);
+
+const repliedVenueIds = new Set(
+  emailLogs
+    .filter(e => e.direction === 'received' && e.venue_id)
+    .map(e => e.venue_id)
+);
+
+const responseRate = sentVenueIds.size > 0
+  ? Math.round(
+      ([...repliedVenueIds].filter(id => sentVenueIds.has(id)).length / sentVenueIds.size) * 100
+    )
+  : 0;
 
   // ── Regional performance ─────────────────────────────────────────────────
   const regionMap: Record<string, { state: string; total: number; confirmed: number; responded: number }> = {};
@@ -83,8 +98,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const state = (v.venue as any)?.state ?? 'Unknown';
     if (!regionMap[state]) regionMap[state] = { state, total: 0, confirmed: 0, responded: 0 };
     regionMap[state].total++;
-    if (v.status === 'confirmed') regionMap[state].confirmed++;
-    if (['waiting', 'follow_up', 'confirmed'].includes(v.status)) regionMap[state].responded++;
+    if (['confirmed', 'thank_you'].includes(v.status)) {
+  regionMap[state].confirmed++;
+}
+
+if (v.venue_id && repliedVenueIds.has(v.venue_id)) {
+  regionMap[state].responded++;
+}
   }
   const regionalPerformance = Object.values(regionMap)
     .sort((a, b) => b.confirmed - a.confirmed)
@@ -95,8 +115,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }));
 
   // ── Email performance ────────────────────────────────────────────────────
-  const emailsSent      = emailLogs.length;
-  const emailsDelivered = emailLogs.filter(e => e.status === 'delivered').length;
+  const sentEmails = emailLogs.filter(e => e.direction !== 'received');
+
+const emailsSent = sentEmails.length;
+const emailsDelivered = sentEmails.filter(
+  e => e.status === 'delivered'
+).length;
 
   const emailPerformance = {
     sent:          emailsSent,
@@ -153,8 +177,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // ── Tour comparison ──────────────────────────────────────────────────────
   const tourStats = tours.map((t: any) => {
     const tvs       = tourVenues.filter((v: any) => v.tour_id === t.id);
-    const confirmed = tvs.filter((v: any) => v.status === 'confirmed').length;
-    const contacted = tvs.filter((v: any) => v.status !== 'target').length;
+    const confirmed = tvs.filter((v: any) =>
+  ['confirmed', 'thank_you'].includes(v.status)
+).length;
+
+const contacted = tvs.filter((v: any) =>
+  v.last_contacted_at != null
+).length;
     return {
       id:             t.id,
       name:           t.name,

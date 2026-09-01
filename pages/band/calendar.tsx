@@ -100,13 +100,14 @@ export default function BandCalendar() {
       {/* Status legend */}
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem', alignItems: 'center', padding: '0.5rem 0.75rem', background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
         {[
-          ['#6B8FB5', 'Target'],
-          ['#E8602A', 'Pitched'],
-          ['#F5C842', 'Negotiate'],
-          ['#4CAF50', 'Confirmed'],
-          ['#888888', 'Declined'],
-          ['#6b7280', 'Completed'],
-        ].map(([color, label]) => (
+  [STATUS_COLORS.pitch, 'Pitch'],
+  [STATUS_COLORS.negotiation, 'Negotiation'],
+  [STATUS_COLORS.hold, 'Hold'],
+  [STATUS_COLORS.contract, 'Contract'],
+  [STATUS_COLORS.confirmed, 'Confirmed'],
+  [STATUS_COLORS.advancing, 'Advancing'],
+  [STATUS_COLORS.completed, 'Completed'],
+].map(([color, label]) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
             <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>{label}</span>

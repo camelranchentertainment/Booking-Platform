@@ -97,7 +97,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .from('tour_venues')
       .select('id')
       .in('tour_id', tourIds)
-      .in('status', ['confirmed', 'follow_up', 'declined']);
+      .in('status', ['follow_up', 'confirmed', 'declined', 'thank_you']);
     const staleIds = (staleTVs || []).map((tv: any) => tv.id);
     if (staleIds.length > 0) {
       await service.from('email_drafts')
@@ -197,13 +197,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // --- 2. Tour venues — ONLY pitch-eligible statuses, NEVER confirmed venues ---
-  if (tourIds.length > 0) {
-    const { data: tourVenues, error: tvErr } = await service.from('tour_venues')
-      .select('id, venue_id, tour_id, venue:venues(name, city, state, capacity, email, secondary_emails)')
-      .in('tour_id', tourIds)
-      .in('status', ['target', 'pitched', 'waiting', 'follow_up'])
-      .limit(30);
+ // --- 2. Tour venues — generate cold-pitch drafts for Target venues only ---
+if (tourIds.length > 0) {
+  const { data: tourVenues, error: tvErr } = await service.from('tour_venues')
+    .select('id, venue_id, tour_id, venue:venues(name, city, state, capacity, email, secondary_emails)')
+    .in('tour_id', tourIds)
+    .eq('status', 'target')
+    .limit(30);
 
     if (tvErr) errors.push(`Tour venues query: ${tvErr.message}`);
 

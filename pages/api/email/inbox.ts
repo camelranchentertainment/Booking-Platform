@@ -112,36 +112,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
 
-    // Advance pitched → waiting for any matched venue replies
-    if (actId) {
-      const matchedVenueIds = [...new Set(enriched.map(m => m.matchedVenueId).filter(Boolean))] as string[];
-      if (matchedVenueIds.length > 0) {
-        const { data: tvs } = await admin
-          .from('tour_venues')
-          .select('id, tour:tours(act_id)')
-          .in('venue_id', matchedVenueIds)
-          .eq('status', 'pitched');
+// Notify users of matched venue replies without changing outreach status    
+// Outreach status is manually controlled by the user.
+if (actId) {
+  const venueNames = [
+    ...new Set(
+      enriched
+        .filter(m => m.matchedVenueId && m.matchedVenueName)
+        .map(m => m.matchedVenueName)
+        .filter(Boolean)
+    ),
+  ] as string[];
 
-        const toAdvance = (tvs || []).filter((tv: any) => tv.tour?.act_id === actId).map((tv: any) => tv.id);
-        if (toAdvance.length > 0) {
-          await admin.from('tour_venues')
-            .update({ status: 'waiting', updated_at: new Date().toISOString() })
-            .in('id', toAdvance);
-
-          const venueNames = [...new Set(enriched
-            .filter(m => m.matchedVenueId && toAdvance.some(() => true))
-            .map(m => m.matchedVenueName).filter(Boolean))];
-          if (actId && venueNames.length > 0) {
-            await notifyActMembers({
-              actId,
-              type:      'venue_replied',
-              message:   `Venue replied: ${venueNames.slice(0, 2).join(', ')}${venueNames.length > 2 ? ` +${venueNames.length - 2} more` : ''}`,
-              actionUrl: '/email',
-            });
-          }
-        }
-      }
-    }
+  if (venueNames.length > 0) {
+    await notifyActMembers({
+      actId,
+      type: 'venue_replied',
+      message: `Venue replied: ${venueNames.slice(0, 2).join(', ')}${
+        venueNames.length > 2 ? ` +${venueNames.length - 2} more` : ''
+      }`,
+      actionUrl: '/email',
+    });
+  }
+}
 
     return res.status(200).json({ messages: enriched, configured: true });
   } catch (err: any) {

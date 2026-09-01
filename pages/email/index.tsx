@@ -12,12 +12,11 @@ import VenueDrawer from '../../components/VenueDrawer';
 type TabView = 'inbox' | 'pipeline' | 'outreach' | 'outbox' | 'archive' | 'drafts';
 
 const PIPELINE_STAGES = [
-  { key: 'target',    label: 'Target',              color: '#6B8FB5' },
-  { key: 'pitched',   label: 'Pitched',             color: '#E8A020' },
-  { key: 'waiting',   label: 'Waiting on Response', color: '#B56B8F' },
-  { key: 'follow_up', label: 'Follow Up',           color: '#E85252' },
-  { key: 'confirmed', label: 'Confirmed',           color: '#E8602A' },
-  { key: 'declined',  label: 'Declined',            color: '#708090' },
+  { key: 'target',    label: 'Target',    color: '#6B8FB5' },
+  { key: 'follow_up', label: 'Follow Up', color: '#E85252' },
+  { key: 'confirmed', label: 'Confirm',   color: '#34d399' },
+  { key: 'declined',  label: 'Declined',  color: '#f87171' },
+  { key: 'thank_you', label: 'Thank You', color: '#6b7280' },
 ] as const;
 
 type StageKey = typeof PIPELINE_STAGES[number]['key'];
@@ -668,7 +667,7 @@ export default function EmailPage() {
                             <td onClick={() => toggleRow(tv.id)} style={{ color: 'var(--text-secondary)', fontSize: '0.84rem' }}>{tv.tour?.name || '—'}</td>
                             <td onClick={() => toggleRow(tv.id)}>
                               <span style={{ background: `${stColor}22`, color: stColor, fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0.15rem 0.5rem', borderRadius: 4 }}>
-                                {STAGE_COLOR[tv.status] ? (tv.status === 'waiting' ? 'Waiting' : tv.status === 'follow_up' ? 'Follow Up' : tv.status.charAt(0).toUpperCase() + tv.status.slice(1)) : tv.status}
+                                {PIPELINE_STAGES.find(s => s.key === tv.status)?.label || tv.status}
                               </span>
                             </td>
                             <td onClick={() => toggleRow(tv.id)} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDate(lastC)}</td>
@@ -804,7 +803,7 @@ export default function EmailPage() {
                     const venue    = tv.venue as any;
                     const lastC    = tv.last_contacted_at || tv.pitched_at || tv.updated_at;
                     const days     = lastC ? daysSince(lastC) : null;
-                    const overdue  = tv.status === 'pitched' && days !== null && days >= 7;
+                    const overdue = tv.status === 'follow_up' && days !== null && days >= 7;
                     const dotColor = days !== null ? (overdue ? '#f87171' : days > 3 ? '#fbbf24' : '#34d399') : '#6b7280';
                     const stColor  = STAGE_COLOR[tv.status] || 'var(--text-muted)';
                     return (
@@ -816,7 +815,7 @@ export default function EmailPage() {
                         <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{tv.tour?.name || '—'}</td>
                         <td>
                           <span style={{ background: `${stColor}22`, color: stColor, fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0.15rem 0.45rem', borderRadius: 3 }}>
-                            {tv.status === 'waiting' ? 'Waiting' : tv.status === 'follow_up' ? 'Follow Up' : (tv.status || '—')}
+                            {PIPELINE_STAGES.find(s => s.key === tv.status)?.label || tv.status || '—'}
                           </span>
                         </td>
                         <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDate(lastC)}</td>
@@ -831,16 +830,9 @@ export default function EmailPage() {
                         </td>
                         <td>
                           <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                            {['target', 'pitched', 'waiting', 'follow_up'].includes(tv.status) && (
+                            {['target', 'follow_up', 'confirmed', 'thank_you'].includes(tv.status) && (
                               <button style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', padding: '0.2rem 0.5rem', border: '1px solid rgba(96,165,250,0.4)', borderRadius: 3, background: 'transparent', color: '#60a5fa', cursor: 'pointer' }}
                                 onClick={() => { setComposerTourVenue(tv); setComposerCategory('target'); }}>✉ Email</button>
-                            )}
-                            {(tv.status === 'pitched' || tv.status === 'waiting') && (
-                              <button style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', padding: '0.2rem 0.5rem', border: '1px solid rgba(52,211,153,0.4)', borderRadius: 3, background: 'transparent', color: '#34d399', cursor: 'pointer' }}
-                                disabled={markingReplied === tv.id}
-                                onClick={() => markReplied(tv.id)}>
-                                {markingReplied === tv.id ? '…' : '✓ Replied'}
-                              </button>
                             )}
                             <button style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', padding: '0.2rem 0.5rem', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 3, background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}
                               onClick={() => setArchivePrompt({ tv })}>Archive</button>
