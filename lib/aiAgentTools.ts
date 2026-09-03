@@ -311,12 +311,25 @@ export async function execStageBookingUpsert(
 
   const { data: conflicts, error: conflictErr } = await supabase
     .from('bookings')
-    .select('id, status, venues:venue_id(name, city, state)')
+    .select('id, status, venue_id, venues:venue_id(name, city, state)')
     .eq('act_id', actId)
     .eq('show_date', args.show_date)
     .neq('status', 'cancelled')
     .neq('id', args.booking_id ?? '00000000-0000-0000-0000-000000000000');
   if (conflictErr) throw new Error(`Conflict check failed: ${conflictErr.message}`);
+
+  // Same venue + same date as an existing non-cancelled show is a near-certain duplicate,
+  // not a scheduling coincidence — refuse to create a second booking. This is exactly the
+  // failure mode that produced a real duplicate "Private Party - Ohio" show in production.
+  if (!args.booking_id && args.venue_id) {
+    const exactDuplicate = (conflicts ?? []).find((c: any) => c.venue_id === args.venue_id);
+    if (exactDuplicate) {
+      throw new Error(
+        `A ${exactDuplicate.status} show already exists at this venue on ${args.show_date} ` +
+        `(id=${exactDuplicate.id}). Reference that booking_id to update it instead of creating a duplicate.`
+      );
+    }
+  }
 
   const payload = {
     ...args,
