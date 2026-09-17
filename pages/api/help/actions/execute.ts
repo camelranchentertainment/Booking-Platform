@@ -265,6 +265,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           .single();
         if (error) throw error;
         result = data;
+      } else if (staged.action_type === 'payment_settle') {
+        // Explicit whitelist — actual_amount_received and payment_status ONLY.
+        // Never touch agreed_amount, fee, or any other financial column here.
+        const updatePayload: { actual_amount_received?: number; payment_status?: string; updated_at: string } = {
+          updated_at: new Date().toISOString(),
+        };
+        if (p.actual_amount_received !== undefined) updatePayload.actual_amount_received = p.actual_amount_received;
+        if (typeof p.payment_status === 'string') updatePayload.payment_status = p.payment_status;
+        const { data, error } = await supabase
+          .from('bookings')
+          .update(updatePayload)
+          .eq('id', p.booking_id)
+          .eq('act_id', profile.act_id)
+          .select('id, actual_amount_received, payment_status, show_date')
+          .single();
+        if (error) throw error;
+        result = data;
       } else if (staged.action_type === 'personnel_upsert') {
         if (p.personnel_id) {
           const { data, error } = await supabase

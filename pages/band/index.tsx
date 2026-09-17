@@ -658,6 +658,7 @@ export default function BandDashboard() {
                       else if (item.kind === 'tour_create') summary = `New tour: ${p.name}${p.start_date ? ` (${p.start_date}${p.end_date ? ` – ${p.end_date}` : ''})` : ''}`;
                       else if (item.kind === 'calendar_settings_update') summary = `Calendar: ${p.sync_enabled !== undefined ? (p.sync_enabled ? 'sync ON' : 'sync OFF') : ''}${p.calendar_name ? ` · name: ${p.calendar_name}` : ''}`;
                       else if (item.kind === 'personnel_upsert') summary = `Roster: ${p.name || '(unnamed)'}${p.instrument_role ? ` — ${p.instrument_role}` : ''}${p.default_pay_amount ? ` · $${p.default_pay_amount}` : ''}`;
+                      else if (item.kind === 'payment_settle') summary = `Payment: ${p.venue_name || ''}${p.show_date ? ` — ${p.show_date}` : ''}${p.actual_amount_received != null ? ` · $${p.actual_amount_received}` : ''}${p.payment_status ? ` · ${p.payment_status}` : ''}`;
                       const hasConflicts = item.conflicts?.length > 0;
                       const conflictDetail = hasConflicts
                         ? item.conflicts.map((c: any) => `${c.venues?.name || 'another show'} [${c.status}]`).join(', ')

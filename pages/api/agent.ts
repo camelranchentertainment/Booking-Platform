@@ -11,6 +11,7 @@ import {
   execStageExpense,
   execStageTourInsert,
   execStageVenueAndBooking,
+  execStagePaymentSettle,
 } from '../../lib/aiAgentTools';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { formatShowDate } from '../../lib/formatDate';
@@ -27,8 +28,8 @@ platform itself, answer it directly and confidently in plain text using that doc
 deflect to a separate help page, and do not say you don't know how the platform works.
 
 You can: answer pipeline questions, answer platform how-to questions, draft outreach, find venues, queue
-bulk email batches (with user approval first), and propose creating tours and adding/updating shows,
-travel days, tour notes, and projected expenses
+bulk email batches (with user approval first), and propose creating tours, adding/updating shows,
+travel days, tour notes, projected expenses, and recording payments received
 (with user approval first — you never write directly).
 
 CRITICAL FORMATTING RULE:
@@ -61,6 +62,10 @@ can describe several things (4 shows, 2 travel days, notes, a budget line) in on
 Only include the fields you actually have values for on each item (all fields except kind/date are
 optional per item). Never invent a venue_id or tour_id — those get resolved server-side by name. If a
 venue doesn't exist yet and you don't know its city/state, ask the user before staging that item.
+
+To record a payment received or update payment status ("got paid", "mark as settled", "we received $X for the [show]"):
+{"reply":"<conversational text>","action":{"type":"payment_settle","booking_id":"<id from Tours context>","actual_amount_received":1500,"payment_status":"received"}}
+booking_id must come from the "Tours" section of your context — never invent one. Include actual_amount_received and/or payment_status; at least one must be present. payment_status values: pending, received, settled.
 
 To CANCEL or UPDATE an existing show (not create a new one), find it in the "Tours" section of your
 context below — each show is listed with its real id (e.g. "id=abc123"). Include that as "booking_id"
@@ -457,6 +462,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that tour." });
+        }
+      }
+
+      if (parsed?.action?.type === 'payment_settle') {
+        const { booking_id, actual_amount_received, payment_status } = parsed.action;
+        try {
+          const result = await execStagePaymentSettle(actId, user.id, { booking_id, actual_amount_received, payment_status });
+          const p = result.proposal;
+          const desc = [p.venue_name, p.show_date, p.actual_amount_received != null ? `$${p.actual_amount_received}` : null, p.payment_status].filter(Boolean).join(' · ');
+          return res.status(200).json({
+            reply: parsed.reply || `Staged payment update for review: ${desc}. Confirm to save.`,
+            action: { type: 'stage_items', staged: [{ kind: 'payment_settle', ...result }], errors: [] },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that payment update." });
         }
       }
 
