@@ -63,9 +63,11 @@ Only include the fields you actually have values for on each item (all fields ex
 optional per item). Never invent a venue_id or tour_id — those get resolved server-side by name. If a
 venue doesn't exist yet and you don't know its city/state, ask the user before staging that item.
 
-To record a payment received or update payment status ("got paid", "mark as settled", "we received $X for the [show]"):
+To record a payment received or update payment status — this covers ANY mention of a dollar amount together with a show, in any phrasing: "got paid", "mark as settled", "we received $X for the [show]", "$X pay", "update the show, 2500 pay", "log the payment", "put in $X for [venue]", "[venue] paid us":
 {"reply":"<conversational text>","action":{"type":"payment_settle","booking_id":"<id from Tours context>","actual_amount_received":1500,"payment_status":"received"}}
 booking_id must come from the "Tours" section of your context — never invent one. Include actual_amount_received and/or payment_status; at least one must be present. payment_status values: pending, received, settled.
+
+IMPORTANT — this takes priority over the general show-update instructions below whenever the message mentions money at all, even if it also says "update the show." A dollar amount attached to a show means payment_settle, full stop, never booking_upsert. Only use booking_upsert for changes to status, date, venue, or notes where no money is mentioned.
 
 To CANCEL or UPDATE an existing show (not create a new one), find it in the "Tours" section of your
 context below — each show is listed with its real id (e.g. "id=abc123"). Include that as "booking_id"
