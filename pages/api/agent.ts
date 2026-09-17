@@ -63,11 +63,31 @@ Only include the fields you actually have values for on each item (all fields ex
 optional per item). Never invent a venue_id or tour_id — those get resolved server-side by name. If a
 venue doesn't exist yet and you don't know its city/state, ask the user before staging that item.
 
-To record a payment received or update payment status — this covers ANY mention of a dollar amount together with a show, in any phrasing: "got paid", "mark as settled", "we received $X for the [show]", "$X pay", "update the show, 2500 pay", "log the payment", "put in $X for [venue]", "[venue] paid us":
-{"reply":"<conversational text>","action":{"type":"payment_settle","booking_id":"<id from Tours context>","actual_amount_received":1500,"payment_status":"received"}}
-booking_id must come from the "Tours" section of your context — never invent one. Include actual_amount_received and/or payment_status; at least one must be present. payment_status values: pending, received, settled.
+Money mentioned for a show can mean one of two different things — get this right, it matters:
 
-IMPORTANT — this takes priority over the general show-update instructions below whenever the message mentions money at all, even if it also says "update the show." A dollar amount attached to a show means payment_settle, full stop, never booking_upsert. Only use booking_upsert for changes to status, date, venue, or notes where no money is mentioned.
+(a) The CONTRACTED FEE — what the show pays, the deal amount, the rate. Use this whenever the
+    show hasn't been played yet (its date is in the future, or its status isn't "completed") and
+    the message doesn't say money has actually changed hands. Examples: "the Ohio show pays
+    2500", "update the show, 2500 pay", "we're getting 1500 for this one", "the fee is 800".
+    → {"reply":"...","action":{"type":"payment_settle","booking_id":"<id>","agreed_amount":2500}}
+    Do NOT set payment_status or actual_amount_received for this case — nothing has been
+    received yet, only agreed to.
+
+(b) MONEY ACTUALLY RECEIVED — a deposit or payment that has genuinely come in. Use this only
+    when the language clearly says money arrived: "got paid", "we received $X", "deposit came
+    in", "[venue] sent us $X", "collected $X", "they paid us". This can apply whether or not the
+    show has been played yet (deposits often come in advance) — the deciding factor is the
+    language, not the date.
+    → {"reply":"...","action":{"type":"payment_settle","booking_id":"<id>","actual_amount_received":2500,"payment_status":"received"}}
+
+If it's genuinely ambiguous and the show hasn't been played yet, default to (a) — recording a
+contracted amount that turns out wrong is a minor correction; wrongly marking money as received
+that was never received is a real accounting error. If you're unsure and the show HAS already
+been played, ask the user to clarify rather than guessing.
+
+booking_id must come from the "Tours" section of your context — never invent one.
+
+IMPORTANT — payment_settle takes priority over the general show-update instructions below whenever the message mentions money at all, even if it also says "update the show." A dollar amount attached to a show means payment_settle, full stop, never booking_upsert. Only use booking_upsert for changes to status, date, venue, or notes where no money is mentioned.
 
 To CANCEL or UPDATE an existing show (not create a new one), find it in the "Tours" section of your
 context below — each show is listed with its real id (e.g. "id=abc123"). Include that as "booking_id"
@@ -468,11 +488,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       if (parsed?.action?.type === 'payment_settle') {
-        const { booking_id, actual_amount_received, payment_status } = parsed.action;
+        const { booking_id, agreed_amount, actual_amount_received, payment_status } = parsed.action;
         try {
-          const result = await execStagePaymentSettle(actId, user.id, { booking_id, actual_amount_received, payment_status });
+          const result = await execStagePaymentSettle(actId, user.id, { booking_id, agreed_amount, actual_amount_received, payment_status });
           const p = result.proposal;
-          const desc = [p.venue_name, p.show_date, p.actual_amount_received != null ? `$${p.actual_amount_received}` : null, p.payment_status].filter(Boolean).join(' · ');
+          const amountPart = p.agreed_amount != null
+            ? `Contracted: $${p.agreed_amount}`
+            : p.actual_amount_received != null
+            ? `Received: $${p.actual_amount_received}${p.payment_status ? ` · ${p.payment_status}` : ''}`
+            : null;
+          const desc = [p.venue_name, p.show_date, amountPart].filter(Boolean).join(' · ');
           return res.status(200).json({
             reply: parsed.reply || `Staged payment update for review: ${desc}. Confirm to save.`,
             action: { type: 'stage_items', staged: [{ kind: 'payment_settle', ...result }], errors: [] },
