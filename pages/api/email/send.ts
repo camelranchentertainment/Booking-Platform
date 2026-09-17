@@ -1,60 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { Resend } from 'resend';
 import { getServiceClient } from '../../../lib/supabase';
-import { sendViaGmail } from '../../../lib/gmailSend';
+import { sendActEmail, stripHtml } from '../../../lib/emailSend';
 
-async function getResendConfig(service: ReturnType<typeof getServiceClient>) {
-  if (process.env.RESEND_API_KEY) {
-    return {
-      apiKey: process.env.RESEND_API_KEY,
-      baseFrom:
-        process.env.RESEND_FROM_EMAIL ||
-        'booking@mail.camelranchbooking.com',
-    };
-  }
-
-  const { data } = await service
-    .from('platform_settings')
-    .select('key, value')
-    .in('key', ['resend_api_key', 'resend_from_email']);
-
-  const map: Record<string, string> = {};
-
-  for (const row of data || []) {
-    map[row.key] = row.value;
-  }
-
-  return {
-    apiKey: map['resend_api_key'] || '',
-    baseFrom:
-      map['resend_from_email'] ||
-      'booking@mail.camelranchbooking.com',
-  };
-}
-
-/** Strip HTML tags for plain-text fallback */
-function stripHtml(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n\n')
-    .replace(/<\/div>/gi, '\n')
-    .replace(/<li>/gi, '• ')
-    .replace(/<\/li>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -74,287 +22,71 @@ export default async function handler(
   } = req.body;
 
   if (!to || !subject || !html) {
-    return res.status(400).json({
-      error: 'to, subject, html required',
-    });
+    return res.status(400).json({ error: 'to, subject, html required' });
   }
 
   const service = getServiceClient();
 
-  const { apiKey, baseFrom } = await getResendConfig(service);
-
   // Authenticate sender
   let userId: string | null = null;
-
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
-
     if (token) {
-      const {
-        data: { user },
-      } = await service.auth.getUser(token);
-
+      const { data: { user } } = await service.auth.getUser(token);
       userId = user?.id || null;
     }
   } catch {}
 
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
   // Resolve caller's act and validate body-supplied actId before any write.
-  // Service client bypasses RLS so ownership must be checked explicitly.
   const { data: callerProfile } = await service
     .from('profiles')
     .select('act_id')
     .eq('id', userId)
     .single();
 
-  if (!callerProfile?.act_id) {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
-
-  if (actId && actId !== callerProfile.act_id) {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
+  if (!callerProfile?.act_id) return res.status(403).json({ error: 'Forbidden' });
+  if (actId && actId !== callerProfile.act_id) return res.status(403).json({ error: 'Forbidden' });
 
   const effectiveActId = callerProfile.act_id;
 
-  // ── Dynamic From + Reply-To based on act ────────────────────────────────
-
-  let from = `Camel Ranch Booking <bookings@camelranchbooking.com>`;
-  let replyTo: string | undefined;
-
-  let gmailConnected = false;
-  let gmailAddress: string | null = null;
-
-  if (effectiveActId) {
-    // 1. Get act name + contact email + Gmail connection
-    const { data: act } = await service
-      .from('acts')
-      .select(
-        'act_name, contact_email, gmail_address, google_refresh_token'
-      )
-      .eq('id', effectiveActId)
+  // Validate tourVenueId ownership before delegating to sendActEmail
+  if (tourVenueId) {
+    const { data: tvLookup } = await service
+      .from('tour_venues')
+      .select('tour_id')
+      .eq('id', tourVenueId)
       .single();
-
-    gmailAddress = act?.gmail_address || null;
-
-    gmailConnected = Boolean(
-      gmailAddress && act?.google_refresh_token
-    );
-
-    if (act?.act_name) {
-      from = `${act.act_name} <bookings@camelranchbooking.com>`;
-    }
-
-    // 2. Reply-to: prefer band_admin profile email
-    const { data: bandAdmin } = await service
-      .from('profiles')
-      .select('email')
+    if (!tvLookup) return res.status(403).json({ error: 'Forbidden' });
+    const { data: tourCheck } = await service
+      .from('tours')
+      .select('id')
+      .eq('id', tvLookup.tour_id)
       .eq('act_id', effectiveActId)
-      .eq('role', 'band_admin')
-      .maybeSingle();
-
-    if (bandAdmin?.email) {
-      replyTo = bandAdmin.email;
-    } else if (act?.contact_email) {
-      // 3. Fall back to act's contact_email
-      replyTo = act.contact_email;
-    }
-
-    // 4. If neither found, omit replyTo entirely
+      .single();
+    if (!tourCheck) return res.status(403).json({ error: 'Forbidden' });
   }
-
-  // ────────────────────────────────────────────────────────────────────────
 
   try {
-    let providerMessageId: string | null = null;
-    let actualFromAddress: string | null = null;
-
-    if (gmailConnected) {
-      await sendViaGmail(
-        effectiveActId,
-        to,
-        subject,
-        html
-      );
-
-      actualFromAddress = gmailAddress;
-    } else {
-      if (!apiKey) {
-        return res.status(500).json({
-          error:
-            'Email not configured. Connect Gmail or add a Resend API key in Settings.',
-        });
-      }
-
-      const resend = new Resend(apiKey);
-
-      const sendPayload: Parameters<
-        typeof resend.emails.send
-      >[0] = {
-        from,
-        to,
-        subject,
-        html,
-      };
-
-      if (replyTo) {
-        sendPayload.replyTo = replyTo;
-      }
-
-      const { data, error } =
-        await resend.emails.send(sendPayload);
-
-      if (error) {
-        return res.status(500).json({
-          error: error.message,
-        });
-      }
-
-      providerMessageId = data?.id ?? null;
-
-      // Store the actual sender address used by Resend.
-      const fromMatch = from.match(/<([^>]+)>/);
-
-      actualFromAddress =
-        fromMatch?.[1] ||
-        baseFrom ||
-        'bookings@camelranchbooking.com';
-    }
-
-    const now = new Date().toISOString();
-
-    // Step 1 — Log to email_log
-    await service.from('email_log').insert({
-      sent_by: userId,
-      booking_id: bookingId || null,
-      tour_venue_id: tourVenueId || null,
-      venue_id: venueId || null,
-      contact_id: contactId || null,
-      act_id: effectiveActId || null,
-      template_id: templateId || null,
-      category: category || null,
-      resend_id: providerMessageId,
-      subject,
-      body: bodyPreview || null,
+    const { email_log_id } = await sendActEmail({
+      actId: effectiveActId,
+      sentBy: userId,
       recipient: to,
-      from_address: actualFromAddress,
-      status: 'sent',
-      sent_at: now,
-      direction: 'sent',
+      subject,
+      body: bodyPreview || stripHtml(html),
+      bodyHtml: html,
+      bookingId: bookingId || undefined,
+      venueId: venueId || undefined,
+      tourVenueId: tourVenueId || undefined,
+      contactId: contactId || undefined,
+      templateId: templateId || undefined,
+      category: category || undefined,
     });
 
-// Step 2 — Record contact activity without changing outreach status.
-// Outreach status is manually controlled by the user.
-if (tourVenueId) {
-  // Verify tourVenueId belongs to caller's act before mutating.
-  const { data: tvLookup } = await service
-    .from('tour_venues')
-    .select('tour_id')
-    .eq('id', tourVenueId)
-    .single();
-
-  if (!tvLookup) {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
-
-  const { data: tourCheck } = await service
-    .from('tours')
-    .select('id')
-    .eq('id', tvLookup.tour_id)
-    .eq('act_id', effectiveActId)
-    .single();
-
-  if (!tourCheck) {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
-
-  await service
-    .from('tour_venues')
-    .update({
-      last_contacted_at: now,
-      updated_at: now,
-    })
-    .eq('id', tourVenueId);
-}
-
-// Step 3 — Record booking contact activity without changing booking status.
-// Booking pipeline status is managed separately from email outreach status.
-if (effectiveActId && bookingId) {
-  await service
-    .from('bookings')
-    .update({
-      last_contact_date: now,
-      updated_at: now,
-    })
-    .eq('id', bookingId)
-    .eq('act_id', effectiveActId);
-}
-
-    // Step 4 — Fetch venue name for notification
-    let venueName = 'the venue';
-    let tourId: string | null = null;
-
-    if (venueId) {
-      const { data: v } = await service
-        .from('venues')
-        .select('name')
-        .eq('id', venueId)
-        .single();
-
-      if (v?.name) {
-        venueName = v.name;
-      }
-    }
-
-    if (tourVenueId) {
-      const { data: tv } = await service
-        .from('tour_venues')
-        .select('tour_id, venue:venues(name)')
-        .eq('id', tourVenueId)
-        .single();
-
-      if (tv) {
-        tourId = tv.tour_id || null;
-
-        const tvVenue = tv.venue as any;
-
-        if (tvVenue?.name) {
-          venueName = tvVenue.name;
-        }
-      }
-    }
-
-    // Step 5 — Create notification
- const notifMessage = `Email sent to ${venueName}`;
-
-    await service.from('notifications').insert({
-      user_id: userId,
-      type: 'email_sent',
-      message: notifMessage,
-      action_url: tourId
-        ? `/tours/${tourId}`
-        : tourVenueId
-          ? '/email'
-          : bookingId
-            ? `/bookings/${bookingId}`
-            : '/email',
-      related_id: tourVenueId || bookingId || null,
-      read: false,
-    });
-
-    return res.status(200).json({
-      ok: true,
-      id: providerMessageId,
-      provider: gmailConnected ? 'gmail' : 'resend',
-    });
+    return res.status(200).json({ ok: true, email_log_id });
   } catch (err: any) {
     console.error('[email/send] send failed:', err);
-
-    return res.status(500).json({
-      error: err?.message || 'Email send failed',
-    });
+    return res.status(500).json({ error: err?.message || 'Email send failed' });
   }
 }

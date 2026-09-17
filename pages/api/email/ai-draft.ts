@@ -5,7 +5,7 @@ import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
 import { formatShowDate } from '../../../lib/formatDate';
 
-const SYSTEM_PROMPT = `You are an expert music booking agent assistant for Camel Ranch Entertainment.
+const BASE_SYSTEM_PROMPT = `You are an expert music booking agent assistant for Camel Ranch Entertainment.
 You draft professional, concise emails for booking music acts at venues.
 
 Style:
@@ -14,7 +14,6 @@ Style:
 - Short paragraphs, no walls of text
 - Always include a clear call-to-action
 - Never open with "I hope this email finds you well" or similar filler
-- No em dashes, no bullet points in the body
 - Subject lines under 60 characters
 
 Output: Return ONLY a valid JSON object with these exact keys:
@@ -23,6 +22,15 @@ Output: Return ONLY a valid JSON object with these exact keys:
   "body": "plain email body text — no HTML tags",
   "preview": "one sentence summary of the email"
 }`;
+
+function buildSystemPrompt(styleExamples: Array<{ subject: string | null; body: string | null }>): string {
+  if (!styleExamples.length) return BASE_SYSTEM_PROMPT;
+  const exampleBlocks = styleExamples
+    .slice(0, 6)
+    .map((e, i) => `Example ${i + 1}:\nSubject: ${e.subject || '(no subject)'}\n${e.body || '(no body)'}`)
+    .join('\n\n---\n\n');
+  return BASE_SYSTEM_PROMPT + `\n\nHere are examples of how this person actually writes their emails. Match their tone, sentence length, level of formality, and structure — do not copy exact wording or reuse specific phrases verbatim, write new content in their style:\n\n${exampleBlocks}`;
+}
 
 type Category = 'target' | 'follow_up_1' | 'follow_up_2' | 'confirmation' | 'decline' | 'advance' | 'thank_you' | 'reply';
 
@@ -114,13 +122,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const anthropicKey = await getSetting('anthropic_api_key');
   if (!anthropicKey) return res.status(500).json({ error: 'AI not configured. Add your Anthropic API key in Settings.' });
 
+  // Fetch up to 6 recent sent emails as few-shot style examples. Falls back to
+  // generic style if the act has no sent history yet.
+  const { data: styleExamples } = await service
+    .from('email_log')
+    .select('subject, body')
+    .eq('act_id', resolvedActId)
+    .eq('direction', 'sent')
+    .eq('is_draft', false)
+    .not('body', 'is', null)
+    .order('sent_at', { ascending: false })
+    .limit(6);
+
+  const systemPrompt = buildSystemPrompt(styleExamples || []);
+
   const client = new Anthropic({ apiKey: anthropicKey });
 
   try {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
-      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: prompt }],
     });
 

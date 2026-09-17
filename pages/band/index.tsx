@@ -665,6 +665,7 @@ export default function BandDashboard() {
                           summary = `Received: ${p.venue_name || ''}${p.show_date ? ` — ${p.show_date}` : ''}${p.actual_amount_received != null ? ` · $${p.actual_amount_received}` : ''}${p.payment_status ? ` · ${p.payment_status}` : ''}`;
                         }
                       }
+                      else if (item.kind === 'email_send') summary = `Email to ${p.recipient}${p.venue_name ? ` (${p.venue_name})` : ''}: ${p.subject}`;
                       const hasConflicts = item.conflicts?.length > 0;
                       const conflictDetail = hasConflicts
                         ? item.conflicts.map((c: any) => `${c.venues?.name || 'another show'} [${c.status}]`).join(', ')
@@ -674,6 +675,14 @@ export default function BandDashboard() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{summary}</span>
                           </div>
+                          {item.kind === 'email_send' && p.body && (
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 460, whiteSpace: 'pre-wrap' }}>
+                              {String(p.body).slice(0, 150)}{String(p.body).length > 150 ? '…' : ''}
+                            </div>
+                          )}
+                          {item.kind === 'email_send' && (
+                            <span style={{ fontSize: 11, color: '#f59e0b' }}>⚠ Confirming sends this email immediately to a real recipient.</span>
+                          )}
                           {hasConflicts && (
                             <span style={{ color: '#f59e0b', fontSize: 11 }}>⚠ same date as: {conflictDetail}</span>
                           )}

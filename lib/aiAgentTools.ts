@@ -765,3 +765,80 @@ export async function execStagePersonnelUpsert(
 
   return { action_type: 'personnel_upsert' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Email — outbound only. Confirming the staged proposal triggers a real
+// send to a real person outside the platform — irreversible external side
+// effect. Recipient is verified against the venue's on-file email so the
+// model cannot invent an address.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const STAGE_EMAIL_TOOL = {
+  name: 'stage_email',
+  description:
+    "Propose an email to a venue contact and its full body. Does NOT send — " +
+    "stages a proposal showing the exact recipient, subject, and body for the " +
+    "user to confirm; confirming sends it immediately. Always call find_venue " +
+    "first to get a real contact — never invent an email address. If the venue " +
+    "has no contact email on file, say so and ask the user for one instead of " +
+    "calling this tool.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      venue_id: { type: 'string', description: 'UUID from find_venue. Required.' },
+      booking_id: { type: 'string', description: 'UUID of the related booking, if any.' },
+      recipient: { type: 'string', description: "Venue contact's email address, from find_venue's result. Never invented." },
+      subject: { type: 'string' },
+      body: { type: 'string', description: 'Plain text body. Write in the style shown in the style examples provided.' },
+      category: {
+        type: 'string',
+        enum: ['target','follow_up_1','follow_up_2','confirmation','decline','advance','thank_you','reply'],
+      },
+    },
+    required: ['venue_id', 'recipient', 'subject', 'body'],
+  },
+};
+
+export async function execStageEmail(
+  actId: string,
+  userId: string,
+  args: {
+    venue_id: string;
+    booking_id?: string;
+    recipient: string;
+    subject: string;
+    body: string;
+    category?: string;
+  }
+) {
+  const { data: venue, error: venueErr } = await supabase
+    .from('venues')
+    .select('id, name, booking_contact, email')
+    .eq('id', args.venue_id)
+    .eq('act_id', actId)
+    .maybeSingle();
+  if (venueErr) throw new Error(`Lookup failed: ${venueErr.message}`);
+  if (!venue) throw new Error('That venue was not found for this band.');
+  if (args.recipient !== venue.email) {
+    throw new Error("Recipient email doesn't match this venue's contact on file. Use the email returned by find_venue.");
+  }
+
+  const payload = {
+    venue_id: args.venue_id,
+    venue_name: venue.name,
+    booking_id: args.booking_id,
+    recipient: args.recipient,
+    subject: args.subject,
+    body: args.body,
+    category: args.category ?? 'target',
+  };
+
+  const { data: staged, error: stageErr } = await supabase
+    .from('ai_staged_actions')
+    .insert({ act_id: actId, created_by: userId, action_type: 'email_send', payload })
+    .select()
+    .single();
+  if (stageErr) throw new Error(`Failed to stage proposal: ${stageErr.message}`);
+
+  return { action_type: 'email_send' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
+}
