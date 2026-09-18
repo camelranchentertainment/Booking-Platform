@@ -324,6 +324,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (error) throw error;
           result = data;
         }
+      } else if (staged.action_type === 'expense_archive') {
+        // Soft-delete: set archived_at timestamp. Never hard-deletes.
+        const { data, error } = await supabase
+          .from('expenses')
+          .update({ archived_at: new Date().toISOString() })
+          .eq('id', p.expense_id)
+          .eq('act_id', profile.act_id)
+          .is('archived_at', null)
+          .select('id, category, amount, expense_date, archived_at')
+          .single();
+        if (error) throw error;
+        result = data;
+      } else if (staged.action_type === 'social_post_draft') {
+        // Insert a pending draft — publish.ts requires status='approved' before posting.
+        const { data, error } = await supabase
+          .from('social_queue')
+          .insert({
+            act_id:     profile.act_id,
+            platform:   p.platform,
+            content:    p.content,
+            status:     'pending',
+            booking_id: p.booking_id ?? null,
+          })
+          .select('id, platform, status, created_at')
+          .single();
+        if (error) throw error;
+        result = data;
       } else {
         throw new Error(`Unknown action_type: ${staged.action_type}`);
       }

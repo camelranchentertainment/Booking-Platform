@@ -657,7 +657,9 @@ export default function BandDashboard() {
                       else if (item.kind === 'venue_and_booking') summary = `New venue + show: ${p.venue_name} (${p.venue_city}, ${p.venue_state}) — ${p.show_date}`;
                       else if (item.kind === 'tour_create') summary = `New tour: ${p.name}${p.start_date ? ` (${p.start_date}${p.end_date ? ` – ${p.end_date}` : ''})` : ''}`;
                       else if (item.kind === 'calendar_settings_update') summary = `Calendar: ${p.sync_enabled !== undefined ? (p.sync_enabled ? 'sync ON' : 'sync OFF') : ''}${p.calendar_name ? ` · name: ${p.calendar_name}` : ''}`;
-                      else if (item.kind === 'personnel_upsert') summary = `Roster: ${p.name || '(unnamed)'}${p.instrument_role ? ` — ${p.instrument_role}` : ''}${p.default_pay_amount ? ` · $${p.default_pay_amount}` : ''}`;
+                      else if (item.kind === 'personnel_upsert') summary = `Roster: ${p.name || '(unnamed)'}${p.instrument_role ? ` — ${p.instrument_role}` : ''}`;
+                      else if (item.kind === 'expense_archive') summary = `Archive expense: ${p.category} — $${p.amount} (${p.expense_date})`;
+                      else if (item.kind === 'social_post_draft') summary = `Social draft [${p.platform}]: ${String(p.content || '').slice(0, 60)}${(p.content || '').length > 60 ? '…' : ''}`;
                       else if (item.kind === 'payment_settle') {
                         if (p.agreed_amount != null) {
                           summary = `Contracted: ${p.venue_name || ''}${p.show_date ? ` — ${p.show_date}` : ''} · $${p.agreed_amount}`;

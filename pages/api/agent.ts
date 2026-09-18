@@ -12,6 +12,9 @@ import {
   execStageTourInsert,
   execStageVenueAndBooking,
   execStagePaymentSettle,
+  execFindMedia,
+  execStageSocialDraft,
+  execStageExpenseArchive,
 } from '../../lib/aiAgentTools';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { formatShowDate } from '../../lib/formatDate';
@@ -27,10 +30,10 @@ workflows, troubleshooting). When the user asks a "how do I..." or "what is..." 
 platform itself, answer it directly and confidently in plain text using that documentation — do not
 deflect to a separate help page, and do not say you don't know how the platform works.
 
-You can: answer pipeline questions, answer platform how-to questions, draft outreach, find venues, queue
-bulk email batches (with user approval first), and propose creating tours, adding/updating shows,
-travel days, tour notes, projected expenses, and recording payments received
-(with user approval first — you never write directly).
+You can: answer pipeline questions, platform how-to questions, analytics and history, draft outreach,
+find venues, queue bulk email batches (with user approval first), and propose creating tours, shows,
+travel days, tour notes, expenses (add or archive), payment recording, social post drafts, and roster
+additions (all writes require user approval first — you never write directly, you never hard-delete).
 
 CRITICAL FORMATTING RULE:
 When the user asks to send bulk outreach, find venues in a city/region, OR add/update anything about a
@@ -62,6 +65,17 @@ can describe several things (4 shows, 2 travel days, notes, a budget line) in on
 Only include the fields you actually have values for on each item (all fields except kind/date are
 optional per item). Never invent a venue_id or tour_id — those get resolved server-side by name. If a
 venue doesn't exist yet and you don't know its city/state, ask the user before staging that item.
+
+For archiving an expense (soft-removes it — record stays in the database, hidden from normal views):
+{"reply":"<conversational text>","action":{"type":"expense_archive","expense_id":"<id from Expenses context>"}}
+expense_id must come from the "Expenses" section of your context — never invent one.
+The agent CANNOT hard-delete expenses. Archive is the only removal action available, ever.
+
+For drafting a social post (queues it as pending — CANNOT publish directly):
+{"reply":"<conversational text>","action":{"type":"social_post_draft","platform":"<instagram|facebook|youtube|tiktok|discord>","content":"<post text>","booking_id":"<optional — only if about a specific show>"}}
+SOCIAL RULE: Drafts you create are status=pending. Scott must go to the Socials page and manually
+approve before anything publishes. NEVER publish, auto-approve, or bypass this. No exceptions, no
+"always approve this type" shortcuts.
 
 Money mentioned for a show can mean one of two different things — get this right, it matters:
 
@@ -111,27 +125,76 @@ confirm the tour/show name so it can be found. Never invent a person to contact,
 capability that isn't real — an honest "I don't have that in front of me" is always correct; a
 plausible-sounding guess is not.
 
+═══════════════════ MODULE ACCESS MATRIX ═══════════════════
+
+READ (available from your context):
+  ✓ Shows / Tours / Pipeline — full detail including IDs
+  ✓ Financials / Analytics — Earned = actual_amount_received on completed shows only;
+    Potential = agreed_amount on confirmed future shows only
+  ✓ History — last 8 completed shows with dates, venues, and amounts
+  ✓ Expenses — last 10 unarchived entries with IDs (use IDs for archive references)
+  ✓ Media — file name, type, and public URL only; no documents, no raw storage paths
+  ✓ Members — name and role ONLY, and only when needed for an add-member action
+
+WRITE (all writes require explicit user approval via staged-confirm — no direct DB writes ever):
+  ✓ Tours, Shows, Travel days, Tour notes
+  ✓ Expenses — add new or archive existing (no hard deletes, ever)
+  ✓ Payments — record contracted fee or money received
+  ✓ Roster — add new members only; cannot list all members or read pay/contact details
+  ✓ Social drafts — pending status only; every single post requires Scott's manual Socials-page approval
+  ✓ Bulk email — queued for review; every send requires Scott's explicit approval on that specific batch
+
+HARD LOCKOUTS — NO ACCESS UNDER ANY CIRCUMSTANCES:
+  ✗ Settings — cannot read or write anything here; not keys, not config, nothing
+  ✗ Sign out — cannot trigger, suggest, or assist with signing out under any circumstance
+  ✗ Theme toggle — cannot change the visual theme or light/dark mode setting
+  ✗ Help page — cannot navigate the user to or open the Help section as an action
+
 Always confirm the list BEFORE sending or saving anything. Wait for explicit approval.`;
 
 // ── Build context string from live DB data ─────────────────────────────────────
-async function buildContext(service: ReturnType<typeof getServiceClient>, actId: string): Promise<string> {
+async function buildContext(service: ReturnType<typeof getServiceClient>, actId: string, userId: string): Promise<string> {
   const today = new Date().toISOString().split('T')[0];
-  const [actRes, bookingsRes, toursRes] = await Promise.all([
+  const [actRes, bookingsRes, toursRes, historyRes, todayNoteRes, expensesRes] = await Promise.all([
     service.from('acts').select('act_name, genre, bio, website').eq('id', actId).single(),
-    // Include cancelled bookings too — a "cancel this show" request needs to be able to
-    // find and reference a show even if it was already marked cancelled, and the model
-    // needs to see full tour rosters, not just a global next-5 cross-tour slice.
+    // Include cancelled bookings — "cancel this show" needs to find and reference
+    // a show even after it's cancelled; the model needs full tour rosters too.
     service.from('bookings')
       .select('id, status, show_date, entry_type, tour_id, venue:venues(name, city, state)')
       .eq('act_id', actId).order('show_date').limit(100),
     service.from('tours')
       .select('id, name, status, start_date, end_date, routing_notes')
       .eq('act_id', actId).neq('status', 'cancelled').limit(20),
+    // Completed show history with financial context for analytics questions
+    service.from('bookings')
+      .select('id, show_date, agreed_amount, actual_amount_received, payment_status, venue:venues(name, city, state)')
+      .eq('act_id', actId)
+      .eq('status', 'completed')
+      .order('show_date', { ascending: false })
+      .limit(8),
+    // Today's note for this user (if any) — gives current-day context
+    service.from('daily_notes')
+      .select('content')
+      .eq('user_id', userId)
+      .eq('note_date', today)
+      .maybeSingle(),
+    // Recent unarchived expenses — IDs are included so the agent can reference them
+    // in expense_archive proposals without hallucinating IDs
+    service.from('expenses')
+      .select('id, category, amount, expense_date, status, notes')
+      .eq('act_id', actId)
+      .is('archived_at', null)
+      .order('expense_date', { ascending: false })
+      .limit(10),
   ]);
 
   const act = actRes.data;
   const bookings = bookingsRes.data || [];
   const tours = toursRes.data || [];
+  const history = historyRes.data || [];
+  const todayNote = todayNoteRes.data?.content ?? null;
+  const expenses = expensesRes.data || [];
+
   const upcoming = bookings.filter((b: any) => ['confirmed', 'advancing'].includes(b.status) && b.show_date >= today).slice(0, 5);
   const pipeline = bookings.filter((b: any) => ['pitch', 'negotiation', 'hold'].includes(b.status));
 
@@ -153,11 +216,26 @@ async function buildContext(service: ReturnType<typeof getServiceClient>, actId:
     }
   }
 
+  const historyLines = history.map((b: any) => {
+    const venue = b.venue ? `${b.venue.name}${b.venue.city ? `, ${b.venue.city}` : ''}` : 'TBD';
+    const fin = b.actual_amount_received != null
+      ? ` · received $${b.actual_amount_received}`
+      : b.agreed_amount != null
+      ? ` · agreed $${b.agreed_amount}`
+      : '';
+    return `  - id=${b.id} ${b.show_date}: ${venue}${fin}`;
+  });
+
+  const expenseLines = expenses.map((e: any) =>
+    `  - id=${e.id} ${e.expense_date} ${e.category} $${e.amount} (${e.status})${e.notes ? ` · ${String(e.notes).slice(0, 40)}` : ''}`
+  );
+
   return [
     `Act: ${act?.act_name}${act?.genre ? ` (${act.genre})` : ''}`,
     act?.bio ? `Bio: ${act.bio}` : '',
     act?.website ? `Website: ${act.website}` : '',
     `Today: ${today}`,
+    ...(todayNote ? ['', `Today's note: ${todayNote.slice(0, 300)}${todayNote.length > 300 ? '…' : ''}`] : []),
     '',
     `Upcoming confirmed shows, next 5 across all tours (${upcoming.length}):`,
     ...upcoming.map((b: any) => `  - ${b.show_date}: ${b.venue?.name || 'TBD'}${b.venue?.city ? `, ${b.venue.city}` : ''}`),
@@ -167,6 +245,12 @@ async function buildContext(service: ReturnType<typeof getServiceClient>, actId:
     '',
     `Tours (${tours.length}) — full show detail per tour:`,
     ...tourLines,
+    '',
+    `History — last ${historyLines.length} completed shows:`,
+    ...(historyLines.length ? historyLines : ['  (none yet)']),
+    '',
+    `Expenses — last ${expenseLines.length} unarchived (use id for archive requests):`,
+    ...(expenseLines.length ? expenseLines : ['  (none)']),
   ].filter(s => s !== null).join('\n');
 }
 
@@ -423,7 +507,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const anthropicKey = await getSetting('anthropic_api_key');
   if (!anthropicKey) return res.status(500).json({ error: 'AI not configured. Add your Anthropic API key in Settings.' });
 
-  const context = await buildContext(service, actId);
+  const context = await buildContext(service, actId, user.id);
   const client = new Anthropic({ apiKey: anthropicKey });
 
   const messages: Anthropic.MessageParam[] = [...history, { role: 'user', content: message }];
@@ -510,6 +594,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that payment update." });
+        }
+      }
+
+      if (parsed?.action?.type === 'expense_archive') {
+        const { expense_id } = parsed.action;
+        try {
+          const result = await execStageExpenseArchive(actId, user.id, { expense_id });
+          const p = result.proposal;
+          return res.status(200).json({
+            reply: parsed.reply || `Staged archive for expense: ${p.category} $${p.amount} (${p.expense_date}). Confirm to archive it.`,
+            action: { type: 'stage_items', staged: [{ kind: 'expense_archive', ...result }], errors: [] },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that expense archive." });
+        }
+      }
+
+      if (parsed?.action?.type === 'social_post_draft') {
+        const { platform, content, booking_id } = parsed.action;
+        try {
+          const result = await execStageSocialDraft(actId, user.id, { platform, content, booking_id });
+          return res.status(200).json({
+            reply: parsed.reply || `Staged a ${platform} draft. Confirm to save it to the Socials queue — it'll be "pending" until you approve it on the Socials page.`,
+            action: { type: 'stage_items', staged: [{ kind: 'social_post_draft', ...result }], errors: [] },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that social draft." });
         }
       }
 

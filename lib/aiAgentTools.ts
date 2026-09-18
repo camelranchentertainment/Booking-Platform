@@ -718,9 +718,10 @@ export const PERSONNEL_UPSERT_TOOL = {
 };
 
 export async function execFindPersonnel(actId: string, name: string) {
+  // Intentionally omits pay, phone, email — the agent has no need for those.
   const { data, error } = await supabase
     .from('act_personnel')
-    .select('id, name, instrument_role, default_pay_amount, phone, email, is_active')
+    .select('id, name, instrument_role')
     .eq('act_id', actId)
     .ilike('name', `%${name}%`)
     .limit(5);
@@ -764,4 +765,83 @@ export async function execStagePersonnelUpsert(
   if (stageErr) throw new Error(`Failed to stage proposal: ${stageErr.message}`);
 
   return { action_type: 'personnel_upsert' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
+}
+
+// ── Media read (images/audio/logos only — no documents, no raw storage paths) ───
+
+export async function execFindMedia(actId: string, { name, file_type }: { name?: string; file_type?: string } = {}) {
+  let query = supabase
+    .from('media_library')
+    .select('id, file_name, file_type, public_url, alt_text, is_primary_logo, created_at')
+    .eq('act_id', actId)
+    .neq('file_type', 'document');
+  if (name) query = (query as any).ilike('file_name', `%${name}%`);
+  if (file_type) query = (query as any).eq('file_type', file_type);
+  const { data, error } = await (query as any).order('created_at', { ascending: false }).limit(20);
+  if (error) throw new Error(`Media search failed: ${error.message}`);
+  return data ?? [];
+}
+
+// ── Stage social post draft (status=pending — Scott must approve on Socials page) ─
+
+export async function execStageSocialDraft(
+  actId: string,
+  userId: string,
+  args: { platform: string; content: string; booking_id?: string }
+) {
+  const allowed = ['instagram', 'facebook', 'youtube', 'tiktok', 'discord'];
+  if (!allowed.includes(args.platform)) {
+    throw new Error(`platform must be one of: ${allowed.join(', ')}`);
+  }
+  if (!args.content?.trim()) throw new Error('content is required for a social draft.');
+
+  const payload = {
+    platform: args.platform,
+    content: args.content,
+    booking_id: args.booking_id ?? null,
+  };
+
+  const { data: staged, error } = await supabase
+    .from('ai_staged_actions')
+    .insert({ act_id: actId, created_by: userId, action_type: 'social_post_draft', payload })
+    .select()
+    .single();
+  if (error) throw new Error(`Failed to stage social draft: ${error.message}`);
+
+  return { action_type: 'social_post_draft' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
+}
+
+// ── Stage expense archive (soft-delete — sets archived_at, never hard-deletes) ──
+
+export async function execStageExpenseArchive(
+  actId: string,
+  userId: string,
+  args: { expense_id: string }
+) {
+  const { data: expense, error: lookupErr } = await supabase
+    .from('expenses')
+    .select('id, category, amount, expense_date, status')
+    .eq('id', args.expense_id)
+    .eq('act_id', actId)
+    .is('archived_at', null)
+    .maybeSingle();
+  if (lookupErr) throw new Error(`Expense lookup failed: ${lookupErr.message}`);
+  if (!expense) throw new Error("That expense wasn't found for this act or is already archived.");
+
+  const payload = {
+    expense_id:   expense.id,
+    category:     expense.category,
+    amount:       expense.amount,
+    expense_date: expense.expense_date,
+    status:       expense.status,
+  };
+
+  const { data: staged, error: stageErr } = await supabase
+    .from('ai_staged_actions')
+    .insert({ act_id: actId, created_by: userId, action_type: 'expense_archive', payload })
+    .select()
+    .single();
+  if (stageErr) throw new Error(`Failed to stage archive: ${stageErr.message}`);
+
+  return { action_type: 'expense_archive' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
 }
