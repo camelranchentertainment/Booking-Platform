@@ -80,7 +80,8 @@ export default function BandDashboard() {
   const [setupSaving, setSetupSaving] = useState(false);
   const [setupError, setSetupError]   = useState('');
 
-  const threadRef = useRef<HTMLDivElement>(null);
+  const threadRef   = useRef<HTMLDivElement>(null);
+  const agentInputRef = useRef<HTMLInputElement>(null);
   const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => { load(); }, []);
@@ -161,6 +162,16 @@ export default function BandDashboard() {
       setMessages([{ role: 'assistant' as const, content: buildGreeting() }]);
     }
   }, [myAct, userProfile, loading, greetingSent, conversationLoaded, targetsCount, confirmedCount, toursCount]);
+
+  // Focus the agent input once myAct loads (input isn't in the DOM until then)
+  useEffect(() => {
+    if (myAct) agentInputRef.current?.focus();
+  }, [myAct]);
+
+  // Refocus after agentLoading clears — covers post-send, post-error, post-response
+  useEffect(() => {
+    if (!agentLoading) agentInputRef.current?.focus();
+  }, [agentLoading]);
 
   const load = async () => {
     setLoading(true);
@@ -810,7 +821,10 @@ export default function BandDashboard() {
                   </span>
                 </div>
               )}
-              <div style={{ display: 'flex', gap: '0.5rem', padding: '0.5rem 1.25rem 0.75rem' }}>
+              <form
+                onSubmit={e => { e.preventDefault(); sendMessage(agentInput); }}
+                style={{ display: 'flex', gap: '0.5rem', padding: '0.5rem 1.25rem 0.75rem' }}
+              >
                 {/* Hidden file input */}
                 <input
                   ref={fileInputRef}
@@ -821,6 +835,7 @@ export default function BandDashboard() {
                 />
                 {/* Paperclip button */}
                 <button
+                  type="button"
                   title="Attach file (CSV, Excel, PDF)"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={agentLoading || fileLoading}
@@ -835,6 +850,7 @@ export default function BandDashboard() {
                   {fileLoading ? '⏳' : '📎'}
                 </button>
                 <input
+                  ref={agentInputRef}
                   className="input"
                   style={{
                     flex: 1, fontSize: 14,
@@ -846,10 +862,10 @@ export default function BandDashboard() {
                   placeholder={attachedFile ? 'Add a message or just hit send…' : `Ask about ${myAct?.act_name || 'your pipeline'}, or attach a show list…`}
                   value={agentInput}
                   onChange={e => setAgentInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(agentInput); } }}
                   disabled={agentLoading}
                 />
                 <button
+                  type="submit"
                   className="btn"
                   style={{
                     flexShrink: 0,
@@ -861,12 +877,11 @@ export default function BandDashboard() {
                     fontWeight: 700,
                     fontSize: 16,
                   }}
-                  onClick={() => sendMessage(agentInput)}
                   disabled={agentLoading || fileLoading}
                 >
                   {agentLoading ? '…' : '→'}
                 </button>
-              </div>
+              </form>
             </div>
           </div>
 
