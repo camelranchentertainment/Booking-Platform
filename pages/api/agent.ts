@@ -485,9 +485,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (parsed?.action?.type === 'find_venue') {
         const { name, city } = parsed.action;
         const venues = await execFindVenue(actId, { name, city });
-        const replyText = venues.length > 0
-          ? (parsed.reply || `Found ${venues.length} matching venue${venues.length > 1 ? 's' : ''}.`)
-          : `No venue found matching "${name || city}". Check the spelling, or it may be listed under a different name.`;
+        let replyText: string;
+        if (venues.length === 0) {
+          replyText = `No venue found matching "${name || city}". Check the spelling, or it may be listed under a different name.`;
+        } else {
+          const lines = venues.map((v: any) => {
+            const dates = (v.bookings || []).map((b: any) => b.show_date).filter(Boolean).join(', ');
+            return `- ${v.name}${v.city ? ` (${v.city}${v.state ? `, ${v.state}` : ''})` : ''} — id: ${v.id}, email: ${v.email || 'none on file'}${dates ? `, show date(s): ${dates}` : ''}`;
+          }).join('\n');
+          replyText = venues.length === 1
+            ? `Found it:\n${lines}`
+            : `Found ${venues.length} matches — which one?\n${lines}`;
+        }
         return res.status(200).json({ reply: replyText, action: { type: 'find_venue', venues } });
       }
 

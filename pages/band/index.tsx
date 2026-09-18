@@ -28,7 +28,11 @@ type StageItemsAction = {
   staged: Array<{ kind: string; staged_action_id: string; proposal: any; conflicts?: any[] }>;
   errors: string[];
 };
-type AgentAction = TourOutreachAction | CitySearchAction | StageItemsAction;
+type FindVenueAction = {
+  type: 'find_venue';
+  venues: { id: string; name: string; city?: string; state?: string; email?: string | null; bookings?: { show_date: string }[] }[];
+};
+type AgentAction = TourOutreachAction | CitySearchAction | StageItemsAction | FindVenueAction;
 
 const QUICK_CHIPS: { label: string; href?: string; prompt?: string }[] = [
   { label: 'Show my targets',       href: '/tours' },
@@ -401,7 +405,7 @@ export default function BandDashboard() {
         actId:   myAct.id,
         tourId:  pendingAction.tourId,
       };
-    } else {
+    } else if (pendingAction.type === 'city_search') {
       payload = {
         venues:    pendingAction.venues.filter(v => selectedVenueIds.has(v.id)).map(v => ({ venueId: v.id, name: v.name, city: v.city, state: v.state, email: v.email, contactName: null })),
         subject:   draftSubject || `Booking inquiry — ${myAct.act_name}`,
@@ -410,6 +414,8 @@ export default function BandDashboard() {
         tourId:    pendingAction.activeTour?.id || null,
         addToTour: !!pendingAction.activeTour,
       };
+    } else {
+      return;
     }
 
     try {
