@@ -49,8 +49,6 @@ export default function BandDashboard() {
   const [myAct, setMyAct]             = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [targetsCount, setTargetsCount]   = useState(0);
-  const [confirmedCount, setConfirmedCount] = useState(0);
-  const [confirmedTotalCount, setConfirmedTotalCount] = useState(0);
   const [toursCount, setToursCount]     = useState(0);
   const [upcomingShows, setUpcomingShows] = useState<any[]>([]);
   const [loading, setLoading]           = useState(true);
@@ -119,7 +117,7 @@ export default function BandDashboard() {
     const hour = new Date().getHours();
     const greetingWord = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
     const firstName = (userProfile?.display_name || '').split(' ')[0] || myAct?.act_name || 'there';
-    return `${greetingWord} ${firstName}! Currently you have ${toursCount} active tour${toursCount !== 1 ? 's' : ''} with ${confirmedCount} confirmed show${confirmedCount !== 1 ? 's' : ''} and ${targetsCount} target${targetsCount !== 1 ? 's' : ''}. What should we work on today?`;
+    return `${greetingWord} ${firstName}! Currently you have ${toursCount} active tour${toursCount !== 1 ? 's' : ''} and ${targetsCount} target${targetsCount !== 1 ? 's' : ''} in the pipeline. What should we work on today?`;
   };
 
   const saveConversationHistory = (msgs: Array<{ role: string; content: string }>) => {
@@ -160,7 +158,7 @@ export default function BandDashboard() {
       setGreetingSent(true);
       setMessages([{ role: 'assistant' as const, content: buildGreeting() }]);
     }
-  }, [myAct, userProfile, loading, greetingSent, conversationLoaded, targetsCount, confirmedCount, toursCount]);
+  }, [myAct, userProfile, loading, greetingSent, conversationLoaded, targetsCount, toursCount]);
 
   const load = async () => {
     setLoading(true);
@@ -187,17 +185,16 @@ export default function BandDashboard() {
         const tourIds = (tourIdsRes.data || []).map((t: any) => t.id);
 
         const today = new Date().toISOString().slice(0, 10);
-        const [tvTargetRes, confirmedRes, confirmedTotalRes, toursRes, upcomingRes] = await Promise.all([
+        const [tvTargetRes, toursRes, upcomingRes] = await Promise.all([
           tourIds.length
             ? supabase.from('tour_venues').select('id', { count: 'exact', head: true }).in('tour_id', tourIds).eq('status', 'target')
             : Promise.resolve({ count: 0 }),
-          supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('act_id', actId).eq('status', 'confirmed').gte('show_date', today),
-          supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('act_id', actId).in('status', ['confirmed', 'completed']),
           supabase.from('tours').select('id', { count: 'exact', head: true }).eq('act_id', actId).in('status', ['planning', 'active']),
+          // Upcoming row shows confirmed-only shows — pitch/hold/target don't belong here
           supabase.from('bookings')
             .select('id, status, show_date, venue:venues(id, name, city, state)')
             .eq('act_id', actId)
-            .neq('status', 'cancelled')
+            .eq('status', 'confirmed')
             .not('show_date', 'is', null)
             .gte('show_date', today)
             .order('show_date')
@@ -205,8 +202,6 @@ export default function BandDashboard() {
         ]);
 
         setTargetsCount((tvTargetRes as any).count ?? 0);
-        setConfirmedCount((confirmedRes as any).count ?? 0);
-        setConfirmedTotalCount((confirmedTotalRes as any).count ?? 0);
         setToursCount((toursRes as any).count ?? 0);
         setUpcomingShows((upcomingRes as any).data || []);
       }
@@ -485,7 +480,7 @@ export default function BandDashboard() {
           .dash-act-name      { font-size:32px; }
           .dash-crb-badge     { display:flex; }
           .dash-upcoming-grid { grid-template-columns:repeat(2,1fr); }
-          .dash-stats-grid    { grid-template-columns:repeat(3,1fr); }
+          .dash-stats-grid    { grid-template-columns:repeat(2,1fr); }
           .dash-tiles-grid    { grid-template-columns:repeat(4,1fr); }
           .dash-appr-grid     { grid-template-columns:repeat(2,1fr); gap:0.25rem 1.5rem; }
           .dash-draft-grid    { grid-template-columns:1fr 2fr; }
@@ -642,9 +637,8 @@ export default function BandDashboard() {
           {/* ── Stat cards ──────────────────────────────────────────────────── */}
           <div className="dash-stats-grid">
             {([
-              { label: 'TARGETS',   value: targetsCount,   sub: 'venues in target list',   href: '/email?tab=outreach&status=target',    color: '#6B8FB5' },
-              { label: 'CONFIRMED', value: confirmedCount, sub: 'upcoming confirmed shows', href: '/email?tab=outreach&status=confirmed', color: '#4CAF50', total: confirmedTotalCount, totalSub: 'total confirmed + completed' },
-              { label: 'TOURS',     value: toursCount,     sub: 'planning or active',       href: '/tours',                               color: '#60a5fa' },
+              { label: 'TARGETS', value: targetsCount, sub: 'venues in target list', href: '/email?tab=outreach&status=target', color: '#6B8FB5' },
+              { label: 'TOURS',   value: toursCount,   sub: 'planning or active',         href: '/tours',                               color: '#60a5fa' },
             ] as any[]).map(card => (
               <Link key={card.label} href={card.href} style={{ textDecoration: 'none', display: 'block', padding: '1.25rem 1.5rem', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderTop: `3px solid ${card.color}`, position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s, box-shadow 0.15s', cursor: 'pointer' }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = card.color; e.currentTarget.style.boxShadow = `0 4px 16px ${card.color}22`; }}
