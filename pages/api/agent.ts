@@ -80,6 +80,12 @@ Money mentioned for a show can mean one of two different things — get this rig
     language, not the date.
     → {"reply":"...","action":{"type":"payment_settle","booking_id":"<id>","actual_amount_received":2500,"payment_status":"received"}}
 
+When correcting a previous classification (money was marked received but was actually just the
+contracted amount, or vice versa), you MUST explicitly clear the fields that no longer apply by
+setting them to null — omitting them leaves the old wrong values in place. Example: correcting a
+wrongly-marked "received" $2,500 to be the contracted amount instead:
+{"reply":"...","action":{"type":"payment_settle","booking_id":"<id>","agreed_amount":2500,"actual_amount_received":null,"payment_status":null}}
+
 If it's genuinely ambiguous and the show hasn't been played yet, default to (a) — recording a
 contracted amount that turns out wrong is a minor correction; wrongly marking money as received
 that was never received is a real accounting error. If you're unsure and the show HAS already

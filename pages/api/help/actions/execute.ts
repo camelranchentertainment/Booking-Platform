@@ -58,6 +58,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       let result: unknown;
 
       if (staged.action_type === 'booking_upsert') {
+        if (typeof p.notes === 'string' && /\$\s?\d/.test(p.notes)) {
+          throw new Error(
+            'This update includes a dollar amount in the notes field. Payment amounts must be recorded via payment_settle (agreed_amount for the contracted fee, or actual_amount_received/payment_status for money received), not written into notes. Please stage this again as a payment_settle action instead.'
+          );
+        }
         if (p.booking_id) {
           const { data, error } = await supabase
             .from('bookings')
@@ -268,12 +273,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } else if (staged.action_type === 'payment_settle') {
         // Explicit whitelist — agreed_amount, actual_amount_received, and payment_status ONLY.
         // Never touch fee or any other financial column here.
-        const updatePayload: { agreed_amount?: number; actual_amount_received?: number; payment_status?: string; updated_at: string } = {
+        const updatePayload: { agreed_amount?: number | null; actual_amount_received?: number | null; payment_status?: string | null; updated_at: string } = {
           updated_at: new Date().toISOString(),
         };
-        if (typeof p.agreed_amount === 'number') updatePayload.agreed_amount = p.agreed_amount;
-        if (typeof p.actual_amount_received === 'number') updatePayload.actual_amount_received = p.actual_amount_received;
-        if (typeof p.payment_status === 'string') updatePayload.payment_status = p.payment_status;
+        if (p.agreed_amount === null || typeof p.agreed_amount === 'number') updatePayload.agreed_amount = p.agreed_amount;
+        if (p.actual_amount_received === null || typeof p.actual_amount_received === 'number') updatePayload.actual_amount_received = p.actual_amount_received;
+        if (p.payment_status === null || typeof p.payment_status === 'string') updatePayload.payment_status = p.payment_status;
         const { data, error } = await supabase
           .from('bookings')
           .update(updatePayload)
