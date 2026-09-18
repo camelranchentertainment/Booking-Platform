@@ -601,7 +601,10 @@ export default function BandDashboard() {
           <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-panel)', border: '1px solid var(--border)', marginBottom: '1.25rem', minHeight: 240 }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>AI BOOKING AGENT</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                <img src="/booking-agent.png" alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 4 }} />
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>AI BOOKING AGENT</span>
+              </span>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 {messages.length > 1 && (
                   <button onClick={startNewChat} className="btn btn-ghost btn-sm" style={{ color: 'var(--text-muted)' }} disabled={agentLoading}>
