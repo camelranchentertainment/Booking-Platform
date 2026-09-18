@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabase';
@@ -76,6 +77,9 @@ function NotifBell({ userId, email, displayName }: { userId: string; email: stri
   const [invites, setInvites]     = useState<InviteNotif[]>([]);
   const [responding, setResponding] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [coords, setCoords] = useState<{ top: number; right: number } | null>(null);
 
   const load = useCallback(async () => {
     const [sysRes, invRes] = await Promise.all([
@@ -100,17 +104,29 @@ function NotifBell({ userId, email, displayName }: { userId: string; email: stri
 
   useEffect(() => { load(); }, [load]);
 
-  // Close on outside click
+  // Close on outside click — check both the button wrapper and the portaled dropdown
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        panelRef.current && !panelRef.current.contains(target) &&
+        (!dropdownRef.current || !dropdownRef.current.contains(target))
+      ) {
         setOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
+
+  const toggleOpen = () => {
+    if (!open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setCoords({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+    }
+    setOpen(v => !v);
+  };
 
   const dismissNotification = async (notifId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -154,10 +170,11 @@ function NotifBell({ userId, email, displayName }: { userId: string; email: stri
   const total = sysNotifs.length + invites.length;
 
   return (
-    <div ref={panelRef} style={{ position: 'relative', zIndex: 9999 }}>
+    <div ref={panelRef}>
       {/* Bell button — icon only, no box */}
       <button
-        onClick={() => setOpen(v => !v)}
+        ref={buttonRef}
+        onClick={toggleOpen}
         style={{
           position: 'relative',
           background: 'transparent',
@@ -189,17 +206,22 @@ function NotifBell({ userId, email, displayName }: { userId: string; email: stri
         )}
       </button>
 
-      {/* Dropdown panel */}
-      {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-          width: 320, maxHeight: 420, overflowY: 'auto',
-          background: 'var(--bg-panel)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
-          zIndex: 9999,
-        }}>
+      {/* Dropdown panel — portaled to document.body to escape any ancestor stacking context */}
+      {open && coords && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: 'fixed',
+            top: coords.top,
+            right: coords.right,
+            width: 320, maxHeight: 420, overflowY: 'auto',
+            background: 'var(--bg-panel)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
+            zIndex: 9999,
+          }}
+        >
           {/* Header */}
           <div style={{
             padding: '0.65rem 1rem',
@@ -323,7 +345,8 @@ function NotifBell({ userId, email, displayName }: { userId: string; email: stri
 
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -465,9 +488,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
           />
           {/* Bell — only when logged in */}
           {user ? (
-            <div style={{ position: 'relative', zIndex: 201 }}>
-              <NotifBell userId={user.id} email={user.email ?? ''} displayName={profile?.display_name || ''} />
-            </div>
+            <NotifBell userId={user.id} email={user.email ?? ''} displayName={profile?.display_name || ''} />
           ) : (
             <div style={{ width: 36, flexShrink: 0 }} />
           )}

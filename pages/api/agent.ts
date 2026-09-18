@@ -11,6 +11,7 @@ import {
   execStageExpense,
   execStageTourInsert,
   execStageVenueAndBooking,
+  execStagePaymentSettle,
 } from '../../lib/aiAgentTools';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { formatShowDate } from '../../lib/formatDate';
@@ -27,8 +28,8 @@ platform itself, answer it directly and confidently in plain text using that doc
 deflect to a separate help page, and do not say you don't know how the platform works.
 
 You can: answer pipeline questions, answer platform how-to questions, draft outreach, find venues, queue
-bulk email batches (with user approval first), and propose creating tours and adding/updating shows,
-travel days, tour notes, and projected expenses
+bulk email batches (with user approval first), and propose creating tours, adding/updating shows,
+travel days, tour notes, projected expenses, and recording payments received
 (with user approval first — you never write directly).
 
 CRITICAL FORMATTING RULE:
@@ -61,6 +62,38 @@ can describe several things (4 shows, 2 travel days, notes, a budget line) in on
 Only include the fields you actually have values for on each item (all fields except kind/date are
 optional per item). Never invent a venue_id or tour_id — those get resolved server-side by name. If a
 venue doesn't exist yet and you don't know its city/state, ask the user before staging that item.
+
+Money mentioned for a show can mean one of two different things — get this right, it matters:
+
+(a) The CONTRACTED FEE — what the show pays, the deal amount, the rate. Use this whenever the
+    show hasn't been played yet (its date is in the future, or its status isn't "completed") and
+    the message doesn't say money has actually changed hands. Examples: "the Ohio show pays
+    2500", "update the show, 2500 pay", "we're getting 1500 for this one", "the fee is 800".
+    → {"reply":"...","action":{"type":"payment_settle","booking_id":"<id>","agreed_amount":2500}}
+    Do NOT set payment_status or actual_amount_received for this case — nothing has been
+    received yet, only agreed to.
+
+(b) MONEY ACTUALLY RECEIVED — a deposit or payment that has genuinely come in. Use this only
+    when the language clearly says money arrived: "got paid", "we received $X", "deposit came
+    in", "[venue] sent us $X", "collected $X", "they paid us". This can apply whether or not the
+    show has been played yet (deposits often come in advance) — the deciding factor is the
+    language, not the date.
+    → {"reply":"...","action":{"type":"payment_settle","booking_id":"<id>","actual_amount_received":2500,"payment_status":"received"}}
+
+When correcting a previous classification (money was marked received but was actually just the
+contracted amount, or vice versa), you MUST explicitly clear the fields that no longer apply by
+setting them to null — omitting them leaves the old wrong values in place. Example: correcting a
+wrongly-marked "received" $2,500 to be the contracted amount instead:
+{"reply":"...","action":{"type":"payment_settle","booking_id":"<id>","agreed_amount":2500,"actual_amount_received":null,"payment_status":null}}
+
+If it's genuinely ambiguous and the show hasn't been played yet, default to (a) — recording a
+contracted amount that turns out wrong is a minor correction; wrongly marking money as received
+that was never received is a real accounting error. If you're unsure and the show HAS already
+been played, ask the user to clarify rather than guessing.
+
+booking_id must come from the "Tours" section of your context — never invent one.
+
+IMPORTANT — payment_settle takes priority over the general show-update instructions below whenever the message mentions money at all, even if it also says "update the show." A dollar amount attached to a show means payment_settle, full stop, never booking_upsert. Only use booking_upsert for changes to status, date, venue, or notes where no money is mentioned.
 
 To CANCEL or UPDATE an existing show (not create a new one), find it in the "Tours" section of your
 context below — each show is listed with its real id (e.g. "id=abc123"). Include that as "booking_id"
@@ -457,6 +490,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that tour." });
+        }
+      }
+
+      if (parsed?.action?.type === 'payment_settle') {
+        const { booking_id, agreed_amount, actual_amount_received, payment_status } = parsed.action;
+        try {
+          const result = await execStagePaymentSettle(actId, user.id, { booking_id, agreed_amount, actual_amount_received, payment_status });
+          const p = result.proposal;
+          const amountPart = p.agreed_amount != null
+            ? `Contracted: $${p.agreed_amount}`
+            : p.actual_amount_received != null
+            ? `Received: $${p.actual_amount_received}${p.payment_status ? ` · ${p.payment_status}` : ''}`
+            : null;
+          const desc = [p.venue_name, p.show_date, amountPart].filter(Boolean).join(' · ');
+          return res.status(200).json({
+            reply: parsed.reply || `Staged payment update for review: ${desc}. Confirm to save.`,
+            action: { type: 'stage_items', staged: [{ kind: 'payment_settle', ...result }], errors: [] },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that payment update." });
         }
       }
 

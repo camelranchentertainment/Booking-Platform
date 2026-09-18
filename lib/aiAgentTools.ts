@@ -556,6 +556,68 @@ export async function execStageExpense(
   return { action_type: 'expense_insert' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
 }
 
+export const STAGE_PAYMENT_SETTLE_TOOL = {
+  name: 'stage_payment_settle',
+  description:
+    "Propose updating a booking's payment fields. Does NOT write to the database — " +
+    "stages a proposal the user must confirm. The booking must already be " +
+    "visible in the current tour/show context — never invent a booking_id.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      booking_id: { type: 'string', description: 'UUID of the booking to update.' },
+      agreed_amount: { type: 'number', description: 'The contracted fee for this show — what it pays. Use this when no money has actually changed hands yet.' },
+      actual_amount_received: { type: 'number', description: 'Money actually received so far — a deposit or full payment already in hand.' },
+      payment_status: {
+        type: 'string',
+        enum: ['pending', 'received', 'settled'],
+      },
+    },
+    required: ['booking_id'],
+  },
+};
+
+export async function execStagePaymentSettle(
+  actId: string,
+  userId: string,
+  args: { booking_id: string; agreed_amount?: number; actual_amount_received?: number; payment_status?: string }
+) {
+  if (args.agreed_amount === undefined && args.actual_amount_received === undefined && args.payment_status === undefined) {
+    throw new Error('Nothing to change — specify agreed_amount, actual_amount_received, and/or payment_status.');
+  }
+
+  const { data: current, error: curErr } = await supabase
+    .from('bookings')
+    .select('id, agreed_amount, actual_amount_received, payment_status, show_date, venue:venues(name)')
+    .eq('id', args.booking_id)
+    .eq('act_id', actId)
+    .maybeSingle();
+  if (curErr) throw new Error(`Lookup failed: ${curErr.message}`);
+  if (!current) throw new Error('That booking was not found for this band.');
+
+  // Explicit whitelist — only these three fields, ever.
+  const payload: Record<string, any> = {
+    booking_id: args.booking_id,
+    previous_agreed_amount: (current as any).agreed_amount,
+    previous_actual_amount_received: current.actual_amount_received,
+    previous_payment_status: current.payment_status,
+    show_date: current.show_date,
+    venue_name: (current as any).venue?.name,
+  };
+  if (args.agreed_amount !== undefined) payload.agreed_amount = args.agreed_amount;
+  if (args.actual_amount_received !== undefined) payload.actual_amount_received = args.actual_amount_received;
+  if (args.payment_status !== undefined) payload.payment_status = args.payment_status;
+
+  const { data: staged, error: stageErr } = await supabase
+    .from('ai_staged_actions')
+    .insert({ act_id: actId, created_by: userId, action_type: 'payment_settle', payload })
+    .select()
+    .single();
+  if (stageErr) throw new Error(`Failed to stage proposal: ${stageErr.message}`);
+
+  return { action_type: 'payment_settle' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Calendar settings — sync toggle + display name ONLY.
 // NEVER read or write google_access_token, google_refresh_token,
