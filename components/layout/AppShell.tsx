@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { UserProfile } from '../../lib/types';
 import { useAuth } from '../../contexts/AuthContext';
 import Sidebar from './Sidebar';
+import BrandLogo from '../BrandLogo';
 
 interface Props {
   children: React.ReactNode;
@@ -481,10 +482,10 @@ export default function AppShell({ children, requireRole = null }: Props) {
           }} />
           {/* Left spacer to keep logo centred */}
           <div style={{ width: 36, flexShrink: 0 }} />
-          <img
-            src="/camel-ranch-booking-horizontal.svg"
-            alt="Camel Ranch Booking"
-            style={{ height: '112px', width: 'auto', minWidth: '400px', maxWidth: '640px', objectFit: 'contain', display: 'block' }}
+          <BrandLogo
+            variant="banner"
+            height={112}
+            style={{ minWidth: 400, maxWidth: 640 }}
           />
           {/* Bell — only when logged in */}
           {user ? (
