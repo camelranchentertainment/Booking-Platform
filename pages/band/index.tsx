@@ -4,6 +4,9 @@ import { supabase } from '../../lib/supabase';
 import { getActId } from '../../lib/bookingQueries';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
+import { formatShowDate } from '../../lib/formatDate';
+import { STATUS_COLORS } from '../../lib/statusSync';
+import { BOOKING_STATUS_LABELS } from '../../lib/types';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -49,6 +52,7 @@ export default function BandDashboard() {
   const [confirmedCount, setConfirmedCount] = useState(0);
   const [confirmedTotalCount, setConfirmedTotalCount] = useState(0);
   const [toursCount, setToursCount]     = useState(0);
+  const [upcomingShows, setUpcomingShows] = useState<any[]>([]);
   const [loading, setLoading]           = useState(true);
 
   // Agent
@@ -183,19 +187,28 @@ export default function BandDashboard() {
         const tourIds = (tourIdsRes.data || []).map((t: any) => t.id);
 
         const today = new Date().toISOString().slice(0, 10);
-        const [tvTargetRes, confirmedRes, confirmedTotalRes, toursRes] = await Promise.all([
+        const [tvTargetRes, confirmedRes, confirmedTotalRes, toursRes, upcomingRes] = await Promise.all([
           tourIds.length
             ? supabase.from('tour_venues').select('id', { count: 'exact', head: true }).in('tour_id', tourIds).eq('status', 'target')
             : Promise.resolve({ count: 0 }),
           supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('act_id', actId).eq('status', 'confirmed').gte('show_date', today),
           supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('act_id', actId).in('status', ['confirmed', 'completed']),
           supabase.from('tours').select('id', { count: 'exact', head: true }).eq('act_id', actId).in('status', ['planning', 'active']),
+          supabase.from('bookings')
+            .select('id, status, show_date, venue:venues(id, name, city, state)')
+            .eq('act_id', actId)
+            .neq('status', 'cancelled')
+            .not('show_date', 'is', null)
+            .gte('show_date', today)
+            .order('show_date')
+            .limit(6),
         ]);
 
         setTargetsCount((tvTargetRes as any).count ?? 0);
         setConfirmedCount((confirmedRes as any).count ?? 0);
         setConfirmedTotalCount((confirmedTotalRes as any).count ?? 0);
         setToursCount((toursRes as any).count ?? 0);
+        setUpcomingShows((upcomingRes as any).data || []);
       }
     } catch (err) {
       console.error('band dashboard load:', err);
@@ -457,25 +470,30 @@ export default function BandDashboard() {
   return (
     <AppShell requireRole="band_admin">
       <style>{`
-        .dash-act-header  { display:flex; align-items:center; justify-content:space-between; min-height:70px; padding:0.75rem 1rem; background:var(--bg-panel); border:1px solid var(--border); margin-bottom:1.25rem; }
-        .dash-act-name    { font-family:var(--font-display); font-size:28px; font-weight:900; color:var(--text-primary); line-height:1; letter-spacing:0.03em; }
-        .dash-crb-badge   { display:none; }
-        .dash-stats-grid  { display:grid; grid-template-columns:1fr; gap:0.75rem; margin-bottom:1.25rem; }
-        .dash-tiles-grid  { display:grid; grid-template-columns:repeat(2,1fr); gap:0.75rem; }
-        .dash-appr-grid   { display:grid; grid-template-columns:1fr; gap:0.25rem; max-height:160px; overflow-y:auto; }
-        .dash-draft-grid  { display:grid; grid-template-columns:1fr; gap:0.5rem; align-items:start; }
-        .dash-msg-ai      { max-width:90%; }
-        .dash-msg-user    { max-width:88%; }
+        .dash-act-header    { display:flex; align-items:center; justify-content:space-between; min-height:70px; padding:0.75rem 1rem; background:var(--bg-panel); border:1px solid var(--border); margin-bottom:1.25rem; }
+        .dash-act-name      { font-family:var(--font-display); font-size:28px; font-weight:900; color:var(--text-primary); line-height:1; letter-spacing:0.03em; }
+        .dash-crb-badge     { display:none; }
+        .dash-upcoming-grid { display:grid; grid-template-columns:1fr; gap:0.75rem; }
+        .dash-stats-grid    { display:grid; grid-template-columns:1fr; gap:0.75rem; margin-bottom:1.25rem; }
+        .dash-tiles-grid    { display:grid; grid-template-columns:repeat(2,1fr); gap:0.75rem; }
+        .dash-appr-grid     { display:grid; grid-template-columns:1fr; gap:0.25rem; max-height:160px; overflow-y:auto; }
+        .dash-draft-grid    { display:grid; grid-template-columns:1fr; gap:0.5rem; align-items:start; }
+        .dash-msg-ai        { max-width:90%; }
+        .dash-msg-user      { max-width:88%; }
         @media(min-width:640px){
-          .dash-act-header  { height:80px; padding:0 1.25rem; }
-          .dash-act-name    { font-size:32px; }
-          .dash-crb-badge   { display:flex; }
-          .dash-stats-grid  { grid-template-columns:repeat(3,1fr); }
-          .dash-tiles-grid  { grid-template-columns:repeat(4,1fr); }
-          .dash-appr-grid   { grid-template-columns:repeat(2,1fr); gap:0.25rem 1.5rem; }
-          .dash-draft-grid  { grid-template-columns:1fr 2fr; }
-          .dash-msg-ai      { max-width:75%; }
-          .dash-msg-user    { max-width:60%; }
+          .dash-act-header    { height:80px; padding:0 1.25rem; }
+          .dash-act-name      { font-size:32px; }
+          .dash-crb-badge     { display:flex; }
+          .dash-upcoming-grid { grid-template-columns:repeat(2,1fr); }
+          .dash-stats-grid    { grid-template-columns:repeat(3,1fr); }
+          .dash-tiles-grid    { grid-template-columns:repeat(4,1fr); }
+          .dash-appr-grid     { grid-template-columns:repeat(2,1fr); gap:0.25rem 1.5rem; }
+          .dash-draft-grid    { grid-template-columns:1fr 2fr; }
+          .dash-msg-ai        { max-width:75%; }
+          .dash-msg-user      { max-width:60%; }
+        }
+        @media(min-width:900px){
+          .dash-upcoming-grid { grid-template-columns:repeat(4,1fr); }
         }
       `}</style>
 
@@ -573,6 +591,54 @@ export default function BandDashboard() {
 
       {myAct && (
         <>
+          {/* ── Upcoming Shows ──────────────────────────────────────────────── */}
+          <div style={{ marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>UPCOMING SHOWS</span>
+              <Link href="/band/calendar" style={{ fontSize: 12, color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 700 }}>View all →</Link>
+            </div>
+            {loading ? (
+              <div style={{ height: 108, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }} />
+            ) : upcomingShows.length === 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1.5rem', background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>No upcoming shows</span>
+                <Link href="/tours"
+                  style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, padding: '0.3rem 0.75rem', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', background: 'rgba(255,255,255,0.08)', textDecoration: 'none', transition: 'all 0.15s' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.background = 'rgba(224,120,32,0.15)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}>
+                  + Add a show
+                </Link>
+              </div>
+            ) : (
+              <div className="dash-upcoming-grid">
+                {upcomingShows.map((show: any) => {
+                  const color = STATUS_COLORS[show.status] || '#6b7280';
+                  return (
+                    <div key={show.id} style={{ borderRadius: 16, background: 'var(--surface)', border: '1px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ height: 6, background: color }} />
+                      <div style={{ padding: '1rem 1.1rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color, fontWeight: 800 }}>
+                          {formatShowDate(show.show_date, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                        <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                          {show.venue?.name || 'TBD'}
+                        </span>
+                        {(show.venue?.city || show.venue?.state) && (
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                            {[show.venue.city, show.venue.state].filter(Boolean).join(', ')}
+                          </span>
+                        )}
+                        <span style={{ marginTop: '0.35rem', alignSelf: 'flex-start', padding: '0.2rem 0.55rem', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', background: `${color}29`, color, border: `1px solid ${color}4d` }}>
+                          {BOOKING_STATUS_LABELS[show.status as keyof typeof BOOKING_STATUS_LABELS] || show.status}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* ── Stat cards ──────────────────────────────────────────────────── */}
           <div className="dash-stats-grid">
             {([
