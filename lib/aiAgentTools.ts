@@ -208,7 +208,11 @@ export const STAGE_TOUR_INSERT_TOOL = {
 };
 
 export async function execFindVenue(actId: string, args: { name?: string; city?: string }) {
-  let query = supabase.from('venues').select('id, name, city, state').eq('act_id', actId).limit(5);
+  let query = supabase
+    .from('venues')
+    .select('id, name, city, state, email, bookings(show_date)')
+    .eq('act_id', actId)
+    .limit(5);
   if (args.name) query = query.ilike('name', `%${args.name}%`);
   if (args.city) query = query.ilike('city', `%${args.city}%`);
   const { data, error } = await query;

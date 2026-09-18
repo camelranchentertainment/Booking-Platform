@@ -482,6 +482,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(200).json({ reply: parsed.reply || `Found ${result.venues.length} target venues on ${result.tourName}.`, action: { type: 'tour_outreach', ...result } });
       }
 
+      if (parsed?.action?.type === 'find_venue') {
+        const { name, city } = parsed.action;
+        const venues = await execFindVenue(actId, { name, city });
+        const replyText = venues.length > 0
+          ? (parsed.reply || `Found ${venues.length} matching venue${venues.length > 1 ? 's' : ''}.`)
+          : `No venue found matching "${name || city}". Check the spelling, or it may be listed under a different name.`;
+        return res.status(200).json({ reply: replyText, action: { type: 'find_venue', venues } });
+      }
+
       if (parsed?.action?.type === 'city_search') {
         const { city, state, dateRange } = parsed.action;
         const result = await resolveCitySearch(service, actId, city || '', state || '');
