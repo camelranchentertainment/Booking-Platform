@@ -12,6 +12,7 @@ import {
   execStageTourInsert,
   execStageVenueAndBooking,
   execStagePaymentSettle,
+  execStageEmail,
 } from '../../lib/aiAgentTools';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { formatShowDate } from '../../lib/formatDate';
@@ -28,15 +29,16 @@ platform itself, answer it directly and confidently in plain text using that doc
 deflect to a separate help page, and do not say you don't know how the platform works.
 
 You can: answer pipeline questions, answer platform how-to questions, draft outreach, find venues, queue
-bulk email batches (with user approval first), and propose creating tours, adding/updating shows,
-travel days, tour notes, projected expenses, and recording payments received
-(with user approval first — you never write directly).
+bulk email batches (with user approval first), propose creating tours, adding/updating shows, travel
+days, tour notes, projected expenses, recording payments received, and composing individual emails to
+venue contacts (all with user approval first — you never write directly).
 
 CRITICAL FORMATTING RULE:
-When the user asks to send bulk outreach, find venues in a city/region, OR add/update anything about a
-tour (shows, travel days, tour notes, expenses), respond ONLY with valid JSON in the exact shape for
-that action. Output the raw JSON object only — no markdown code fences (no \`\`\`), no text before or
-after it. For ALL other messages: respond with plain text only — no JSON, no wrapper.
+When the user asks to send bulk outreach, find venues in a city/region, add/update anything about a
+tour (shows, travel days, tour notes, expenses), record a payment, OR compose an email to a venue,
+respond ONLY with valid JSON in the exact shape for that action. Output the raw JSON object only —
+no markdown code fences (no \`\`\`), no text before or after it. For ALL other messages: respond with
+plain text only — no JSON, no wrapper.
 
 For bulk tour outreach ("send emails to targets on [tour]", "blast the Spring Tour", etc.):
 {"reply":"<conversational text>","action":{"type":"tour_outreach","tourName":"<best match from context>"}}
@@ -94,6 +96,15 @@ been played, ask the user to clarify rather than guessing.
 booking_id must come from the "Tours" section of your context — never invent one.
 
 IMPORTANT — payment_settle takes priority over the general show-update instructions below whenever the message mentions money at all, even if it also says "update the show." A dollar amount attached to a show means payment_settle, full stop, never booking_upsert. Only use booking_upsert for changes to status, date, venue, or notes where no money is mentioned.
+
+To find a venue's real ID and contact email before emailing them, call:
+{"reply":"<conversational text>","action":{"type":"find_venue","name":"<venue name to search>","city":"<city, if known>"}}
+This returns matching venues with their id, email, and show date(s) in the same response. If more than one venue matches, ask the user which show/date before proceeding — do not guess. Once you have a confirmed single venue_id and its email, use them in stage_email. If find_venue returns zero matches, say so plainly and ask the user for the correct name or the contact email directly — never claim a technical error or malfunction; an empty result is not a failure, it just means try a different search term or ask the user.
+
+To compose and send an individual email to a venue ("email the Rusty Rail", "send a follow-up to Memphis Music Hall", "write a confirmation to [venue]"):
+{"reply":"<conversational text>","action":{"type":"stage_email","venue_id":"<UUID from find_venue>","booking_id":"<UUID if related to a booking, otherwise omit>","recipient":"<email from find_venue result>","subject":"<subject line>","body":"<plain text body>","category":"target"}}
+category values: target, follow_up_1, follow_up_2, confirmation, decline, advance, thank_you, reply. WARNING: confirming this proposal sends a real email immediately to a real person outside the platform — make sure the subject, body, and recipient are correct before presenting this for approval.
+Never call stage_email without a real venue_id already confirmed via find_venue in this conversation. If the user hasn't specified which venue/show, or there are multiple matches, ask them to clarify first — do not guess, and do not stage with a missing or placeholder venue_id.
 
 To CANCEL or UPDATE an existing show (not create a new one), find it in the "Tours" section of your
 context below — each show is listed with its real id (e.g. "id=abc123"). Include that as "booking_id"
@@ -471,6 +482,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(200).json({ reply: parsed.reply || `Found ${result.venues.length} target venues on ${result.tourName}.`, action: { type: 'tour_outreach', ...result } });
       }
 
+      if (parsed?.action?.type === 'find_venue') {
+        const { name, city } = parsed.action;
+        const venues = await execFindVenue(actId, { name, city });
+        let replyText: string;
+        if (venues.length === 0) {
+          replyText = `No venue found matching "${name || city}". Check the spelling, or it may be listed under a different name.`;
+        } else {
+          const lines = venues.map((v: any) => {
+            const dates = (v.bookings || []).map((b: any) => b.show_date).filter(Boolean).join(', ');
+            return `- ${v.name}${v.city ? ` (${v.city}${v.state ? `, ${v.state}` : ''})` : ''} — id: ${v.id}, email: ${v.email || 'none on file'}${dates ? `, show date(s): ${dates}` : ''}`;
+          }).join('\n');
+          replyText = venues.length === 1
+            ? `Found it:\n${lines}`
+            : `Found ${venues.length} matches — which one?\n${lines}`;
+        }
+        return res.status(200).json({ reply: replyText, action: { type: 'find_venue', venues } });
+      }
+
       if (parsed?.action?.type === 'city_search') {
         const { city, state, dateRange } = parsed.action;
         const result = await resolveCitySearch(service, actId, city || '', state || '');
@@ -510,6 +539,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that payment update." });
+        }
+      }
+
+      if (parsed?.action?.type === 'stage_email') {
+        const { venue_id, booking_id, recipient, subject, body, category } = parsed.action;
+        try {
+          const result = await execStageEmail(actId, user.id, { venue_id, booking_id, recipient, subject, body, category });
+          const p = result.proposal;
+          return res.status(200).json({
+            reply: parsed.reply || `Staged email to ${p.recipient} — subject: "${p.subject}". Review and confirm to send.`,
+            action: { type: 'stage_items', staged: [{ kind: 'email_send', ...result }], errors: [] },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that email." });
         }
       }
 

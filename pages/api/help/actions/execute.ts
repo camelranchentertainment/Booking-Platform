@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
+import { sendActEmail } from '../../../../lib/emailSend';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -324,6 +325,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (error) throw error;
           result = data;
         }
+      } else if (staged.action_type === 'email_send') {
+        // EXTERNAL SIDE EFFECT: this branch sends a real email to a real person
+        // outside the platform. Unlike every other branch (which are DB writes),
+        // this is irreversible the moment it fires. Do not "simplify" this into
+        // looking like a normal DB-write branch — the distinction matters.
+        const { email_log_id } = await sendActEmail({
+          actId: profile.act_id,
+          sentBy: user.id,
+          recipient: p.recipient,
+          subject: p.subject,
+          body: p.body,
+          venueId: p.venue_id || undefined,
+          bookingId: p.booking_id || undefined,
+          category: p.category || undefined,
+        });
+        result = { email_log_id, recipient: p.recipient, subject: p.subject };
       } else {
         throw new Error(`Unknown action_type: ${staged.action_type}`);
       }
