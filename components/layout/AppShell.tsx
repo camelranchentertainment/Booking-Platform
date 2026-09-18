@@ -465,9 +465,7 @@ export default function AppShell({ children, requireRole = null }: Props) {
           />
           {/* Bell — only when logged in */}
           {user ? (
-            <div style={{ position: 'relative', zIndex: 201 }}>
-              <NotifBell userId={user.id} email={user.email ?? ''} displayName={profile?.display_name || ''} />
-            </div>
+            <NotifBell userId={user.id} email={user.email ?? ''} displayName={profile?.display_name || ''} />
           ) : (
             <div style={{ width: 36, flexShrink: 0 }} />
           )}
