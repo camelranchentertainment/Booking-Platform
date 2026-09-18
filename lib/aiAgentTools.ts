@@ -811,6 +811,10 @@ export async function execStageEmail(
     category?: string;
   }
 ) {
+  if (!args.venue_id || typeof args.venue_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(args.venue_id)) {
+    throw new Error('A valid venue_id is required. Call find_venue first to get the real venue and its contact email before staging this email — do not proceed without a confirmed venue.');
+  }
+
   const { data: venue, error: venueErr } = await supabase
     .from('venues')
     .select('id, name, booking_contact, email')
