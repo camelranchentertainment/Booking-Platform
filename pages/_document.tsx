@@ -5,8 +5,8 @@ export default function Document() {
     <Html lang="en">
       <Head>
         {/* Favicon */}
-        <link rel="icon" href="/images/logo-square.png" type="image/png" />
-        <link rel="apple-touch-icon" href="/images/logo-square.png" />
+        <link rel="icon" href="/camel-ranch-booking-square.svg" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/camel-ranch-booking-square.svg" />
 
         {/* Site description shown in Google search results */}
         <meta name="description" content="Camel Ranch Booking — DIY booking workflow for independent touring artists. Manage venues, run email campaigns, and track every show." />
