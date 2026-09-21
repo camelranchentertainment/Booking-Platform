@@ -166,7 +166,7 @@ h4 { font-size: 1.2rem; }
   color: var(--text-secondary);
   font-family: var(--font-body);
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   transition: color 0.15s, background 0.15s, padding-left 0.15s;
@@ -256,7 +256,7 @@ h4 { font-size: 1.2rem; }
 .card-title {
   font-family: var(--font-body);
   font-size: 0.75rem;
-  font-weight: 900;
+  font-weight: 800;
   letter-spacing: 0.35em;
   text-transform: uppercase;
   color: var(--accent);
@@ -449,7 +449,7 @@ table {
 th {
   font-family: var(--font-body);
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.32em;
   text-transform: uppercase;
   color: var(--accent);
@@ -464,7 +464,7 @@ td {
   border-bottom: 1px solid var(--border);
   color: var(--text-secondary);
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 700;
   transition: background 0.12s, color 0.12s;
 }
 
@@ -532,7 +532,7 @@ tr:hover td { background: rgba(232,130,58,0.06); color: var(--text-primary); }
 .kanban-col-title {
   font-family: var(--font-body);
   font-size: 0.75rem;
-  font-weight: 900;
+  font-weight: 800;
   letter-spacing: 0.3em;
   text-transform: uppercase;
   color: var(--accent);

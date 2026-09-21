@@ -520,6 +520,61 @@ export default function AppShell({ children, requireRole = null }: Props) {
             )}
           </div>
         )}
+        {profile?.role === 'band_admin' && (
+          <div style={{
+            margin: '-1.5rem -2rem 1.5rem',
+            padding: '0.3rem 1.5rem',
+            background: 'rgba(0,0,0,0.18)',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', gap: '0.45rem',
+          }}>
+            {([
+              { label: 'Targets',   href: '/email?tab=outreach&status=target' },
+              { label: 'Confirmed', href: '/bookings?filter=confirmed' },
+              { label: 'Tours',     href: '/tours' },
+            ] as const).map(pill => {
+              const base = pill.href.split('?')[0];
+              const active = router.pathname === base || router.pathname.startsWith(base + '/');
+              return (
+                <a
+                  key={pill.label}
+                  href={pill.href}
+                  onClick={e => { e.preventDefault(); router.push(pill.href); }}
+                  style={{
+                    fontFamily: 'var(--font-body)',
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.14em',
+                    textTransform: 'uppercase',
+                    padding: '0.15rem 0.55rem',
+                    border: `1px solid ${active ? 'var(--accent)' : 'rgba(224,120,32,0.3)'}`,
+                    background: active ? 'var(--accent)' : 'transparent',
+                    color: active ? '#0D1B2A' : 'var(--text-secondary)',
+                    textDecoration: 'none',
+                    transition: 'all 0.15s',
+                    cursor: 'pointer',
+                    display: 'inline-block',
+                  }}
+                  onMouseEnter={e => {
+                    if (!active) {
+                      (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--accent)';
+                      (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-primary)';
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (!active) {
+                      (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(224,120,32,0.3)';
+                      (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-secondary)';
+                    }
+                  }}
+                >
+                  {pill.label}
+                </a>
+              );
+            })}
+          </div>
+        )}
+
         {trialDays !== null && trialDays <= 7 && (
           <div style={{
             margin: '-1.75rem -2rem 1.5rem',
