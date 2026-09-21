@@ -22,5 +22,6 @@ ALTER TABLE ai_staged_actions
     'venue_and_booking_upsert',
     'payment_settle',
     'calendar_settings_update',
-    'personnel_upsert'
+    'personnel_upsert',
+    'email_send'
   ));
