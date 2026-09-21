@@ -674,14 +674,25 @@ export default function BandDashboard() {
             ))}
           </div>
 
-          {/* ── AI Booking Agent — full width ──────────────────────────────── */}
-          <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-panel)', border: '1px solid var(--border)', marginBottom: '1.25rem', minHeight: 240 }}>
+          {/* ── AI Booking Agent — two-column layout ──────────────────────── */}
+          <div style={{ display: 'flex', flexDirection: 'row', background: 'var(--bg-panel)', border: '1px solid var(--border)', marginBottom: '1.25rem', minHeight: 500 }}>
+
+            {/* Left — mascot column */}
+            <div style={{ width: 320, flexShrink: 0, background: 'var(--surface-2)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 26 }}>
+              <div style={{ width: 210, height: 210, borderRadius: '50%', background: '#0d1420', border: '3px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
+                <img src="/Agent-Camel.png" alt="Booking agent mascot" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />
+                <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 700 }}>Online · ready to help</span>
+              </div>
+            </div>
+
+            {/* Right — chat column */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <img src="/Agent-Camel.png" alt="" style={{ height: 28, width: 28, flexShrink: 0, borderRadius: 4, objectFit: 'cover' }} />
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>AI BOOKING AGENT</span>
-              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>AI BOOKING AGENT</span>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 {messages.length > 1 && (
                   <button onClick={startNewChat} className="btn btn-ghost btn-sm" style={{ color: 'var(--text-muted)' }} disabled={agentLoading}>
@@ -946,7 +957,8 @@ export default function BandDashboard() {
                 </button>
               </form>
             </div>
-          </div>
+            </div>{/* end right column */}
+          </div>{/* end agent panel */}
 
           {/* ── Bottom tiles ─────────────────────────────────────────────────── */}
           <div className="dash-tiles-grid">
