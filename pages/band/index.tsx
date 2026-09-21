@@ -31,7 +31,11 @@ type StageItemsAction = {
   staged: Array<{ kind: string; staged_action_id: string; proposal: any; conflicts?: any[] }>;
   errors: string[];
 };
-type AgentAction = TourOutreachAction | CitySearchAction | StageItemsAction;
+type FindVenueAction = {
+  type: 'find_venue';
+  venues: { id: string; name: string; city?: string; state?: string; email?: string | null; bookings?: { show_date: string }[] }[];
+};
+type AgentAction = TourOutreachAction | CitySearchAction | StageItemsAction | FindVenueAction;
 
 const QUICK_CHIPS: { label: string; href?: string; prompt?: string }[] = [
   { label: 'Show my targets',       href: '/tours' },
@@ -78,7 +82,8 @@ export default function BandDashboard() {
   const [setupSaving, setSetupSaving] = useState(false);
   const [setupError, setSetupError]   = useState('');
 
-  const threadRef = useRef<HTMLDivElement>(null);
+  const threadRef   = useRef<HTMLDivElement>(null);
+  const agentInputRef = useRef<HTMLInputElement>(null);
   const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => { load(); }, []);
@@ -159,6 +164,16 @@ export default function BandDashboard() {
       setMessages([{ role: 'assistant' as const, content: buildGreeting() }]);
     }
   }, [myAct, userProfile, loading, greetingSent, conversationLoaded, targetsCount, toursCount]);
+
+  // Focus the agent input once myAct loads (input isn't in the DOM until then)
+  useEffect(() => {
+    if (myAct) agentInputRef.current?.focus();
+  }, [myAct]);
+
+  // Refocus after agentLoading clears — covers post-send, post-error, post-response
+  useEffect(() => {
+    if (!agentLoading) agentInputRef.current?.focus();
+  }, [agentLoading]);
 
   const load = async () => {
     setLoading(true);
@@ -409,7 +424,7 @@ export default function BandDashboard() {
         actId:   myAct.id,
         tourId:  pendingAction.tourId,
       };
-    } else {
+    } else if (pendingAction.type === 'city_search') {
       payload = {
         venues:    pendingAction.venues.filter(v => selectedVenueIds.has(v.id)).map(v => ({ venueId: v.id, name: v.name, city: v.city, state: v.state, email: v.email, contactName: null })),
         subject:   draftSubject || `Booking inquiry — ${myAct.act_name}`,
@@ -418,6 +433,8 @@ export default function BandDashboard() {
         tourId:    pendingAction.activeTour?.id || null,
         addToTour: !!pendingAction.activeTour,
       };
+    } else {
+      return;
     }
 
     try {
@@ -725,6 +742,7 @@ export default function BandDashboard() {
                           summary = `Received: ${p.venue_name || ''}${p.show_date ? ` — ${p.show_date}` : ''}${p.actual_amount_received != null ? ` · $${p.actual_amount_received}` : ''}${p.payment_status ? ` · ${p.payment_status}` : ''}`;
                         }
                       }
+                      else if (item.kind === 'email_send') summary = `Email to ${p.recipient}${p.venue_name ? ` (${p.venue_name})` : ''}: ${p.subject}`;
                       const hasConflicts = item.conflicts?.length > 0;
                       const conflictDetail = hasConflicts
                         ? item.conflicts.map((c: any) => `${c.venues?.name || 'another show'} [${c.status}]`).join(', ')
@@ -734,6 +752,14 @@ export default function BandDashboard() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{summary}</span>
                           </div>
+                          {item.kind === 'email_send' && p.body && (
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 460, whiteSpace: 'pre-wrap' }}>
+                              {String(p.body).slice(0, 150)}{String(p.body).length > 150 ? '…' : ''}
+                            </div>
+                          )}
+                          {item.kind === 'email_send' && (
+                            <span style={{ fontSize: 11, color: '#f59e0b' }}>⚠ Confirming sends this email immediately to a real recipient.</span>
+                          )}
                           {hasConflicts && (
                             <span style={{ color: '#f59e0b', fontSize: 11 }}>⚠ same date as: {conflictDetail}</span>
                           )}
@@ -855,7 +881,10 @@ export default function BandDashboard() {
                   </span>
                 </div>
               )}
-              <div style={{ display: 'flex', gap: '0.5rem', padding: '0.5rem 1.25rem 0.75rem' }}>
+              <form
+                onSubmit={e => { e.preventDefault(); sendMessage(agentInput); }}
+                style={{ display: 'flex', gap: '0.5rem', padding: '0.5rem 1.25rem 0.75rem' }}
+              >
                 {/* Hidden file input */}
                 <input
                   ref={fileInputRef}
@@ -866,6 +895,7 @@ export default function BandDashboard() {
                 />
                 {/* Paperclip button */}
                 <button
+                  type="button"
                   title="Attach file (CSV, Excel, PDF)"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={agentLoading || fileLoading}
@@ -880,6 +910,7 @@ export default function BandDashboard() {
                   {fileLoading ? '⏳' : '📎'}
                 </button>
                 <input
+                  ref={agentInputRef}
                   className="input"
                   style={{
                     flex: 1, fontSize: 14,
@@ -891,10 +922,10 @@ export default function BandDashboard() {
                   placeholder={attachedFile ? 'Add a message or just hit send…' : `Ask about ${myAct?.act_name || 'your pipeline'}, or attach a show list…`}
                   value={agentInput}
                   onChange={e => setAgentInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(agentInput); } }}
                   disabled={agentLoading}
                 />
                 <button
+                  type="submit"
                   className="btn"
                   style={{
                     flexShrink: 0,
@@ -906,12 +937,11 @@ export default function BandDashboard() {
                     fontWeight: 700,
                     fontSize: 16,
                   }}
-                  onClick={() => sendMessage(agentInput)}
                   disabled={agentLoading || fileLoading}
                 >
                   {agentLoading ? '…' : '→'}
                 </button>
-              </div>
+              </form>
             </div>
           </div>
 
