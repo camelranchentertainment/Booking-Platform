@@ -407,7 +407,8 @@ async function resolveStageItems(
           booking_id: item.booking_id,
           venue_id,
           show_date: item.date || '',
-          status: item.status || 'confirmed',
+          // Don't default status on updates — only set it when explicitly provided or creating new
+          ...(item.status ? { status: item.status } : !item.booking_id ? { status: 'confirmed' } : {}),
           entry_type: item.kind === 'travel' ? 'travel' : 'show',
           load_in_time: item.loadInTime,
           set_time: item.setTime,

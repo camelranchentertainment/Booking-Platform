@@ -21,17 +21,22 @@ export const FIND_VENUE_TOOL = {
 export const BOOKING_UPSERT_TOOL = {
   name: 'stage_booking_upsert',
   description:
-    "Propose creating a new show or travel day, or updating an existing booking. Does NOT write to the " +
-    "database — validates the request, checks for conflicts, and returns a staged proposal the user must " +
-    "confirm. For shows (entry_type 'show'), always call find_venue first to get a real venue_id; never " +
-    "invent one. For travel/logistics days (entry_type 'travel'), venue_id is not required. " +
-    "tour_id is OPTIONAL — omit it entirely when no tour was mentioned or the show is standalone.",
+    "Propose creating a new show or travel day, updating an existing booking, or linking a standalone " +
+    "show to a tour. Does NOT write to the database — validates the request, checks for conflicts, and " +
+    "returns a staged proposal the user must confirm. For shows (entry_type 'show'), always call " +
+    "find_venue first to get a real venue_id; never invent one. For travel/logistics days " +
+    "(entry_type 'travel'), venue_id is not required. " +
+    "tour_id is OPTIONAL — omit it entirely when no tour was mentioned or the show is standalone. " +
+    "To link an existing standalone show to a tour, pass booking_id (from context) + tour_id (from " +
+    "find_tour) with no other fields — only supply additional fields if those are also changing.",
   input_schema: {
     type: 'object',
     properties: {
       booking_id: {
         type: 'string',
-        description: 'UUID of an existing booking to update. Omit when creating.',
+        description: 'UUID of an existing booking to update or link to a tour. Omit when creating new. ' +
+          'Find the id in the "Standalone shows" section (for unlinking/linking) or "Tours" section ' +
+          '(for updates/cancellations) of your context.',
       },
       venue_id: {
         type: 'string',
