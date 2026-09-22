@@ -114,7 +114,7 @@ export default function TourDetail() {
       supabase.from('bookings').select(`
         id, status, show_date, fee, agreed_amount,
         venue:venues(name, city, state)
-      `).eq('tour_id', id).in('status', ['confirmed', 'advancing', 'completed']).order('show_date', { ascending: true }),
+      `).eq('tour_id', id).neq('status', 'cancelled').order('show_date', { ascending: true }),
     ]);
     if (tourRes.data) {
       setTour(tourRes.data);
@@ -333,6 +333,9 @@ const overdue = (poolData as any[]).filter((tv: any) =>
   const filteredPool = poolFilter === 'all' ? pool : pool.filter(v => v.status === poolFilter);
   const pendingCount = pool.filter(v => !['confirmed', 'declined'].includes(v.status)).length;
 
+  const confirmedBookings = bookings.filter((b: any) => ['confirmed', 'advancing', 'completed'].includes(b.status));
+  const pendingBookings   = bookings.filter((b: any) => !['confirmed', 'advancing', 'completed'].includes(b.status));
+
   if (!tour) return (
     <AppShell requireRole="band_admin">
       {loadError
@@ -418,15 +421,15 @@ const overdue = (poolData as any[]).filter((tv: any) =>
         {/* Confirmed Shows */}
         <div className="card">
           <div className="card-header">
-            <span className="card-title">CONFIRMED SHOWS ({bookings.filter((b: any) => ['confirmed','advancing','completed'].includes(b.status)).length})</span>
+            <span className="card-title">CONFIRMED SHOWS ({confirmedBookings.length})</span>
           </div>
-          {bookings.filter((b: any) => ['confirmed','advancing','completed'].includes(b.status)).length === 0 ? (
+          {confirmedBookings.length === 0 ? (
             <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>
               No shows yet. Use the outreach pool below to target venues, then confirm a show.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              {bookings.filter((b: any) => ['confirmed','advancing','completed'].includes(b.status)).map((b: any) => (
+              {confirmedBookings.map((b: any) => (
                 <Link key={b.id} href={`/bookings/${b.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.6rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', textDecoration: 'none' }}>
                   <div>
                     <div style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 500 }}>{b.venue?.name || 'TBD'}</div>
@@ -445,6 +448,29 @@ const overdue = (poolData as any[]).filter((tv: any) =>
           )}
         </div>
       </div>
+
+      {/* Pending Shows — bookings linked to this tour but not yet confirmed */}
+      {pendingBookings.length > 0 && (
+        <div className="card" style={{ marginTop: '1rem' }}>
+          <div className="card-header">
+            <span className="card-title">PENDING ({pendingBookings.length})</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            {pendingBookings.map((b: any) => (
+              <Link key={b.id} href={`/bookings/${b.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.6rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', textDecoration: 'none' }}>
+                <div>
+                  <div style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 500 }}>{b.venue?.name || 'TBD'}</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>
+                    {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                    {b.venue?.city ? ` · ${b.venue.city}, ${b.venue.state}` : ''}
+                  </div>
+                </div>
+                <span className={`badge badge-${b.status}`}>{BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tour Expenses */}
         <div className="card" style={{ marginTop: '1rem' }}>
