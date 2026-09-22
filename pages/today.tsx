@@ -99,8 +99,7 @@ function StatusBadge({ green }: { green: boolean }) {
 
 // ── ShowDetail ────────────────────────────────────────────────────────────────
 
-function ShowDetail({ booking, role }: { booking: any; role: string }) {
-  const isAdmin = role === 'band_admin' || role === 'superadmin';
+function ShowDetail({ booking }: { booking: any }) {
   const v = booking.venue;
   const tourName: string | null = booking.tour
     ? (Array.isArray(booking.tour) ? booking.tour[0]?.name : booking.tour?.name) ?? null
@@ -182,7 +181,7 @@ function ShowDetail({ booking, role }: { booking: any; role: string }) {
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{booking.special_requirements}</div>
           </div>
         )}
-        {isAdmin && booking.advance_notes && (
+        {booking.advance_notes && (
           <div style={{ padding: '6px 0' }}>
             <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', marginBottom: 3 }}>Advance Notes</div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{booking.advance_notes}</div>
@@ -190,8 +189,8 @@ function ShowDetail({ booking, role }: { booking: any; role: string }) {
         )}
       </div>
 
-      {/* Deal box — admin only */}
-      {isAdmin && (booking.deal_type || booking.agreed_amount) && (
+      {/* Deal box */}
+      {(booking.deal_type || booking.agreed_amount) && (
         <div style={{ padding: '10px 14px', background: 'rgba(200,146,26,0.06)', border: '1px solid rgba(200,146,26,0.2)', borderRadius: 10, marginBottom: 10 }}>
           <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 4, fontFamily: 'var(--font-body)' }}>Deal</div>
           <div style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 13.5 }}>
@@ -205,9 +204,7 @@ function ShowDetail({ booking, role }: { booking: any; role: string }) {
       {pendingFields.length > 0 && (
         <div style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.3)', borderRadius: 10, padding: '8px 12px', fontSize: 12, color: '#f97316', fontFamily: 'var(--font-body)' }}>
           ⚠ Unconfirmed: {pendingFields.join(', ')}
-          {isAdmin && (
-            <Link href={`/bookings/${booking.id}`} style={{ marginLeft: 8, color: 'var(--accent)', textDecoration: 'underline' }}>Fill in →</Link>
-          )}
+          <Link href={`/bookings/${booking.id}`} style={{ marginLeft: 8, color: 'var(--accent)', textDecoration: 'underline' }}>Fill in →</Link>
         </div>
       )}
 
@@ -266,19 +263,11 @@ interface NotesPanelProps {
   tourId: string | null;
   tourName: string | null;
   todayStr: string;
-  role: string;
   session: string;
 }
 
-const VIS_OPTIONS: { value: Visibility; label: string }[] = [
-  { value: 'admin_only',  label: 'ONLY ME' },
-  { value: 'band_admin',  label: 'BAND ADMIN CAN SEE' },
-  { value: 'all_members', label: 'WHOLE BAND CAN SEE' },
-];
-
 function NotesPanel({ userId, actId, tourId, tourName, todayStr, session }: NotesPanelProps) {
   const [content,    setContent]    = useState('');
-  const [visibility, setVisibility] = useState<Visibility>('admin_only');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   const [showPast,     setShowPast]     = useState(false);
@@ -292,7 +281,7 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, session }: Note
   const [loadingPast,  setLoadingPast]  = useState(false);
 
   const contentRef    = useRef('');
-  const visibilityRef = useRef<Visibility>('admin_only');
+  const visibilityRef = useRef<Visibility>('admin_only'); // fixed default; no longer user-selectable
   const saveTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const authHeaders = {
@@ -310,10 +299,8 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, session }: Note
       const { notes } = (await res.json()) as { notes: DailyNote[] };
       const mine = notes.find((n) => n.user_id === userId);
       if (mine) {
-        contentRef.current    = mine.content ?? '';
-        visibilityRef.current = mine.visibility ?? 'admin_only';
+        contentRef.current = mine.content ?? '';
         setContent(mine.content ?? '');
-        setVisibility(mine.visibility ?? 'admin_only');
         setSaveStatus('saved');
       }
     })();
@@ -347,12 +334,6 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, session }: Note
     setContent(val);
     setSaveStatus('idle');
     scheduleAutosave(2000);
-  };
-
-  const handleVisibilityChange = (vis: Visibility) => {
-    visibilityRef.current = vis;
-    setVisibility(vis);
-    scheduleAutosave(500);
   };
 
   const openPastNotes = async () => {
@@ -443,31 +424,6 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, session }: Note
             ⟲ {tourName}
           </span>
         )}
-      </div>
-
-      {/* Visibility pills */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {VIS_OPTIONS.map(({ value, label }) => {
-          const active = visibility === value;
-          return (
-            <button
-              key={value}
-              onClick={() => handleVisibilityChange(value)}
-              style={{
-                display: 'inline-flex', alignItems: 'center',
-                padding: '6px 14px', borderRadius: 999,
-                fontSize: 10.5, fontWeight: 800, letterSpacing: '0.5px',
-                fontFamily: 'var(--font-body)', cursor: 'pointer',
-                background: active ? 'rgba(200,146,26,0.16)' : 'var(--surface-2)',
-                color:      active ? 'var(--accent)' : 'var(--text-muted)',
-                border:     active ? '1px solid rgba(200,146,26,0.35)' : '1px solid var(--border)',
-                transition: 'all 0.15s',
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
       </div>
 
       {/* Textarea */}
@@ -629,7 +585,6 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, session }: Note
 // ── TodayPage ─────────────────────────────────────────────────────────────────
 
 export default function TodayPage() {
-  const [role,        setRole]        = useState('');
   const [userId,      setUserId]      = useState('');
   const [userActId,   setUserActId]   = useState<string | null>(null);
   const [session,     setSession]     = useState('');
@@ -662,8 +617,6 @@ export default function TodayPage() {
 
       const { data: prof } = await supabase
         .from('profiles').select('role, act_id').eq('id', sess.user.id).maybeSingle();
-
-      setRole(prof?.role || 'member');
 
       const actId = prof?.act_id ?? null;
       setUserActId(actId);
@@ -767,7 +720,7 @@ export default function TodayPage() {
                 </>
               )}
             </div>
-            {!loading && today && <ShowDetail booking={today} role={role} />}
+            {!loading && today && <ShowDetail booking={today} />}
           </div>
 
           {/* TOMORROW */}
@@ -813,7 +766,7 @@ export default function TodayPage() {
                 </>
               )}
             </div>
-            {!loading && tomorrow && <ShowDetail booking={tomorrow} role={role} />}
+            {!loading && tomorrow && <ShowDetail booking={tomorrow} />}
           </div>
 
         </div>
@@ -826,7 +779,6 @@ export default function TodayPage() {
             tourId={activeTour?.id   ?? null}
             tourName={activeTour?.name ?? null}
             todayStr={todayStr}
-            role={role}
             session={session}
           />
         )}
