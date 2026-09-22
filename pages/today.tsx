@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, CSSProperties } from 'react';
+import Link from 'next/link';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { formatShowDate } from '../lib/formatDate';
@@ -44,6 +45,23 @@ const EYEBROW: CSSProperties = {
   display: 'block',
 };
 
+// ── Show-detail helpers ───────────────────────────────────────────────────────
+
+const DEAL_LABELS: Record<string, string> = {
+  guarantee:  'Guarantee',
+  door_split: 'Door Split',
+  percentage: 'Percentage',
+  flat_fee:   'Flat Fee',
+  other:      'Other',
+};
+
+function fmt(t: string | null | undefined): string {
+  if (!t) return 'TBD';
+  const [h, m] = t.split(':');
+  const hour = parseInt(h, 10);
+  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+}
+
 // ── Icons ────────────────────────────────────────────────────────────────────
 
 function CalendarIcon() {
@@ -76,6 +94,124 @@ function StatusBadge({ green }: { green: boolean }) {
     }}>
       {green ? <CheckCalendarIcon /> : <CalendarIcon />}
     </span>
+  );
+}
+
+// ── ShowDetail ────────────────────────────────────────────────────────────────
+
+function ShowDetail({ booking, role }: { booking: any; role: string }) {
+  const isAdmin = role === 'band_admin' || role === 'superadmin';
+  const v = booking.venue;
+  const tourName: string | null = booking.tour
+    ? (Array.isArray(booking.tour) ? booking.tour[0]?.name : booking.tour?.name) ?? null
+    : null;
+
+  const pendingFields: string[] = [];
+  if (!booking.load_in_time)    pendingFields.push('Load-in');
+  if (!booking.soundcheck_time) pendingFields.push('Soundcheck');
+  if (!booking.set_time)        pendingFields.push('Set Time');
+
+  return (
+    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+
+      {/* Tour position */}
+      {tourName && booking.tourPosition && (
+        <div style={{ marginBottom: 10, fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
+          Day {booking.tourPosition.current} of {booking.tourPosition.total} · {tourName}
+        </div>
+      )}
+
+      {/* Address + phone */}
+      {(v?.address || v?.phone) && (
+        <div style={{ marginBottom: 14 }}>
+          {v?.address && (
+            <div style={{ fontSize: 12.5, color: 'var(--text-muted)', fontFamily: 'var(--font-body)', marginBottom: 2 }}>{v.address}</div>
+          )}
+          {v?.phone && (
+            <a href={`tel:${v.phone}`} style={{ fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-body)' }}>{v.phone}</a>
+          )}
+        </div>
+      )}
+
+      {/* Time grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+        {([
+          ['Load-in',    booking.load_in_time],
+          ['Soundcheck', booking.soundcheck_time],
+          ['Showtime',   booking.set_time],
+          ['End',        booking.end_time],
+        ] as [string, string | null][]).map(([label, val]) => (
+          <div key={label} style={{
+            background: 'var(--surface-2)', padding: '8px 12px', borderRadius: 10,
+            borderLeft: `2px solid ${val ? 'var(--accent)' : '#f97316'}`,
+          }}>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 2, fontFamily: 'var(--font-body)' }}>{label}</div>
+            <div style={{ color: val ? 'var(--text-primary)' : '#f97316', fontWeight: 600, fontSize: 13.5 }}>{fmt(val)}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Logistics rows */}
+      <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 12 }}>
+        {([
+          ['Sound',  booking.sound_system === 'house' ? 'House PA' : booking.sound_system === 'self' ? 'Self-Provided' : 'TBD'],
+          ['Meals',  booking.meals_provided  ? 'Provided'   : 'Not provided'],
+          ['Drinks', booking.drinks_provided ? 'Provided'   : 'Not provided'],
+          ['Hotel',  booking.hotel_booked    ? 'Booked'     : 'Not booked'],
+        ] as [string, string][]).map(([label, val]) => (
+          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>{label}</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{val}</span>
+          </div>
+        ))}
+        {booking.lodging_details && (
+          <div style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', marginBottom: 3 }}>Lodging</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{booking.lodging_details}</div>
+          </div>
+        )}
+        {booking.venue_contact_name && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>Contact</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{booking.venue_contact_name}</span>
+          </div>
+        )}
+        {booking.special_requirements && (
+          <div style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', marginBottom: 3 }}>Requirements</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{booking.special_requirements}</div>
+          </div>
+        )}
+        {isAdmin && booking.advance_notes && (
+          <div style={{ padding: '6px 0' }}>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', marginBottom: 3 }}>Advance Notes</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{booking.advance_notes}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Deal box — admin only */}
+      {isAdmin && (booking.deal_type || booking.agreed_amount) && (
+        <div style={{ padding: '10px 14px', background: 'rgba(200,146,26,0.06)', border: '1px solid rgba(200,146,26,0.2)', borderRadius: 10, marginBottom: 10 }}>
+          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 4, fontFamily: 'var(--font-body)' }}>Deal</div>
+          <div style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 13.5 }}>
+            {DEAL_LABELS[booking.deal_type] || booking.deal_type || 'TBD'}
+            {booking.agreed_amount ? ` · $${Number(booking.agreed_amount).toLocaleString()}` : ''}
+          </div>
+        </div>
+      )}
+
+      {/* Pending fields warning */}
+      {pendingFields.length > 0 && (
+        <div style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.3)', borderRadius: 10, padding: '8px 12px', fontSize: 12, color: '#f97316', fontFamily: 'var(--font-body)' }}>
+          ⚠ Unconfirmed: {pendingFields.join(', ')}
+          {isAdmin && (
+            <Link href={`/bookings/${booking.id}`} style={{ marginLeft: 8, color: 'var(--accent)', textDecoration: 'underline' }}>Fill in →</Link>
+          )}
+        </div>
+      )}
+
+    </div>
   );
 }
 
@@ -493,6 +629,7 @@ function NotesPanel({ userId, actId, tourId, tourName, todayStr, session }: Note
 // ── TodayPage ─────────────────────────────────────────────────────────────────
 
 export default function TodayPage() {
+  const [role,        setRole]        = useState('');
   const [userId,      setUserId]      = useState('');
   const [userActId,   setUserActId]   = useState<string | null>(null);
   const [session,     setSession]     = useState('');
@@ -526,13 +663,20 @@ export default function TodayPage() {
       const { data: prof } = await supabase
         .from('profiles').select('role, act_id').eq('id', sess.user.id).maybeSingle();
 
+      setRole(prof?.role || 'member');
+
       const actId = prof?.act_id ?? null;
       setUserActId(actId);
       if (!actId) return;
 
       const bookingSelect = `
         id, show_date, status, tour_id,
-        venue:venues(id, name, city, state)
+        load_in_time, soundcheck_time, set_time, end_time,
+        sound_system, meals_provided, drinks_provided, hotel_booked,
+        lodging_details, venue_contact_name, special_requirements,
+        advance_notes, deal_type, agreed_amount,
+        venue:venues(id, name, city, state, address, phone),
+        tour:tours(id, name)
       `;
 
       const [todayRes, tomorrowRes, upcomingRes] = await Promise.all([
@@ -548,15 +692,25 @@ export default function TodayPage() {
       const tomorrowBooking = tomorrowRes.data?.[0] ?? null;
       const upcomingBooking = upcomingRes.data?.[0] ?? null;
 
+      // Tour position for today's show
+      if (todayBooking?.tour_id) {
+        const { data: tourShows } = await supabase.from('bookings')
+          .select('id, show_date').eq('tour_id', todayBooking.tour_id)
+          .neq('status', 'cancelled').order('show_date');
+        const sorted = (tourShows || []).filter((b: any) => b.show_date);
+        const pos = sorted.findIndex((b: any) => b.id === todayBooking.id);
+        if (pos !== -1) (todayBooking as any).tourPosition = { current: pos + 1, total: sorted.length };
+      }
+
       setToday(todayBooking);
       setTomorrow(tomorrowBooking);
       setUpcoming(upcomingBooking);
 
       // Active tour: today's show tour, or most recent active/planning tour
       if (todayBooking?.tour_id) {
-        const { data: tourData } = await supabase
-          .from('tours').select('id, name').eq('id', todayBooking.tour_id).maybeSingle();
-        if (tourData) setActiveTour({ id: tourData.id, name: tourData.name });
+        const tourAny = todayBooking.tour as any;
+        const tourName: string = (Array.isArray(tourAny) ? tourAny[0]?.name : tourAny?.name) ?? '';
+        if (tourName) setActiveTour({ id: todayBooking.tour_id as string, name: tourName });
       } else {
         const { data: activeTours } = await supabase.from('tours')
           .select('id, name').eq('act_id', actId)
@@ -613,6 +767,7 @@ export default function TodayPage() {
                 </>
               )}
             </div>
+            {!loading && today && <ShowDetail booking={today} role={role} />}
           </div>
 
           {/* TOMORROW */}
@@ -658,6 +813,7 @@ export default function TodayPage() {
                 </>
               )}
             </div>
+            {!loading && tomorrow && <ShowDetail booking={tomorrow} role={role} />}
           </div>
 
         </div>
@@ -670,7 +826,7 @@ export default function TodayPage() {
             tourId={activeTour?.id   ?? null}
             tourName={activeTour?.name ?? null}
             todayStr={todayStr}
-            role=""
+            role={role}
             session={session}
           />
         )}
