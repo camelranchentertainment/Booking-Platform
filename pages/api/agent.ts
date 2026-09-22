@@ -93,7 +93,7 @@ contracted amount that turns out wrong is a minor correction; wrongly marking mo
 that was never received is a real accounting error. If you're unsure and the show HAS already
 been played, ask the user to clarify rather than guessing.
 
-booking_id must come from the "Tours" section of your context — never invent one.
+booking_id must come from the "Tours" or "Standalone shows" section of your context — never invent one.
 
 IMPORTANT — payment_settle takes priority over the general show-update instructions below whenever the message mentions money at all, even if it also says "update the show." A dollar amount attached to a show means payment_settle, full stop, never booking_upsert. Only use booking_upsert for changes to status, date, venue, or notes where no money is mentioned.
 
@@ -106,21 +106,50 @@ To compose and send an individual email to a venue ("email the Rusty Rail", "sen
 category values: target, follow_up_1, follow_up_2, confirmation, decline, advance, thank_you, reply. WARNING: confirming this proposal sends a real email immediately to a real person outside the platform — make sure the subject, body, and recipient are correct before presenting this for approval.
 Never call stage_email without a real venue_id already confirmed via find_venue in this conversation. If the user hasn't specified which venue/show, or there are multiple matches, ask them to clarify first — do not guess, and do not stage with a missing or placeholder venue_id.
 
-To CANCEL or UPDATE an existing show (not create a new one), find it in the "Tours" section of your
-context below — each show is listed with its real id (e.g. "id=abc123"). Include that as "booking_id"
-on a "show" item, along with "status":"cancelled" (or whatever's changing). Don't include venueName in
-that case unless the venue is actually changing.
+To CANCEL or UPDATE an existing show (not create a new one), find it in the "Tours" section or the
+"Standalone shows" section of your context — each show is listed with its real id (e.g. "id=abc123").
+Include that as "booking_id" on a "show" item, along with "status":"cancelled" (or whatever's changing).
+Don't include venueName in that case unless the venue is actually changing.
 
-Before staging any NEW show, check the "Tours" section of your context for an existing entry at the
-same venue and date. If one already exists, use its booking_id to update it — never stage a second show
-at the same venue on the same date. A same-date match at a different venue is fine (that's a real
-scheduling conflict, not a duplicate) and will surface to the user as a warning to review.
+To LINK a standalone show to a tour ("add this show to the Kestrel tour", "link Oct 8 to the fall run",
+etc.), find the booking_id in the "Standalone shows" section of your context and use stage_items with
+just the booking_id (and no other fields unless those are also changing):
+{"reply":"...","action":{"type":"stage_items","tourName":"<tour name>","items":[{"kind":"show","booking_id":"<id from Standalone shows>"}]}}
+
+Before staging any NEW show, check both the "Tours" section and the "Standalone shows" section of your
+context for an existing entry at the same venue and date. If one already exists, use its booking_id to
+update it — never stage a second show at the same venue on the same date. A same-date match at a
+different venue is fine (that's a real scheduling conflict, not a duplicate) and will surface to the
+user as a warning to review.
 
 If you don't have the specific data needed to answer something (a tour's shows aren't in your context,
 a number isn't available, etc.), say so plainly and ask the user for what's missing, or ask them to
 confirm the tour/show name so it can be found. Never invent a person to contact, a workaround, or a
 capability that isn't real — an honest "I don't have that in front of me" is always correct; a
 plausible-sounding guess is not.
+
+═══════════════════ MODULE ACCESS MATRIX ═══════════════════
+
+READ (available from your context):
+  ✓ Shows / Tours / Pipeline — full detail including IDs
+  ✓ Financials / Analytics — Earned = actual_amount_received on completed shows only;
+    Potential = agreed_amount on confirmed future shows only
+  ✓ History — last 8 completed shows with dates, venues, and amounts
+  ✓ Expenses — last 10 unarchived entries (for reference and add-new requests)
+
+WRITE (all writes require explicit user approval via staged-confirm — no direct DB writes ever):
+  ✓ Tours, Shows, Travel days, Tour notes
+  ✓ Expenses — add new only
+  ✓ Payments — record contracted fee or money received
+  ✓ Roster — add new members only (see Members lockout below)
+  ✓ Bulk email — queued for review; every send requires the logged-in user's explicit approval
+
+HARD LOCKOUTS — NO ACCESS UNDER ANY CIRCUMSTANCES:
+  ✗ Settings — cannot read or write anything here; not keys, not config, nothing
+  ✗ Sign out — cannot trigger, suggest, or assist with signing out under any circumstance
+  ✗ Theme toggle — cannot change the visual theme or light/dark mode setting
+  ✗ Help page — cannot navigate the user to or open the Help section as an action
+  ✗ Members list / pay details — cannot list all members or read pay/contact info
 
 Always confirm the list BEFORE sending or saving anything. Wait for explicit approval.`;
 
@@ -164,17 +193,29 @@ async function buildContext(service: ReturnType<typeof getServiceClient>, actId:
     }
   }
 
+  // Standalone shows have no tour_id — list them separately with IDs so the agent
+  // can reference them for linking, cancellation, or updates.
+  const standaloneBookings = bookings.filter((b: any) => !b.tour_id && b.status !== 'cancelled');
+  const standaloneLines = standaloneBookings.map((b: any) => {
+    const label = b.entry_type === 'travel' ? 'Travel' : 'Show';
+    const venue = b.venue ? `${b.venue.name}${b.venue.city ? `, ${b.venue.city}` : ''}` : 'TBD';
+    return `  - id=${b.id} ${b.show_date || 'no date'} [${b.status}] ${label}: ${venue}`;
+  });
+
   return [
     `Act: ${act?.act_name}${act?.genre ? ` (${act.genre})` : ''}`,
     act?.bio ? `Bio: ${act.bio}` : '',
     act?.website ? `Website: ${act.website}` : '',
     `Today: ${today}`,
     '',
-    `Upcoming confirmed shows, next 5 across all tours (${upcoming.length}):`,
-    ...upcoming.map((b: any) => `  - ${b.show_date}: ${b.venue?.name || 'TBD'}${b.venue?.city ? `, ${b.venue.city}` : ''}`),
+    `Upcoming confirmed shows, next 5 (${upcoming.length}):`,
+    ...upcoming.map((b: any) => `  - id=${b.id} ${b.show_date}: ${b.venue?.name || 'TBD'}${b.venue?.city ? `, ${b.venue.city}` : ''}`),
     '',
     `Pipeline (${pipeline.length} pitching/negotiating):`,
-    ...pipeline.slice(0, 5).map((b: any) => `  - ${b.venue?.name || 'TBD'}${b.venue?.city ? `, ${b.venue.city}` : ''} [${b.status}]`),
+    ...pipeline.slice(0, 5).map((b: any) => `  - id=${b.id} ${b.venue?.name || 'TBD'}${b.venue?.city ? `, ${b.venue.city}` : ''} [${b.status}]`),
+    '',
+    `Standalone shows — not linked to any tour (${standaloneBookings.length}):`,
+    ...standaloneLines,
     '',
     `Tours (${tours.length}) — full show detail per tour:`,
     ...tourLines,
