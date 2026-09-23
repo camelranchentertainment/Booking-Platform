@@ -51,7 +51,8 @@
     "stripe": "^14.0.0",
     "svix": "^1.95.2",
     "tailwindcss": "^4.1.18",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.3",
@@ -71,6 +72,7 @@
     "eslint-plugin-react": "^7.37.5",
     "husky": "^9.1.7",
     "jest": "^30.3.0",
+    "node-mocks-http": "^1.18.1",
     "prettier": "^3.8.3",
     "ts-jest": "^29.4.9",
     "typescript": "6.0.3"

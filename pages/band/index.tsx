@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import { formatShowDate } from '../../lib/formatDate';
 import { STATUS_COLORS } from '../../lib/statusSync';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
+import { buildConfirmMessage } from '../../lib/agentStagingHelpers';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -30,6 +31,7 @@ type StageItemsAction = {
   type: 'stage_items';
   staged: Array<{ kind: string; staged_action_id: string; proposal: any; conflicts?: any[] }>;
   errors: string[];
+  overflow?: number;
 };
 type FindVenueAction = {
   type: 'find_venue';
@@ -388,14 +390,19 @@ export default function BandDashboard() {
       setSendResult(null);
       const { data: { session } } = await supabase.auth.getSession();
       try {
+        const stagedSnapshot = pendingAction.staged;
         const res = await fetch('/api/help/actions/execute', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-          body: JSON.stringify({ staged_action_ids: pendingAction.staged.map(s => s.staged_action_id) }),
+          body: JSON.stringify({ staged_action_ids: stagedSnapshot.map(s => s.staged_action_id) }),
         });
         const json = await res.json();
-        if (!res.ok) throw new Error(json.error || 'Save failed');
-        const confirmMsg = { role: 'assistant' as const, content: `Saved ${pendingAction.staged.length} item${pendingAction.staged.length !== 1 ? 's' : ''} to the tour.` };
+        // Build truthful history from actual execution results, not model text
+        const content = json.results
+          ? buildConfirmMessage(stagedSnapshot, json.results)
+          : `Saved ${stagedSnapshot.length} item${stagedSnapshot.length !== 1 ? 's' : ''}.`;
+        if (!res.ok && !json.results) throw new Error(json.error || 'Save failed');
+        const confirmMsg = { role: 'assistant' as const, content };
         setMessages(prev => {
           const updated = [...prev, confirmMsg];
           saveConversationHistory(updated);
@@ -785,8 +792,14 @@ export default function BandDashboard() {
                   {pendingAction.errors.length > 0 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                       {pendingAction.errors.map((e: string, i: number) => (
-                        <div key={i} style={{ fontSize: 12, color: '#f87171' }}>⚠ {e}</div>
+                        <div key={i} style={{ fontSize: 12, color: '#f87171' }}>Couldn't stage: {e}</div>
                       ))}
+                    </div>
+                  )}
+
+                  {(pendingAction.overflow ?? 0) > 0 && (
+                    <div style={{ fontSize: 12, color: '#f59e0b' }}>
+                      +{pendingAction.overflow} more not staged yet — say "continue" to stage the next batch.
                     </div>
                   )}
 
