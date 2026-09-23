@@ -45,8 +45,6 @@ export function buildIcal(
     if (s.status)       desc.push(`Status: ${s.status}`);
     if (s.load_in_time) desc.push(`Load-in: ${s.load_in_time}`);
     if (s.set_time)     desc.push(`Set time: ${s.set_time}`);
-    const feeAmt = s.agreed_amount ?? s.fee;
-    if (feeAmt)         desc.push(`Fee: $${Number(feeAmt).toLocaleString()}`);
 
     return [
       'BEGIN:VEVENT',

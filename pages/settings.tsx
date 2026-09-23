@@ -868,7 +868,7 @@ export default function Settings() {
                   <input
                     readOnly
                     className="input"
-                    value={`https://camelranchbooking.com/api/calendar/${myAct.id}.ics`}
+                    value={`https://camelranchbooking.com/api/calendar/feed/${myAct.ical_feed_token}.ics`}
                     style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', cursor: 'text' }}
                     onFocus={e => e.target.select()}
                   />
@@ -876,7 +876,7 @@ export default function Settings() {
                     className="btn btn-primary btn-sm"
                     style={{ whiteSpace: 'nowrap', minWidth: 96 }}
                     onClick={() => {
-                      navigator.clipboard.writeText(`https://camelranchbooking.com/api/calendar/${myAct.id}.ics`);
+                      navigator.clipboard.writeText(`https://camelranchbooking.com/api/calendar/feed/${myAct.ical_feed_token}.ics`);
                       setIcsCopied(true);
                       setTimeout(() => setIcsCopied(false), 2500);
                     }}
