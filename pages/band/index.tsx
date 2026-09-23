@@ -89,7 +89,10 @@ export default function BandDashboard() {
   useEffect(() => { load(); }, []);
 
   useEffect(() => {
-    if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
+    const el = threadRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distFromBottom <= 80) el.scrollTop = el.scrollHeight;
   }, [messages, pendingAction]);
 
   // Load any previously saved conversation for this user+act before deciding whether
@@ -675,7 +678,7 @@ export default function BandDashboard() {
           </div>
 
           {/* ── AI Booking Agent — two-column layout ──────────────────────── */}
-          <div style={{ display: 'flex', flexDirection: 'row', background: 'var(--bg-panel)', border: '1px solid var(--border)', marginBottom: '1.25rem', minHeight: 500 }}>
+          <div style={{ display: 'flex', flexDirection: 'row', background: 'var(--bg-panel)', border: '1px solid var(--border)', marginBottom: '1.25rem', minHeight: 540, maxHeight: 'min(810px, 85vh)', overflow: 'hidden' }}>
 
             {/* Left — mascot column */}
             <div style={{ width: 320, flexShrink: 0, background: 'var(--surface-2)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 26 }}>
@@ -708,7 +711,16 @@ export default function BandDashboard() {
             </div>
 
             {/* Thread */}
-            <div ref={threadRef} style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.65rem', minHeight: 0 }}>
+            <div
+              ref={threadRef}
+              role="log"
+              aria-live="polite"
+              aria-label="Agent conversation"
+              tabIndex={0}
+              onFocus={e => { e.currentTarget.style.outline = '2px solid var(--accent)'; e.currentTarget.style.outlineOffset = '-2px'; }}
+              onBlur={e => { e.currentTarget.style.outline = ''; e.currentTarget.style.outlineOffset = ''; }}
+              style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.65rem', minHeight: 0 }}
+            >
               {messages.map((m, i) => (
                 <div key={i} className={m.role === 'user' ? 'dash-msg-user' : 'dash-msg-ai'} style={{
                   alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
