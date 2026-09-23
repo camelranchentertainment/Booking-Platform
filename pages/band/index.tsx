@@ -184,7 +184,13 @@ export default function BandDashboard() {
       if (!user) return;
 
       const actId = await getActId(supabase, user.id);
-      if (!actId) { return; }
+      if (!actId) {
+        // Still need role so the no-act render shows the right message vs the setup form.
+        const { data: noActProfile } = await supabase
+          .from('profiles').select('role').eq('id', user.id).maybeSingle();
+        setUserProfile(noActProfile || null);
+        return;
+      }
 
       const [actRes, profileRes] = await Promise.all([
         supabase.from('acts').select('*').eq('id', actId).eq('is_active', true).single(),
@@ -521,8 +527,16 @@ export default function BandDashboard() {
         </div>
       )}
 
-      {/* ── No act state — inline setup form ────────────────────────────────── */}
-      {!loading && !myAct && (
+      {/* ── No act state ─────────────────────────────────────────────────────── */}
+      {!loading && !myAct && userProfile?.role !== 'band_admin' && (
+        <div className="card" style={{ maxWidth: 480, margin: '4rem auto', padding: '2.5rem 2rem', textAlign: 'center' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', color: 'var(--accent)', marginBottom: '0.5rem', letterSpacing: '0.04em' }}>NOT YET LINKED</div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Ask your band admin to invite you. Once you accept the invitation, the dashboard will unlock.</p>
+        </div>
+      )}
+
+      {/* ── No act state — inline setup form (band_admin only) ───────────────── */}
+      {!loading && !myAct && userProfile?.role === 'band_admin' && (
         <div className="card" style={{ maxWidth: 480, margin: '4rem auto', padding: '2.5rem 2rem' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', color: 'var(--accent)', marginBottom: '0.5rem', letterSpacing: '0.04em' }}>GET STARTED</div>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '1.75rem', fontSize: 14 }}>Create your band profile to unlock the dashboard.</p>

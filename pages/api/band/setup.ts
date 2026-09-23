@@ -26,8 +26,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   const { act_name, home_city, home_state, bio } = parse.data;
 
-  // Re-read the profile with service role so we see the ground truth, not a cached browser value.
-  const { data: profile } = await svc.from('profiles').select('act_id').eq('id', user.id).single();
+  // Re-read the profile with service role — ground truth, not a cached browser value.
+  const { data: profile } = await svc.from('profiles').select('act_id, role').eq('id', user.id).single();
+
+  if (profile?.role !== 'band_admin') {
+    return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Only band admins can create a band.' } });
+  }
+
   if (profile?.act_id) {
     return res.status(409).json({ error: { code: 'ALREADY_LINKED', message: 'This account is already linked to a band.' } });
   }
@@ -50,16 +55,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: { code: 'ACT_CREATE_FAILED', message: 'Failed to create act. Please try again.' } });
   }
 
-  const { error: profileErr } = await svc
+  // Atomic link: the .is('act_id', null) guard means this update only applies if act_id
+  // is still null at write time, closing the race between the pre-check and the update.
+  const { data: linked, error: profileErr } = await svc
     .from('profiles')
     .update({ act_id: newAct.id })
-    .eq('id', user.id);
+    .eq('id', user.id)
+    .is('act_id', null)
+    .select('id');
 
   if (profileErr) {
-    // Roll back the orphaned act so the user can retry cleanly.
     await svc.from('acts').delete().eq('id', newAct.id);
     console.error('[band/setup] profile link failed:', profileErr.code);
     return res.status(500).json({ error: { code: 'LINK_FAILED', message: 'Band was created but could not be linked to your account. Please contact support.' } });
+  }
+
+  if (!linked || linked.length === 0) {
+    // act_id was set concurrently — roll back the orphaned act.
+    await svc.from('acts').delete().eq('id', newAct.id);
+    return res.status(409).json({ error: { code: 'ALREADY_LINKED', message: 'This account is already linked to a band.' } });
   }
 
   return res.status(200).json({ ok: true, actId: newAct.id });
