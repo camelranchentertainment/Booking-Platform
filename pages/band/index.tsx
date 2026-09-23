@@ -675,7 +675,7 @@ export default function BandDashboard() {
           </div>
 
           {/* ── AI Booking Agent — two-column layout ──────────────────────── */}
-          <div style={{ display: 'flex', flexDirection: 'row', background: 'var(--bg-panel)', border: '1px solid var(--border)', marginBottom: '1.25rem', height: 540 }}>
+          <div style={{ display: 'flex', flexDirection: 'row', background: 'var(--bg-panel)', border: '1px solid var(--border)', marginBottom: '1.25rem', minHeight: 500 }}>
 
             {/* Left — mascot column */}
             <div style={{ width: 320, flexShrink: 0, background: 'var(--surface-2)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 26 }}>
