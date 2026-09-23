@@ -234,36 +234,26 @@ export default function BandDashboard() {
     setSetupError('');
 
     const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setSetupError('Not signed in.'); setSetupSaving(false); return; }
 
-    const user = session?.user ?? null;
-    if (!user) { setSetupError('Not signed in.'); setSetupSaving(false); return; }
+    const res = await fetch('/api/band/setup', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        act_name:   setupForm.act_name.trim(),
+        home_city:  setupForm.home_city.trim() || undefined,
+        home_state: setupForm.home_state.trim() || undefined,
+        bio:        setupForm.bio.trim() || undefined,
+      }),
+    });
 
-    const { data: newAct, error: actError } = await supabase
-      .from('acts')
-      .insert({
-        owner_id:  user.id,
-        act_name:  setupForm.act_name.trim(),
-        home_city: setupForm.home_city.trim() || null,
-        home_state: setupForm.home_state.trim() || null,
-        bio:       setupForm.bio.trim() || null,
-        is_active: true,
-      })
-      .select('id')
-      .single();
+    const json = await res.json();
 
-    if (actError || !newAct) {
-      setSetupError(actError?.message || 'Failed to create act.');
-      setSetupSaving(false);
-      return;
-    }
-
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({ act_id: newAct.id })
-      .eq('id', user.id);
-
-    if (profileError) {
-      setSetupError(profileError.message);
+    if (!res.ok) {
+      setSetupError(json.error?.message || 'Failed to create act.');
       setSetupSaving(false);
       return;
     }
