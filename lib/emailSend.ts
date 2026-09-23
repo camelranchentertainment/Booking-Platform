@@ -65,13 +65,12 @@ export async function sendActEmail(params: {
   const service = getServiceClient();
   const { apiKey, baseFrom } = await getResendConfig(service);
 
-  const { data: act } = await service
-    .from('acts')
-    .select('act_name, contact_email, gmail_address, google_refresh_token')
-    .eq('id', params.actId)
-    .single();
+  const [{ data: act }, { data: creds }] = await Promise.all([
+    service.from('acts').select('act_name, contact_email, gmail_address').eq('id', params.actId).single(),
+    service.from('act_credentials').select('google_refresh_token').eq('act_id', params.actId).maybeSingle(),
+  ]);
 
-  const gmailConnected = Boolean(act?.gmail_address && act?.google_refresh_token);
+  const gmailConnected = Boolean(act?.gmail_address && creds?.google_refresh_token);
   const gmailAddress: string | null = act?.gmail_address || null;
 
   let from = `Camel Ranch Booking <bookings@camelranchbooking.com>`;

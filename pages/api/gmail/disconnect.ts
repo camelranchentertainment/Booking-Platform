@@ -22,15 +22,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  await service
-    .from('acts')
-    .update({
-      google_access_token:  null,
-      google_refresh_token: null,
-      gmail_address:        null,
-      gmail_connected_at:   null,
-    })
-    .eq('id', profile.act_id);
+  await service.from('act_credentials').update({
+    google_access_token:  null,
+    google_refresh_token: null,
+  }).eq('act_id', profile.act_id);
+
+  await service.from('acts').update({
+    gmail_address:      null,
+    gmail_connected_at: null,
+  }).eq('id', profile.act_id);
 
   return res.status(200).json({ ok: true });
 }

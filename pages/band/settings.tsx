@@ -62,9 +62,10 @@ export default function BandSettings() {
     setPersonalGmail((prof as any)?.personal_gmail || '');
 
     // Dual-lookup for act: owner first, then profile act_id
-    let { data: acts } = await supabase.from('acts').select('*').eq('owner_id', user.id).eq('is_active', true).limit(1);
+    const ACT_SAFE_COLS = 'id, owner_id, act_name, genre, bio, website, instagram, spotify, logo_url, member_count, gcal_calendar_id, is_active, created_at, updated_at, contact_email, contact_phone, home_city, home_state, facebook, username, epk_link, profile_photo_url, calendar_name, sync_enabled, calendar_type, ical_url, last_synced_at, tiktok_url, facebook_url, instagram_url, epk_url, gmail_address, gmail_connected_at, ical_feed_token';
+    let { data: acts } = await supabase.from('acts').select(ACT_SAFE_COLS).eq('owner_id', user.id).eq('is_active', true).limit(1);
     if (!acts?.length && prof?.act_id) {
-      const { data: linked } = await supabase.from('acts').select('*').eq('id', prof.act_id).eq('is_active', true).limit(1);
+      const { data: linked } = await supabase.from('acts').select(ACT_SAFE_COLS).eq('id', prof.act_id).eq('is_active', true).limit(1);
       acts = linked;
     }
     const a = acts?.[0];
