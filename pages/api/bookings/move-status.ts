@@ -5,6 +5,7 @@ import type { BookingStatus } from '../../../lib/types';
 import { AppError, withHandler } from '../../../lib/apiError';
 import { notifyActMembers } from '../../../lib/notifications';
 import { formatShowDate } from '../../../lib/formatDate';
+import { syncBookingToGoogleCalendar } from '../../../lib/calendarSync';
 
 export default withHandler(async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') throw new AppError(405, 'Method not allowed');
@@ -37,6 +38,14 @@ export default withHandler(async function handler(req: NextApiRequest, res: Next
   if (!booking) throw new AppError(403, 'Forbidden');
 
   await updateBookingStatus(service, bookingId, status as BookingStatus, profile.act_id);
+
+  // Best-effort Google Calendar sync.
+// A Calendar API failure should never prevent the booking status change.
+try {
+  await syncBookingToGoogleCalendar(bookingId, profile.act_id);
+} catch (err) {
+  console.error('[calendar sync] booking status update failed:', err);
+}
 
   if (status === 'confirmed') {
     const venueName = (booking.venue as any)?.name || 'venue';
