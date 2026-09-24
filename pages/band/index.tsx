@@ -70,6 +70,7 @@ export default function BandDashboard() {
   const [conversationLoaded, setConversationLoaded] = useState(false);
   const [attachedFile, setAttachedFile]   = useState<{ name: string; content: string } | null>(null);
   const [fileLoading, setFileLoading]     = useState(false);
+  const [expandedMsgs, setExpandedMsgs]   = useState<Set<number>>(new Set());
   const fileInputRef                      = useRef<HTMLInputElement>(null);
 
   // Approval
@@ -85,7 +86,7 @@ export default function BandDashboard() {
   const [setupError, setSetupError]   = useState('');
 
   const threadRef   = useRef<HTMLDivElement>(null);
-  const agentInputRef = useRef<HTMLInputElement>(null);
+  const agentInputRef = useRef<HTMLTextAreaElement>(null);
   const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => { load(); }, []);
@@ -93,8 +94,7 @@ export default function BandDashboard() {
   useEffect(() => {
     const el = threadRef.current;
     if (!el) return;
-    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (distFromBottom <= 80) el.scrollTop = el.scrollHeight;
+    el.scrollTop = el.scrollHeight;
   }, [messages, pendingAction]);
 
   // Load any previously saved conversation for this user+act before deciding whether
@@ -689,16 +689,16 @@ export default function BandDashboard() {
           </div>
 
           {/* ── AI Booking Agent — two-column layout ──────────────────────── */}
-          <div style={{ display: 'flex', flexDirection: 'row', background: 'var(--bg-panel)', border: '1px solid var(--border)', marginBottom: '1.25rem', minHeight: 540, maxHeight: 'min(810px, 85vh)', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', flexDirection: 'row', background: 'var(--bg-panel)', border: '1px solid var(--border)', marginBottom: '1.25rem', height: 'min(450px, 70vh)', overflow: 'hidden' }}>
 
             {/* Left — mascot column */}
-            <div style={{ width: 320, flexShrink: 0, background: 'var(--surface-2)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 26 }}>
-              <div style={{ width: 210, height: 210, borderRadius: '50%', background: '#0d1420', border: '3px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
+            <div style={{ width: 220, flexShrink: 0, background: 'var(--surface-2)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16 }}>
+              <div style={{ width: 120, height: 120, borderRadius: '50%', background: '#0d1420', border: '3px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', flexShrink: 0 }}>
                 <img src="/Agent-Camel.jpg" alt="Booking agent mascot" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />
-                <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 700 }}>Online · ready to help</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', display: 'inline-block', flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>Online · ready</span>
               </div>
             </div>
 
@@ -732,24 +732,51 @@ export default function BandDashboard() {
               onBlur={e => { e.currentTarget.style.outline = ''; e.currentTarget.style.outlineOffset = ''; }}
               style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.65rem', minHeight: 0 }}
             >
-              {messages.map((m, i) => (
-                <div key={i} className={m.role === 'user' ? 'dash-msg-user' : 'dash-msg-ai'} style={{
-                  alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                  padding: '0.6rem 0.85rem',
-                  background: m.role === 'user' ? 'rgba(224,120,32,0.14)' : 'var(--bg-overlay)',
-                  border: `1px solid ${m.role === 'user' ? 'rgba(224,120,32,0.3)' : 'var(--border)'}`,
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                  color: 'var(--text-primary)',
-                  whiteSpace: 'pre-wrap',
-                }}>
-                  {m.content.split(/\*\*(.*?)\*\*/g).map((chunk, ci) =>
-                    ci % 2 === 1
-                      ? <strong key={ci} style={{ color: 'var(--accent)', fontWeight: 700 }}>{chunk}</strong>
-                      : chunk
-                  )}
-                </div>
-              ))}
+              {messages.map((m, i) => {
+                const isLong     = m.content.length > 280;
+                const isExpanded = expandedMsgs.has(i);
+                const toggleExpand = () => setExpandedMsgs(prev => {
+                  const next = new Set(prev);
+                  next.has(i) ? next.delete(i) : next.add(i);
+                  return next;
+                });
+                return (
+                  <div key={i} className={m.role === 'user' ? 'dash-msg-user' : 'dash-msg-ai'}
+                    style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <div style={{
+                      padding: '0.6rem 0.85rem',
+                      background: m.role === 'user' ? 'rgba(224,120,32,0.14)' : 'var(--bg-overlay)',
+                      border: `1px solid ${m.role === 'user' ? 'rgba(224,120,32,0.3)' : 'var(--border)'}`,
+                      fontSize: 14,
+                      lineHeight: 1.6,
+                      color: 'var(--text-primary)',
+                      whiteSpace: 'pre-wrap',
+                      ...(isLong && !isExpanded ? { maxHeight: '7.5em', overflow: 'hidden' } : {}),
+                    }}>
+                      {m.content.split(/\*\*(.*?)\*\*/g).map((chunk, ci) =>
+                        ci % 2 === 1
+                          ? <strong key={ci} style={{ color: 'var(--accent)', fontWeight: 700 }}>{chunk}</strong>
+                          : chunk
+                      )}
+                    </div>
+                    {isLong && (
+                      <button
+                        onClick={toggleExpand}
+                        style={{
+                          alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          fontSize: 12, color: 'var(--accent)', fontWeight: 700,
+                          padding: '0 0.2rem', lineHeight: 1,
+                        }}
+                        onFocus={e => { e.currentTarget.style.outline = '2px solid var(--accent)'; e.currentTarget.style.outlineOffset = '2px'; }}
+                        onBlur={e => { e.currentTarget.style.outline = ''; }}
+                      >
+                        {isExpanded ? 'Show less ↑' : 'Show more ↓'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
               {agentLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontFamily: 'var(--font-mono)', alignSelf: 'flex-start' }}>thinking…</div>}
 
               {/* Approval panel */}
@@ -952,20 +979,29 @@ export default function BandDashboard() {
                 >
                   {fileLoading ? '⏳' : '📎'}
                 </button>
-                <input
+                <textarea
                   ref={agentInputRef}
                   className="input"
+                  rows={1}
                   style={{
                     flex: 1, fontSize: 14,
                     background: 'rgba(255,255,255,0.08)',
                     border: '1px solid rgba(255,255,255,0.3)',
                     color: '#fff',
                     opacity: 1,
+                    resize: 'none',
+                    overflow: 'auto',
+                    lineHeight: '1.5',
                   }}
                   placeholder={attachedFile ? 'Add a message or just hit send…' : `Ask about ${myAct?.act_name || 'your pipeline'}, or attach a show list…`}
                   value={agentInput}
                   onChange={e => setAgentInput(e.target.value)}
-                  disabled={agentLoading}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      if (!agentLoading && (agentInput.trim() || attachedFile)) sendMessage(agentInput);
+                    }
+                  }}
                 />
                 <button
                   type="submit"
