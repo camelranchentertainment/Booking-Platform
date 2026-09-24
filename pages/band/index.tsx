@@ -184,7 +184,13 @@ export default function BandDashboard() {
       if (!user) return;
 
       const actId = await getActId(supabase, user.id);
-      if (!actId) { return; }
+      if (!actId) {
+        // Still need role so the no-act render shows the right message vs the setup form.
+        const { data: noActProfile } = await supabase
+          .from('profiles').select('role').eq('id', user.id).maybeSingle();
+        setUserProfile(noActProfile || null);
+        return;
+      }
 
       const [actRes, profileRes] = await Promise.all([
         supabase.from('acts').select('id, owner_id, act_name, genre, bio, website, instagram, spotify, logo_url, member_count, gcal_calendar_id, is_active, created_at, updated_at, contact_email, contact_phone, home_city, home_state, facebook, username, epk_link, profile_photo_url, calendar_name, sync_enabled, calendar_type, ical_url, last_synced_at, tiktok_url, facebook_url, instagram_url, epk_url, gmail_address, gmail_connected_at, ical_feed_token').eq('id', actId).eq('is_active', true).single(),
@@ -234,36 +240,26 @@ export default function BandDashboard() {
     setSetupError('');
 
     const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setSetupError('Not signed in.'); setSetupSaving(false); return; }
 
-    const user = session?.user ?? null;
-    if (!user) { setSetupError('Not signed in.'); setSetupSaving(false); return; }
+    const res = await fetch('/api/band/setup', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        act_name:   setupForm.act_name.trim(),
+        home_city:  setupForm.home_city.trim() || undefined,
+        home_state: setupForm.home_state.trim() || undefined,
+        bio:        setupForm.bio.trim() || undefined,
+      }),
+    });
 
-    const { data: newAct, error: actError } = await supabase
-      .from('acts')
-      .insert({
-        owner_id:  user.id,
-        act_name:  setupForm.act_name.trim(),
-        home_city: setupForm.home_city.trim() || null,
-        home_state: setupForm.home_state.trim() || null,
-        bio:       setupForm.bio.trim() || null,
-        is_active: true,
-      })
-      .select('id')
-      .single();
+    const json = await res.json();
 
-    if (actError || !newAct) {
-      setSetupError(actError?.message || 'Failed to create act.');
-      setSetupSaving(false);
-      return;
-    }
-
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({ act_id: newAct.id })
-      .eq('id', user.id);
-
-    if (profileError) {
-      setSetupError(profileError.message);
+    if (!res.ok) {
+      setSetupError(json.error?.message || 'Failed to create act.');
       setSetupSaving(false);
       return;
     }
@@ -531,8 +527,16 @@ export default function BandDashboard() {
         </div>
       )}
 
-      {/* ── No act state — inline setup form ────────────────────────────────── */}
-      {!loading && !myAct && (
+      {/* ── No act state ─────────────────────────────────────────────────────── */}
+      {!loading && !myAct && userProfile?.role !== 'band_admin' && (
+        <div className="card" style={{ maxWidth: 480, margin: '4rem auto', padding: '2.5rem 2rem', textAlign: 'center' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', color: 'var(--accent)', marginBottom: '0.5rem', letterSpacing: '0.04em' }}>NOT YET LINKED</div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Ask your band admin to invite you. Once you accept the invitation, the dashboard will unlock.</p>
+        </div>
+      )}
+
+      {/* ── No act state — inline setup form (band_admin only) ───────────────── */}
+      {!loading && !myAct && userProfile?.role === 'band_admin' && (
         <div className="card" style={{ maxWidth: 480, margin: '4rem auto', padding: '2.5rem 2rem' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', color: 'var(--accent)', marginBottom: '0.5rem', letterSpacing: '0.04em' }}>GET STARTED</div>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '1.75rem', fontSize: 14 }}>Create your band profile to unlock the dashboard.</p>
