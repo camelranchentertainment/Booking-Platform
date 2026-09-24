@@ -1,108 +1,110 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
-import { getValidAccessToken, createOrUpdateEvent, deleteEvent } from '../../../lib/googleCalendar';
+import { syncBookingToGoogleCalendar } from '../../../lib/calendarSync';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse,
+) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
 
   const service = getServiceClient();
-  const { data: { user } } = await service.auth.getUser(token);
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
+  const {
+    data: { user },
+  } = await service.auth.getUser(token);
+
+  if (!user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // Verify this user has a configured Google Calendar connection.
   const { data: settings } = await service
     .from('user_calendar_settings')
-    .select('act_id, sync_enabled, selected_calendar_id, google_refresh_token')
+    .select(
+      'act_id, sync_enabled, selected_calendar_id, google_refresh_token',
+    )
     .eq('user_id', user.id)
     .maybeSingle();
 
   if (!settings?.google_refresh_token) {
     return res.status(400).json({ error: 'Google Calendar not connected' });
   }
+
   if (!settings.sync_enabled) {
     return res.status(400).json({ error: 'Sync is disabled' });
   }
+
   if (!settings.selected_calendar_id) {
     return res.status(400).json({ error: 'No calendar selected' });
   }
 
-  const accessToken = await getValidAccessToken(user.id);
-  if (!accessToken) {
-    return res.status(401).json({ error: 'Could not refresh Google token' });
-  }
-
-  const { data: profileRow } = await service
+  // Use the user's current profile as the authoritative act relationship.
+  const { data: profile } = await service
     .from('profiles')
     .select('act_id')
     .eq('id', user.id)
     .maybeSingle();
 
-  const actId = profileRow?.act_id;
-  if (!actId) return res.status(400).json({ error: 'No act linked to account' });
+  const actId = profile?.act_id;
 
-  // Fetch all confirmed bookings with show_date
-  const { data: bookings } = await service
+  if (!actId) {
+    return res.status(400).json({ error: 'No act linked to account' });
+  }
+
+  /*
+   * Fetch every booking for the act.
+   *
+   * The shared helper decides whether each booking should:
+   *   - exist on Google Calendar
+   *   - be updated
+   *   - be removed
+   *   - be skipped
+   *
+   * This also cleans up existing events if a booking moves backward from
+   * confirmed to hold/contract/etc.
+   */
+  const { data: bookings, error: bookingsError } = await service
     .from('bookings')
-    .select('id, show_date, google_event_id, act:acts(act_name), venue:venues(name, city, state)')
-    .eq('act_id', actId)
-    .eq('status', 'confirmed')
-    .not('show_date', 'is', null);
+    .select('id')
+    .eq('act_id', actId);
 
-  const calendarId = settings.selected_calendar_id;
-  const synced: string[] = [];
+  if (bookingsError) {
+    return res.status(500).json({
+      error: `Could not load bookings: ${bookingsError.message}`,
+    });
+  }
+
+  let synced = 0;
+  let deleted = 0;
+  let skipped = 0;
   const errors: string[] = [];
 
-  for (const booking of (bookings || [])) {
+  for (const booking of bookings || []) {
     try {
-      const act   = (booking.act as any)?.act_name  || 'Show';
-      const venue = (booking.venue as any)?.name     || '';
-      const city  = (booking.venue as any)?.city     || '';
-      const state = (booking.venue as any)?.state    || '';
-
-      const summary     = `${act} @ ${venue}`;
-      const location    = [venue, city, state].filter(Boolean).join(', ');
-      const showDate    = booking.show_date as string;
-      // Google Calendar's all-day event `end.date` is EXCLUSIVE — it must be the
-      // day AFTER the event's last day, or Google treats it as a zero-duration
-      // event and some views render it as spilling into the next day. Add 1 day.
-      const endDate = (() => {
-        const d = new Date(showDate + 'T00:00:00');
-        d.setDate(d.getDate() + 1);
-        return d.toISOString().slice(0, 10);
-      })();
-
-      const googleEventId = await createOrUpdateEvent(
-        accessToken,
-        calendarId,
-        { summary, location, start: showDate, end: endDate },
-        booking.google_event_id || undefined,
+      const result = await syncBookingToGoogleCalendar(
+        booking.id as string,
+        actId,
       );
 
-      if (googleEventId !== booking.google_event_id) {
-        await service.from('bookings').update({ google_event_id: googleEventId }).eq('id', booking.id);
-      }
-      synced.push(booking.id as string);
+      if (result.synced) synced++;
+      if (result.deleted) deleted++;
+      if (result.skipped) skipped++;
     } catch (err: any) {
       errors.push(`${booking.id}: ${err.message}`);
     }
   }
 
-  // Delete events for cancelled bookings that still have a google_event_id
-  const { data: cancelled } = await service
-    .from('bookings')
-    .select('id, google_event_id')
-    .eq('act_id', actId)
-    .eq('status', 'cancelled')
-    .not('google_event_id', 'is', null);
-
-  for (const booking of (cancelled || [])) {
-    try {
-      await deleteEvent(accessToken, calendarId, booking.google_event_id as string);
-      await service.from('bookings').update({ google_event_id: null }).eq('id', booking.id);
-    } catch {}
-  }
-
-  return res.status(200).json({ ok: true, synced: synced.length, errors });
+  return res.status(200).json({
+    ok: errors.length === 0,
+    synced,
+    deleted,
+    skipped,
+    errors,
+  });
 }
