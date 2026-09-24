@@ -529,8 +529,8 @@ export default function BandDashboard() {
         .dash-act-header    { display:flex; align-items:center; justify-content:space-between; min-height:70px; padding:0.75rem 1rem; background:var(--bg-panel); border:1px solid var(--border); margin-bottom:1.25rem; }
         .dash-act-name      { font-family:var(--font-display); font-size:28px; font-weight:900; color:var(--text-primary); line-height:1; letter-spacing:0.03em; }
         .dash-crb-badge     { display:none; }
-        .dash-upcoming-grid { display:grid; grid-template-columns:1fr; gap:0.75rem; }
-        .dash-tours-grid    { display:grid; grid-template-columns:1fr; gap:0.75rem; }
+        .dash-upcoming-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:0.5rem; }
+        .dash-tours-grid    { display:grid; grid-template-columns:repeat(2,1fr); gap:0.5rem; }
         .dash-targets-grid  { display:grid; grid-template-columns:repeat(2,1fr); gap:0.5rem; }
         .dash-tiles-grid    { display:grid; grid-template-columns:repeat(2,1fr); gap:0.75rem; }
         .dash-appr-grid     { display:grid; grid-template-columns:1fr; gap:0.25rem; max-height:160px; overflow-y:auto; }
@@ -541,8 +541,8 @@ export default function BandDashboard() {
           .dash-act-header    { height:80px; padding:0 1.25rem; }
           .dash-act-name      { font-size:32px; }
           .dash-crb-badge     { display:flex; }
-          .dash-upcoming-grid { grid-template-columns:repeat(2,1fr); }
-          .dash-tours-grid    { grid-template-columns:repeat(2,1fr); }
+          .dash-upcoming-grid { grid-template-columns:repeat(4,1fr); }
+          .dash-tours-grid    { grid-template-columns:repeat(4,1fr); }
           .dash-targets-grid  { grid-template-columns:repeat(4,1fr); }
           .dash-tiles-grid    { grid-template-columns:repeat(4,1fr); }
           .dash-appr-grid     { grid-template-columns:repeat(2,1fr); gap:0.25rem 1.5rem; }
@@ -551,8 +551,8 @@ export default function BandDashboard() {
           .dash-msg-user      { max-width:60%; }
         }
         @media(min-width:900px){
-          .dash-upcoming-grid { grid-template-columns:repeat(4,1fr); }
-          .dash-tours-grid    { grid-template-columns:repeat(4,1fr); }
+          .dash-upcoming-grid { grid-template-columns:repeat(8,1fr); }
+          .dash-tours-grid    { grid-template-columns:repeat(8,1fr); }
           .dash-targets-grid  { grid-template-columns:repeat(8,1fr); }
         }
       `}</style>
@@ -682,23 +682,25 @@ export default function BandDashboard() {
                 {upcomingShows.map((show: any) => {
                   const color = STATUS_COLORS[show.status] || '#6b7280';
                   return (
-                    <div key={show.id} style={{ borderRadius: 16, background: 'var(--surface)', border: '1px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ height: 6, background: color }} />
-                      <div style={{ padding: '1rem 1.1rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color, fontWeight: 800 }}>
-                          {formatShowDate(show.show_date, { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </span>
-                        <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                    <div key={show.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ height: 4, background: color, flexShrink: 0 }} />
+                      <div style={{ padding: '0.45rem 0.6rem', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.25rem', overflow: 'hidden' }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {formatShowDate(show.show_date, { month: 'short', day: 'numeric' })}
+                          </span>
+                          <span style={{ padding: '0.1rem 0.3rem', borderRadius: 999, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', background: `${color}29`, color, border: `1px solid ${color}4d`, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {BOOKING_STATUS_LABELS[show.status as keyof typeof BOOKING_STATUS_LABELS] || show.status}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {show.venue?.name || 'TBD'}
                         </span>
                         {(show.venue?.city || show.venue?.state) && (
-                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {[show.venue.city, show.venue.state].filter(Boolean).join(', ')}
                           </span>
                         )}
-                        <span style={{ marginTop: '0.35rem', alignSelf: 'flex-start', padding: '0.2rem 0.55rem', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', background: `${color}29`, color, border: `1px solid ${color}4d` }}>
-                          {BOOKING_STATUS_LABELS[show.status as keyof typeof BOOKING_STATUS_LABELS] || show.status}
-                        </span>
                       </div>
                     </div>
                   );
@@ -748,16 +750,16 @@ export default function BandDashboard() {
                       onBlur={e => { e.currentTarget.style.outline = ''; e.currentTarget.style.outlineOffset = ''; }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = edgeColor; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}>
-                      <div style={{ height: 6, background: edgeColor, flexShrink: 0 }} />
-                      <div style={{ padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1 }}>
-                        <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>{tour.name}</span>
+                      <div style={{ height: 4, background: edgeColor, flexShrink: 0 }} />
+                      <div style={{ padding: '0.45rem 0.6rem', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.name}</span>
                         {dateRange && (
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{dateRange}</span>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dateRange}</span>
                         )}
+                        <span style={{ fontSize: 10, color: edgeColor, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{statusLine}</span>
                         {tour.description && (
-                          <span style={CLAMP_2_STYLE}>{tour.description}</span>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.description}</span>
                         )}
-                        <span style={{ fontSize: 11, color: edgeColor, fontWeight: 700, marginTop: '0.3rem' }}>{statusLine}</span>
                       </div>
                     </Link>
                   );
