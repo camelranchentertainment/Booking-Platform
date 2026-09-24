@@ -686,10 +686,10 @@ export default function BandDashboard() {
                       <div style={{ height: 4, background: color, flexShrink: 0 }} />
                       <div style={{ padding: '0.45rem 0.6rem', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.25rem', overflow: 'hidden' }}>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {formatShowDate(show.show_date, { month: 'short', day: 'numeric' })}
                           </span>
-                          <span style={{ padding: '0.1rem 0.3rem', borderRadius: 999, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', background: `${color}29`, color, border: `1px solid ${color}4d`, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          <span style={{ padding: '0.1rem 0.3rem', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', background: `${color}29`, color, border: `1px solid ${color}4d`, whiteSpace: 'nowrap', flexShrink: 0 }}>
                             {BOOKING_STATUS_LABELS[show.status as keyof typeof BOOKING_STATUS_LABELS] || show.status}
                           </span>
                         </div>
@@ -697,7 +697,7 @@ export default function BandDashboard() {
                           {show.venue?.name || 'TBD'}
                         </span>
                         {(show.venue?.city || show.venue?.state) && (
-                          <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {[show.venue.city, show.venue.state].filter(Boolean).join(', ')}
                           </span>
                         )}
@@ -754,11 +754,11 @@ export default function BandDashboard() {
                       <div style={{ padding: '0.45rem 0.6rem', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
                         <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.name}</span>
                         {dateRange && (
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dateRange}</span>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dateRange}</span>
                         )}
-                        <span style={{ fontSize: 10, color: edgeColor, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{statusLine}</span>
+                        <span style={{ fontSize: 11, color: edgeColor, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{statusLine}</span>
                         {tour.description && (
-                          <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.description}</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.description}</span>
                         )}
                       </div>
                     </Link>
