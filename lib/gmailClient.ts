@@ -8,13 +8,12 @@ export async function getGmailClient(actId: string) {
 
   const service = getServiceClient();
 
-  const { data: act } = await service
-    .from('acts')
-    .select('google_access_token, google_refresh_token, gmail_address')
-    .eq('id', actId)
-    .single();
+  const [{ data: creds }, { data: actData }] = await Promise.all([
+    service.from('act_credentials').select('google_access_token, google_refresh_token').eq('act_id', actId).maybeSingle(),
+    service.from('acts').select('gmail_address').eq('id', actId).single(),
+  ]);
 
-  if (!act?.google_refresh_token) {
+  if (!creds?.google_refresh_token) {
     throw new Error('Gmail not connected for this act');
   }
 
@@ -24,27 +23,17 @@ export async function getGmailClient(actId: string) {
   );
 
   oauth2Client.setCredentials({
-    access_token: act.google_access_token,
-    refresh_token: act.google_refresh_token,
+    access_token: creds.google_access_token,
+    refresh_token: creds.google_refresh_token,
   });
 
-  // Save refreshed Google credentials for future Gmail requests
+  // Save refreshed credentials back to act_credentials
   oauth2Client.on('tokens', async (newTokens) => {
     const updates: Record<string, string> = {};
-
-    if (newTokens.access_token) {
-      updates.google_access_token = newTokens.access_token;
-    }
-
-    if (newTokens.refresh_token) {
-      updates.google_refresh_token = newTokens.refresh_token;
-    }
-
+    if (newTokens.access_token) updates.google_access_token = newTokens.access_token;
+    if (newTokens.refresh_token) updates.google_refresh_token = newTokens.refresh_token;
     if (Object.keys(updates).length > 0) {
-      await service
-        .from('acts')
-        .update(updates)
-        .eq('id', actId);
+      await service.from('act_credentials').update(updates).eq('act_id', actId);
     }
   });
 
@@ -55,6 +44,6 @@ export async function getGmailClient(actId: string) {
 
   return {
     gmail,
-    gmailAddress: act.gmail_address as string | null,
+    gmailAddress: actData?.gmail_address as string | null,
   };
 }

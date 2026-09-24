@@ -187,7 +187,7 @@ export default function BandDashboard() {
       if (!actId) { return; }
 
       const [actRes, profileRes] = await Promise.all([
-        supabase.from('acts').select('*').eq('id', actId).eq('is_active', true).single(),
+        supabase.from('acts').select('id, owner_id, act_name, genre, bio, website, instagram, spotify, logo_url, member_count, gcal_calendar_id, is_active, created_at, updated_at, contact_email, contact_phone, home_city, home_state, facebook, username, epk_link, profile_photo_url, calendar_name, sync_enabled, calendar_type, ical_url, last_synced_at, tiktok_url, facebook_url, instagram_url, epk_url, gmail_address, gmail_connected_at, ical_feed_token').eq('id', actId).eq('is_active', true).single(),
         supabase.from('profiles').select('display_name, email, role').eq('id', user.id).single(),
       ]);
 
