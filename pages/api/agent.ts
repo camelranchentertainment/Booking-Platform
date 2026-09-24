@@ -16,6 +16,15 @@ import {
 } from '../../lib/aiAgentTools';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { formatShowDate } from '../../lib/formatDate';
+import {
+  BATCH_CAP,
+  StageItem,
+  validateItems,
+  applyBatchCap,
+  normalizeItemKey,
+  isDuplicateInRows,
+  formatPendingContextSummary,
+} from '../../lib/agentStagingHelpers';
 
 export const config = { api: { bodyParser: { sizeLimit: '5mb' } } };
 
@@ -64,6 +73,11 @@ can describe several things (4 shows, 2 travel days, notes, a budget line) in on
 Only include the fields you actually have values for on each item (all fields except kind/date are
 optional per item). Never invent a venue_id or tour_id — those get resolved server-side by name. If a
 venue doesn't exist yet and you don't know its city/state, ask the user before staging that item.
+
+BATCH CAP — CRITICAL: Stage at most 4 items per stage_items response. If the user asks for more
+than 4, stage the first 4 only and tell them how many remain, e.g.:
+"Staged 4 — **2 more remaining**. Say "continue" when ready to stage the next batch."
+The server enforces this cap and will discard any items beyond the 4th.
 
 Money mentioned for a show can mean one of two different things — get this right, it matters:
 
@@ -350,22 +364,9 @@ async function resolveStageItems(
   actId: string,
   userId: string,
   tourName: string,
-  items: Array<{
-    kind: 'show' | 'travel' | 'tour_notes' | 'expense';
-    booking_id?: string;
-    venueName?: string;
-    venueCity?: string;
-    venueState?: string;
-    date?: string;
-    setTime?: string;
-    loadInTime?: string;
-    soundcheckTime?: string;
-    endTime?: string;
-    category?: string;
-    amount?: number;
-    status?: string;
-    notes?: string;
-  }>,
+  items: StageItem[],
+  service: ReturnType<typeof getServiceClient>,
+  dedupRows: { pending: any[]; recent: any[] },
 ): Promise<{ staged: any[]; errors: string[] }> {
   const tours = await execFindTour(actId, tourName);
   const tour = tours[0];
@@ -375,6 +376,7 @@ async function resolveStageItems(
 
   const staged: any[] = [];
   const errors: string[] = [];
+  const batchKeys = new Set<string>(); // track keys staged in this batch to catch within-batch duplicates
 
   for (const item of items) {
     try {
@@ -385,6 +387,22 @@ async function resolveStageItems(
           const venues = await execFindVenue(actId, { name: item.venueName });
           if (!venues.length) {
             if (item.venueCity && item.venueState) {
+              const candidateKey = normalizeItemKey('venue_and_booking_upsert', {
+                venue_name: item.venueName, show_date: item.date ?? '',
+              });
+              if (batchKeys.has(candidateKey)) {
+                errors.push(`Already staged in this batch: ${item.venueName} on ${item.date}`);
+                continue;
+              }
+              const dup = isDuplicateInRows(dedupRows.pending, dedupRows.recent, 'venue_and_booking_upsert', {
+                venue_name: item.venueName, show_date: item.date ?? '',
+              });
+              if (dup.duplicate) {
+                errors.push(dup.reason === 'pending'
+                  ? `Already waiting for confirmation: ${item.venueName} on ${item.date}`
+                  : `Already saved recently: ${item.venueName} on ${item.date}`);
+                continue;
+              }
               try {
                 const result = await execStageVenueAndBooking(actId, userId, {
                   venue_name: item.venueName,
@@ -399,6 +417,7 @@ async function resolveStageItems(
                   notes: item.notes,
                   tour_id: tour.id,
                 });
+                batchKeys.add(candidateKey);
                 staged.push({ kind: 'venue_and_booking', ...result });
               } catch (e: any) {
                 errors.push(e.message || `Couldn't stage "${item.venueName}".`);
@@ -411,6 +430,24 @@ async function resolveStageItems(
           venue_id = venues[0].id;
         }
         if (!item.date && !item.booking_id) { errors.push('A date is required for every show/travel item.'); continue; }
+
+        const candidateKey = normalizeItemKey('booking_upsert', {
+          booking_id: item.booking_id ?? '', venue_id: venue_id ?? '', show_date: item.date ?? '',
+        });
+        if (batchKeys.has(candidateKey)) {
+          errors.push(`Already staged in this batch: ${item.date} at ${item.venueName ?? 'venue'}`);
+          continue;
+        }
+        const dup = isDuplicateInRows(dedupRows.pending, dedupRows.recent, 'booking_upsert', {
+          booking_id: item.booking_id ?? '', venue_id: venue_id ?? '', show_date: item.date ?? '',
+        });
+        if (dup.duplicate) {
+          errors.push(dup.reason === 'pending'
+            ? `Already waiting for confirmation: ${item.date} at ${item.venueName ?? 'venue'}`
+            : `Already saved recently: ${item.date} at ${item.venueName ?? 'venue'}`);
+          continue;
+        }
+
         const result = await execStageBookingUpsert(actId, userId, {
           booking_id: item.booking_id,
           venue_id,
@@ -425,14 +462,42 @@ async function resolveStageItems(
           notes: item.notes,
           tour_id: tour.id,
         });
+        batchKeys.add(candidateKey);
         staged.push({ kind: item.kind, ...result });
       } else if (item.kind === 'tour_notes') {
         if (!item.notes) { errors.push('Tour notes item has no text.'); continue; }
+        const candidateKey = normalizeItemKey('tour_notes_update', { tour_id: tour.id });
+        if (batchKeys.has(candidateKey)) {
+          errors.push('Tour notes already updated in this batch.');
+          continue;
+        }
+        const dup = isDuplicateInRows(dedupRows.pending, dedupRows.recent, 'tour_notes_update', { tour_id: tour.id });
+        if (dup.duplicate) {
+          errors.push(dup.reason === 'recent' ? 'Tour notes already saved recently.' : 'Tour notes update already waiting for confirmation.');
+          continue;
+        }
         const result = await execStageTourNotesUpdate(actId, userId, { tour_id: tour.id, notes: item.notes });
+        batchKeys.add(candidateKey);
         staged.push({ kind: 'tour_notes', ...result });
       } else if (item.kind === 'expense') {
         if (!item.category || item.amount == null || !item.date) {
           errors.push('An expense item is missing category, amount, or date.');
+          continue;
+        }
+        const candidateKey = normalizeItemKey('expense_insert', {
+          tour_id: tour.id, category: item.category, amount: item.amount, expense_date: item.date,
+        });
+        if (batchKeys.has(candidateKey)) {
+          errors.push(`Duplicate expense in this batch: ${item.category} $${item.amount}`);
+          continue;
+        }
+        const dup = isDuplicateInRows(dedupRows.pending, dedupRows.recent, 'expense_insert', {
+          tour_id: tour.id, category: item.category, amount: item.amount, expense_date: item.date,
+        });
+        if (dup.duplicate) {
+          errors.push(dup.reason === 'recent'
+            ? `Expense already saved recently: ${item.category} $${item.amount}`
+            : `Expense already waiting for confirmation: ${item.category} $${item.amount}`);
           continue;
         }
         const result = await execStageExpense(actId, userId, {
@@ -443,7 +508,11 @@ async function resolveStageItems(
           status: item.status ?? 'potential',
           notes: item.notes,
         });
+        batchKeys.add(candidateKey);
         staged.push({ kind: 'expense', ...result });
+      } else {
+        // Unknown kind — report it rather than silently dropping
+        errors.push(`Unknown item kind "${(item as any).kind}" — item not staged.`);
       }
     } catch (e: any) {
       errors.push(e.message || 'Failed to stage an item.');
@@ -484,9 +553,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const anthropicKey = await getSetting('anthropic_api_key');
   if (!anthropicKey) return res.status(500).json({ error: 'AI not configured. Add your Anthropic API key in Settings.' });
 
-  const context = await buildContext(service, actId);
-  const client = new Anthropic({ apiKey: anthropicKey });
+  // ── Load pending staged actions for context + dedup ──────────────────────────
+  const now = new Date().toISOString();
+  const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 
+  const [{ data: pendingRows }, { data: recentRows }] = await Promise.all([
+    service
+      .from('ai_staged_actions')
+      .select('id, action_type, payload, created_at')
+      .eq('act_id', actId)
+      .eq('created_by', user.id)
+      .eq('status', 'pending')
+      .gt('expires_at', now),
+    service
+      .from('ai_staged_actions')
+      .select('action_type, payload')
+      .eq('act_id', actId)
+      .eq('status', 'executed')
+      .gt('executed_at', tenMinsAgo),
+  ]);
+
+  const dedupRows = { pending: pendingRows ?? [], recent: recentRows ?? [] };
+
+  // ── Cancel orphaned pending actions before this new message is processed ─────
+  if ((pendingRows?.length ?? 0) > 0) {
+    await service
+      .from('ai_staged_actions')
+      .update({ status: 'cancelled' })
+      .eq('act_id', actId)
+      .eq('created_by', user.id)
+      .eq('status', 'pending');
+  }
+
+  // ── Build context with pending summary so model knows what was outstanding ───
+  const context = await buildContext(service, actId);
+  const pendingContextStr = formatPendingContextSummary(pendingRows ?? []);
+  const fullContext = pendingContextStr ? `${context}\n\n${pendingContextStr}` : context;
+
+  const client = new Anthropic({ apiKey: anthropicKey });
   const messages: Anthropic.MessageParam[] = [...history, { role: 'user', content: message }];
 
   try {
@@ -496,13 +600,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       system: [
         { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
         { type: 'text', text: HELP_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
-        { type: 'text', text: `Current pipeline context:\n\n${context}` },
+        { type: 'text', text: `Current pipeline context:\n\n${fullContext}` },
       ],
       messages,
     });
 
     const raw = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
     const wasTruncated = response.stop_reason === 'max_tokens';
+
+    // ── Truncation guard — catch before any JSON processing ───────────────────
+    // If the response was cut off, the item list could be silently shorter than
+    // the user requested. Never stage a partial batch from a truncated response.
+    if (wasTruncated) {
+      console.error('[agent] response truncated: stop_reason=max_tokens', { actId });
+      return res.status(200).json({
+        reply: "That was too many at once — let's do it in smaller groups.",
+      });
+    }
 
     // Strip markdown code fences if present, then look for a JSON object
     // anywhere in the response — don't require the whole response to be bare JSON.
@@ -513,15 +627,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         parsed = JSON.parse(jsonMatch[0]);
       } catch {
-        // The JSON is malformed — almost always because the response was cut off
-        // mid-object. Never show broken JSON to the user; ask them to retry with
-        // a smaller request instead.
-        if (wasTruncated) {
-          return res.status(200).json({
-            reply: "That was a lot to process in one go and my response got cut off. Could you split it into a couple of smaller messages — for example, the shows first, then travel days and notes separately?",
-          });
-        }
-        /* fall through to plain text for any other parse failure */
+        // Malformed JSON that wasn't caught by the truncation check above —
+        // fall through to plain text rather than showing broken output.
       }
 
       if (parsed?.action?.type === 'tour_outreach') {
@@ -565,7 +672,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const result = await execStageTourInsert(actId, user.id, { name: name || '', start_date, end_date, description });
           return res.status(200).json({
             reply: parsed.reply || `Staged a new tour: "${name}"${start_date ? ` (${start_date}${end_date ? ` – ${end_date}` : ''})` : ''}. Confirm to save it.`,
-            action: { type: 'stage_items', staged: [{ kind: 'tour_create', ...result }], errors: [] },
+            action: { type: 'stage_items', staged: [{ kind: 'tour_create', ...result }], errors: [], overflow: 0 },
           });
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that tour." });
@@ -585,7 +692,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const desc = [p.venue_name, p.show_date, amountPart].filter(Boolean).join(' · ');
           return res.status(200).json({
             reply: parsed.reply || `Staged payment update for review: ${desc}. Confirm to save.`,
-            action: { type: 'stage_items', staged: [{ kind: 'payment_settle', ...result }], errors: [] },
+            action: { type: 'stage_items', staged: [{ kind: 'payment_settle', ...result }], errors: [], overflow: 0 },
           });
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that payment update." });
@@ -599,7 +706,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const p = result.proposal;
           return res.status(200).json({
             reply: parsed.reply || `Staged email to ${p.recipient} — subject: "${p.subject}". Review and confirm to send.`,
-            action: { type: 'stage_items', staged: [{ kind: 'email_send', ...result }], errors: [] },
+            action: { type: 'stage_items', staged: [{ kind: 'email_send', ...result }], errors: [], overflow: 0 },
           });
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that email." });
@@ -607,12 +714,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       if (parsed?.action?.type === 'stage_items') {
-        const { tourName, items } = parsed.action;
-        const { staged, errors } = await resolveStageItems(actId, user.id, tourName || '', items || []);
+        const { tourName, items: rawItems } = parsed.action;
+
+        // ── Zod validation — reject malformed items before touching the DB ────
+        const rawArray = Array.isArray(rawItems) ? rawItems : [];
+        const { valid: validItems, invalid: invalidItems } = validateItems(rawArray);
+        const zodErrors: string[] = invalidItems.map(
+          inv => `Couldn't stage item ${inv.index + 1}: ${inv.reason}`,
+        );
+        if (rawItems != null && !Array.isArray(rawItems)) {
+          zodErrors.unshift('Model returned items in unexpected format — nothing staged.');
+        }
+
+        // ── Batch cap — stage at most BATCH_CAP items, report overflow ────────
+        const { capped, overflow } = applyBatchCap(validItems);
+
+        const { staged, errors: stageErrors } = await resolveStageItems(
+          actId, user.id, tourName || '', capped, service, dedupRows,
+        );
+
+        const allErrors = [...zodErrors, ...stageErrors];
+        const overflowNote = overflow > 0
+          ? ` **${overflow} more** not staged yet — say "continue" to stage the next batch.`
+          : '';
         const replyText = staged.length
-          ? (parsed.reply || `Staged ${staged.length} item${staged.length !== 1 ? 's' : ''} for review.`)
-          : (errors[0] || 'Nothing could be staged.');
-        return res.status(200).json({ reply: replyText, action: { type: 'stage_items', staged, errors } });
+          ? (parsed.reply ?? `Staged ${staged.length} item${staged.length !== 1 ? 's' : ''}.`) + overflowNote
+          : (allErrors[0] || 'Nothing could be staged.');
+
+        return res.status(200).json({
+          reply: replyText,
+          action: { type: 'stage_items', staged, errors: allErrors, overflow },
+        });
       }
 
       // Valid JSON but not a recognized action — use reply field or raw
