@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { getActId } from '../../lib/bookingQueries';
@@ -11,6 +11,26 @@ import { buildConfirmMessage } from '../../lib/agentStagingHelpers';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Message = { role: 'user' | 'assistant'; content: string };
+
+type TourBooking  = { id: string; status: string };
+type TourTile     = { id: string; name: string; start_date: string | null; end_date: string | null; description: string | null; bookings: TourBooking[] };
+type VenueSnippet = { id: string; name: string; city: string | null; state: string | null };
+type TargetTile   = { id: string; venue: VenueSnippet | null };
+
+// Supabase's untyped TS client types many-to-one embedded resources as arrays,
+// but PostgREST returns a single object at runtime. This normaliser handles both.
+function normaliseTarget(row: { id: string; venue: VenueSnippet | VenueSnippet[] | null }): TargetTile {
+  const v = row.venue;
+  if (!v) return { id: row.id, venue: null };
+  if (Array.isArray(v)) return { id: row.id, venue: v[0] ?? null };
+  return { id: row.id, venue: v };
+}
+
+const CLAMP_2_STYLE: React.CSSProperties = {
+  fontSize: 12, color: 'var(--text-muted)',
+  overflow: 'hidden', display: '-webkit-box',
+  WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+};
 
 type TourOutreachAction = {
   type: 'tour_outreach';
@@ -57,6 +77,8 @@ export default function BandDashboard() {
   const [targetsCount, setTargetsCount]   = useState(0);
   const [toursCount, setToursCount]     = useState(0);
   const [upcomingShows, setUpcomingShows] = useState<any[]>([]);
+  const [tours, setTours]               = useState<TourTile[]>([]);
+  const [targets, setTargets]           = useState<TargetTile[]>([]);
   const [loading, setLoading]           = useState(true);
 
   // Agent
@@ -208,14 +230,20 @@ export default function BandDashboard() {
       if (actRes.data) {
         // Accurate counts per spec
         const tourIdsRes = await supabase.from('tours').select('id').eq('act_id', actId).neq('status', 'cancelled');
-        const tourIds = (tourIdsRes.data || []).map((t: any) => t.id);
+        const tourIds = (tourIdsRes.data ?? []).map((t: { id: string }) => t.id);
 
         const today = new Date().toISOString().slice(0, 10);
-        const [tvTargetRes, toursRes, upcomingRes] = await Promise.all([
+        const [tvTargetRes, toursCountRes, toursRes, upcomingRes, targetsRes] = await Promise.all([
           tourIds.length
             ? supabase.from('tour_venues').select('id', { count: 'exact', head: true }).in('tour_id', tourIds).eq('status', 'target')
             : Promise.resolve({ count: 0 }),
           supabase.from('tours').select('id', { count: 'exact', head: true }).eq('act_id', actId).in('status', ['planning', 'active']),
+          supabase.from('tours')
+            .select('id, name, start_date, end_date, description, bookings(id, status)')
+            .eq('act_id', actId)
+            .in('status', ['planning', 'active'])
+            .order('start_date', { ascending: true, nullsFirst: false })
+            .limit(4),
           // Upcoming row shows confirmed-only shows — pitch/hold/target don't belong here
           supabase.from('bookings')
             .select('id, status, show_date, venue:venues(id, name, city, state)')
@@ -224,12 +252,22 @@ export default function BandDashboard() {
             .not('show_date', 'is', null)
             .gte('show_date', today)
             .order('show_date')
-            .limit(6),
+            .limit(8),
+          tourIds.length
+            ? supabase.from('tour_venues')
+                .select('id, venue:venues(id, name, city, state)')
+                .in('tour_id', tourIds)
+                .eq('status', 'target')
+                .limit(16)
+            : Promise.resolve({ data: [] }),
         ]);
 
-        setTargetsCount((tvTargetRes as any).count ?? 0);
-        setToursCount((toursRes as any).count ?? 0);
-        setUpcomingShows((upcomingRes as any).data || []);
+        setTargetsCount(tvTargetRes.count ?? 0);
+        setToursCount(toursCountRes.count ?? 0);
+        setTours(toursRes.data ?? []);
+        setUpcomingShows(upcomingRes.data ?? []);
+        const targetRows: Array<{ id: string; venue: VenueSnippet | VenueSnippet[] | null }> = targetsRes.data ?? [];
+        setTargets(targetRows.map(normaliseTarget));
       }
     } catch (err) {
       console.error('band dashboard load:', err);
@@ -491,8 +529,9 @@ export default function BandDashboard() {
         .dash-act-header    { display:flex; align-items:center; justify-content:space-between; min-height:70px; padding:0.75rem 1rem; background:var(--bg-panel); border:1px solid var(--border); margin-bottom:1.25rem; }
         .dash-act-name      { font-family:var(--font-display); font-size:28px; font-weight:900; color:var(--text-primary); line-height:1; letter-spacing:0.03em; }
         .dash-crb-badge     { display:none; }
-        .dash-upcoming-grid { display:grid; grid-template-columns:1fr; gap:0.75rem; }
-        .dash-stats-grid    { display:grid; grid-template-columns:1fr; gap:0.75rem; margin-bottom:1.25rem; }
+        .dash-upcoming-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:0.5rem; }
+        .dash-tours-grid    { display:grid; grid-template-columns:repeat(2,1fr); gap:0.5rem; }
+        .dash-targets-grid  { display:grid; grid-template-columns:repeat(2,1fr); gap:0.5rem; }
         .dash-tiles-grid    { display:grid; grid-template-columns:repeat(2,1fr); gap:0.75rem; }
         .dash-appr-grid     { display:grid; grid-template-columns:1fr; gap:0.25rem; max-height:160px; overflow-y:auto; }
         .dash-draft-grid    { display:grid; grid-template-columns:1fr; gap:0.5rem; align-items:start; }
@@ -502,8 +541,9 @@ export default function BandDashboard() {
           .dash-act-header    { height:80px; padding:0 1.25rem; }
           .dash-act-name      { font-size:32px; }
           .dash-crb-badge     { display:flex; }
-          .dash-upcoming-grid { grid-template-columns:repeat(2,1fr); }
-          .dash-stats-grid    { grid-template-columns:repeat(2,1fr); }
+          .dash-upcoming-grid { grid-template-columns:repeat(4,1fr); }
+          .dash-tours-grid    { grid-template-columns:repeat(4,1fr); }
+          .dash-targets-grid  { grid-template-columns:repeat(4,1fr); }
           .dash-tiles-grid    { grid-template-columns:repeat(4,1fr); }
           .dash-appr-grid     { grid-template-columns:repeat(2,1fr); gap:0.25rem 1.5rem; }
           .dash-draft-grid    { grid-template-columns:1fr 2fr; }
@@ -511,7 +551,9 @@ export default function BandDashboard() {
           .dash-msg-user      { max-width:60%; }
         }
         @media(min-width:900px){
-          .dash-upcoming-grid { grid-template-columns:repeat(4,1fr); }
+          .dash-upcoming-grid { grid-template-columns:repeat(8,1fr); }
+          .dash-tours-grid    { grid-template-columns:repeat(8,1fr); }
+          .dash-targets-grid  { grid-template-columns:repeat(8,1fr); }
         }
       `}</style>
 
@@ -640,23 +682,25 @@ export default function BandDashboard() {
                 {upcomingShows.map((show: any) => {
                   const color = STATUS_COLORS[show.status] || '#6b7280';
                   return (
-                    <div key={show.id} style={{ borderRadius: 16, background: 'var(--surface)', border: '1px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ height: 6, background: color }} />
-                      <div style={{ padding: '1rem 1.1rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color, fontWeight: 800 }}>
-                          {formatShowDate(show.show_date, { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </span>
-                        <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                    <div key={show.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ height: 4, background: color, flexShrink: 0 }} />
+                      <div style={{ padding: '0.45rem 0.6rem', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.25rem', overflow: 'hidden' }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {formatShowDate(show.show_date, { month: 'short', day: 'numeric' })}
+                          </span>
+                          <span style={{ padding: '0.1rem 0.3rem', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', background: `${color}29`, color, border: `1px solid ${color}4d`, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {BOOKING_STATUS_LABELS[show.status as keyof typeof BOOKING_STATUS_LABELS] || show.status}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {show.venue?.name || 'TBD'}
                         </span>
                         {(show.venue?.city || show.venue?.state) && (
-                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {[show.venue.city, show.venue.state].filter(Boolean).join(', ')}
                           </span>
                         )}
-                        <span style={{ marginTop: '0.35rem', alignSelf: 'flex-start', padding: '0.2rem 0.55rem', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', background: `${color}29`, color, border: `1px solid ${color}4d` }}>
-                          {BOOKING_STATUS_LABELS[show.status as keyof typeof BOOKING_STATUS_LABELS] || show.status}
-                        </span>
                       </div>
                     </div>
                   );
@@ -665,27 +709,103 @@ export default function BandDashboard() {
             )}
           </div>
 
-          {/* ── Stat cards ──────────────────────────────────────────────────── */}
-          <div className="dash-stats-grid">
-            {([
-              { label: 'TARGETS', value: targetsCount, sub: 'venues in target list', href: '/email?tab=outreach&status=target', color: '#6B8FB5' },
-              { label: 'TOURS',   value: toursCount,   sub: 'planning or active',         href: '/tours',                               color: '#60a5fa' },
-            ] as any[]).map(card => (
-              <Link key={card.label} href={card.href} style={{ textDecoration: 'none', display: 'block', padding: '1.25rem 1.5rem', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderTop: `3px solid ${card.color}`, position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s, box-shadow 0.15s', cursor: 'pointer' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = card.color; e.currentTarget.style.boxShadow = `0 4px 16px ${card.color}22`; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none'; }}>
-                <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse at top right, ${card.color}11, transparent 65%)`, pointerEvents: 'none' }} />
-                {loading
-                  ? <div style={{ height: 68, background: 'rgba(255,255,255,0.05)', marginBottom: 8 }} />
-                  : <div style={{ fontFamily: 'var(--font-display)', fontSize: 72, fontWeight: 700, color: card.color, lineHeight: 0.9 }}>{card.value}</div>
-                }
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.5rem' }}>{card.label}</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginTop: '0.2rem' }}>{card.sub}</div>
-                {card.total != null && !loading && (
-                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: '0.4rem' }}>{card.total} {card.totalSub}</div>
-                )}
-              </Link>
-            ))}
+          {/* ── Tours ───────────────────────────────────────────────────────── */}
+          <div style={{ marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>TOURS</span>
+              <Link href="/tours" style={{ fontSize: 12, color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 700 }}>View all →</Link>
+            </div>
+            {loading ? (
+              <div style={{ height: 108, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }} />
+            ) : tours.length === 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1.5rem', background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>No active tours</span>
+                <Link href="/tours"
+                  style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, padding: '0.3rem 0.75rem', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', background: 'rgba(255,255,255,0.08)', textDecoration: 'none', transition: 'all 0.15s' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.background = 'rgba(224,120,32,0.15)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}>
+                  + Plan a tour
+                </Link>
+              </div>
+            ) : (
+              <div className="dash-tours-grid">
+                {tours.map((tour) => {
+                  const activeShows = tour.bookings.filter(b => b.status !== 'cancelled');
+                  const confirmedShows = activeShows.filter(b => b.status === 'confirmed');
+                  const edgeColor =
+                    activeShows.length === 0 ? '#6b7280' :
+                    confirmedShows.length === activeShows.length ? '#34d399' :
+                    confirmedShows.length > 0 ? '#f59e0b' : '#ef4444';
+                  const statusLine = activeShows.length === 0
+                    ? 'No shows yet'
+                    : `${confirmedShows.length} of ${activeShows.length} confirmed`;
+                  const dateParts = ([tour.start_date, tour.end_date] as const)
+                    .filter((d): d is string => d !== null)
+                    .map(d => formatShowDate(d, { month: 'short', day: 'numeric', year: 'numeric' }));
+                  const dateRange = dateParts.join(' – ');
+                  return (
+                    <Link key={tour.id} href={`/tours/${tour.id}`}
+                      style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', background: 'var(--bg-panel)', border: '1px solid var(--border)', overflow: 'hidden', transition: 'border-color 0.15s' }}
+                      onFocus={e => { e.currentTarget.style.outline = '2px solid var(--accent)'; e.currentTarget.style.outlineOffset = '2px'; }}
+                      onBlur={e => { e.currentTarget.style.outline = ''; e.currentTarget.style.outlineOffset = ''; }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = edgeColor; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}>
+                      <div style={{ height: 4, background: edgeColor, flexShrink: 0 }} />
+                      <div style={{ padding: '0.45rem 0.6rem', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.name}</span>
+                        {dateRange && (
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dateRange}</span>
+                        )}
+                        <span style={{ fontSize: 11, color: edgeColor, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{statusLine}</span>
+                        {tour.description && (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.description}</span>
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── Targets ─────────────────────────────────────────────────────── */}
+          <div style={{ marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>TARGETS</span>
+              <Link href="/email?tab=outreach&status=target" style={{ fontSize: 12, color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 700 }}>View all →</Link>
+            </div>
+            {loading ? (
+              <div style={{ height: 60, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }} />
+            ) : targets.length === 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1.5rem', background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>No targets yet — start pitching venues.</span>
+                <Link href="/email?tab=outreach&status=target"
+                  style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, padding: '0.3rem 0.75rem', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', background: 'rgba(255,255,255,0.08)', textDecoration: 'none', transition: 'all 0.15s', whiteSpace: 'nowrap' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.background = 'rgba(224,120,32,0.15)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}>
+                  + Add target
+                </Link>
+              </div>
+            ) : (
+              <div className="dash-targets-grid">
+                {targets.map((t) => (
+                  <Link key={t.id} href={t.venue?.id ? `/venues/${t.venue.id}` : '/email?tab=outreach&status=target'}
+                    style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', background: 'var(--bg-panel)', border: '1px solid var(--border)', overflow: 'hidden', transition: 'border-color 0.15s' }}
+                    onFocus={e => { e.currentTarget.style.outline = '2px solid var(--accent)'; e.currentTarget.style.outlineOffset = '2px'; }}
+                    onBlur={e => { e.currentTarget.style.outline = ''; e.currentTarget.style.outlineOffset = ''; }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#6B8FB5'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}>
+                    <div style={{ height: 4, background: '#6B8FB5', flexShrink: 0 }} />
+                    <div style={{ padding: '0.45rem 0.6rem' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.venue?.name ?? '—'}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {[t.venue?.city, t.venue?.state].filter((s): s is string => s != null).join(', ') || '—'}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* ── AI Booking Agent — two-column layout ──────────────────────── */}
