@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { getActId } from '../../lib/bookingQueries';
@@ -11,6 +11,26 @@ import { buildConfirmMessage } from '../../lib/agentStagingHelpers';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Message = { role: 'user' | 'assistant'; content: string };
+
+type TourBooking  = { id: string; status: string };
+type TourTile     = { id: string; name: string; start_date: string | null; end_date: string | null; description: string | null; bookings: TourBooking[] };
+type VenueSnippet = { id: string; name: string; city: string | null; state: string | null };
+type TargetTile   = { id: string; venue: VenueSnippet | null };
+
+// Supabase's untyped TS client types many-to-one embedded resources as arrays,
+// but PostgREST returns a single object at runtime. This normaliser handles both.
+function normaliseTarget(row: { id: string; venue: VenueSnippet | VenueSnippet[] | null }): TargetTile {
+  const v = row.venue;
+  if (!v) return { id: row.id, venue: null };
+  if (Array.isArray(v)) return { id: row.id, venue: v[0] ?? null };
+  return { id: row.id, venue: v };
+}
+
+const CLAMP_2_STYLE: React.CSSProperties = {
+  fontSize: 12, color: 'var(--text-muted)',
+  overflow: 'hidden', display: '-webkit-box',
+  WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+};
 
 type TourOutreachAction = {
   type: 'tour_outreach';
@@ -57,8 +77,8 @@ export default function BandDashboard() {
   const [targetsCount, setTargetsCount]   = useState(0);
   const [toursCount, setToursCount]     = useState(0);
   const [upcomingShows, setUpcomingShows] = useState<any[]>([]);
-  const [tours, setTours]               = useState<any[]>([]);
-  const [targets, setTargets]           = useState<any[]>([]);
+  const [tours, setTours]               = useState<TourTile[]>([]);
+  const [targets, setTargets]           = useState<TargetTile[]>([]);
   const [loading, setLoading]           = useState(true);
 
   // Agent
@@ -210,7 +230,7 @@ export default function BandDashboard() {
       if (actRes.data) {
         // Accurate counts per spec
         const tourIdsRes = await supabase.from('tours').select('id').eq('act_id', actId).neq('status', 'cancelled');
-        const tourIds = (tourIdsRes.data || []).map((t: any) => t.id);
+        const tourIds = (tourIdsRes.data ?? []).map((t: { id: string }) => t.id);
 
         const today = new Date().toISOString().slice(0, 10);
         const [tvTargetRes, toursCountRes, toursRes, upcomingRes, targetsRes] = await Promise.all([
@@ -242,11 +262,12 @@ export default function BandDashboard() {
             : Promise.resolve({ data: [] }),
         ]);
 
-        setTargetsCount((tvTargetRes as any).count ?? 0);
-        setToursCount((toursCountRes as any).count ?? 0);
-        setTours((toursRes as any).data || []);
-        setUpcomingShows((upcomingRes as any).data || []);
-        setTargets((targetsRes as any).data || []);
+        setTargetsCount(tvTargetRes.count ?? 0);
+        setToursCount(toursCountRes.count ?? 0);
+        setTours(toursRes.data ?? []);
+        setUpcomingShows(upcomingRes.data ?? []);
+        const targetRows: Array<{ id: string; venue: VenueSnippet | VenueSnippet[] | null }> = targetsRes.data ?? [];
+        setTargets(targetRows.map(normaliseTarget));
       }
     } catch (err) {
       console.error('band dashboard load:', err);
@@ -706,9 +727,9 @@ export default function BandDashboard() {
               </div>
             ) : (
               <div className="dash-tours-grid">
-                {tours.map((tour: any) => {
-                  const activeShows = (tour.bookings || []).filter((b: any) => b.status !== 'cancelled');
-                  const confirmedShows = activeShows.filter((b: any) => b.status === 'confirmed');
+                {tours.map((tour) => {
+                  const activeShows = tour.bookings.filter(b => b.status !== 'cancelled');
+                  const confirmedShows = activeShows.filter(b => b.status === 'confirmed');
                   const edgeColor =
                     activeShows.length === 0 ? '#6b7280' :
                     confirmedShows.length === activeShows.length ? '#34d399' :
@@ -716,8 +737,9 @@ export default function BandDashboard() {
                   const statusLine = activeShows.length === 0
                     ? 'No shows yet'
                     : `${confirmedShows.length} of ${activeShows.length} confirmed`;
-                  const dateParts = [tour.start_date, tour.end_date].filter(Boolean)
-                    .map((d: string) => formatShowDate(d, { month: 'short', day: 'numeric', year: 'numeric' }));
+                  const dateParts = ([tour.start_date, tour.end_date] as const)
+                    .filter((d): d is string => d !== null)
+                    .map(d => formatShowDate(d, { month: 'short', day: 'numeric', year: 'numeric' }));
                   const dateRange = dateParts.join(' – ');
                   return (
                     <Link key={tour.id} href={`/tours/${tour.id}`}
@@ -733,7 +755,7 @@ export default function BandDashboard() {
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{dateRange}</span>
                         )}
                         {tour.description && (
-                          <span style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{tour.description}</span>
+                          <span style={CLAMP_2_STYLE}>{tour.description}</span>
                         )}
                         <span style={{ fontSize: 11, color: edgeColor, fontWeight: 700, marginTop: '0.3rem' }}>{statusLine}</span>
                       </div>
@@ -764,7 +786,7 @@ export default function BandDashboard() {
               </div>
             ) : (
               <div className="dash-targets-grid">
-                {targets.map((t: any) => (
+                {targets.map((t) => (
                   <Link key={t.id} href={t.venue?.id ? `/venues/${t.venue.id}` : '/email?tab=outreach&status=target'}
                     style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', background: 'var(--bg-panel)', border: '1px solid var(--border)', overflow: 'hidden', transition: 'border-color 0.15s' }}
                     onFocus={e => { e.currentTarget.style.outline = '2px solid var(--accent)'; e.currentTarget.style.outlineOffset = '2px'; }}
@@ -773,9 +795,9 @@ export default function BandDashboard() {
                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}>
                     <div style={{ height: 4, background: '#6B8FB5', flexShrink: 0 }} />
                     <div style={{ padding: '0.45rem 0.6rem' }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.venue?.name || '—'}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.venue?.name ?? '—'}</div>
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {[t.venue?.city, t.venue?.state].filter(Boolean).join(', ') || '—'}
+                        {[t.venue?.city, t.venue?.state].filter((s): s is string => s != null).join(', ') || '—'}
                       </div>
                     </div>
                   </Link>
