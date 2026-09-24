@@ -86,7 +86,7 @@ export default function BandDashboard() {
   const [setupError, setSetupError]   = useState('');
 
   const threadRef   = useRef<HTMLDivElement>(null);
-  const agentInputRef = useRef<HTMLInputElement>(null);
+  const agentInputRef = useRef<HTMLTextAreaElement>(null);
   const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => { load(); }, []);
@@ -94,8 +94,7 @@ export default function BandDashboard() {
   useEffect(() => {
     const el = threadRef.current;
     if (!el) return;
-    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (distFromBottom <= 80) el.scrollTop = el.scrollHeight;
+    el.scrollTop = el.scrollHeight;
   }, [messages, pendingAction]);
 
   // Load any previously saved conversation for this user+act before deciding whether
@@ -980,20 +979,29 @@ export default function BandDashboard() {
                 >
                   {fileLoading ? '⏳' : '📎'}
                 </button>
-                <input
+                <textarea
                   ref={agentInputRef}
                   className="input"
+                  rows={1}
                   style={{
                     flex: 1, fontSize: 14,
                     background: 'rgba(255,255,255,0.08)',
                     border: '1px solid rgba(255,255,255,0.3)',
                     color: '#fff',
                     opacity: 1,
+                    resize: 'none',
+                    overflow: 'auto',
+                    lineHeight: '1.5',
                   }}
                   placeholder={attachedFile ? 'Add a message or just hit send…' : `Ask about ${myAct?.act_name || 'your pipeline'}, or attach a show list…`}
                   value={agentInput}
                   onChange={e => setAgentInput(e.target.value)}
-                  disabled={agentLoading}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      if (!agentLoading && (agentInput.trim() || attachedFile)) sendMessage(agentInput);
+                    }
+                  }}
                 />
                 <button
                   type="submit"
