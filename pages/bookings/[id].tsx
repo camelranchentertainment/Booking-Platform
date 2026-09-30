@@ -155,13 +155,34 @@ export default function BookingDetail() {
   };
 
   const setStatus = async (newStatus: BookingStatus) => {
-    await supabase.from('bookings').update({ status: newStatus }).eq('id', id);
-    setBooking((b: any) => ({ ...b, status: newStatus }));
-  };
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) return;
+
+  const res = await fetch('/api/bookings/move-status', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ bookingId: id, status: newStatus }),
+  });
+
+  if (!res.ok) {
+    console.error('Failed to update booking status:', await res.text());
+    return;
+  }
+
+  setBooking((b: any) => ({ ...b, status: newStatus }));
+};
 
   const saveEdit = async () => {
-    setSaving(true);
-    await supabase.from('bookings').update({
+  setSaving(true);
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+
+    const updates = {
       act_id:         form.act_id,
       venue_id:       form.venue_id       || null,
       tour_id:        form.tour_id        || null,
@@ -178,11 +199,31 @@ export default function BookingDetail() {
       contract_url:   form.contract_url   || null,
       deposit_paid:   form.deposit_paid,
       deposit_amount: form.deposit_amount ? Number(form.deposit_amount) : null,
-    }).eq('id', id);
+    };
+
+    const res = await fetch('/api/bookings/update', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        bookingId: id,
+        updates,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error('Failed to update booking:', await res.text());
+      return;
+    }
+
     await loadAll();
     setEdit(false);
+  } finally {
     setSaving(false);
-  };
+  }
+};
 
   const saveDetails = async () => {
     setSavingDetails(true);
