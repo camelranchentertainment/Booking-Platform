@@ -46,13 +46,20 @@ function makeChain(resolveWith: unknown) {
   return chain as Record<string, jest.Mock> & { then: Function };
 }
 
-/** A chain returned by .update(); awaiting it resolves with `resolveWith`. */
+/** A chain returned by .update(); supports .eq().in().eq().select() and is awaitable. */
 function makeUpdateChain(resolveWith: unknown) {
   const then = (
     onFulfilled: (v: unknown) => unknown,
     onRejected?: (e: unknown) => unknown,
   ) => Promise.resolve(resolveWith).then(onFulfilled, onRejected);
-  return { eq: jest.fn().mockReturnValue({ then }), then };
+  const leaf = { then };
+  const chain: Record<string, unknown> = { then };
+  for (const m of ['eq', 'in', 'select']) {
+    (chain as Record<string, jest.Mock>)[m] = jest.fn().mockReturnValue(chain);
+  }
+  // final .select() resolves the chain
+  (chain as Record<string, jest.Mock>)['select'] = jest.fn().mockReturnValue(leaf);
+  return chain;
 }
 
 // ── Service mock builder ──────────────────────────────────────────────────────
@@ -172,6 +179,29 @@ describe('GET /api/social/announcements', () => {
 
     expect(announcementChain.in).toHaveBeenCalledWith('status', ['ready', 'drafting']);
   });
+
+  it('sorts results by booking.show_date ascending, nulls last', async () => {
+    const rows = [
+      { id: 'c', booking: { show_date: '2027-03-01' } },
+      { id: 'a', booking: { show_date: null } },
+      { id: 'b', booking: { show_date: '2027-01-15' } },
+    ];
+    const fromMock = jest.fn()
+      .mockReturnValueOnce(makeChain({ data: { role: 'band_admin', act_id: 'act-123' }, error: null }))
+      .mockReturnValueOnce(makeChain({ data: rows, error: null }));
+    const svc = {
+      auth: { getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'u' } }, error: null }) },
+      from: fromMock,
+    };
+    (getServiceClient as jest.Mock).mockReturnValue(svc);
+
+    const { res, status, json } = mockRes();
+    await handler(mockReq('GET'), res);
+
+    expect(status).toHaveBeenCalledWith(200);
+    const { data } = (json.mock.calls[0] as [{ data: typeof rows }])[0];
+    expect(data.map((r) => r.id)).toEqual(['b', 'c', 'a']);
+  });
 });
 
 describe('PATCH /api/social/announcements', () => {
@@ -194,8 +224,8 @@ describe('PATCH /api/social/announcements', () => {
   it('returns 404 when the announcement belongs to another act', async () => {
     const svc = buildService({
       fromCalls: [
-        // select returns no row (act_id guard)
-        { result: { data: null, error: { message: 'no rows' } } },
+        // PGRST116 = PostgREST "no rows returned" — treated as 404
+        { result: { data: null, error: { code: 'PGRST116', message: 'no rows' } } },
       ],
     });
     (getServiceClient as jest.Mock).mockReturnValue(svc);
@@ -212,8 +242,8 @@ describe('PATCH /api/social/announcements', () => {
       fromCalls: [
         // select returns a ready row
         { result: { data: { id: 'ann-1', status: 'ready', dismissed_reason: null, booking_id: 'bk-1' }, error: null } },
-        // update succeeds
-        { isUpdate: true, result: { data: null, error: null } },
+        // update returns the affected row (conditional update matched)
+        { isUpdate: true, result: { data: [{ id: 'ann-1' }], error: null } },
       ],
     });
     (getServiceClient as jest.Mock).mockReturnValue(svc);
@@ -253,8 +283,8 @@ describe('PATCH /api/social/announcements', () => {
         },
         // booking is confirmed
         { result: { data: { status: 'confirmed' }, error: null } },
-        // update succeeds
-        { isUpdate: true, result: { data: null, error: null } },
+        // update returns the affected row (conditional update matched)
+        { isUpdate: true, result: { data: [{ id: 'ann-1' }], error: null } },
       ],
     });
     (getServiceClient as jest.Mock).mockReturnValue(svc);
@@ -312,5 +342,61 @@ describe('PATCH /api/social/announcements', () => {
       res,
     );
     expect(status).toHaveBeenCalledWith(409);
+  });
+
+  it('dismiss: returns 409 when update touches zero rows (concurrent state change)', async () => {
+    const svc = buildService({
+      fromCalls: [
+        { result: { data: { id: 'ann-1', status: 'ready', dismissed_reason: null, booking_id: 'bk-1' }, error: null } },
+        // update returns empty array — row was already changed
+        { isUpdate: true, result: { data: [], error: null } },
+      ],
+    });
+    (getServiceClient as jest.Mock).mockReturnValue(svc);
+    const { res, status } = mockRes();
+    await handler(
+      mockReq('PATCH', { body: { id: '00000000-0000-4000-8000-000000000008', action: 'dismiss' } }),
+      res,
+    );
+    expect(status).toHaveBeenCalledWith(409);
+  });
+
+  it('restore: returns 409 when update touches zero rows (concurrent state change)', async () => {
+    const svc = buildService({
+      fromCalls: [
+        {
+          result: {
+            data: { id: 'ann-1', status: 'dismissed', dismissed_reason: 'user', booking_id: 'bk-1' },
+            error: null,
+          },
+        },
+        { result: { data: { status: 'confirmed' }, error: null } },
+        // update returns empty array
+        { isUpdate: true, result: { data: [], error: null } },
+      ],
+    });
+    (getServiceClient as jest.Mock).mockReturnValue(svc);
+    const { res, status } = mockRes();
+    await handler(
+      mockReq('PATCH', { body: { id: '00000000-0000-4000-8000-000000000009', action: 'restore' } }),
+      res,
+    );
+    expect(status).toHaveBeenCalledWith(409);
+  });
+
+  it('returns 500 (via withHandler) when initial row lookup has a real DB error', async () => {
+    const svc = buildService({
+      fromCalls: [
+        // rowErr with a non-PGRST116 code = real DB error
+        { result: { data: null, error: { code: 'PGRST301', message: 'connection failure' } } },
+      ],
+    });
+    (getServiceClient as jest.Mock).mockReturnValue(svc);
+    const { res, status } = mockRes();
+    await handler(
+      mockReq('PATCH', { body: { id: '00000000-0000-4000-8000-000000000010', action: 'dismiss' } }),
+      res,
+    );
+    expect(status).toHaveBeenCalledWith(500);
   });
 });
