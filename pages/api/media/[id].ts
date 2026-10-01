@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
+import { PUBLIC_LOGO_BUCKET, PUBLIC_LOGO_PREFIX } from './upload';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (!['DELETE', 'PATCH'].includes(req.method || '')) return res.status(405).end();
@@ -61,6 +62,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (record.is_primary_logo) {
     await service.from('acts').update({ logo_url: null }).eq('id', profile.act_id);
+    // Remove the published public copy (see upload.ts) so it stops being served.
+    const folder = `${PUBLIC_LOGO_PREFIX}/${profile.act_id}`;
+    const { data: published } = await service.storage.from(PUBLIC_LOGO_BUCKET).list(folder);
+    if (published?.length) {
+      await service.storage.from(PUBLIC_LOGO_BUCKET).remove(published.map(o => `${folder}/${o.name}`));
+    }
   }
 
   return res.status(200).json({ ok: true });
