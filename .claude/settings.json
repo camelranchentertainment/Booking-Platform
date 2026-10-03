@@ -26,7 +26,6 @@
 
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push origin HEAD)",
 
       "Edit(pages/**)",
       "Edit(components/**)",
@@ -68,6 +67,7 @@
     ],
 
     "ask": [
+      "Bash(git push)",
       "Bash(git push *)",
       "Bash(git merge *)",
       "Bash(git rebase *)",
@@ -114,6 +114,11 @@
       "Bash(rm -rf *)",
       "Bash(git push --force*)",
       "Bash(git push -f*)",
+      "Bash(git push origin main*)",
+      "Bash(git push origin HEAD:main*)",
+      "Bash(git push -u origin main*)",
+      "Bash(git push --set-upstream origin main*)",
+      "Bash(git commit * --no-verify*)",
       "Bash(git reset --hard*)",
       "Bash(curl * | bash)",
       "Bash(curl * | sh)",

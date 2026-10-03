@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { sendActEmail } from '../../../../lib/emailSend';
+import { syncBookingToGoogleCalendar } from '../../../../lib/calendarSync';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -121,6 +122,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (error) throw error;
           result = data;
         }
+
+        // Best-effort Google Calendar sync after the booking is successfully saved.
+        // Calendar failures must not fail the confirmed AI action.
+        const savedBooking = result as { id?: string } | null;
+
+        if (savedBooking?.id) {
+          try {
+            await syncBookingToGoogleCalendar(
+              savedBooking.id,
+              profile.act_id,
+            );
+          } catch (err) {
+            console.error('[calendar sync] AI booking upsert failed:', err);
+          }
+        }
       } else if (staged.action_type === 'tour_insert') {
         const { data, error } = await supabase
           .from('tours')
@@ -229,6 +245,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           venue,
           booking,
         };
+        const savedBooking = booking as { id?: string } | null;
+
+        if (savedBooking?.id) {
+          try {
+            await syncBookingToGoogleCalendar(
+              savedBooking.id,
+              profile.act_id,
+            );
+          } catch (err) {
+            console.error(
+              '[calendar sync] AI venue + booking creation failed:',
+              err,
+            );
+          }
+        }
       } else if (staged.action_type === 'tour_notes_update') {
         const { data, error } = await supabase
           .from('tours')

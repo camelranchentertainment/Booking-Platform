@@ -36,6 +36,10 @@ const VALID_DOCUMENT_CATEGORIES = new Set([
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
+// Public bucket + prefix that holds the published copy of each act's primary logo.
+export const PUBLIC_LOGO_BUCKET = 'avatars';
+export const PUBLIC_LOGO_PREFIX = 'act-logos';
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
@@ -150,10 +154,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const isPrimaryLogo = fields.is_primary_logo?.[0] === 'true'
     || fields.file_type?.[0] === 'logo';
 
-  const { data: urlData } = service.storage
-    .from('media-library')
-    .getPublicUrl(storagePath);
-  const publicUrl = urlData.publicUrl;
+  // media-library is a PRIVATE bucket (phase14 migration), so getPublicUrl()
+  // on it yields a URL that storage refuses to serve. Non-logo media is shown
+  // in-app via signed URLs. The primary logo, however, is rendered on public
+  // pages (ArtistSpotlight, /api/public/acts) and must be publicly reachable,
+  // so we publish a copy of it to the public `avatars` bucket and point
+  // acts.logo_url at that copy. The private original remains the source of truth.
+  let publicUrl: string;
+  let publicLogoPath: string | null = null;
+
+  if (isPrimaryLogo) {
+    if (!mimeType.startsWith('image/')) {
+      await service.storage.from('media-library').remove([storagePath]);
+      return res.status(400).json({ error: 'Act logo must be an image (PNG, JPG, SVG, GIF or WebP)' });
+    }
+    publicLogoPath = `${PUBLIC_LOGO_PREFIX}/${profile.act_id}/${Date.now()}${ext}`;
+    const { error: publishError } = await service.storage
+      .from(PUBLIC_LOGO_BUCKET)
+      .upload(publicLogoPath, fileBuffer, {
+        contentType: mimeType,
+        upsert: false,
+        cacheControl: '31536000', // path is unique per upload, safe to cache long
+      });
+    if (publishError) {
+      console.error('[media/upload] failed to publish logo copy', {
+        actId: profile.act_id, error: publishError.message,
+      });
+      await service.storage.from('media-library').remove([storagePath]);
+      return res.status(500).json({ error: `Could not publish logo: ${publishError.message}` });
+    }
+    publicUrl = service.storage.from(PUBLIC_LOGO_BUCKET).getPublicUrl(publicLogoPath).data.publicUrl;
+  } else {
+    publicUrl = service.storage.from('media-library').getPublicUrl(storagePath).data.publicUrl;
+  }
 
   // Clear previous primary logo for this act before inserting new one
   if (isPrimaryLogo) {
@@ -192,15 +225,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (dbError) {
     await service.storage.from('media-library').remove([storagePath]);
+    if (publicLogoPath) await service.storage.from(PUBLIC_LOGO_BUCKET).remove([publicLogoPath]);
     return res.status(500).json({ error: dbError.message });
   }
 
-  if (isPrimaryLogo) {
-    await service
+  if (isPrimaryLogo && publicLogoPath) {
+    const { error: actError } = await service
       .from('acts')
       .update({ logo_url: publicUrl })
       .eq('id', profile.act_id);
+    if (actError) {
+      console.error('[media/upload] failed to set acts.logo_url', {
+        actId: profile.act_id, error: actError.message,
+      });
+      return res.status(500).json({ error: `Logo uploaded but could not be set on the act: ${actError.message}` });
+    }
+    await removeStalePublicLogos(service, profile.act_id, publicLogoPath);
   }
 
   return res.status(201).json(record);
+}
+
+/**
+ * Deletes earlier published logo copies for an act so the public bucket holds
+ * only the current one. Best-effort: a failure leaves orphaned files, never a
+ * broken logo, so it is logged rather than surfaced to the user.
+ */
+async function removeStalePublicLogos(
+  service: ReturnType<typeof getServiceClient>,
+  actId: string,
+  keepPath: string,
+): Promise<void> {
+  const folder = `${PUBLIC_LOGO_PREFIX}/${actId}`;
+  const { data: existing, error } = await service.storage.from(PUBLIC_LOGO_BUCKET).list(folder);
+  if (error) {
+    console.warn('[media/upload] could not list old logos', { actId, error: error.message });
+    return;
+  }
+  const stale = (existing ?? [])
+    .map(o => `${folder}/${o.name}`)
+    .filter(p => p !== keepPath);
+  if (stale.length === 0) return;
+  const { error: rmError } = await service.storage.from(PUBLIC_LOGO_BUCKET).remove(stale);
+  if (rmError) console.warn('[media/upload] could not remove old logos', { actId, error: rmError.message });
 }

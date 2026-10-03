@@ -230,6 +230,29 @@ export interface TourVenue {
   venue?: Venue | null;
 }
 
+export type SocialAnnouncementStatus = 'ready' | 'drafting' | 'posted' | 'dismissed';
+
+export interface SocialAnnouncement {
+  id: string;
+  act_id: string;
+  booking_id: string;
+  status: SocialAnnouncementStatus;
+  dismissed_reason: 'user' | 'booking_cancelled' | null;
+  background_media_id: string | null;
+  graphic_style: 'americana' | 'electric' | 'western' | null;
+  created_at: string;
+  updated_at: string;
+  booking?: {
+    id: string;
+    show_date: string | null;
+    status: string;
+    door_time: string | null;
+    set_time: string | null;
+    venue: { name: string; city: string | null; state: string | null } | null;
+  } | null;
+  act?: { act_name: string } | null;
+}
+
 export interface SocialQueueItem {
   id: string;
   booking_id: string;
