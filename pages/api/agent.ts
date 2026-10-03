@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { getServiceClient } from '../../lib/supabase';
+import { isBandAdminRole } from '../../lib/server/requireBandAdmin';
 import { getSetting } from '../../lib/platformSettings';
 import {
   execFindVenue,
@@ -542,7 +543,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const service = getServiceClient();
 
-  const { data: profile } = await service.from('profiles').select('act_id').eq('id', user.id).single();
+  const { data: profile } = await service.from('profiles').select('act_id, role').eq('id', user.id).single();
+  // Service-role client bypasses RLS: the agent can stage writes, so only admins may call it.
+  if (!isBandAdminRole(profile?.role)) return res.status(403).json({ error: 'Forbidden' });
   let actId: string | null = profile?.act_id ?? null;
   if (!actId) {
     const { data: owned } = await service.from('acts').select('id').eq('owner_id', user.id).eq('is_active', true).limit(1).maybeSingle();
