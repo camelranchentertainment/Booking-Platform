@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
 import { getServiceClient } from '../../lib/supabase';
+import { isBandAdminRole } from '../../lib/server/requireBandAdmin';
 import { getSetting } from '../../lib/platformSettings';
 
 interface VenueTarget {
@@ -54,10 +55,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Service client bypasses RLS so ownership must be checked explicitly.
   const { data: callerProfile } = await service
     .from('profiles')
-    .select('act_id')
+    .select('act_id, role')
     .eq('id', user.id)
     .single();
   if (!callerProfile?.act_id) return res.status(403).json({ error: 'Forbidden' });
+  // Sends real email as the band — admins only.
+  if (!isBandAdminRole(callerProfile.role)) return res.status(403).json({ error: 'Forbidden' });
   if (actId !== callerProfile.act_id) return res.status(403).json({ error: 'Forbidden' });
 
   if (tourId) {

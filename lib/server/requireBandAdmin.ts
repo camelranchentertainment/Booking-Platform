@@ -2,6 +2,14 @@ import type { NextApiRequest } from 'next';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AppError } from '../apiError';
 
+/** Roles allowed to use admin-only server routes (agent, bulk send, staged-action execute). */
+export const BAND_ADMIN_ROLES = ['band_admin', 'superadmin'] as const;
+
+/** True only for band_admin / superadmin. Members and unknown roles are false. */
+export function isBandAdminRole(role: unknown): role is (typeof BAND_ADMIN_ROLES)[number] {
+  return role === 'band_admin' || role === 'superadmin';
+}
+
 export interface BandAdminContext {
   userId: string;
   actId: string;
@@ -34,7 +42,7 @@ export async function requireBandAdmin(
 
   if (profileErr || !profile) throw new AppError(403, 'Profile not found');
 
-  if (profile.role !== 'band_admin' && profile.role !== 'superadmin') {
+  if (!isBandAdminRole(profile.role)) {
     throw new AppError(403, 'Forbidden');
   }
 
