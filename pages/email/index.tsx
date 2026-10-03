@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
+import InboxSyncBar from '../../components/email/InboxSyncBar';
+import { INBOX_SYNCED_EVENT, type InboxSyncedEventDetail } from '../../lib/inboxSync';
 import { supabase } from '../../lib/supabase';
 import { getActId } from '../../lib/bookingQueries';
 import { parseLocalDate, formatShowDate } from '../../lib/formatDate';
@@ -102,7 +104,6 @@ export default function EmailPage() {
 
   // Core data
   const [actId, setActId]                 = useState<string | null>(null);
-  const [token, setToken]                 = useState('');
   const [loading, setLoading]             = useState(true);
   const [allTourVenues, setAllTourVenues] = useState<any[]>([]);
   const [bookings, setBookings]           = useState<any[]>([]);
@@ -127,8 +128,6 @@ export default function EmailPage() {
   // Inbox
   const [readIds, setReadIds]                 = useState<Set<string>>(new Set());
   const [expandedEmail, setExpandedEmail]     = useState<string | null>(null);
-  const [syncingInbox, setSyncingInbox] = useState(false);
-  const [syncMessage, setSyncMessage] = useState('');
 
   // Outbox
   const [expandedOutbox, setExpandedOutbox]   = useState<string | null>(null);
@@ -174,8 +173,6 @@ export default function EmailPage() {
     setLoading(true);
     try {
     const { data: { session } } = await supabase.auth.getSession();
-    const tok = session?.access_token || '';
-    setToken(tok);
 
     const user = session?.user ?? null;
     if (!user) return;
@@ -262,38 +259,37 @@ export default function EmailPage() {
   };
 
   // ─── Actions ───────────────────────────────────────────────────────────────
-  const syncInbox = async () => {
-  if (!token) return;
-
-  setSyncingInbox(true);
-  setSyncMessage('');
-
-  try {
-    const response = await fetch('/api/email/gmail-sync', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Inbox sync failed');
+  // Pull the inbox list again (DB only — Gmail fetching happens in lib/inboxSync).
+  const reloadInbox = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
+      if (!user) return;
+      const aid = await getActId(supabase, user.id);
+      if (!aid) return;
+      const { data, error } = await supabase.from('email_log')
+        .select('id, from_address, subject, body, sent_at, venue_id, venue:venues(name)')
+        .eq('direction', 'received')
+        .eq('act_id', aid)
+        .neq('archived', true)
+        .order('sent_at', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      setInboxEmails(data || []);
+    } catch (err) {
+      console.error('email reloadInbox:', err);
     }
+  };
 
-    setSyncMessage(
-      `Synced ${result.imported} new message${result.imported === 1 ? '' : 's'}`
-    );
-
-    await loadAll();
-  } catch (err: any) {
-    console.error('Inbox sync failed:', err);
-    setSyncMessage(err?.message || 'Inbox sync failed');
-  } finally {
-    setSyncingInbox(false);
-  }
-};
+  // When an automatic or manual Gmail check imports new mail, refresh the list in place.
+  useEffect(() => {
+    const onSynced = (e: Event) => {
+      const detail = (e as CustomEvent<InboxSyncedEventDetail>).detail;
+      if (detail && detail.imported > 0) void reloadInbox();
+    };
+    window.addEventListener(INBOX_SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(INBOX_SYNCED_EVENT, onSynced);
+  }, []);
 
   const archiveEmail = async (id: string) => {
     await supabase.from('email_log').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id);
@@ -507,6 +503,8 @@ export default function EmailPage() {
   </button>
 </div>
 
+      <InboxSyncBar />
+
       {/* ── Tab Bar ── */}
       <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
         {([
@@ -567,28 +565,6 @@ export default function EmailPage() {
     {inboxCount} message{inboxCount !== 1 ? 's' : ''} · {unreadCount} unread
   </div>
 
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-    {syncMessage && (
-      <span
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: '0.7rem',
-          color: 'var(--text-muted)',
-        }}
-      >
-        {syncMessage}
-      </span>
-    )}
-
-    <button
-      className="btn btn-secondary"
-      onClick={syncInbox}
-      disabled={syncingInbox}
-      style={{ fontSize: '0.75rem' }}
-    >
-      {syncingInbox ? 'Syncing…' : '↻ Sync Inbox'}
-    </button>
-  </div>
 </div>
           {inboxEmails.length === 0 && !loading ? (
             <div className="card" style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.88rem', lineHeight: 1.7 }}>
