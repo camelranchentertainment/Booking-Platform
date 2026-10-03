@@ -91,7 +91,7 @@ describe.each(routes)('%s role guard', (_name, handler, body) => {
   it('lets a Band Admin past the guard', async () => {
     mockProfile = { act_id: 'act-1', role: 'band_admin' };
     const { r, status } = res();
-    await handler(req(body), r).catch(() => undefined);
+    await Promise.resolve(handler(req(body), r)).catch(() => undefined);
     expect(status).not.toHaveBeenCalledWith(403);
   });
 });
