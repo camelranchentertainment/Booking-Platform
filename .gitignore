@@ -33,3 +33,8 @@ dev-debug.log
 tsconfig.test.tsbuildinfo
 .vercel
 .env*
+
+# Local-only working files (relays, page reviews, design mockups)
+RELAY_*.md
+PAGE_REVIEW_*.md
+design-reference/
