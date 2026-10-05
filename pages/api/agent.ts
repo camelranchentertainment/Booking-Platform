@@ -17,6 +17,7 @@ import {
 } from '../../lib/aiAgentTools';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { formatShowDate } from '../../lib/formatDate';
+import { buildVoiceSystemPrompt } from '../../lib/emailVoice';
 import {
   BATCH_CAP,
   StageItem,
@@ -296,8 +297,7 @@ Website: ${act?.website || ''}
 Tour: ${tour.name} — ${dateRange}
 Routing notes: ${tour.routing_notes || 'N/A'}
 
-Keep it under 130 words. Professional, direct, music industry tone. Clear call-to-action to hold a date.
-No em dashes. No bullet points in body.
+Lead with the dates and the ask. Keep it to a few sentences.
 
 Output ONLY valid JSON: { "subject": "...", "body": "..." }`;
 
@@ -305,11 +305,16 @@ Output ONLY valid JSON: { "subject": "...", "body": "..." }`;
   const msg = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 600,
+    system: buildVoiceSystemPrompt({
+      task: `You draft one cold pitch booking email, sent to many venues, for a working band's booking team. Write as a person from the band's side, not a booking firm.`,
+      relationship: 'new',
+      outputSpec: 'Output ONLY valid JSON: { "subject": "...", "body": "..." }',
+    }),
     messages: [{ role: 'user', content: draftPrompt }],
   });
   const raw = msg.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  const draft = jsonMatch ? JSON.parse(jsonMatch[0]) : { subject: `Booking inquiry — ${act?.act_name}`, body: `Hi {contact_name},\n\nWe're reaching out about booking ${act?.act_name} at {venue_name} during our ${tour.name} run (${dateRange}).\n\nWould love to discuss holding a date. Please let me know if you have availability.\n\nBest,\nCamel Ranch Booking` };
+  const draft = jsonMatch ? JSON.parse(jsonMatch[0]) : { subject: `Booking - ${act?.act_name}`, body: `{contact_name},\n\nI'm looking to get ${act?.act_name} booked at {venue_name} during our ${tour.name} run (${dateRange}). Do you have any of those dates open?\n\nThanks,\nCamel Ranch Booking` };
 
   return {
     tourId: tour.id,

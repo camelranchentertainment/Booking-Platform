@@ -3,14 +3,16 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
 import { formatShowDate } from '../../../lib/formatDate';
+import { buildVoiceSystemPrompt } from '../../../lib/emailVoice';
 
-const SYSTEM_PROMPT = `You are an expert music booking assistant for Camel Ranch Booking.
-Draft a professional cold pitch email to a venue on behalf of a band and their management.
-Style: professional but human, music industry voice, concise, clear call-to-action.
-Never open with "I hope this email finds you well". No em dashes or bullet points in body.
-Subject line format MUST be: [Band Name] — Booking Inquiry — [Venue Name], [City]
-Example: Artist Name — Booking Inquiry — Off Broadway, St. Louis
-Output ONLY valid JSON: { "subject": "...", "body": "...", "preview": "..." }`;
+const TASK_LINE = `You draft cold pitch emails to venues for a working band's booking team, writing as a person from the band's side, not a booking firm.`;
+
+const OUTPUT_SPEC = `Output: Return ONLY a valid JSON object:
+{ "subject": "...", "body": "...", "preview": "..." }`;
+
+// Backfill drafts only tour venues with no booking history yet, so every draft
+// here is a cold pitch and uses the new-venue voice.
+const SYSTEM_PROMPT = buildVoiceSystemPrompt({ task: TASK_LINE, relationship: 'new', outputSpec: OUTPUT_SPEC });
 
 async function getTourDateRange(service: any, tourId: string): Promise<string> {
   const [tourRes, bookedRes] = await Promise.all([
@@ -47,8 +49,8 @@ ${actInfo}
 ${venueInfo}
 ${tourDateRange ? `Available dates: ${tourDateRange}` : 'Available dates: [add specific dates here]'}
 
-Introduce the act in 2 sentences. Ask them to hold a date. Under 150 words. Include website link if available.
-Subject line format: [Act Name] — Booking Inquiry — [Venue Name], [City]`;
+Lead with the date or dates and the ask. One link (website) if available. Keep it to a few sentences.
+Subject: short and plain, like "Booking - Jun 23" or "Booking - [Act Name]".`;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
