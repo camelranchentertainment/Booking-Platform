@@ -532,6 +532,8 @@ export default function AppShell({ children, requireRole = null }: Props) {
               { label: 'Targets',   href: '/email?tab=outreach&status=target' },
               { label: 'Confirmed', href: '/bookings?filter=confirmed' },
               { label: 'Tours',     href: '/tours' },
+              { label: 'Emails',    href: '/email' },
+              { label: 'Venues',    href: '/venues' },
             ] as const).map(pill => {
               const base = pill.href.split('?')[0];
               const active = router.pathname === base || router.pathname.startsWith(base + '/');
