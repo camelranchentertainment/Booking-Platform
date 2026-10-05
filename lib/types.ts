@@ -279,6 +279,15 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   cancelled:   'Cancelled',
 };
 
+/**
+ * Statuses that mean a show was actually booked with the venue. Only these
+ * belong in History / "needs settle". Pitches, negotiations and holds are
+ * outreach — a venue we looked at — and must never appear as played shows.
+ */
+export const BOOKED_SHOW_STATUSES: readonly BookingStatus[] = [
+  'contract', 'confirmed', 'advancing', 'completed',
+] as const;
+
 export const BOOKING_STATUS_ORDER: BookingStatus[] = [
   'pitch', 'negotiation', 'hold',
   'contract', 'confirmed', 'advancing', 'completed',
