@@ -7,6 +7,7 @@ import { UserProfile } from '../../lib/types';
 import { useAuth } from '../../contexts/AuthContext';
 import Sidebar from './Sidebar';
 import BrandLogo from '../BrandLogo';
+import { INBOX_SYNCED_EVENT, startInboxAutoSync, stopInboxAutoSync, type InboxSyncedEventDetail } from '../../lib/inboxSync';
 
 interface Props {
   children: React.ReactNode;
@@ -104,6 +105,17 @@ function NotifBell({ userId, email, displayName }: { userId: string; email: stri
   }, [userId, email]);
 
   useEffect(() => { load(); }, [load]);
+
+  // An automatic inbox check that imported venue replies also created
+  // notifications — refresh the bell so they show without a page reload.
+  useEffect(() => {
+    const onSynced = (e: Event) => {
+      const detail = (e as CustomEvent<InboxSyncedEventDetail>).detail;
+      if (detail && detail.imported > 0) void load();
+    };
+    window.addEventListener(INBOX_SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(INBOX_SYNCED_EVENT, onSynced);
+  }, [load]);
 
   // Close on outside click — check both the button wrapper and the portaled dropdown
   useEffect(() => {
@@ -395,6 +407,16 @@ export default function AppShell({ children, requireRole = null }: Props) {
       .then(({ data }) => { if (data?.act_name) setActName(data.act_name); });
   }, [profile?.act_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Check Gmail for venue replies every ~2.5 min on every page while an admin
+  // is logged in (lib/inboxSync.ts). Members never sync; the API also refuses them.
+  const canSyncInbox = profile?.role === 'band_admin' || profile?.role === 'superadmin';
+  const syncActId = canSyncInbox ? profile?.act_id ?? null : null;
+  useEffect(() => {
+    if (!syncActId) return;
+    startInboxAutoSync(syncActId);
+    return () => stopInboxAutoSync();
+  }, [syncActId]);
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.replace('/login');
@@ -532,6 +554,8 @@ export default function AppShell({ children, requireRole = null }: Props) {
               { label: 'Targets',   href: '/email?tab=outreach&status=target' },
               { label: 'Confirmed', href: '/bookings?filter=confirmed' },
               { label: 'Tours',     href: '/tours' },
+              { label: 'Emails',    href: '/email' },
+              { label: 'Venues',    href: '/venues' },
             ] as const).map(pill => {
               const base = pill.href.split('?')[0];
               const active = router.pathname === base || router.pathname.startsWith(base + '/');

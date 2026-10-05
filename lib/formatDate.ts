@@ -26,3 +26,15 @@ export function formatShowDate(
 ): string {
   return parseLocalDate(dateStr).toLocaleDateString('en-US', options);
 }
+
+/**
+ * Today's date as YYYY-MM-DD in the browser's local time zone.
+ * (toISOString() would give the UTC date, which is "tomorrow" every evening
+ * in the US and would hide tonight's targets early.)
+ */
+export function localToday(now: Date = new Date()): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
