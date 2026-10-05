@@ -3,6 +3,7 @@ import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { getActId } from '../lib/bookingQueries';
 import { parseLocalDate, formatShowDate } from '../lib/formatDate';
+import { sumExpenses, yearExpenseTotal, monthExpenseTotal } from '../lib/financialSummary';
 
 type Booking = {
   id: string;
@@ -196,8 +197,12 @@ export default function Financials() {
   const yearBookings   = bookings.filter(b => !b.show_date || b.show_date.startsWith(String(year)));
   const totalFee       = yearBookings.reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
   const totalPaid      = yearBookings.reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0);
-  const totalExpenses  = expenses.reduce((s, e) => s + Number(e.amount), 0);
-  const potential      = yearBookings.filter(b => b.status === 'confirmed' && b.show_date && b.show_date >= todayStr)
+  // Summary cards and the monthly TOTAL are scoped to the selected year (matching `earned`),
+  // and use allExpenses so the Expenses-tab filters never change the headline numbers.
+  const totalExpenses  = yearExpenseTotal(allExpenses, year);
+  // The Expenses tab footer totals exactly the rows listed under that tab's filters.
+  const listedExpensesTotal = sumExpenses(expenses);
+  const potential     = yearBookings.filter(b => b.status === 'confirmed' && b.show_date && b.show_date >= todayStr)
     .reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
   const earned         = yearBookings.filter(b => b.status === 'completed' && b.payment_status === 'received')
     .reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0);
@@ -209,16 +214,12 @@ export default function Financials() {
   // Monthly breakdown
   const monthly = MONTHS.map((month, idx) => {
     const mbs = yearBookings.filter(b => b.show_date && parseLocalDate(b.show_date).getMonth() === idx);
-    const monthExpenses = expenses.filter(e => {
-      const d = parseLocalDate(e.expense_date);
-      return d.getMonth() === idx && d.getFullYear() === year;
-    });
     return {
       month,
       shows:    mbs.length,
       fee:      mbs.reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0),
       paid:     mbs.reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0),
-      expenses: monthExpenses.reduce((s, e) => s + Number(e.amount), 0),
+      expenses: monthExpenseTotal(allExpenses, year, idx),
     };
   });
 
@@ -687,7 +688,7 @@ export default function Financials() {
                     ))}
                     <tr style={{ borderTop: '2px solid var(--border)' }}>
                       <td colSpan={2} style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-primary)' }}>TOTAL</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#f87171' }}>{fmt(totalExpenses)}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#f87171' }}>{fmt(listedExpensesTotal)}</td>
                       <td colSpan={2}></td>
                     </tr>
                   </tbody>
