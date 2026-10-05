@@ -1,5 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
+import { isBandAdminRole } from '../../../lib/server/requireBandAdmin';
+import { attachmentListSchema } from '../../../lib/emailAttachments';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -23,13 +25,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     subject,
     body,
     category,
+    attachments,
   } = req.body;
 
-  if (!actId) return res.status(400).json({ error: 'actId required' });
+  // The band comes from the caller's profile — the body's actId is only checked, never trusted.
+  const { data: profile } = await service
+    .from('profiles')
+    .select('act_id, role')
+    .eq('id', user.id)
+    .single();
+  if (!profile?.act_id || !isBandAdminRole(profile.role)) return res.status(403).json({ error: 'Forbidden' });
+  if (actId && actId !== profile.act_id) return res.status(403).json({ error: 'Forbidden' });
+
+  const parsedAttachments = attachmentListSchema.safeParse(attachments ?? []);
+  if (!parsedAttachments.success) return res.status(400).json({ error: 'Attachments are not valid' });
 
   const payload = {
     sent_by:       user.id,
-    act_id:        actId,
+    act_id:        profile.act_id,
     venue_id:      venueId      || null,
     tour_venue_id: tourVenueId  || null,
     booking_id:    bookingId    || null,
@@ -38,6 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     subject:       subject      || null,
     body:          body         || null,
     category:      category     || null,
+    attachments:   parsedAttachments.data,
     direction:     'sent',
     status:        'draft',
     is_draft:      true,

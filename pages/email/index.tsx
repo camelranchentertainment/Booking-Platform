@@ -213,7 +213,7 @@ export default function EmailPage() {
 
     const draftsQ = aid
       ? supabase.from('email_log')
-          .select('id, subject, body, category, recipient, updated_at, venue_id, venue:venues(name)')
+          .select('id, subject, body, category, recipient, updated_at, attachments, venue_id, venue:venues(name)')
           .eq('act_id', aid)
           .eq('is_draft', true)
           .order('updated_at', { ascending: false })
@@ -1210,6 +1210,7 @@ export default function EmailPage() {
           defaultCategory={composerDraft.category || 'target'}
           initialSubject={composerDraft.subject || undefined}
           initialBody={composerDraft.body || undefined}
+          initialAttachments={Array.isArray(composerDraft.attachments) ? composerDraft.attachments : undefined}
           draftId={composerDraft.id}
           onClose={() => { setComposerDraft(null); loadAll(); }}
         />
