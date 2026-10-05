@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { sendActEmail } from '../../../../lib/emailSend';
 import { syncBookingToGoogleCalendar } from '../../../../lib/calendarSync';
+import { isBandAdminRole } from '../../../../lib/server/requireBandAdmin';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,10 +29,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { data: profile, error: profileErr } = await supabase
     .from('profiles')
-    .select('act_id')
+    .select('act_id, role')
     .eq('id', user.id)
     .single();
   if (profileErr || !profile?.act_id) return res.status(403).json({ error: 'No active act for this user' });
+  // Executes bookings, payments, expenses and email sends — admins only.
+  if (!isBandAdminRole(profile.role)) return res.status(403).json({ error: 'Forbidden' });
 
   // Process each staged action. A single item failing does not abort the rest.
   // Note: these are sequential per-row writes, not one atomic transaction across tables —

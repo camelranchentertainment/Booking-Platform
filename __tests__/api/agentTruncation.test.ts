@@ -28,7 +28,7 @@ jest.mock('../../lib/supabase', () => {
     return chain;
   };
   const mockFrom = jest.fn((table: string) => {
-    if (table === 'profiles') return buildChain({ act_id: 'act-1' });
+    if (table === 'profiles') return buildChain({ act_id: 'act-1', role: 'band_admin' });
     if (table === 'ai_staged_actions') return buildChain([]);
     if (table === 'acts') return buildChain({ act_name: 'Test Band', genre: 'Rock' });
     if (table === 'bookings') return buildChain([]);
