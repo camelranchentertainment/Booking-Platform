@@ -3,8 +3,8 @@ import { useRouter } from 'next/router';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { getActId, getBandBookings } from '../lib/bookingQueries';
-import { BOOKING_STATUS_LABELS } from '../lib/types';
-import { parseLocalDate, formatShowDate } from '../lib/formatDate';
+import { BOOKING_STATUS_LABELS, BOOKED_SHOW_STATUSES, isVisibleOnAppCalendar } from '../lib/types';
+import { parseLocalDate, formatShowDate, localToday } from '../lib/formatDate';
 import { STATUS_COLORS } from '../lib/statusSync';
 import { buildIcal, downloadIcal } from '../lib/ical';
 import Link from 'next/link';
@@ -64,7 +64,7 @@ export default function AgentCalendar() {
         supabase.from('venues').select('id, name, city, state').order('name').limit(300),
       ]);
       if (actRes.data) setActs([actRes.data]);
-      setShows(data.filter((b: any) => b.status !== 'cancelled' && b.show_date));
+      setShows(data.filter((b: any) => isVisibleOnAppCalendar(b, localToday())));
       setVenueList(venueRes.data || []);
     } catch (err) {
       console.error('calendar load:', err);
@@ -169,7 +169,7 @@ export default function AgentCalendar() {
           </div>
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => downloadIcal(buildIcal(filtered, 'Camel Ranch Shows', actName), 'camel-ranch-shows.ics')}
+            onClick={() => downloadIcal(buildIcal(filtered.filter((s: any) => (BOOKED_SHOW_STATUSES as readonly string[]).includes(s.status)), 'Camel Ranch Shows', actName), 'camel-ranch-shows.ics')}
             title="Export to Google/Apple/Outlook Calendar"
           >↓ Export</button>
           <button className="btn btn-primary" onClick={() => openAddModal(todayStr)}>+ Add Show</button>

@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
 import { getServiceClient } from '../../../../lib/supabase';
 import { buildIcal } from '../../../../lib/ical';
+import { BOOKED_SHOW_STATUSES } from '../../../../lib/types';
 
 const TokenSchema = z.string().regex(/^[0-9a-f]{64}$/, 'Invalid token');
 
@@ -35,7 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       venue:venues(name, city, state, address)
     `)
     .eq('act_id', act.id)
-    .neq('status', 'cancelled')
+    // Subscribed phone calendars get booked shows only — never targets/pitches.
+    .in('status', [...BOOKED_SHOW_STATUSES])
     .not('show_date', 'is', null)
     .order('show_date');
 

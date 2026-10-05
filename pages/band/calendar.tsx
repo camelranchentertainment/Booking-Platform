@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
-import { BOOKING_STATUS_LABELS } from '../../lib/types';
-import { parseLocalDate, formatShowDate } from '../../lib/formatDate';
+import { BOOKING_STATUS_LABELS, BOOKED_SHOW_STATUSES, isVisibleOnAppCalendar } from '../../lib/types';
+import { parseLocalDate, formatShowDate, localToday } from '../../lib/formatDate';
 import { STATUS_COLORS } from '../../lib/statusSync';
 import { buildIcal, downloadIcal } from '../../lib/ical';
 import EmailComposer from '../../components/email/EmailComposer';
@@ -48,7 +48,8 @@ export default function BandCalendar() {
         .neq('status', 'cancelled')
         .not('show_date', 'is', null)
         .order('show_date');
-      setShows(data || []);
+      // Hide past targets and anything cancelled (see isVisibleOnAppCalendar).
+      setShows((data || []).filter((b: any) => isVisibleOnAppCalendar(b, localToday())));
     } catch (err) {
       console.error('band calendar load:', err);
     } finally {
@@ -88,7 +89,7 @@ export default function BandCalendar() {
           )}
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => downloadIcal(buildIcal(shows, 'Band Shows'), 'band-shows.ics')}
+            onClick={() => downloadIcal(buildIcal(shows.filter((s: any) => (BOOKED_SHOW_STATUSES as readonly string[]).includes(s.status)), 'Band Shows'), 'band-shows.ics')}
             title="Export to Google / Apple / Outlook"
           >
             ↓ Export

@@ -288,6 +288,23 @@ export const BOOKED_SHOW_STATUSES: readonly BookingStatus[] = [
   'contract', 'confirmed', 'advancing', 'completed',
 ] as const;
 
+/**
+ * In-app calendars: every booked show, plus targets/pitches whose date is
+ * still ahead (useful to see which dates you're pitching for). Targets whose
+ * date has passed were never played and are hidden. Cancelled is never shown.
+ *
+ * @param booking  needs `status` and `show_date` (YYYY-MM-DD)
+ * @param today    YYYY-MM-DD in the viewer's time zone
+ */
+export function isVisibleOnAppCalendar(
+  booking: { status?: string | null; show_date?: string | null },
+  today: string,
+): boolean {
+  if (!booking.show_date || !booking.status || booking.status === 'cancelled') return false;
+  if ((BOOKED_SHOW_STATUSES as readonly string[]).includes(booking.status)) return true;
+  return booking.show_date >= today;
+}
+
 export const BOOKING_STATUS_ORDER: BookingStatus[] = [
   'pitch', 'negotiation', 'hold',
   'contract', 'confirmed', 'advancing', 'completed',
