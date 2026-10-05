@@ -1,6 +1,8 @@
 import { Resend } from 'resend';
 import { getServiceClient } from './supabase';
 import { sendViaGmail } from './gmailSend';
+import type { ResolvedAttachment } from './server/emailAttachments';
+import type { AttachmentRef } from './emailAttachments';
 
 export function stripHtml(html: string): string {
   return html
@@ -61,6 +63,10 @@ export async function sendActEmail(params: {
   contactId?: string;
   templateId?: string;
   category?: string;
+  /** Files to attach, already downloaded and ownership-checked (see resolveAttachments). */
+  attachments?: ResolvedAttachment[];
+  /** The references those files came from — stored on the email_log row. */
+  attachmentRefs?: AttachmentRef[];
 }): Promise<{ email_log_id: string }> {
   const service = getServiceClient();
   const { apiKey, baseFrom } = await getResendConfig(service);
@@ -95,7 +101,7 @@ export async function sendActEmail(params: {
   let actualFromAddress: string | null = null;
 
   if (gmailConnected) {
-    await sendViaGmail(params.actId, params.recipient, params.subject, htmlPayload);
+    await sendViaGmail(params.actId, params.recipient, params.subject, htmlPayload, params.attachments ?? []);
     actualFromAddress = gmailAddress;
   } else {
     if (!apiKey) {
@@ -109,6 +115,13 @@ export async function sendActEmail(params: {
       html: htmlPayload,
     };
     if (replyTo) sendPayload.replyTo = replyTo;
+    if (params.attachments?.length) {
+      sendPayload.attachments = params.attachments.map(a => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      }));
+    }
     const { data: resendData, error } = await resend.emails.send(sendPayload);
     if (error) throw new Error(error.message);
     providerMessageId = resendData?.id ?? null;
@@ -136,6 +149,7 @@ export async function sendActEmail(params: {
     sent_at: now,
     direction: 'sent',
     is_draft: false,
+    attachments: params.attachmentRefs ?? [],
   }).select('id').single();
   if (logErr) throw new Error(`email_log insert failed: ${logErr.message}`);
 

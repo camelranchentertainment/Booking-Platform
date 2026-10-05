@@ -230,7 +230,7 @@ export default function Settings() {
     if (!prof?.act_id || !['band_admin', 'superadmin'].includes(prof.role)) return;
     const [ruleRes, tmplRes] = await Promise.all([
       supabase.from('followup_rules').select('*').eq('act_id', prof.act_id).maybeSingle(),
-      supabase.from('email_templates').select('id, category').eq('act_id', prof.act_id),
+      supabase.from('email_templates').select('id, name').eq('act_id', prof.act_id).order('name'),
     ]);
     if (ruleRes.data) {
       setFollowupRule(ruleRes.data);
@@ -1240,7 +1240,7 @@ export default function Settings() {
                       onChange={e => setFollowupForm(f => ({ ...f, followup_template_id: e.target.value }))}>
                       <option value="">Use default template</option>
                       {followupTemplates.map(t => (
-                        <option key={t.id} value={t.id}>{t.category}</option>
+                        <option key={t.id} value={t.id}>{t.name}</option>
                       ))}
                     </select>
                   </label>

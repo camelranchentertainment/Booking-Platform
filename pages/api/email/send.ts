@@ -1,6 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 import { sendActEmail, stripHtml } from '../../../lib/emailSend';
+import { isBandAdminRole } from '../../../lib/server/requireBandAdmin';
+import { attachmentListSchema, type AttachmentRef } from '../../../lib/emailAttachments';
+import { resolveAttachments, type ResolvedAttachment } from '../../../lib/server/emailAttachments';
+import { AppError } from '../../../lib/apiError';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -19,6 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     templateId,
     category,
     bodyPreview,
+    attachments: rawAttachments,
   } = req.body;
 
   if (!to || !subject || !html) {
@@ -42,11 +47,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Resolve caller's act and validate body-supplied actId before any write.
   const { data: callerProfile } = await service
     .from('profiles')
-    .select('act_id')
+    .select('act_id, role')
     .eq('id', userId)
     .single();
 
   if (!callerProfile?.act_id) return res.status(403).json({ error: 'Forbidden' });
+  // Sends email as the band (service role bypasses RLS) — admins only.
+  if (!isBandAdminRole(callerProfile.role)) return res.status(403).json({ error: 'Forbidden' });
+
+  const parsedAttachments = attachmentListSchema.safeParse(rawAttachments ?? []);
+  if (!parsedAttachments.success) {
+    return res.status(400).json({ error: 'Attachments are not valid. Remove them and attach again.' });
+  }
+  const attachmentRefs: AttachmentRef[] = parsedAttachments.data;
   if (actId && actId !== callerProfile.act_id) return res.status(403).json({ error: 'Forbidden' });
 
   const effectiveActId = callerProfile.act_id;
@@ -68,6 +81,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!tourCheck) return res.status(403).json({ error: 'Forbidden' });
   }
 
+  let attachments: ResolvedAttachment[] = [];
+  try {
+    attachments = await resolveAttachments(service, effectiveActId, attachmentRefs);
+  } catch (err) {
+    if (err instanceof AppError) return res.status(err.statusCode).json({ error: err.message });
+    console.error('[email/send] attachment resolve failed:', err);
+    return res.status(500).json({ error: 'Could not load the attachments. Try again.' });
+  }
+
   try {
     const { email_log_id } = await sendActEmail({
       actId: effectiveActId,
@@ -82,6 +104,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       contactId: contactId || undefined,
       templateId: templateId || undefined,
       category: category || undefined,
+      attachments,
+      attachmentRefs,
     });
 
     return res.status(200).json({ ok: true, email_log_id });
