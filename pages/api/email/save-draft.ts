@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 import { isBandAdminRole } from '../../../lib/server/requireBandAdmin';
 import { attachmentListSchema } from '../../../lib/emailAttachments';
+import { buildDraftPayload } from '../../../lib/server/draftPayload';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -40,24 +41,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const parsedAttachments = attachmentListSchema.safeParse(attachments ?? []);
   if (!parsedAttachments.success) return res.status(400).json({ error: 'Attachments are not valid' });
 
-  const payload = {
-    sent_by:       user.id,
-    act_id:        profile.act_id,
-    venue_id:      venueId      || null,
-    tour_venue_id: tourVenueId  || null,
-    booking_id:    bookingId    || null,
-    contact_id:    contactId    || null,
-    recipient:     recipient    || null,
-    subject:       subject      || null,
-    body:          body         || null,
-    category:      category     || null,
-    attachments:   parsedAttachments.data,
-    direction:     'sent',
-    status:        'draft',
-    is_draft:      true,
-    sent_at:       null,
-    updated_at:    new Date().toISOString(),
-  };
+  // No sent_at here: the column is NOT NULL (default now()), see buildDraftPayload.
+  const payload = buildDraftPayload(
+    { venueId, tourVenueId, bookingId, contactId, recipient, subject, body, category },
+    user.id,
+    profile.act_id,
+    parsedAttachments.data,
+  );
 
   if (draftId) {
     // Update existing draft — verify ownership
