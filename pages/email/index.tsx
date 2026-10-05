@@ -208,6 +208,8 @@ export default function EmailPage() {
       .eq('sent_by', user.id)
       .neq('direction', 'received')
       .neq('archived', true)
+      // Saved drafts are direction 'sent' too; keep them out of the Outbox (null = legacy rows).
+      .or('is_draft.is.null,is_draft.eq.false')
       .order('sent_at', { ascending: false })
       .limit(200);
 
