@@ -3,20 +3,12 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
 import { formatShowDate } from '../../../lib/formatDate';
+import { buildVoiceSystemPrompt, relationshipFor } from '../../../lib/emailVoice';
+import { hasPlayedVenue } from '../../../lib/server/venueHistory';
 
-const SYSTEM_PROMPT = `You are an expert music booking assistant for Camel Ranch Booking.
-You draft professional, concise cold pitch emails to venues on behalf of bands and their management.
+const TASK_LINE = `You draft booking emails to venues for a working band's booking team, writing as a person from the band's side, not a booking firm.`;
 
-Style:
-- Professional but human — not corporate
-- Music industry voice
-- Short paragraphs, no walls of text
-- Clear call-to-action
-- Never open with "I hope this email finds you well"
-- No em dashes, no bullet points in the body
-- Subject lines under 60 characters
-
-Output: Return ONLY a valid JSON object:
+const OUTPUT_SPEC = `Output: Return ONLY a valid JSON object:
 { "subject": "...", "body": "...", "preview": "..." }`;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -108,7 +100,14 @@ ${actInfo}
 ${venueInfo}
 ${availableDates}
 
-Introduce the act in 2 sentences. Ask them to hold a date. Keep it under 150 words. Include website link if available.`;
+Lead with the date or dates and the ask. One link (website) if available. Keep it to a few sentences.`;
+
+  const playedBefore = await hasPlayedVenue(service, booking.act_id, booking.venue_id, bookingId);
+  const systemPrompt = buildVoiceSystemPrompt({
+    task: TASK_LINE,
+    relationship: relationshipFor('target', playedBefore),
+    outputSpec: OUTPUT_SPEC,
+  });
 
   const anthropicKey = await getSetting('anthropic_api_key');
   if (!anthropicKey) return res.status(500).json({ error: 'Anthropic API key not configured' });
@@ -119,7 +118,7 @@ Introduce the act in 2 sentences. Ask them to hold a date. Keep it under 150 wor
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
-      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: prompt }],
     });
 

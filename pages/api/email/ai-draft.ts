@@ -4,32 +4,34 @@ import { createClient } from '@supabase/supabase-js';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
 import { formatShowDate } from '../../../lib/formatDate';
+import { buildVoiceSystemPrompt, relationshipFor, VenueRelationship } from '../../../lib/emailVoice';
+import { hasPlayedVenue } from '../../../lib/server/venueHistory';
 
-const BASE_SYSTEM_PROMPT = `You are an expert music booking agent assistant for Camel Ranch Entertainment.
-You draft professional, concise emails for booking music acts at venues.
+const TASK_LINE = `You draft booking emails for a working band's booking team, writing as a person from the band's side, not a booking firm.`;
 
-Style:
-- Professional but human — not corporate
-- Music industry voice, not generic business speak
-- Short paragraphs, no walls of text
-- Always include a clear call-to-action
-- Never open with "I hope this email finds you well" or similar filler
-- Subject lines under 60 characters
-
-Output: Return ONLY a valid JSON object with these exact keys:
+const OUTPUT_SPEC = `Output: Return ONLY a valid JSON object with these exact keys:
 {
   "subject": "email subject line",
-  "body": "plain email body text — no HTML tags",
+  "body": "plain email body text, no HTML tags",
   "preview": "one sentence summary of the email"
 }`;
 
-function buildSystemPrompt(styleExamples: Array<{ subject: string | null; body: string | null }>): string {
-  if (!styleExamples.length) return BASE_SYSTEM_PROMPT;
+/**
+ * System prompt = musician voice for this venue relationship, then (when the act
+ * has sent mail) the act's own emails as few-shot examples. The act's own
+ * writing outranks the generic guide.
+ */
+function buildSystemPrompt(
+  relationship: VenueRelationship,
+  styleExamples: Array<{ subject: string | null; body: string | null }>,
+): string {
+  const base = buildVoiceSystemPrompt({ task: TASK_LINE, relationship, outputSpec: OUTPUT_SPEC });
+  if (!styleExamples.length) return base;
   const exampleBlocks = styleExamples
     .slice(0, 6)
     .map((e, i) => `Example ${i + 1}:\nSubject: ${e.subject || '(no subject)'}\n${e.body || '(no body)'}`)
     .join('\n\n---\n\n');
-  return BASE_SYSTEM_PROMPT + `\n\nHere are examples of how this person actually writes their emails. Match their tone, sentence length, level of formality, and structure — do not copy exact wording or reuse specific phrases verbatim, write new content in their style:\n\n${exampleBlocks}`;
+  return base + `\n\nHere are examples of how this person actually writes their emails. Where they differ from the voice guide above, follow these. Match their tone, sentence length, and structure, but write new content and do not reuse phrases verbatim:\n\n${exampleBlocks}`;
 }
 
 type Category = 'target' | 'follow_up_1' | 'follow_up_2' | 'confirmation' | 'decline' | 'advance' | 'thank_you' | 'reply';
@@ -134,7 +136,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .order('sent_at', { ascending: false })
     .limit(6);
 
-  const systemPrompt = buildSystemPrompt(styleExamples || []);
+  // Known venue (played before, or already mid-conversation) gets the familiar voice.
+  const playedBefore = await hasPlayedVenue(service, resolvedActId, resolvedVenueId, bookingId);
+  const systemPrompt = buildSystemPrompt(relationshipFor(category, playedBefore), styleExamples || []);
 
   const client = new Anthropic({ apiKey: anthropicKey });
 
@@ -207,7 +211,7 @@ ${actInfo}
 ${venueInfo}
 ${availableDates}
 
-Introduce the act in 2 sentences. Ask them to hold a date. Keep it under 150 words. Include the EPK/website link if available.`;
+Lead with the date or dates and the ask. One link (EPK or website) if available. Keep it to a few sentences.`;
 
     case 'follow_up_1':
       return `Write a brief follow-up email to ${contactName} at ${venue?.name || 'this venue'}. We pitched ${act.act_name} about a week ago with no response.
@@ -217,7 +221,7 @@ ${actInfo}
 ${venueInfo}
 ${availableDates}
 
-Reference the original outreach without being pushy. Light, professional tone. Under 100 words.`;
+Just touching base on the original note, no pressure. One or two sentences.`;
 
     case 'follow_up_2':
       return `Write a second follow-up email to ${contactName} at ${venue?.name || 'this venue'} about booking ${act.act_name}. Two weeks since first contact, still no reply.
@@ -227,7 +231,7 @@ ${actInfo}
 ${venueInfo}
 ${availableDates}
 
-This is the last outreach. Keep it brief and gracious — leave the door open even if they're not interested right now. Under 80 words.`;
+This is the last outreach. Keep it short and easygoing and leave the door open. Two sentences.`;
 
     case 'confirmation':
       return `Write a booking confirmation email to ${contactName} at ${venue?.name || 'this venue'} confirming ${act.act_name}${showDate ? ` on ${showDate}` : ''}.
@@ -235,7 +239,7 @@ This is the last outreach. Keep it brief and gracious — leave the door open ev
 ${from}
 ${venueInfo}
 
-Confirm the date is locked. Mention that a contract will follow and advance details will be sent 14 days before the show. Thank them for their response. Professional and concise.`;
+Confirm the date is locked. Mention that a contract will follow and advance details will be sent 14 days before the show. Thank them for their response. Plain and short.`;
 
     case 'decline':
       return `Write a graceful response to ${contactName} at ${venue?.name || 'this venue'} — they passed on booking ${act.act_name}.
@@ -244,7 +248,7 @@ ${from}
 ${actInfo}
 ${venueInfo}
 
-Thank them for their time. Keep the relationship warm. Mention ${act.act_name} will be routing through the area again. No bitterness, no over-explanation. Under 80 words.`;
+Take it gracefully, like a person would. Say ${act.act_name} will be through the area again and you'll reach back out. No bitterness, no over-explaining. Two sentences.`;
 
     case 'advance':
       return `Write a 14-day advance email to ${contactName} at ${venue?.name || 'this venue'} for the upcoming ${act.act_name} show${showDate ? ` on ${showDate}` : ''}.
@@ -252,7 +256,7 @@ Thank them for their time. Keep the relationship warm. Mention ${act.act_name} w
 ${from}
 ${venueInfo}
 
-Request confirmation on: load-in time, sound check time, PA/backline provided, promotional status (socials, posters), door time, set length, and payment logistics. Use a short list format for the questions. Professional and efficient.`;
+Ask about: load-in time, sound check time, PA/backline provided, promotional status (socials, posters), door time, set length, and payment logistics. A short list is fine here since it is a list of questions. Keep it plain.`;
 
     case 'thank_you':
       return `Write a post-show thank you email to ${contactName} at ${venue?.name || 'this venue'} following the ${act.act_name} show${showDate ? ` on ${showDate}` : ''}.
@@ -260,19 +264,19 @@ Request confirmation on: load-in time, sound check time, PA/backline provided, p
 ${from}
 ${venueInfo}
 
-Thank them for the hospitality. Keep it warm but brief. Mention you'd love to bring ${act.act_name} back and will be in touch when routing through again. Under 100 words.`;
+Thank them for having the band. Keep it short and real. Say you'd like to bring ${act.act_name} back and will be in touch when routing through again.`;
 
     case 'reply':
-      return `Write a professional reply email to ${contactName} at ${venue?.name || 'this venue'}, responding to their message about booking ${act.act_name}.
+      return `Write a reply email to ${contactName} at ${venue?.name || 'this venue'}, responding to their message about booking ${act.act_name}.
 
 ${from}
 ${actInfo}
 ${venueInfo}
 ${availableDates}
 
-Keep the momentum going. If they're interested, propose next steps (confirm the date, send contract). If they asked questions, answer clearly. Professional, warm, and brief. Under 120 words.`;
+Keep it moving. If they're interested, propose the next step (confirm the date, send the contract). If they asked questions, answer them straight. One to three sentences.`;
 
     default:
-      return `Write a professional booking email for ${act.act_name} to ${venue?.name || 'this venue'}.\n\n${from}\n${actInfo}\n${venueInfo}`;
+      return `Write a booking email for ${act.act_name} to ${venue?.name || 'this venue'}.\n\n${from}\n${actInfo}\n${venueInfo}`;
   }
 }
