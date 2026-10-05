@@ -80,12 +80,14 @@ export default function AnalyticsPage() {
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loadingRecs, setLoadingRecs] = useState(false);
   const [recsLoaded, setRecsLoaded]   = useState(false);
+  // Booking figures are reported one calendar year at a time (year-over-year, tax season).
+  const [year, setYear]               = useState<number>(() => new Date().getFullYear());
 
   useEffect(() => {
     if (!profile || authLoading) return;
     loadAnalytics();
     loadActName();
-  }, [profile, authLoading]);
+  }, [profile, authLoading, year]);
 
   const loadActName = async () => {
     if (!profile?.act_id) return;
@@ -99,7 +101,7 @@ export default function AnalyticsPage() {
     const timeout = setTimeout(() => setLoading(false), 5000);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch('/api/analytics', {
+      const response = await fetch(`/api/analytics?year=${year}`, {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
       if (!response.ok) throw new Error('Failed to load analytics');
@@ -169,7 +171,8 @@ export default function AnalyticsPage() {
     marginBottom:  '1rem',
   };
 
-  if (authLoading || loading) {
+  // Full-page loader only on the first load, so the year picker stays put while switching years.
+  if (authLoading || (loading && !data)) {
     return (
       <AppShell requireRole="band_admin">
         <div style={{ padding: '2rem', fontFamily: 'var(--font-body)', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
@@ -193,6 +196,7 @@ export default function AnalyticsPage() {
   const regional          = data?.regionalPerformance ?? [];
   const emailPerf         = data?.emailPerformance  ?? {};
   const financials        = data?.bookingFinancials ?? {};
+  const yearOptions: number[] = financials.availableYears ?? [year];
   const tourStats         = data?.tourStats         ?? [];
   const conversionRate    = data?.conversionRate    ?? 0;
   const responseRate      = data?.responseRate      ?? 0;
@@ -235,15 +239,34 @@ export default function AnalyticsPage() {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '1.5rem 1rem 3rem', display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
 
         {/* Page header */}
-        <div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', color: 'var(--text-primary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            Analytics
-          </div>
-          {actName && (
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-              {actName}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', color: 'var(--text-primary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              Analytics
             </div>
-          )}
+            {actName && (
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                {actName}
+              </div>
+            )}
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            Year
+            <select
+              className="select"
+              style={{ width: 100 }}
+              value={year}
+              onChange={e => {
+                setYear(Number(e.target.value));
+                // Recommendations are generated from the loaded year's data; drop the cached set.
+                setRecommendations([]);
+                setRecsLoaded(false);
+              }}
+              aria-label="Year for booking figures"
+            >
+              {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </label>
         </div>
 
         {/* ── Section 1: Summary Bar ── */}
@@ -268,12 +291,12 @@ export default function AnalyticsPage() {
             <StatCard
               label="Confirmed Shows"
               value={financials.futureConfirmedCount ?? 0}
-              sub="upcoming booked shows"
+              sub={`upcoming booked shows in ${year}`}
             />
             <StatCard
               label="Shows Performed"
               value={financials.totalCompleted ?? 0}
-              sub="completed shows"
+              sub={`completed shows in ${year}`}
             />
           </div>
         </div>
@@ -446,17 +469,17 @@ export default function AnalyticsPage() {
 
             {/* Booking Financials */}
             <div style={card}>
-              <div style={cardTitle}>Booking Financials</div>
+              <div style={cardTitle}>Booking Financials · {year}</div>
               {financials.totalConfirmed === 0 ? (
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.83rem', color: 'var(--text-muted)' }}>
-                  No confirmed shows yet — start a campaign to begin tracking conversions.
+                  No confirmed or completed shows in {year}.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                   {[
                     ['Confirmed Shows',  financials.totalConfirmed],
                     ['Completed Shows',  financials.totalCompleted],
-                    ['Total Earned',     financials.totalEarned > 0 ? `$${financials.totalEarned.toLocaleString()}` : '—'],
+                    [`Total Earned (${year})`, financials.totalEarned > 0 ? `$${financials.totalEarned.toLocaleString()}` : '—'],
                     ['Potential (future)', financials.totalPotential > 0 ? `$${financials.totalPotential.toLocaleString()}` : '—'],
                     ['Avg Pay / Show',   financials.avgPay > 0 ? `$${financials.avgPay.toLocaleString()}` : '—'],
                     ...(financials.wouldReturnPct !== null ? [['Would Rebook', `${financials.wouldReturnPct}%`]] : []),
