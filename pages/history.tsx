@@ -3,6 +3,7 @@ import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { getActId } from '../lib/bookingQueries';
 import { formatShowDate } from '../lib/formatDate';
+import { BOOKED_SHOW_STATUSES } from '../lib/types';
 
 const DEAL_LABELS: Record<string, string> = {
   guarantee:  'Guarantee',
@@ -87,7 +88,9 @@ export default function HistoryPage() {
           venue:venues(id, name, city, state)
         `)
         .eq('act_id', actId)
-        .neq('status', 'cancelled')
+        // Only shows that were actually booked. Pitches/targets with a past
+        // date are venues we looked at, not shows we played.
+        .in('status', [...BOOKED_SHOW_STATUSES])
         .not('show_date', 'is', null)
         .lt('show_date', today)
         .order('show_date', { ascending: false });
