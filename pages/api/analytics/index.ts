@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
+import { resolveYear, bookingsInYear, availableBookingYears } from '../../../lib/analyticsYear';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).end();
@@ -130,10 +131,18 @@ const emailsDelivered = sentEmails.filter(
   };
 
   // ── Booking financials ───────────────────────────────────────────────────
-  const confirmedBookings = bookings.filter((b: any) =>
+  // Bands review money one calendar year at a time (year-over-year, tax season),
+  // so every booking figure below is scoped to the selected year (?year=YYYY,
+  // default: the current year) rather than all-time.
+  const currentYear   = new Date().getFullYear();
+  const selectedYear  = resolveYear(req.query.year, currentYear);
+  const years         = availableBookingYears(bookings, currentYear);
+  const yearBookings  = bookingsInYear(bookings, selectedYear);
+
+  const confirmedBookings = yearBookings.filter((b: any) =>
     ['confirmed', 'completed'].includes(b.status)
   );
-  const completedBookings = bookings.filter((b: any) => b.status === 'completed');
+  const completedBookings = yearBookings.filter((b: any) => b.status === 'completed');
 
   // Earned = actual_amount_received on completed shows only
   const totalEarned = completedBookings.reduce(
@@ -164,6 +173,8 @@ const emailsDelivered = sentEmails.filter(
   const wouldReturnPct = rebookTotal > 0 ? Math.round((rebookYes / rebookTotal) * 100) : null;
 
   const bookingFinancials = {
+    year:                 selectedYear,
+    availableYears:       years,
     totalConfirmed:       confirmedBookings.length,
     futureConfirmedCount: futureConfirmed.length,
     totalCompleted:       completedBookings.length,
