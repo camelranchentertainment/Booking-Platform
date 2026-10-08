@@ -81,11 +81,17 @@ The email system. Composed of:
 - **Templates** — reusable outreach email templates. Variables like {band_name},
   {venue_name}, {proposed_date} are filled in automatically when sending.
 - **Outreach** — send bulk emails to venues in a campaign using a selected template.
-- **Inbox/Sent** — view sent emails and replies (requires SMTP/IMAP configured in
-  Settings).
+- **Inbox** — replies from your saved venues and contacts. Once Gmail is connected
+  the inbox checks Gmail automatically every few minutes while you're logged in;
+  "Check Gmail now" on the Email page checks immediately. Emails from senders who
+  aren't a saved venue or contact stay in Gmail (the bar shows how many) — add the
+  sender as a venue contact to bring their future emails in.
+- **Outbox / Drafts / Archive** — sent emails, saved drafts, and archived mail.
+- When writing an email you can start from a saved template, save the current email
+  as a titled template, and attach files from your computer or your band's files.
 
-To configure email: go to Settings → Email and enter your SMTP credentials.
-Gmail users should use an App Password (not their main Gmail password).
+To connect email: go to Settings → Gmail Send-As and click "Connect Gmail", then
+approve access in the Google window. No passwords or SMTP settings are needed.
 
 ### Calendar
 The show calendar. Displays all bookings on a monthly calendar view. Features:
@@ -132,7 +138,8 @@ choose their role, and send. They receive an invite email with a link to join.
 Account and band configuration. Sections include:
 - **Your Profile** — display name
 - **Band Information** — band name, contact email, phone, website, bio
-- **Email (SMTP)** — configure outbound email (Gmail App Password recommended)
+- **Gmail Send-As** — connect the band's Gmail so outreach sends from it and replies
+  sync into the inbox
 - **Calendar** — connect Google Calendar OAuth or set iCal URL
 - **Team Members** — view and manage band members
 
@@ -160,11 +167,11 @@ System notifications for the act: confirmed shows, upcoming show reminders
 6. Mark the booking status as "Confirmed".
 
 ### How to set up email
-1. Go to Settings → Email.
-2. For Gmail: generate an App Password at myaccount.google.com/apppasswords.
-3. Enter: SMTP host = smtp.gmail.com, port = 587, your Gmail address,
-   and the App Password (not your Gmail password).
-4. Save and send a test email to verify.
+1. Go to Settings → Gmail Send-As.
+2. Click "Connect Gmail" and sign in to the Gmail account the band books from.
+3. Approve access in the Google window. You return to Settings showing
+   "Connected as <your address>".
+4. Open the Email page — the inbox starts checking Gmail automatically.
 
 ### How to connect Google Calendar
 1. Go to Settings → Calendar.
@@ -211,10 +218,11 @@ to download a .ics file and import it manually.
 Your act may not have any confirmed bookings yet. Go to Bookings → "+ Add Booking"
 to add your first show, or go to Campaigns to start a booking run.
 
-**Email isn't sending.**
-Check Settings → Email. Make sure your SMTP credentials are correct. Gmail users
-must use an App Password, not their regular Gmail password. App Passwords are
-created at myaccount.google.com/apppasswords.
+**Email isn't sending, or replies aren't showing up.**
+Check Settings → Gmail Send-As shows "Connected as …". If not, click "Connect Gmail".
+If it's connected but the Email page asks you to reconnect Gmail, disconnect and
+connect again. Replies only appear in the inbox when the sender is a saved venue or
+venue contact — add them in the Venues tab, then click "Check Gmail now".
 
 **Google Calendar won't connect.**
 The Google OAuth app may be in testing mode. As a workaround, use the
