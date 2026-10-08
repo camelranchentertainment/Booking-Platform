@@ -69,17 +69,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const service = getServiceClient();
 
-  // If bookingId provided, fetch booking and resolve act/venue/tour
+  // The band comes from the caller's profile; body ids are only checked against it.
+  const { data: callerProfile } = await service.from('profiles').select('act_id').eq('id', user.id).maybeSingle();
+  const callerActId: string | null = callerProfile?.act_id ?? null;
+  if (!callerActId) return res.status(403).json({ error: 'Forbidden' });
+  if (bodyActId && bodyActId !== callerActId) return res.status(403).json({ error: 'Forbidden' });
+
+  // If bookingId provided, fetch booking and resolve venue/tour
   let booking: any = null;
-  let resolvedActId = bodyActId;
+  const resolvedActId: string = callerActId;
   let resolvedVenueId = bodyVenueId;
   let tourDateRange: string | null = null;
 
   if (bookingId) {
-    const { data: b } = await service.from('bookings').select('*').eq('id', bookingId).single();
+    const { data: b } = await service.from('bookings').select('*').eq('id', bookingId).eq('act_id', callerActId).maybeSingle();
+    if (!b) return res.status(404).json({ error: 'Booking not found' });
     if (b) {
       booking = b;
-      resolvedActId = resolvedActId || b.act_id;
       resolvedVenueId = resolvedVenueId || b.venue_id;
 
       // Fetch tour date range for target/follow_up categories
@@ -100,12 +106,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  if (!resolvedActId) return res.status(400).json({ error: 'actId or bookingId required' });
-
+  // Venue/contact must belong to the caller's band, or they are ignored.
   const [actRes, venueRes, contactRes] = await Promise.all([
     service.from('acts').select('*').eq('id', resolvedActId).single(),
-    resolvedVenueId ? service.from('venues').select('*').eq('id', resolvedVenueId).single() : Promise.resolve({ data: null }),
-    contactId ? service.from('contacts').select('*').eq('id', contactId).single() : Promise.resolve({ data: null }),
+    resolvedVenueId
+      ? service.from('venues').select('*').eq('id', resolvedVenueId).eq('act_id', resolvedActId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    contactId
+      ? service.from('contacts').select('*, venue:venues!inner(act_id)').eq('id', contactId).eq('venue.act_id', resolvedActId).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   if (!actRes.data) return res.status(404).json({ error: 'Act not found' });
