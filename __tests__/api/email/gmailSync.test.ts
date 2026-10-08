@@ -47,11 +47,19 @@ interface Setup {
   authOk?: boolean;
   claim?: 'won' | 'lost' | 'error';
   existingIds?: string[];
+  /** Extra venues returned by the (act-scoped) venues query. */
+  venues?: Array<{ id: string; name: string; email: string; secondary_emails: string[] }>;
+  /** Sender for the m-stranger message. */
+  strangerFrom?: string;
 }
 
-function setup({ role = 'band_admin', actId = ACT, authOk = true, claim = 'won', existingIds = [] }: Setup = {}) {
+function setup({
+  role = 'band_admin', actId = ACT, authOk = true, claim = 'won', existingIds = [],
+  venues = [], strangerFrom = 'Fan <fan@elsewhere.org>',
+}: Setup = {}) {
   const inserts: unknown[] = [];
   const emailLogInQueries: string[][] = [];
+  const venueFilters: Array<[string, unknown]> = [];
 
   const from = jest.fn((table: string) => {
     switch (table) {
@@ -72,8 +80,14 @@ function setup({ role = 'band_admin', actId = ACT, authOk = true, claim = 'won',
         c.maybeSingle = jest.fn(() => Promise.resolve({ data: { gmail_last_sync_at: '2026-10-02T12:00:00.000Z' }, error: null }));
         return c;
       }
-      case 'venues':
-        return chain({ data: [{ id: 'v1', name: 'The Venue', email: 'booker@venue.com', secondary_emails: [] }], error: null });
+      case 'venues': {
+        const c = chain({
+          data: [{ id: 'v1', name: 'The Venue', email: 'booker@venue.com', secondary_emails: [] }, ...venues],
+          error: null,
+        });
+        c.eq = jest.fn((col: string, val: unknown) => { venueFilters.push([col, val]); return c; });
+        return c;
+      }
       case 'contacts':
         return chain({ data: [], error: null });
       case 'tour_venues':
@@ -100,7 +114,7 @@ function setup({ role = 'band_admin', actId = ACT, authOk = true, claim = 'won',
       internalDate: '1759406400000',
       payload: {
         headers: [
-          { name: 'From', value: id === 'm-stranger' ? 'Fan <fan@elsewhere.org>' : 'Booker <booker@venue.com>' },
+          { name: 'From', value: id === 'm-stranger' ? strangerFrom : 'Booker <booker@venue.com>' },
           { name: 'Subject', value: `Re: ${id}` },
         ],
         body: { data: Buffer.from('hello').toString('base64') },
@@ -112,7 +126,7 @@ function setup({ role = 'band_admin', actId = ACT, authOk = true, claim = 'won',
     gmailAddress: 'band@example.com',
   });
 
-  return { from, list, get, inserts, emailLogInQueries };
+  return { from, list, get, inserts, emailLogInQueries, venueFilters };
 }
 
 beforeEach(() => jest.clearAllMocks());
@@ -182,6 +196,24 @@ describe('POST /api/email/gmail-sync', () => {
       ok: true, status: 'synced', imported: 1, skipped: 1, unmatched: 1, scanned: 3,
     }));
     expect(notifyActMembers).toHaveBeenCalledTimes(1);
+  });
+
+  it('matches only against the caller\'s band\'s venues', async () => {
+    const { venueFilters } = setup();
+    const { res } = mockRes();
+    await handler(mockReq(), res);
+    expect(venueFilters).toContainEqual(['act_id', ACT]);
+  });
+
+  it('does not tag an unknown gmail.com sender as the venue that happens to use gmail', async () => {
+    const { inserts } = setup({
+      venues: [{ id: 'v-max', name: "Maxine's Tap Room", email: 'maxinesonblock@gmail.com', secondary_emails: [] }],
+      strangerFrom: 'Cindy <cindyawill3@gmail.com>',
+    });
+    const { res, json } = mockRes();
+    await handler(mockReq(), res);
+    expect(inserts.map(r => (r as { venue_id: string }).venue_id)).not.toContain('v-max');
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ unmatched: 1 }));
   });
 
   it('maps Google credential failures to GMAIL_AUTH_FAILED', async () => {

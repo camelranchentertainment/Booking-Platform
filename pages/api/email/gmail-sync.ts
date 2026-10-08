@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 import { getGmailClient } from '../../../lib/gmailClient';
 import { notifyActMembers } from '../../../lib/notifications';
+import { loadVenueEmailIndex, matchSenderToVenue } from '../../../lib/server/venueEmailMatch';
 import type {
   InboxSyncErrorBody,
   InboxSyncErrorCode,
@@ -224,46 +225,8 @@ export default async function handler(
 
     const connectedAddress = gmailAddress.toLowerCase();
 
-    // Load venue email addresses
-    const { data: venues } = await service
-      .from('venues')
-      .select('id, name, email, secondary_emails');
-
-    const venueEmailMap = new Map<
-      string,
-      { id: string; name: string }
-    >();
-
-    for (const venue of venues || []) {
-      if (venue.email) {
-        venueEmailMap.set(venue.email.toLowerCase(), {
-          id: venue.id,
-          name: venue.name,
-        });
-      }
-
-      for (const email of venue.secondary_emails || []) {
-        venueEmailMap.set(email.toLowerCase(), {
-          id: venue.id,
-          name: venue.name,
-        });
-      }
-    }
-
-    // Include individual venue contacts
-    const { data: contacts } = await service
-      .from('contacts')
-      .select('email, venue_id, venue:venues(name)')
-      .not('email', 'is', null);
-
-    for (const contact of contacts || []) {
-      if (!contact.email || !contact.venue_id) continue;
-
-      venueEmailMap.set(contact.email.toLowerCase(), {
-        id: contact.venue_id,
-        name: (contact.venue as any)?.name || '',
-      });
-    }
+    // This band's venue + contact addresses only (see lib/server/venueEmailMatch).
+    const venueIndex = await loadVenueEmailIndex(service, actId);
 
     // Only look at recent messages in the Gmail inbox.
     // The first sync can bring in up to 50 recent messages.
@@ -343,22 +306,8 @@ export default async function handler(
         ? new Date(Number(fullMessage.data.internalDate)).toISOString()
         : new Date().toISOString();
 
-      // Exact address match first
-      let matchedVenue = venueEmailMap.get(fromAddress) || null;
-
-      // Fallback to matching the sender domain
-      if (!matchedVenue) {
-        const senderDomain = fromAddress.split('@')[1];
-
-        if (senderDomain) {
-          for (const [email, venue] of venueEmailMap.entries()) {
-            if (email.endsWith(`@${senderDomain}`)) {
-              matchedVenue = venue;
-              break;
-            }
-          }
-        }
-      }
+      // Exact address first; company-domain fallback only, never gmail.com etc.
+      const matchedVenue = matchSenderToVenue(venueIndex, fromAddress);
 
       if (!matchedVenue) {
         unmatched++;
