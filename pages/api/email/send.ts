@@ -5,6 +5,7 @@ import { isBandAdminRole } from '../../../lib/server/requireBandAdmin';
 import { attachmentListSchema, type AttachmentRef } from '../../../lib/emailAttachments';
 import { resolveAttachments, type ResolvedAttachment } from '../../../lib/server/emailAttachments';
 import { AppError } from '../../../lib/apiError';
+import { ownedVenueId, ownedContactId } from '../../../lib/server/actOwnership';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -81,6 +82,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!tourCheck) return res.status(403).json({ error: 'Forbidden' });
   }
 
+  // Only link the email to a venue/contact this band owns. A foreign id is
+  // dropped (the email still sends) rather than refused, so a stale picker
+  // can't block a send — but it can no longer attach another band's record.
+  let safeVenueId: string | null;
+  let safeContactId: string | null;
+  try {
+    [safeVenueId, safeContactId] = await Promise.all([
+      ownedVenueId(service, effectiveActId, venueId),
+      ownedContactId(service, effectiveActId, contactId),
+    ]);
+  } catch (err) {
+    console.error('[email/send] ownership check failed:', err);
+    return res.status(500).json({ error: 'Could not send right now. Try again.' });
+  }
+  if (venueId && !safeVenueId) console.warn('[email/send] dropped venueId not owned by caller act');
+
   let attachments: ResolvedAttachment[] = [];
   try {
     attachments = await resolveAttachments(service, effectiveActId, attachmentRefs);
@@ -99,9 +116,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       body: bodyPreview || stripHtml(html),
       bodyHtml: html,
       bookingId: bookingId || undefined,
-      venueId: venueId || undefined,
+      venueId: safeVenueId || undefined,
       tourVenueId: tourVenueId || undefined,
-      contactId: contactId || undefined,
+      contactId: safeContactId || undefined,
       templateId: templateId || undefined,
       category: category || undefined,
       attachments,

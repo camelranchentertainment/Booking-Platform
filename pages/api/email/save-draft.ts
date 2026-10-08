@@ -3,6 +3,7 @@ import { getServiceClient } from '../../../lib/supabase';
 import { isBandAdminRole } from '../../../lib/server/requireBandAdmin';
 import { attachmentListSchema } from '../../../lib/emailAttachments';
 import { buildDraftPayload } from '../../../lib/server/draftPayload';
+import { ownedVenueId, ownedContactId } from '../../../lib/server/actOwnership';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -41,9 +42,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const parsedAttachments = attachmentListSchema.safeParse(attachments ?? []);
   if (!parsedAttachments.success) return res.status(400).json({ error: 'Attachments are not valid' });
 
+  // Drop venue/contact ids that belong to another band (service role bypasses RLS).
+  let safeVenueId: string | null;
+  let safeContactId: string | null;
+  try {
+    [safeVenueId, safeContactId] = await Promise.all([
+      ownedVenueId(service, profile.act_id, venueId),
+      ownedContactId(service, profile.act_id, contactId),
+    ]);
+  } catch (err) {
+    console.error('[email/save-draft] ownership check failed:', err);
+    return res.status(500).json({ error: 'Could not save the draft. Try again.' });
+  }
+
   // No sent_at here: the column is NOT NULL (default now()), see buildDraftPayload.
   const payload = buildDraftPayload(
-    { venueId, tourVenueId, bookingId, contactId, recipient, subject, body, category },
+    { venueId: safeVenueId, tourVenueId, bookingId, contactId: safeContactId, recipient, subject, body, category },
     user.id,
     profile.act_id,
     parsedAttachments.data,

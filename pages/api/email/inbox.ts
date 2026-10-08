@@ -5,6 +5,7 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import crypto from 'crypto';
 import { notifyActMembers } from '../../../lib/notifications';
+import { loadVenueEmailIndex, matchSenderToVenue } from '../../../lib/server/venueEmailMatch';
 
 function decrypt(enc: string): string {
   const key = process.env.EMAIL_ENCRYPT_KEY || '';
@@ -59,52 +60,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const password = settings.password_enc ? decrypt(settings.password_enc) : '';
 
-  // Load venue emails for matching
-  const { data: venues } = await admin
-    .from('venues')
-    .select('id, name, email, secondary_emails')
-    .not('email', 'is', null);
-
-  const venueEmailMap: Record<string, { id: string; name: string }> = {};
-  for (const v of venues || []) {
-    if (v.email) venueEmailMap[v.email.toLowerCase()] = { id: v.id, name: v.name };
-    for (const e of v.secondary_emails || []) {
-      venueEmailMap[e.toLowerCase()] = { id: v.id, name: v.name };
-    }
-  }
-
-  // Also load contact emails
-  const { data: contacts } = await admin
-    .from('contacts')
-    .select('email, venue_id, venue:venues(name)')
-    .not('email', 'is', null);
-
-  for (const c of contacts || []) {
-    if (c.email && c.venue_id) {
-      venueEmailMap[c.email.toLowerCase()] = { id: c.venue_id, name: (c.venue as any)?.name || '' };
-    }
-  }
-
-  // Load user's act_id for scoping tour_venues updates
+  // The caller's band, from their profile — venue matching is scoped to it.
   const { data: profileRow } = await admin
     .from('profiles')
     .select('act_id')
     .eq('id', user.id)
     .maybeSingle();
-  const actId = profileRow?.act_id || null;
+  const actId: string | null = profileRow?.act_id || null;
 
   try {
+    // No band → nothing can match (never fall back to every band's venues).
+    const venueIndex = actId
+      ? await loadVenueEmailIndex(admin, actId)
+      : { byAddress: new Map(), byDomain: new Map() };
+
     const messages = await fetchImapMessages(settings.imap_host, settings.imap_port || 993, settings.username, password);
 
     const enriched: InboxMessage[] = messages.map(m => {
-      const fromDomain = m.fromEmail.split('@')[1] || '';
-      let matched = venueEmailMap[m.fromEmail.toLowerCase()] || null;
-      // Fallback: match by domain against venue emails
-      if (!matched) {
-        for (const [email, venue] of Object.entries(venueEmailMap)) {
-          if (email.endsWith('@' + fromDomain)) { matched = venue; break; }
-        }
-      }
+      const matched = matchSenderToVenue(venueIndex, m.fromEmail);
       return {
         ...m,
         matchedVenueId:   matched?.id   || null,

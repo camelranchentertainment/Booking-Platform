@@ -17,11 +17,23 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 
 const ACT = 'act-1';
 
-function setup(role = 'band_admin') {
+function setup(role = 'band_admin', ownedVenues: string[] = []) {
   const profile: any = { select: () => profile, eq: () => profile, single: () => Promise.resolve({ data: { act_id: ACT, role } }) };
+  const venueChain = () => {
+    const f: Record<string, unknown> = {};
+    const c: any = {
+      select: () => c,
+      eq: (col: string, val: unknown) => { f[col] = val; return c; },
+      maybeSingle: () => Promise.resolve({
+        data: f.act_id === ACT && ownedVenues.includes(f.id as string) ? { id: f.id } : null,
+        error: null,
+      }),
+    };
+    return c;
+  };
   (getServiceClient as jest.Mock).mockReturnValue({
     auth: { getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'u-1' } } }) },
-    from: () => profile,
+    from: (t: string) => (t === 'venues' ? venueChain() : profile),
   });
 }
 function call(body: Record<string, unknown>) {
@@ -71,5 +83,20 @@ describe('/api/email/send', () => {
     const { req, r, status } = call({ ...base, actId: 'other-act' });
     await handler(req, r);
     expect(status).toHaveBeenCalledWith(403);
+  });
+
+  it('links the email to a venue the band owns', async () => {
+    setup('band_admin', ['v-own']);
+    const { req, r } = call({ ...base, venueId: 'v-own' });
+    await handler(req, r);
+    expect((sendActEmail as jest.Mock).mock.calls[0][0].venueId).toBe('v-own');
+  });
+
+  it('drops a venueId that belongs to another band but still sends', async () => {
+    setup('band_admin', ['v-own']);
+    const { req, r, status } = call({ ...base, venueId: 'v-other-band' });
+    await handler(req, r);
+    expect(status).toHaveBeenCalledWith(200);
+    expect((sendActEmail as jest.Mock).mock.calls[0][0].venueId).toBeUndefined();
   });
 });
