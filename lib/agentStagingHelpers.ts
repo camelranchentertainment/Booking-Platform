@@ -170,6 +170,12 @@ function formatItemLabel(item: { kind: string; proposal: Record<string, unknown>
       return `Email → ${p.recipient}: ${p.subject}`;
     case 'email_template_upsert':
       return `${p.replaces_existing ? 'Replaced' : 'Saved'} template: ${p.name}`;
+    case 'tour_update':
+      return describeTourUpdate(p as TourUpdateCard);
+    case 'personnel_upsert':
+      return `Roster: ${(p.name as string | undefined) ?? 'member'}${p.instrument_role ? ` (${p.instrument_role})` : ''}`;
+    case 'calendar_settings_update':
+      return `Calendar sync ${p.sync_enabled === false ? 'off' : 'on'}${p.calendar_name ? ` · "${p.calendar_name}"` : ''}`;
     default:
       return String(item.kind);
   }
@@ -206,9 +212,36 @@ export function formatPendingContextSummary(
         return `  • Email to ${p.recipient}: "${p.subject}"`;
       case 'email_template_upsert':
         return `  • Email template "${p.name}"${p.replaces_existing ? ' (replaces existing)' : ''}`;
+      case 'tour_update':
+        return `  • ${describeTourUpdate(p as TourUpdateCard)}`;
+      case 'personnel_upsert':
+        return `  • Roster: ${p.name ?? 'member'}`;
+      case 'calendar_settings_update':
+        return `  • Calendar sync settings`;
       default:
         return `  • ${r.action_type}`;
     }
   });
   return `Awaiting confirmation (${rows.length} staged item${rows.length !== 1 ? 's' : ''} — still pending):\n${lines.join('\n')}`;
+}
+
+// ── Card text shared by the agent route and the approval card ────────────────
+
+interface TourUpdateCard {
+  tour_name?: string;
+  changes?: Partial<Record<'name' | 'start_date' | 'end_date' | 'description' | 'status', string | null>>;
+  previous?: Partial<Record<'name' | 'start_date' | 'end_date' | 'description' | 'status', string | null>>;
+}
+
+/** One-line description of a staged tour edit. */
+export function describeTourUpdate(p: TourUpdateCard): string {
+  const c = p.changes ?? {};
+  const parts: string[] = [];
+  if (c.name !== undefined) parts.push(`rename to "${c.name}"`);
+  if (c.start_date !== undefined || c.end_date !== undefined) {
+    parts.push(`dates ${c.start_date ?? p.previous?.start_date ?? '?'} – ${c.end_date ?? p.previous?.end_date ?? '?'}`);
+  }
+  if (c.status !== undefined) parts.push(c.status === 'cancelled' ? 'cancel tour (shows unchanged)' : `status → ${c.status}`);
+  if (c.description !== undefined) parts.push('update description');
+  return `Tour "${p.tour_name ?? ''}": ${parts.join(', ') || 'no changes'}`;
 }

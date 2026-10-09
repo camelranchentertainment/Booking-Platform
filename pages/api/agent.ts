@@ -15,7 +15,11 @@ import {
   execStagePaymentSettle,
   execStageEmail,
   execStageEmailTemplate,
+  execStagePersonnelUpsert,
+  execStageCalendarSettingsUpdate,
 } from '../../lib/aiAgentTools';
+import { buildTourUpdatePayload } from '../../lib/server/agentTourActions';
+import { stageAction } from '../../lib/server/agentStage';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { buildInboxContext } from '../../lib/server/agentInboxContext';
 import { formatShowDate } from '../../lib/formatDate';
@@ -28,6 +32,7 @@ import {
   normalizeItemKey,
   isDuplicateInRows,
   formatPendingContextSummary,
+  describeTourUpdate,
 } from '../../lib/agentStagingHelpers';
 
 export const config = { api: { bodyParser: { sizeLimit: '5mb' } } };
@@ -44,13 +49,13 @@ deflect to a separate help page, and do not say you don't know how the platform 
 You can: answer pipeline questions, summarise and act on the band's inbox, answer platform how-to questions, draft outreach, find venues, queue
 bulk email batches (with user approval first), propose creating tours, adding/updating shows, travel
 days, tour notes, projected expenses, recording payments received, composing individual emails to
-venue contacts, and saving reusable email templates (all with user approval first — you never write
-directly).
+venue contacts, saving reusable email templates, editing or cancelling tours, managing the band roster,
+and turning calendar sync on/off (all with user approval first — you never write directly).
 
 CRITICAL FORMATTING RULE:
 When the user asks to send bulk outreach, find venues in a city/region, add/update anything about a
-tour (shows, travel days, tour notes, expenses), record a payment, compose an email to a venue, OR save
-an email template,
+tour (shows, travel days, tour notes, expenses), record a payment, compose an email to a venue, save
+an email template, edit a tour, change the roster, OR change calendar sync,
 respond ONLY with valid JSON in the exact shape for that action. Output the raw JSON object only —
 no markdown code fences (no \`\`\`), no text before or after it. For ALL other messages: respond with
 plain text only — no JSON, no wrapper.
@@ -135,6 +140,24 @@ the parts that change per venue as bracketed blanks the user replaces, e.g. [Ven
 give a title, choose a short clear one and say what you called it. Saving a template does not send
 anything. If a template with that title already exists, the approval card says it will be replaced.
 
+To EDIT a TOUR itself ("rename the fall run", "move the Texas tour to start Nov 3", "cancel the spring
+tour", "mark the Sturgis tour completed"), use the tour's id from the "Tours" section of your context and
+include only the fields that change:
+{"reply":"<conversational text>","action":{"type":"tour_update","tour_id":"<id from Tours>","name":"<new name>","start_date":"YYYY-MM-DD","end_date":"YYYY-MM-DD","description":"<text>","status":"planning|active|completed|cancelled"}}
+Cancelling a tour changes only the tour's status — its shows stay as they are. If the user also wants
+the shows cancelled, stage those separately as "show" items with "status":"cancelled". Tour notes still
+use the tour_notes item. To create a brand-new tour use tour_create.
+
+To ADD or UPDATE someone on the band ROSTER ("add Mike on bass", "set Sarah's default pay to 150",
+"mark Tom inactive"):
+{"reply":"<conversational text>","action":{"type":"roster_upsert","personnel_id":"<id from Roster, only when updating>","name":"<name>","instrument_role":"<e.g. Bass>","default_pay_amount":150,"phone":"<phone>","email":"<email>","is_active":true}}
+Include only fields the user gave. Use personnel_id from the "Roster" section to update an existing
+person; omit it to add someone new. Adding to the roster does not invite them to log in.
+
+To turn Google Calendar SYNC on/off or rename the synced calendar:
+{"reply":"<conversational text>","action":{"type":"calendar_settings","sync_enabled":true,"calendar_name":"<name>"}}
+Include only what changes. This never touches calendar logins or keys.
+
 To CANCEL or UPDATE an existing show (not create a new one), find it in the "Tours" section or the
 "Standalone shows" section of your context — each show is listed with its real id (e.g. "id=abc123").
 Include that as "booking_id" on a "show" item, along with "status":"cancelled" (or whatever's changing).
@@ -204,24 +227,27 @@ WRITE (all writes require explicit user approval via staged-confirm — no direc
   ✓ Tours, Shows, Travel days, Tour notes
   ✓ Expenses — add new only
   ✓ Payments — record contracted fee or money received
-  ✓ Roster — add new members only (see Members lockout below)
   ✓ Bulk email — queued for review; every send requires the logged-in user's explicit approval
   ✓ Email templates — create new or replace one with the same title (save_template)
+  ✓ Tours — rename, change dates/description/status, cancel (tour_update)
+  ✓ Roster — add or update members' name, role, default pay, contact, active (roster_upsert)
+  ✓ Calendar sync — on/off and calendar name only (calendar_settings)
 
 HARD LOCKOUTS — NO ACCESS UNDER ANY CIRCUMSTANCES:
   ✗ Settings — cannot read or write anything here; not keys, not config, nothing
   ✗ Sign out — cannot trigger, suggest, or assist with signing out under any circumstance
   ✗ Theme toggle — cannot change the visual theme or light/dark mode setting
   ✗ Help page — cannot navigate the user to or open the Help section as an action
-  ✗ Members list / pay details — cannot list all members or read pay/contact info
+  ✗ Members' pay rates and contact details — you can see roster names and roles, never read pay
+    amounts, phone numbers or emails (you can still set them when the user tells you the value)
 
 Always confirm the list BEFORE sending or saving anything. Wait for explicit approval.`;
 
 // ── Build context string from live DB data ─────────────────────────────────────
 async function buildContext(service: ReturnType<typeof getServiceClient>, actId: string): Promise<string> {
   const today = new Date().toISOString().split('T')[0];
-  const [actRes, bookingsRes, toursRes] = await Promise.all([
-    service.from('acts').select('act_name, genre, bio, website').eq('id', actId).single(),
+  const [actRes, bookingsRes, toursRes, rosterRes] = await Promise.all([
+    service.from('acts').select('act_name, genre, bio, website, sync_enabled, calendar_name').eq('id', actId).single(),
     // Include cancelled bookings too — a "cancel this show" request needs to be able to
     // find and reference a show even if it was already marked cancelled, and the model
     // needs to see full tour rosters, not just a global next-5 cross-tour slice.
@@ -231,11 +257,16 @@ async function buildContext(service: ReturnType<typeof getServiceClient>, actId:
     service.from('tours')
       .select('id, name, status, start_date, end_date, routing_notes')
       .eq('act_id', actId).neq('status', 'cancelled').limit(20),
+    // Names and roles only — never pay rates or contact details.
+    service.from('act_personnel')
+      .select('id, name, instrument_role, is_active')
+      .eq('act_id', actId).order('name').limit(50),
   ]);
 
   const act = actRes.data;
   const bookings = bookingsRes.data || [];
   const tours = toursRes.data || [];
+  const roster = (rosterRes.data || []) as Array<{ id: string; name: string; instrument_role: string | null; is_active: boolean }>;
   const upcoming = bookings.filter((b: any) => ['confirmed', 'advancing'].includes(b.status) && b.show_date >= today).slice(0, 5);
   const pipeline = bookings.filter((b: any) => ['pitch', 'negotiation', 'hold'].includes(b.status));
 
@@ -283,6 +314,11 @@ async function buildContext(service: ReturnType<typeof getServiceClient>, actId:
     '',
     `Tours (${tours.length}) — full show detail per tour:`,
     ...tourLines,
+    '',
+    `Roster (${roster.length}) — names and roles only:`,
+    ...roster.map(r => `  - personnel_id=${r.id} ${r.name}${r.instrument_role ? ` (${r.instrument_role})` : ''}${r.is_active ? '' : ' [inactive]'}`),
+    '',
+    `Google Calendar sync: ${(act as any)?.sync_enabled ? 'ON' : 'OFF'}${(act as any)?.calendar_name ? ` · calendar name "${(act as any).calendar_name}"` : ''}`,
   ].filter(s => s !== null).join('\n');
 }
 
@@ -776,6 +812,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that template." });
+        }
+      }
+
+      if (parsed?.action?.type === 'tour_update') {
+        try {
+          const { type: _t, ...args } = parsed.action;
+          const payload = await buildTourUpdatePayload(service, actId, args);
+          const result = await stageAction(service, actId, user.id, 'tour_update', payload);
+          return res.status(200).json({
+            reply: parsed.reply || `${describeTourUpdate(payload)}. Review and confirm.`,
+            action: { type: 'stage_items', staged: [{ kind: 'tour_update', ...result }], errors: [], overflow: 0 },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that tour change." });
+        }
+      }
+
+      if (parsed?.action?.type === 'roster_upsert') {
+        const a = parsed.action;
+        try {
+          const result = await execStagePersonnelUpsert(actId, user.id, {
+            personnel_id: typeof a.personnel_id === 'string' && a.personnel_id ? a.personnel_id : undefined,
+            name: typeof a.name === 'string' ? a.name.trim() : undefined,
+            instrument_role: typeof a.instrument_role === 'string' ? a.instrument_role : undefined,
+            default_pay_amount: typeof a.default_pay_amount === 'number' && a.default_pay_amount >= 0 ? a.default_pay_amount : undefined,
+            phone: typeof a.phone === 'string' ? a.phone : undefined,
+            email: typeof a.email === 'string' ? a.email : undefined,
+            is_active: typeof a.is_active === 'boolean' ? a.is_active : undefined,
+          });
+          return res.status(200).json({
+            reply: parsed.reply || `Roster change for ${result.proposal.name || 'that member'} is ready. Review and confirm.`,
+            action: { type: 'stage_items', staged: [{ kind: 'personnel_upsert', ...result }], errors: [], overflow: 0 },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that roster change." });
+        }
+      }
+
+      if (parsed?.action?.type === 'calendar_settings') {
+        const a = parsed.action;
+        try {
+          const result = await execStageCalendarSettingsUpdate(actId, user.id, {
+            sync_enabled: typeof a.sync_enabled === 'boolean' ? a.sync_enabled : undefined,
+            calendar_name: typeof a.calendar_name === 'string' && a.calendar_name.trim() ? a.calendar_name.trim().slice(0, 120) : undefined,
+          });
+          return res.status(200).json({
+            reply: parsed.reply || 'Calendar setting change is ready. Review and confirm.',
+            action: { type: 'stage_items', staged: [{ kind: 'calendar_settings_update', ...result }], errors: [], overflow: 0 },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that calendar change." });
         }
       }
 
