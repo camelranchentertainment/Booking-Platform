@@ -1,4 +1,4 @@
--- supabase/migrations/20261009120000_beta_applications.sql
+-- supabase/migrations/20261009170000_beta_applications.sql
 -- Founding beta program: public applications for a free year of Band Admin.
 --
 -- * Applications are written and read ONLY through service-role API routes
@@ -9,7 +9,7 @@
 --   which takes a transaction-scoped advisory lock so two simultaneous
 --   approvals cannot both pass the count check.
 -- Apply manually after review. Never auto-run. Rollback:
---   supabase/migrations/rollback/20261009120000_beta_applications.down.sql
+--   supabase/migrations/rollback/20261009170000_beta_applications.down.sql
 
 begin;
 

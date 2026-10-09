@@ -1,5 +1,5 @@
--- supabase/migrations/rollback/20261009120000_beta_applications.down.sql
--- Reverses 20261009120000_beta_applications.sql.
+-- supabase/migrations/rollback/20261009170000_beta_applications.down.sql
+-- Reverses 20261009170000_beta_applications.sql.
 -- Refuses to drop the table while it holds applications, so applicant data is
 -- never lost by accident. Export the rows first if a rollback is truly needed.
 -- Free years already granted live on profiles.trial_ends_at and are untouched.

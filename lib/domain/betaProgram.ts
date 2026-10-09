@@ -27,7 +27,7 @@ const optionalText = (max: number) =>
 
 /**
  * Validates a public beta application. Limits mirror the CHECK constraints in
- * supabase/migrations/20261009120000_beta_applications.sql, so a payload that
+ * supabase/migrations/20261009170000_beta_applications.sql, so a payload that
  * passes here never trips a database constraint.
  */
 export const betaApplicationSchema = z.object({
