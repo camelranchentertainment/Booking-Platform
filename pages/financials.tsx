@@ -674,14 +674,16 @@ export default function Financials() {
                             onClick={() => setModal({ open: true, mode: 'edit', expense: e, saving: false, error: '' })}>
                             Edit
                           </button>
-                          <button className="btn btn-danger" style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
+                          <button className="btn btn-secondary" style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
+                            aria-label={`Archive expense ${e.category} on ${e.expense_date}`}
                             onClick={async () => {
-                              if (!confirm('Delete this expense?')) return;
-                              await fetch(`/api/expenses/${e.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${session}` } });
+                              if (!confirm('Archive this expense? It will be removed from your totals but kept on record.')) return;
+                              const res = await fetch(`/api/expenses/${e.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${session}` } });
+                              if (!res.ok) { alert('Could not archive that expense. Try again.'); return; }
                               loadExpenses(session);
                               loadAllExpenses(session);
                             }}>
-                            Delete
+                            Archive
                           </button>
                         </td>
                       </tr>

@@ -288,7 +288,11 @@ export default function BookingDetail() {
     const errors: string[] = [];
 
     const phase1 = await Promise.all([
-      ...toDelete.map(a => supabase.from('expenses').delete().eq('id', a.expenseId)),
+      // Removing someone's pay from a show archives the pay line (financial
+      // data is never deleted); archived lines drop out of totals.
+      ...toDelete.map(a => supabase.from('expenses')
+        .update({ archived_at: new Date().toISOString() })
+        .eq('id', a.expenseId)),
       ...toUpdate.map(p => supabase.from('expenses')
         .update({ amount: Number(p.pay_amount) })
         .eq('id', loadedMap.get(p.personnel_id)!.expenseId)),
@@ -363,6 +367,7 @@ export default function BookingDetail() {
         .eq('booking_id', id as string)
         .eq('personnel_id', member.id)
         .eq('category', 'member_pay')
+        .is('archived_at', null)
         .maybeSingle();
       if (existing) {
         await supabase.from('expenses').update({ amount }).eq('id', existing.id);
