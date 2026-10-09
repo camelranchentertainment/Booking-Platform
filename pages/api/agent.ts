@@ -14,6 +14,7 @@ import {
   execStageVenueAndBooking,
   execStagePaymentSettle,
   execStageEmail,
+  execStageEmailTemplate,
 } from '../../lib/aiAgentTools';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { buildInboxContext } from '../../lib/server/agentInboxContext';
@@ -42,12 +43,14 @@ deflect to a separate help page, and do not say you don't know how the platform 
 
 You can: answer pipeline questions, summarise and act on the band's inbox, answer platform how-to questions, draft outreach, find venues, queue
 bulk email batches (with user approval first), propose creating tours, adding/updating shows, travel
-days, tour notes, projected expenses, recording payments received, and composing individual emails to
-venue contacts (all with user approval first — you never write directly).
+days, tour notes, projected expenses, recording payments received, composing individual emails to
+venue contacts, and saving reusable email templates (all with user approval first — you never write
+directly).
 
 CRITICAL FORMATTING RULE:
 When the user asks to send bulk outreach, find venues in a city/region, add/update anything about a
-tour (shows, travel days, tour notes, expenses), record a payment, OR compose an email to a venue,
+tour (shows, travel days, tour notes, expenses), record a payment, compose an email to a venue, OR save
+an email template,
 respond ONLY with valid JSON in the exact shape for that action. Output the raw JSON object only —
 no markdown code fences (no \`\`\`), no text before or after it. For ALL other messages: respond with
 plain text only — no JSON, no wrapper.
@@ -123,6 +126,15 @@ To compose and send an individual email to a venue ("email the Rusty Rail", "sen
 category values: target, follow_up_1, follow_up_2, confirmation, decline, advance, thank_you, reply. WARNING: confirming this proposal sends a real email immediately to a real person outside the platform — make sure the subject, body, and recipient are correct before presenting this for approval.
 Never call stage_email without a real venue_id already confirmed via find_venue in this conversation. If the user hasn't specified which venue/show, or there are multiple matches, ask them to clarify first — do not guess, and do not stage with a missing or placeholder venue_id.
 
+To save a reusable email TEMPLATE ("save this as a template", "make a template for brewery pitches",
+"turn that email into a template called X"):
+{"reply":"<conversational text>","action":{"type":"save_template","name":"<short title the user will pick from a list>","subject":"<subject line, may be empty>","body":"<plain text body>"}}
+Templates load into the email window exactly as written — nothing is filled in automatically — so write
+the parts that change per venue as bracketed blanks the user replaces, e.g. [Venue Name], [Contact Name],
+[Date], [City]. Don't put a real venue's details into a template unless the user asks. If the user didn't
+give a title, choose a short clear one and say what you called it. Saving a template does not send
+anything. If a template with that title already exists, the approval card says it will be replaced.
+
 To CANCEL or UPDATE an existing show (not create a new one), find it in the "Tours" section or the
 "Standalone shows" section of your context — each show is listed with its real id (e.g. "id=abc123").
 Include that as "booking_id" on a "show" item, along with "status":"cancelled" (or whatever's changing).
@@ -194,6 +206,7 @@ WRITE (all writes require explicit user approval via staged-confirm — no direc
   ✓ Payments — record contracted fee or money received
   ✓ Roster — add new members only (see Members lockout below)
   ✓ Bulk email — queued for review; every send requires the logged-in user's explicit approval
+  ✓ Email templates — create new or replace one with the same title (save_template)
 
 HARD LOCKOUTS — NO ACCESS UNDER ANY CIRCUMSTANCES:
   ✗ Settings — cannot read or write anything here; not keys, not config, nothing
@@ -748,6 +761,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that email." });
+        }
+      }
+
+      if (parsed?.action?.type === 'save_template') {
+        const { name, subject, body } = parsed.action;
+        try {
+          const result = await execStageEmailTemplate(actId, user.id, { name, subject, body });
+          const p = result.proposal;
+          const verb = p.replaces_existing ? 'Replace the template' : 'Save a new template';
+          return res.status(200).json({
+            reply: parsed.reply || `${verb} "${p.name}". Review it and confirm to save.`,
+            action: { type: 'stage_items', staged: [{ kind: 'email_template_upsert', ...result }], errors: [], overflow: 0 },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that template." });
         }
       }
 

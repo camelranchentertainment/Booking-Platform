@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sendActEmail } from '../../../../lib/emailSend';
 import { syncBookingToGoogleCalendar } from '../../../../lib/calendarSync';
 import { isBandAdminRole } from '../../../../lib/server/requireBandAdmin';
+import { saveTemplate, templateSaveSchema, TemplateExistsError } from '../../../../lib/server/emailTemplates';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -375,6 +376,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           category: p.category || undefined,
         });
         result = { email_log_id, recipient: p.recipient, subject: p.subject };
+      } else if (staged.action_type === 'email_template_upsert') {
+        // Re-validate the stored payload; only overwrite when the card the user
+        // approved said it would replace an existing template.
+        const input = templateSaveSchema.parse({ name: p.name, subject: p.subject ?? '', body: p.body });
+        try {
+          const saved = await saveTemplate(supabase, profile.act_id, user.id, input, {
+            overwrite: p.replaces_existing === true,
+          });
+          result = { template_id: saved.template.id, name: saved.template.name, replaced: saved.replaced };
+        } catch (e) {
+          if (e instanceof TemplateExistsError) {
+            throw new Error(`${e.message} Ask the assistant again to replace it, or pick a different title.`);
+          }
+          throw e;
+        }
       } else {
         throw new Error(`Unknown action_type: ${staged.action_type}`);
       }
