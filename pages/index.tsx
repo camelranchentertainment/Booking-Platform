@@ -3,7 +3,6 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import ArtistSpotlight from '../components/public/ArtistSpotlight';
-import BetaOffer from '../components/public/BetaOffer';
 import BrandLogo from '../components/BrandLogo';
 
 const GOLD   = '#E07820';
@@ -978,8 +977,7 @@ export default function Home() {
           display: grid;
           gap: 4rem;
         }
-        .cr-agent-grid,
-        .cr-beta-grid {
+        .cr-agent-grid {
           display: grid;
           grid-template-columns: 1fr;
           gap: 2.5rem;
@@ -1004,7 +1002,6 @@ export default function Home() {
 
           .cr-features-grid { grid-template-columns: repeat(2, 1fr); }
           .cr-agent-grid   { grid-template-columns: 1.15fr 1fr; gap: 3.5rem; align-items: start; }
-          .cr-beta-grid    { grid-template-columns: 1.4fr 1fr; gap: 3.5rem; align-items: center; }
           .cr-booking-grid { grid-template-columns: 1fr 1fr; gap: 5rem; }
           .cr-footer-grid  { grid-template-columns: repeat(3, 1fr); }
           .cr-footer-bottom { flex-direction: row; justify-content: space-between; align-items: center; }
@@ -1019,7 +1016,6 @@ export default function Home() {
       <div style={{ minHeight: '100vh', background: BG, color: CREAM, fontFamily: 'var(--font-body)' }}>
         <Nav />
         <Hero />
-        <BetaOffer />
         <Problem />
         <AgentSection />
         <Features />
