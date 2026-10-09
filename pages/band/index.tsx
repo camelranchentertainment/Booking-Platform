@@ -7,7 +7,7 @@ import * as XLSX from 'xlsx';
 import { formatShowDate } from '../../lib/formatDate';
 import { STATUS_COLORS } from '../../lib/statusSync';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
-import { buildConfirmMessage } from '../../lib/agentStagingHelpers';
+import { buildConfirmMessage, describeTourUpdate, describeVenueUpsert, describeContactUpsert } from '../../lib/agentStagingHelpers';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -927,6 +927,10 @@ export default function BandDashboard() {
                         }
                       }
                       else if (item.kind === 'email_send') summary = `Email to ${p.recipient}${p.venue_name ? ` (${p.venue_name})` : ''}: ${p.subject}`;
+                      else if (item.kind === 'tour_update') summary = describeTourUpdate(p);
+                      else if (item.kind === 'venue_upsert') summary = describeVenueUpsert(p);
+                      else if (item.kind === 'contact_upsert') summary = describeContactUpsert(p);
+                      else if (item.kind === 'email_template_upsert') summary = `${p.replaces_existing ? 'Replace template' : 'New template'}: ${p.name}${p.subject ? ` · subject: ${p.subject}` : ''}`;
                       const hasConflicts = item.conflicts?.length > 0;
                       const conflictDetail = hasConflicts
                         ? item.conflicts.map((c: any) => `${c.venues?.name || 'another show'} [${c.status}]`).join(', ')
@@ -936,6 +940,14 @@ export default function BandDashboard() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{summary}</span>
                           </div>
+                          {item.kind === 'email_template_upsert' && p.body && (
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 460, whiteSpace: 'pre-wrap' }}>
+                              {String(p.body).slice(0, 200)}{String(p.body).length > 200 ? '…' : ''}
+                            </div>
+                          )}
+                          {item.kind === 'email_template_upsert' && p.replaces_existing && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Confirming overwrites your saved template with this title. Nothing is sent.</span>
+                          )}
                           {item.kind === 'email_send' && p.body && (
                             <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 460, whiteSpace: 'pre-wrap' }}>
                               {String(p.body).slice(0, 150)}{String(p.body).length > 150 ? '…' : ''}

@@ -74,6 +74,8 @@ export function normalizeItemKey(
       return `payment:${payload.booking_id ?? ''}`;
     case 'email_send':
       return `email:${String(payload.recipient ?? '').toLowerCase()}:${String(payload.subject ?? '').slice(0, 60).toLowerCase()}`;
+    case 'email_template_upsert':
+      return `email_template:${String(payload.name ?? '').toLowerCase().trim()}`;
     default:
       return `${action_type}:${JSON.stringify(payload).slice(0, 100)}`;
   }
@@ -166,6 +168,18 @@ function formatItemLabel(item: { kind: string; proposal: Record<string, unknown>
     }
     case 'email_send':
       return `Email → ${p.recipient}: ${p.subject}`;
+    case 'email_template_upsert':
+      return `${p.replaces_existing ? 'Replaced' : 'Saved'} template: ${p.name}`;
+    case 'tour_update':
+      return describeTourUpdate(p as TourUpdateCard);
+    case 'venue_upsert':
+      return describeVenueUpsert(p as VenueCard);
+    case 'contact_upsert':
+      return describeContactUpsert(p as ContactCard);
+    case 'personnel_upsert':
+      return `Roster: ${(p.name as string | undefined) ?? 'member'}${p.instrument_role ? ` (${p.instrument_role})` : ''}`;
+    case 'calendar_settings_update':
+      return `Calendar sync ${p.sync_enabled === false ? 'off' : 'on'}${p.calendar_name ? ` · "${p.calendar_name}"` : ''}`;
     default:
       return String(item.kind);
   }
@@ -200,9 +214,72 @@ export function formatPendingContextSummary(
         return `  • Payment update for ${(p.venue_name as string | undefined) ?? ''} ${(p.show_date as string | undefined) ?? ''}`.trimEnd();
       case 'email_send':
         return `  • Email to ${p.recipient}: "${p.subject}"`;
+      case 'email_template_upsert':
+        return `  • Email template "${p.name}"${p.replaces_existing ? ' (replaces existing)' : ''}`;
+      case 'tour_update':
+        return `  • ${describeTourUpdate(p as TourUpdateCard)}`;
+      case 'venue_upsert':
+        return `  • ${describeVenueUpsert(p as VenueCard)}`;
+      case 'contact_upsert':
+        return `  • ${describeContactUpsert(p as ContactCard)}`;
+      case 'personnel_upsert':
+        return `  • Roster: ${p.name ?? 'member'}`;
+      case 'calendar_settings_update':
+        return `  • Calendar sync settings`;
       default:
         return `  • ${r.action_type}`;
     }
   });
   return `Awaiting confirmation (${rows.length} staged item${rows.length !== 1 ? 's' : ''} — still pending):\n${lines.join('\n')}`;
+}
+
+// ── Card text shared by the agent route and the approval card ────────────────
+
+interface TourUpdateCard {
+  tour_name?: string;
+  changes?: Partial<Record<'name' | 'start_date' | 'end_date' | 'description' | 'status', string | null>>;
+  previous?: Partial<Record<'name' | 'start_date' | 'end_date' | 'description' | 'status', string | null>>;
+}
+
+/** One-line description of a staged tour edit. */
+export function describeTourUpdate(p: TourUpdateCard): string {
+  const c = p.changes ?? {};
+  const parts: string[] = [];
+  if (c.name !== undefined) parts.push(`rename to "${c.name}"`);
+  if (c.start_date !== undefined || c.end_date !== undefined) {
+    parts.push(`dates ${c.start_date ?? p.previous?.start_date ?? '?'} – ${c.end_date ?? p.previous?.end_date ?? '?'}`);
+  }
+  if (c.status !== undefined) parts.push(c.status === 'cancelled' ? 'cancel tour (shows unchanged)' : `status → ${c.status}`);
+  if (c.description !== undefined) parts.push('update description');
+  return `Tour "${p.tour_name ?? ''}": ${parts.join(', ') || 'no changes'}`;
+}
+
+interface VenueCard { mode?: 'create' | 'update'; venue_name?: string; changes?: Record<string, unknown> }
+interface ContactCard { mode?: 'create' | 'update'; venue_name?: string; contact_label?: string; changes?: Record<string, unknown> }
+
+const FIELD_LABELS: Record<string, string> = {
+  booking_contact: 'booking contact', venue_type: 'type', secondary_emails: 'extra emails',
+  backline_notes: 'backline notes', pay_notes: 'pay notes', live_music: 'live music',
+  first_name: 'first name', last_name: 'last name',
+};
+const fieldList = (changes: Record<string, unknown> = {}) =>
+  Object.keys(changes).map(k => FIELD_LABELS[k] ?? k).join(', ');
+
+/** One-line description of a staged venue create/edit. */
+export function describeVenueUpsert(p: VenueCard): string {
+  const c = p.changes ?? {};
+  if (p.mode === 'create') {
+    const where = [c.city, c.state].filter(Boolean).join(', ');
+    return `New venue: ${p.venue_name ?? ''}${where ? ` (${where})` : ''}${c.email ? ` · ${c.email}` : ''}`;
+  }
+  return `Update venue ${p.venue_name ?? ''}: ${fieldList(c)}`;
+}
+
+/** One-line description of a staged contact create/edit. */
+export function describeContactUpsert(p: ContactCard): string {
+  const c = p.changes ?? {};
+  if (p.mode === 'create') {
+    return `New contact at ${p.venue_name ?? 'venue'}: ${p.contact_label ?? ''}${c.email && c.email !== p.contact_label ? ` · ${c.email}` : ''}`;
+  }
+  return `Update contact ${p.contact_label ?? ''} (${p.venue_name ?? 'venue'}): ${fieldList(c)}`;
 }

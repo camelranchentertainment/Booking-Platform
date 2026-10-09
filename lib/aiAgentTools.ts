@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { findTemplateByName, templateSaveSchema } from './server/emailTemplates';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -215,7 +216,7 @@ export const STAGE_TOUR_INSERT_TOOL = {
 export async function execFindVenue(actId: string, args: { name?: string; city?: string }) {
   let query = supabase
     .from('venues')
-    .select('id, name, city, state, email, bookings(show_date)')
+    .select('id, name, city, state, email, phone, booking_contact, bookings(show_date), contacts(id, first_name, last_name, title, email)')
     .eq('act_id', actId)
     .limit(5);
   if (args.name) query = query.ilike('name', `%${args.name}%`);
@@ -854,4 +855,46 @@ export async function execStageEmail(
   if (stageErr) throw new Error(`Failed to stage proposal: ${stageErr.message}`);
 
   return { action_type: 'email_send' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// email_template_upsert — save a reusable email template for the band.
+// A DB write only (nothing is sent). The approval card says whether the
+// template is new or replaces one with the same title.
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Stages saving an email template. Validates the title/subject/body and
+ * records whether a template with that title already exists, so the card can
+ * say "Replace" vs "New" and the execute step only overwrites what the user
+ * saw and approved.
+ *
+ * @throws Error with a user-facing message when the input is invalid or the
+ *         lookup/stage write fails
+ */
+export async function execStageEmailTemplate(
+  actId: string,
+  userId: string,
+  args: { name?: unknown; subject?: unknown; body?: unknown },
+) {
+  const parsed = templateSaveSchema.safeParse({
+    name: typeof args.name === 'string' ? args.name : '',
+    subject: typeof args.subject === 'string' ? args.subject : '',
+    body: typeof args.body === 'string' ? args.body : '',
+  });
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message || 'That template is missing a title or body.');
+  }
+
+  const existing = await findTemplateByName(supabase, actId, parsed.data.name);
+  const payload = { ...parsed.data, replaces_existing: Boolean(existing) };
+
+  const { data: staged, error: stageErr } = await supabase
+    .from('ai_staged_actions')
+    .insert({ act_id: actId, created_by: userId, action_type: 'email_template_upsert', payload })
+    .select()
+    .single();
+  if (stageErr) throw new Error(`Failed to stage proposal: ${stageErr.message}`);
+
+  return { action_type: 'email_template_upsert' as const, staged_action_id: staged.id, proposal: payload, requires_confirmation: true };
 }

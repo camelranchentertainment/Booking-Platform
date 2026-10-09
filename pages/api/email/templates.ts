@@ -14,15 +14,9 @@ import { z } from 'zod';
 import { getServiceClient } from '../../../lib/supabase';
 import { requireBandAdmin } from '../../../lib/server/requireBandAdmin';
 import { AppError, withHandler } from '../../../lib/apiError';
+import { TEMPLATE_COLS, TemplateExistsError, saveTemplate, templateSaveSchema } from '../../../lib/server/emailTemplates';
 
-const TEMPLATE_COLS = 'id, name, subject, body, updated_at';
-
-const saveSchema = z.object({
-  name: z.string().trim().min(1, 'Give the template a title').max(120),
-  subject: z.string().max(300).default(''),
-  body: z.string().trim().min(1, 'The template is empty').max(50_000),
-  overwrite: z.boolean().optional(),
-});
+const saveSchema = templateSaveSchema.extend({ overwrite: z.boolean().optional() });
 
 const deleteSchema = z.object({ id: z.string().uuid() });
 
@@ -47,40 +41,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
     const parsed = saveSchema.safeParse(req.body);
     if (!parsed.success) throw new AppError(400, firstIssue(parsed.error));
-    const { name, subject, body, overwrite } = parsed.data;
-    const now = new Date().toISOString();
-
-    // Titles are unique per band, case-insensitively (matches the DB index).
-    const { data: existing } = await service
-      .from('email_templates')
-      .select('id')
-      .eq('act_id', actId)
-      .ilike('name', name.replace(/[%_\\]/g, m => `\\${m}`))
-      .maybeSingle();
-
-    if (existing && !overwrite) {
-      return res.status(409).json({ error: `A template called "${name}" already exists.`, code: 'EXISTS' });
+    const { overwrite, ...input } = parsed.data;
+    try {
+      const { template } = await saveTemplate(service, actId, userId, input, { overwrite });
+      return res.status(200).json({ template });
+    } catch (err) {
+      if (err instanceof TemplateExistsError) {
+        return res.status(409).json({ error: err.message, code: err.code });
+      }
+      throw err;
     }
-
-    if (existing) {
-      const { data, error } = await service
-        .from('email_templates')
-        .update({ name, subject, body, updated_at: now })
-        .eq('id', existing.id)
-        .eq('act_id', actId)
-        .select(TEMPLATE_COLS)
-        .single();
-      if (error) throw new AppError(500, 'Could not save the template');
-      return res.status(200).json({ template: data });
-    }
-
-    const { data, error } = await service
-      .from('email_templates')
-      .insert({ act_id: actId, user_id: userId, name, subject, body, created_at: now, updated_at: now })
-      .select(TEMPLATE_COLS)
-      .single();
-    if (error) throw new AppError(500, 'Could not save the template');
-    return res.status(200).json({ template: data });
   }
 
   if (req.method === 'DELETE') {
