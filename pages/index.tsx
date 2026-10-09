@@ -11,7 +11,14 @@ const BG     = '#0D1B2A';
 const DARK   = '#091725';
 const BORDER = 'rgba(224,120,32,0.13)';
 
-const NAV_LINKS = ['Features', 'How It Works', 'Contact'];
+// Each label points at a real section id on this page. The old "How It Works"
+// link targeted "#how it works", which matched no element.
+const NAV_LINKS: { label: string; href: string }[] = [
+  { label: 'AI Agent', href: '#ai-agent' },
+  { label: 'Features', href: '#features' },
+  { label: 'Pricing',  href: '#pricing' },
+  { label: 'Contact',  href: '#contact' },
+];
 
 
 /* ── Wordmark ─────────────────────────────────────────────── */
@@ -36,7 +43,7 @@ function Nav() {
       {/* Desktop links */}
       <div className="cr-nav-desktop" style={{ display: 'flex', alignItems: 'center', gap: '2.5rem' }}>
         {NAV_LINKS.map(l => (
-          <a key={l} href={`#${l.toLowerCase()}`} style={{
+          <a key={l.href} href={l.href} style={{
             color: 'rgba(239,224,189,0.55)', fontSize: '0.72rem',
             letterSpacing: '0.22em', textTransform: 'uppercase',
             textDecoration: 'none', transition: 'color 0.2s',
@@ -44,7 +51,7 @@ function Nav() {
             onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(239,224,189,0.55)')}
           >
-            {l}
+            {l.label}
           </a>
         ))}
         <Link href="/register" style={{
@@ -90,11 +97,11 @@ function Nav() {
           borderTop: `1px solid rgba(224,120,32,0.15)`,
         }}>
           {NAV_LINKS.map(l => (
-            <a key={l} href={`#${l.toLowerCase()}`} onClick={() => setOpen(false)} style={{
+            <a key={l.href} href={l.href} onClick={() => setOpen(false)} style={{
               color: 'rgba(239,224,189,0.55)', fontSize: '0.72rem',
               letterSpacing: '0.22em', textTransform: 'uppercase', textDecoration: 'none',
             }}>
-              {l}
+              {l.label}
             </a>
           ))}
           <Link href="/login" onClick={() => setOpen(false)} style={{
@@ -162,9 +169,20 @@ function Hero() {
           </h1>
 
           <div className="cr-hero-bottom">
-            <p style={{ maxWidth: '26rem', color: 'rgba(239,224,189,0.42)', fontSize: '0.88rem', lineHeight: 1.65 }}>
-              The complete booking platform for independent touring artists. Manage venues, run email campaigns, track every show from first pitch to final payment.
-            </p>
+            <div style={{ maxWidth: '28rem' }}>
+              <p style={{ color: 'rgba(239,224,189,0.62)', fontSize: '0.95rem', lineHeight: 1.65, margin: '0 0 1.25rem' }}>
+                The complete booking platform for independent touring acts — venues, outreach, tours, show day and money in one place, with an AI booking agent that does the legwork while you keep final say.
+              </p>
+              <p style={{
+                color: 'rgba(239,224,189,0.42)', fontSize: '0.82rem', lineHeight: 1.6, margin: 0,
+                paddingLeft: '0.9rem', borderLeft: `2px solid ${GOLD}`,
+              }}>
+                I booked bands for years off spreadsheets, text threads and memory. I built Camel Ranch Booking to be the organized system I wish I&rsquo;d had.
+                <span style={{ display: 'block', marginTop: '0.35rem', color: GOLD, fontSize: '0.72rem', letterSpacing: '0.18em', textTransform: 'uppercase' }}>
+                  — Scott, founder
+                </span>
+              </p>
+            </div>
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
               <Link href="/register" style={{
                 padding: '0.75rem 2rem', background: GOLD, color: BG,
@@ -201,31 +219,197 @@ function Hero() {
   );
 }
 
+/* ── Section eyebrow (shared) ─────────────────────────────── */
+function Eyebrow({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+      <div style={{ height: 1, width: 48, background: GOLD }} />
+      <span style={{ color: GOLD, letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase' }}>
+        {children}
+      </span>
+    </div>
+  );
+}
+
+const SECTION_H2: React.CSSProperties = {
+  fontFamily: 'var(--font-display)', fontWeight: 900,
+  lineHeight: 1, textTransform: 'uppercase', margin: '0 0 0.75rem',
+  fontSize: 'clamp(2rem,5vw,4rem)', letterSpacing: '-0.01em', color: CREAM,
+};
+
+/* ── The Problem ──────────────────────────────────────────── */
+const PROBLEMS = [
+  { title: 'The missed reply',          desc: 'A venue writes back, nobody sees it for a week, and the date goes to another act.' },
+  { title: 'The double-booked weekend', desc: 'Two people work the same dates from different lists.' },
+  { title: 'The show-day scramble',     desc: 'Everybody texts one person for the address and load-in time.' },
+  { title: 'The tax-time shrug',        desc: 'Nobody can say what was agreed, what got paid, or what the tour cost.' },
+];
+
+function Problem() {
+  return (
+    <section id="problem" style={{ borderTop: BORDER, background: BG }}>
+      <div className="cr-hero-content" style={{ paddingTop: '5rem', paddingBottom: '5rem' }}>
+        <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
+          <Eyebrow>Sound Familiar?</Eyebrow>
+          <h2 style={SECTION_H2}>Disorganization<br />Costs You Shows.</h2>
+          <p style={{ color: 'rgba(239,224,189,0.45)', fontSize: '0.95rem', lineHeight: 1.7, maxWidth: '38rem', margin: '0 0 2.5rem' }}>
+            Venue lists in a spreadsheet. Pitches buried in Gmail. Holds in a notes app. Set times in a group text. Payments in somebody&rsquo;s head. It works until it doesn&rsquo;t.
+          </p>
+          <div className="cr-features-grid">
+            {PROBLEMS.map(p => (
+              <div key={p.title} style={{ borderLeft: `2px solid ${GOLD}`, padding: '0.25rem 0 0.25rem 1.1rem' }}>
+                <div style={{
+                  fontFamily: 'var(--font-display)', fontSize: '1.3rem', letterSpacing: '0.03em',
+                  color: CREAM, lineHeight: 1.05, marginBottom: '0.5rem',
+                }}>
+                  {p.title}
+                </div>
+                <p style={{ fontSize: '0.86rem', color: 'rgba(239,224,189,0.5)', lineHeight: 1.6, margin: 0 }}>{p.desc}</p>
+              </div>
+            ))}
+          </div>
+          <p style={{ color: CREAM, fontSize: '1rem', lineHeight: 1.6, margin: '2.75rem 0 0', maxWidth: '38rem' }}>
+            Camel Ranch Booking puts all of it in one shared system your whole band works from.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ── AI Booking Agent ─────────────────────────────────────── */
+const AGENT_EXAMPLES = [
+  { say: 'What came in from venues this week?',                                  does: 'Sums up your replies and flags what needs an answer.' },
+  { say: 'Find venues in Tulsa for mid-July.',                                   does: 'Pulls live-music venues in that city for you to add.' },
+  { say: 'Add Omaha on the 10th and Des Moines on the 11th, load-in 5, set at 9.', does: 'Stages both shows on the tour with their times.' },
+  { say: 'Email the Rusty Nail and confirm the 14th.',                           does: 'Writes the confirmation to the right contact.' },
+  { say: 'Midtown paid us $800 tonight.',                                        does: 'Logs the payment as received on that show.' },
+];
+
+const AGENT_POINTS = [
+  'Reads venue replies and proposes the calendar or payment update they call for.',
+  'Catches duplicate shows and flags date conflicts.',
+  'Won’t act on instructions hidden in an email, and warns you about anything that looks like phishing.',
+  'Tells you when it doesn’t know something instead of guessing.',
+];
+
+function AgentSection() {
+  return (
+    <section id="ai-agent" style={{ borderTop: BORDER, background: DARK }}>
+      <div className="cr-hero-content" style={{ paddingTop: '5rem', paddingBottom: '5rem' }}>
+        <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
+          <Eyebrow>Your AI Booking Agent</Eyebrow>
+          <h2 style={SECTION_H2}>
+            Tell It What You Need.<br />
+            <span style={{ color: 'transparent', WebkitTextStroke: `1px ${GOLD}` }}>Approve It. Done.</span>
+          </h2>
+          <p style={{ color: 'rgba(239,224,189,0.45)', fontSize: '0.95rem', lineHeight: 1.7, maxWidth: '38rem', margin: '0 0 2.5rem' }}>
+            Every band admin gets an AI booking agent built into the dashboard. It knows your tours, shows, venues, inbox and money — and it does the work, not just the talking.
+          </p>
+
+          <div className="cr-agent-grid">
+            {/* Example conversation */}
+            <ul aria-label="Example requests to the AI booking agent" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {AGENT_EXAMPLES.map(ex => (
+                <li key={ex.say} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <div style={{
+                    alignSelf: 'flex-start', maxWidth: '90%',
+                    background: 'rgba(239,224,189,0.07)', border: '1px solid rgba(239,224,189,0.12)',
+                    color: CREAM, fontSize: '0.88rem', lineHeight: 1.5,
+                    padding: '0.6rem 0.9rem', borderRadius: '12px 12px 12px 2px',
+                  }}>
+                    &ldquo;{ex.say}&rdquo;
+                  </div>
+                  <div style={{
+                    alignSelf: 'flex-end', maxWidth: '90%',
+                    background: 'rgba(224,120,32,0.1)', border: `1px solid rgba(224,120,32,0.35)`,
+                    color: 'rgba(239,224,189,0.78)', fontSize: '0.84rem', lineHeight: 1.5,
+                    padding: '0.6rem 0.9rem', borderRadius: '12px 12px 2px 12px',
+                  }}>
+                    {ex.does}
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            {/* Trust + supporting points */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+              <div style={{ border: `1px solid ${GOLD}`, borderTopWidth: 3, background: 'rgba(224,120,32,0.06)', padding: '1.5rem' }}>
+                <div style={{
+                  fontFamily: 'var(--font-display)', fontSize: '1.6rem', letterSpacing: '0.03em',
+                  color: CREAM, lineHeight: 1, marginBottom: '0.6rem',
+                }}>
+                  Nothing happens until you approve it.
+                </div>
+                <p style={{ fontSize: '0.88rem', color: 'rgba(239,224,189,0.6)', lineHeight: 1.65, margin: 0 }}>
+                  Every show, email and payment the agent proposes comes to you as a card — one click to approve, or change it first.
+                </p>
+              </div>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                {AGENT_POINTS.map(pt => (
+                  <li key={pt} style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
+                    <span aria-hidden style={{ color: GOLD, fontSize: '0.75rem', marginTop: '0.2rem', flexShrink: 0 }}>✓</span>
+                    <span style={{ fontSize: '0.88rem', color: 'rgba(239,224,189,0.6)', lineHeight: 1.55 }}>{pt}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ── Features ─────────────────────────────────────────────── */
 const FEATURES = [
   {
     icon: '◈',
     title: 'Track Every Booking',
     sub: '9 pipeline stages',
-    desc: 'From first pitch to final advance — every booking moves through a clear pipeline so nothing falls through the cracks.',
+    desc: 'From first pitch to final settlement, every show moves through a clear pipeline so nothing falls through the cracks.',
   },
   {
     icon: '♪',
     title: 'Keep Your Band in Sync',
-    sub: 'Role-based portals',
-    desc: 'Every member sees their load-in time, set time, and venue details. No more group texts, no more "what time are we there?"',
+    sub: 'Free member access',
+    desc: 'Members see their load-in, set time, venue details and their own pay. No more group texts, no more "what time are we there?"',
   },
   {
     icon: '⟴',
     title: 'Build Your Tours',
     sub: 'Multi-city routing',
-    desc: 'Plan entire tour runs, route dates across cities, and see your full schedule in one place — confirmed and in progress.',
+    desc: 'Plan whole runs with show dates, travel days, notes and a projected budget, all in one view.',
   },
   {
     icon: '✉',
     title: 'Advance Like a Pro',
     sub: 'Show-day ready',
-    desc: 'Venue contacts, deal notes, hospitality, and stage details all stored and ready when show day arrives.',
+    desc: 'Venue contacts, deal notes, hospitality and stage details, stored and ready when show day arrives.',
+  },
+  {
+    icon: '⌖',
+    title: 'Find Your Next Room',
+    sub: 'Venue discovery',
+    desc: 'Search any city for live-music venues and build a database of contacts and history with every room.',
+  },
+  {
+    icon: '➚',
+    title: 'Pitch at Scale',
+    sub: 'Gmail outreach',
+    desc: 'Send from your own Gmail with AI-drafted pitches, follow-up templates and bulk sends to a whole tour. Replies sync back in.',
+  },
+  {
+    icon: '▦',
+    title: 'Your Schedule, Everywhere',
+    sub: 'Calendar sync',
+    desc: 'Shows sync to Google Calendar, and a subscribe link works in Apple, Outlook or any calendar app.',
+  },
+  {
+    icon: '$',
+    title: 'Know Your Numbers',
+    sub: 'Financials',
+    desc: 'Agreed fees, money received and road expenses by show, tour and year, ready for tax season.',
   },
 ];
 
@@ -310,14 +494,16 @@ const PRICING_TIERS: PricingTier[] = [
     role: 'band_admin',
     recommended: true,
     features: [
+      'AI booking agent',
       'Tour planning and management',
       'Venue discovery and database',
       'AI email outreach campaigns',
       'Booking pipeline management',
-      'Calendar with iCal export',
+      'Calendar sync and iCal subscribe link',
       'Financial tracking and history',
       'Band member management',
-      'Social media tools',
+      'Social posts and show posters',
+      'Import your past shows',
       'Show Day View for your crew',
     ],
   },
@@ -464,7 +650,7 @@ function SignUpCTA() {
             color: 'rgba(239,224,189,0.45)', fontSize: '1rem',
             lineHeight: 1.7, maxWidth: '34rem', margin: '0 auto 2.5rem',
           }}>
-            Free to start. Sign up as a band admin to manage your bookings, or join your band with an invite from your admin.
+            Set up your band in minutes: connect Gmail and your calendar, bring in your past shows, and invite the band. Free to start — no credit card.
           </p>
 
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -791,6 +977,12 @@ export default function Home() {
           display: grid;
           gap: 4rem;
         }
+        .cr-agent-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 2.5rem;
+        }
+        html { scroll-padding-top: 6rem; } /* keep anchored sections clear of the fixed nav */
         .cr-footer-grid {
           display: grid;
           gap: 2.5rem;
@@ -809,6 +1001,7 @@ export default function Home() {
           .cr-hero-bottom  { flex-direction: row; align-items: flex-end; justify-content: space-between; }
 
           .cr-features-grid { grid-template-columns: repeat(2, 1fr); }
+          .cr-agent-grid   { grid-template-columns: 1.15fr 1fr; gap: 3.5rem; align-items: start; }
           .cr-booking-grid { grid-template-columns: 1fr 1fr; gap: 5rem; }
           .cr-footer-grid  { grid-template-columns: repeat(3, 1fr); }
           .cr-footer-bottom { flex-direction: row; justify-content: space-between; align-items: center; }
@@ -823,6 +1016,8 @@ export default function Home() {
       <div style={{ minHeight: '100vh', background: BG, color: CREAM, fontFamily: 'var(--font-body)' }}>
         <Nav />
         <Hero />
+        <Problem />
+        <AgentSection />
         <Features />
 
         {/* Artist success stories */}
