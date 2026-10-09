@@ -130,7 +130,7 @@ export default function BookingDetail() {
           .eq('act_id', bookingActId).eq('is_active', true).order('name'),
         supabase.from('expenses')
           .select('id, personnel_id, amount, act_personnel(name, instrument_role)')
-          .eq('booking_id', id as string).not('personnel_id', 'is', null).eq('category', 'band_pay'),
+          .eq('booking_id', id as string).not('personnel_id', 'is', null).eq('category', 'band_pay').is('archived_at', null),
         supabase.from('booking_personnel')
           .select('id, personnel_id')
           .eq('booking_id', id as string),
