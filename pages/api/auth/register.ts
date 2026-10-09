@@ -1,6 +1,7 @@
 ﻿import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 import { validateRegistration } from '../../../lib/domain/registration';
+import { grantBetaYearOnRegistration } from '../../../lib/server/betaProgram';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -67,6 +68,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await admin.auth.admin.deleteUser(userId);
       return res.status(500).json({ error: linkErr.message });
     }
+
+    // Founding beta: an approved applicant gets their free year as soon as they sign up.
+    // Never throws, so sign-up cannot fail because of the beta program.
+    await grantBetaYearOnRegistration(admin, userId, email);
   }
 
   return res.status(200).json({ ok: true });
