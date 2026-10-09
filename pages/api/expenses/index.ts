@@ -65,6 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .from('expenses')
       .select('*')
       .eq('user_id', user.id)
+      .is('archived_at', null) // archived expenses are kept for the record, not shown or totalled
       .order('expense_date', { ascending: false });
 
     if (tour_id)    query = query.eq('tour_id', tour_id as string);
