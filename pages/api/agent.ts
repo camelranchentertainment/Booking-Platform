@@ -19,6 +19,7 @@ import {
   execStageCalendarSettingsUpdate,
 } from '../../lib/aiAgentTools';
 import { buildTourUpdatePayload } from '../../lib/server/agentTourActions';
+import { buildVenueUpsertPayload, buildContactUpsertPayload } from '../../lib/server/agentVenueActions';
 import { stageAction } from '../../lib/server/agentStage';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { buildInboxContext } from '../../lib/server/agentInboxContext';
@@ -33,6 +34,8 @@ import {
   isDuplicateInRows,
   formatPendingContextSummary,
   describeTourUpdate,
+  describeVenueUpsert,
+  describeContactUpsert,
 } from '../../lib/agentStagingHelpers';
 
 export const config = { api: { bodyParser: { sizeLimit: '5mb' } } };
@@ -50,12 +53,13 @@ You can: answer pipeline questions, summarise and act on the band's inbox, answe
 bulk email batches (with user approval first), propose creating tours, adding/updating shows, travel
 days, tour notes, projected expenses, recording payments received, composing individual emails to
 venue contacts, saving reusable email templates, editing or cancelling tours, managing the band roster,
-and turning calendar sync on/off (all with user approval first — you never write directly).
+turning calendar sync on/off, and adding or editing venues and venue contacts (all with user approval first — you never write directly).
 
 CRITICAL FORMATTING RULE:
 When the user asks to send bulk outreach, find venues in a city/region, add/update anything about a
 tour (shows, travel days, tour notes, expenses), record a payment, compose an email to a venue, save
-an email template, edit a tour, change the roster, OR change calendar sync,
+an email template, edit a tour, change the roster, change calendar sync, OR add/edit a venue or a venue
+contact,
 respond ONLY with valid JSON in the exact shape for that action. Output the raw JSON object only —
 no markdown code fences (no \`\`\`), no text before or after it. For ALL other messages: respond with
 plain text only — no JSON, no wrapper.
@@ -158,6 +162,17 @@ To turn Google Calendar SYNC on/off or rename the synced calendar:
 {"reply":"<conversational text>","action":{"type":"calendar_settings","sync_enabled":true,"calendar_name":"<name>"}}
 Include only what changes. This never touches calendar logins or keys.
 
+To ADD a new VENUE ("save Wire Road Brewing in Fayetteville, AR, booking@wireroad.beer"):
+{"reply":"<conversational text>","action":{"type":"venue_upsert","name":"<name>","city":"<city>","state":"<2-letter state>","address":"<street>","zip":"<zip>","phone":"<phone>","email":"<booking email>","website":"<url>","venue_type":"<bar, brewery, club...>","capacity":250,"booking_contact":"<booker's name>","notes":"<notes>","backline_notes":"<backline>","pay_notes":"<what they usually pay>","secondary_emails":["<other email>"],"live_music":true}}
+A new venue needs name, city and state — ask if any is missing. To EDIT a venue, call find_venue first,
+then send venue_upsert with "venue_id" and ONLY the fields that change. Never invent an id.
+
+To ADD or EDIT a CONTACT person at a venue ("add Sarah, sarah@x.com, as the booker at Dickson Street Pub"):
+{"reply":"<conversational text>","action":{"type":"contact_upsert","venue_id":"<id from find_venue>","contact_id":"<only when editing, from find_venue>","first_name":"<first>","last_name":"<last>","title":"<e.g. Talent Buyer>","email":"<email>","phone":"<phone>","notes":"<notes>","status":"not_contacted|pitched|responded|negotiating|booked|declined|do_not_contact"}}
+Call find_venue first to get venue_id (and contact_id when editing; existing contacts are listed under
+each venue). Saving a contact's email means their emails start showing in the inbox — after it's
+approved, tell the user to click "Check Gmail now" on the Email page to pull in their recent emails.
+
 To CANCEL or UPDATE an existing show (not create a new one), find it in the "Tours" section or the
 "Standalone shows" section of your context — each show is listed with its real id (e.g. "id=abc123").
 Include that as "booking_id" on a "show" item, along with "status":"cancelled" (or whatever's changing).
@@ -232,6 +247,8 @@ WRITE (all writes require explicit user approval via staged-confirm — no direc
   ✓ Tours — rename, change dates/description/status, cancel (tour_update)
   ✓ Roster — add or update members' name, role, default pay, contact, active (roster_upsert)
   ✓ Calendar sync — on/off and calendar name only (calendar_settings)
+  ✓ Venues — add new, edit details (venue_upsert); read via find_venue incl. saved contacts
+  ✓ Venue contacts — add or edit bookers/talent buyers (contact_upsert)
 
 HARD LOCKOUTS — NO ACCESS UNDER ANY CIRCUMSTANCES:
   ✗ Settings — cannot read or write anything here; not keys, not config, nothing
@@ -735,7 +752,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } else {
           const lines = venues.map((v: any) => {
             const dates = (v.bookings || []).map((b: any) => b.show_date).filter(Boolean).join(', ');
-            return `- ${v.name}${v.city ? ` (${v.city}${v.state ? `, ${v.state}` : ''})` : ''} — id: ${v.id}, email: ${v.email || 'none on file'}${dates ? `, show date(s): ${dates}` : ''}`;
+            const contacts = (v.contacts || []).map((c: any) => {
+              const nm = [c.first_name, c.last_name].filter(Boolean).join(' ') || '(no name)';
+              return `    · contact_id: ${c.id} ${nm}${c.title ? ` (${c.title})` : ''}${c.email ? ` <${c.email}>` : ''}`;
+            });
+            return [
+              `- ${v.name}${v.city ? ` (${v.city}${v.state ? `, ${v.state}` : ''})` : ''} — id: ${v.id}, email: ${v.email || 'none on file'}${v.phone ? `, phone: ${v.phone}` : ''}${v.booking_contact ? `, booking contact: ${v.booking_contact}` : ''}${dates ? `, show date(s): ${dates}` : ''}`,
+              ...contacts,
+            ].join('\n');
           }).join('\n');
           replyText = venues.length === 1
             ? `Found it:\n${lines}`
@@ -863,6 +887,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that calendar change." });
+        }
+      }
+
+      if (parsed?.action?.type === 'venue_upsert') {
+        try {
+          const { type: _t, ...args } = parsed.action;
+          const payload = await buildVenueUpsertPayload(service, actId, args);
+          const result = await stageAction(service, actId, user.id, 'venue_upsert', payload);
+          return res.status(200).json({
+            reply: parsed.reply || `${describeVenueUpsert(payload)}. Review and confirm.`,
+            action: { type: 'stage_items', staged: [{ kind: 'venue_upsert', ...result }], errors: [], overflow: 0 },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that venue." });
+        }
+      }
+
+      if (parsed?.action?.type === 'contact_upsert') {
+        try {
+          const { type: _t, ...args } = parsed.action;
+          const payload = await buildContactUpsertPayload(service, actId, args);
+          const result = await stageAction(service, actId, user.id, 'contact_upsert', payload);
+          return res.status(200).json({
+            reply: parsed.reply || `${describeContactUpsert(payload)}. Review and confirm.`,
+            action: { type: 'stage_items', staged: [{ kind: 'contact_upsert', ...result }], errors: [], overflow: 0 },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that contact." });
         }
       }
 

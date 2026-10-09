@@ -5,6 +5,7 @@ import { syncBookingToGoogleCalendar } from '../../../../lib/calendarSync';
 import { isBandAdminRole } from '../../../../lib/server/requireBandAdmin';
 import { saveTemplate, templateSaveSchema, TemplateExistsError } from '../../../../lib/server/emailTemplates';
 import { executeTourUpdate } from '../../../../lib/server/agentTourActions';
+import { executeVenueUpsert, executeContactUpsert } from '../../../../lib/server/agentVenueActions';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -379,6 +380,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         result = { email_log_id, recipient: p.recipient, subject: p.subject };
       } else if (staged.action_type === 'tour_update') {
         result = await executeTourUpdate(supabase, profile.act_id, p);
+      } else if (staged.action_type === 'venue_upsert') {
+        result = await executeVenueUpsert(supabase, profile.act_id, user.id, p);
+      } else if (staged.action_type === 'contact_upsert') {
+        result = await executeContactUpsert(supabase, profile.act_id, p);
       } else if (staged.action_type === 'email_template_upsert') {
         // Re-validate the stored payload; only overwrite when the card the user
         // approved said it would replace an existing template.
