@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 import { parseLocalDate } from '../lib/formatDate';
 import Link from 'next/link';
+import SignupCodesPanel from '../components/admin/SignupCodesPanel';
 
 const GOLD  = '#E07820';
 const ROLE_COLOR: Record<string, string> = {
@@ -596,6 +597,9 @@ export default function AdminPage() {
             </table>
           </div>
         </div>
+
+        {/* ── Signup codes ────────────────────────────────────────────────── */}
+        <SignupCodesPanel />
 
         {/* ── SECTION 3: Subscription Management ──────────────────────────── */}
         <SectionLabel>Subscription Management</SectionLabel>
