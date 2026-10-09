@@ -19,7 +19,7 @@ jest.mock('../../lib/supabase', () => {
   const buildChain = (data: unknown) => {
     const chain: Record<string, unknown> = {};
     const self = () => chain;
-    ['select', 'eq', 'neq', 'in', 'gt', 'gte', 'or', 'not', 'order', 'limit', 'ilike', 'update'].forEach(m => {
+    ['select', 'eq', 'neq', 'is', 'in', 'gt', 'gte', 'or', 'not', 'order', 'limit', 'ilike', 'update'].forEach(m => {
       chain[m] = self;
     });
     chain.then = (fn: (v: unknown) => unknown) => Promise.resolve({ data, error: null }).then(fn);

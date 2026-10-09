@@ -7,7 +7,7 @@ import * as XLSX from 'xlsx';
 import { formatShowDate } from '../../lib/formatDate';
 import { STATUS_COLORS } from '../../lib/statusSync';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
-import { buildConfirmMessage, describeTourUpdate, describeVenueUpsert, describeContactUpsert } from '../../lib/agentStagingHelpers';
+import { buildConfirmMessage, describeTourUpdate, describeVenueUpsert, describeContactUpsert, describeWrapup, describeExpenseUpdate } from '../../lib/agentStagingHelpers';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -930,6 +930,8 @@ export default function BandDashboard() {
                       else if (item.kind === 'tour_update') summary = describeTourUpdate(p);
                       else if (item.kind === 'venue_upsert') summary = describeVenueUpsert(p);
                       else if (item.kind === 'contact_upsert') summary = describeContactUpsert(p);
+                      else if (item.kind === 'booking_wrapup') summary = describeWrapup(p);
+                      else if (item.kind === 'expense_update' || item.kind === 'expense_archive') summary = describeExpenseUpdate({ kind: item.kind, ...p });
                       else if (item.kind === 'email_template_upsert') summary = `${p.replaces_existing ? 'Replace template' : 'New template'}: ${p.name}${p.subject ? ` · subject: ${p.subject}` : ''}`;
                       const hasConflicts = item.conflicts?.length > 0;
                       const conflictDetail = hasConflicts
