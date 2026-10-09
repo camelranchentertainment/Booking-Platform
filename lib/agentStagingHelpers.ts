@@ -176,6 +176,17 @@ function formatItemLabel(item: { kind: string; proposal: Record<string, unknown>
       return describeVenueUpsert(p as VenueCard);
     case 'contact_upsert':
       return describeContactUpsert(p as ContactCard);
+    case 'booking_wrapup':
+      return describeWrapup(p as WrapupCard);
+    case 'expense_update':
+    case 'expense_archive':
+      return describeExpenseUpdate({ kind: item.kind, ...(p as ExpenseCard) });
+    case 'email_archive':
+    case 'email_draft':
+    case 'member_invite':
+    case 'note_upsert':
+    case 'social_draft':
+      return describeOfficeAction(item.kind, p);
     case 'personnel_upsert':
       return `Roster: ${(p.name as string | undefined) ?? 'member'}${p.instrument_role ? ` (${p.instrument_role})` : ''}`;
     case 'calendar_settings_update':
@@ -222,6 +233,17 @@ export function formatPendingContextSummary(
         return `  • ${describeVenueUpsert(p as VenueCard)}`;
       case 'contact_upsert':
         return `  • ${describeContactUpsert(p as ContactCard)}`;
+      case 'booking_wrapup':
+        return `  • ${describeWrapup(p as WrapupCard)}`;
+      case 'expense_update':
+      case 'expense_archive':
+        return `  • ${describeExpenseUpdate({ kind: r.action_type, ...(p as ExpenseCard) })}`;
+      case 'email_archive':
+      case 'email_draft':
+      case 'member_invite':
+      case 'note_upsert':
+      case 'social_draft':
+        return `  • ${describeOfficeAction(r.action_type, p)}`;
       case 'personnel_upsert':
         return `  • Roster: ${p.name ?? 'member'}`;
       case 'calendar_settings_update':
@@ -282,4 +304,50 @@ export function describeContactUpsert(p: ContactCard): string {
     return `New contact at ${p.venue_name ?? 'venue'}: ${p.contact_label ?? ''}${c.email && c.email !== p.contact_label ? ` · ${c.email}` : ''}`;
   }
   return `Update contact ${p.contact_label ?? ''} (${p.venue_name ?? 'venue'}): ${fieldList(c)}`;
+}
+
+interface WrapupCard { venue_name?: string; show_date?: string | null; fields?: Record<string, unknown>; mark_completed?: boolean }
+interface ExpenseCard { kind?: 'expense_update' | 'expense_archive'; label?: string; changes?: Record<string, unknown> }
+
+/** One-line description of a staged post-show wrap-up. */
+export function describeWrapup(p: WrapupCard): string {
+  const f = p.fields ?? {};
+  const parts = [
+    f.attendance != null ? `${f.attendance} people` : null,
+    f.rating != null ? `${f.rating}/5` : null,
+    f.rebook_flag ? `rebook: ${f.rebook_flag}` : null,
+    f.would_return != null ? (f.would_return ? 'would return' : "wouldn't return") : null,
+    f.post_show_notes ? 'notes' : null,
+    f.venue_feedback ? 'venue feedback' : null,
+    p.mark_completed ? 'mark completed' : null,
+  ].filter(Boolean);
+  return `Wrap-up: ${p.venue_name || 'show'}${p.show_date ? ` ${p.show_date}` : ''} — ${parts.join(', ')}`;
+}
+
+/** One-line description of a staged expense edit or archive. */
+export function describeExpenseUpdate(p: ExpenseCard): string {
+  if (p.kind === 'expense_archive') return `Archive expense: ${p.label ?? ''} (kept for records, removed from totals)`;
+  const c = p.changes ?? {};
+  const parts = Object.entries(c).map(([k, v]) => `${k} → ${k === 'amount' ? `$${v}` : v ?? '(blank)'}`);
+  return `Edit expense ${p.label ?? ''}: ${parts.join(', ')}`;
+}
+
+/** One-line description of the office actions (inbox, drafts, invites, notes, social). */
+export function describeOfficeAction(kind: string, p: Record<string, unknown>): string {
+  switch (kind) {
+    case 'email_archive': {
+      const labels = (p.labels as string[] | undefined) ?? [];
+      return `Archive ${labels.length} email${labels.length === 1 ? '' : 's'}: ${labels.slice(0, 3).join('; ')}${labels.length > 3 ? '…' : ''}`;
+    }
+    case 'email_draft':
+      return `Save draft (not sent) to ${p.recipient}${p.venue_name ? ` (${p.venue_name})` : ''}: ${p.subject || '(no subject)'}`;
+    case 'member_invite':
+      return `Invite ${p.email} to log in as a band member${p.personnel_name ? ` (roster: ${p.personnel_name})` : ''} — sends an email`;
+    case 'note_upsert':
+      return `${p.mode === 'replace' ? 'Replace' : 'Add to'} note for ${p.note_date} [${p.visibility}]${p.tour_name ? ` · ${p.tour_name}` : ''}`;
+    case 'social_draft':
+      return `${p.replaces_existing ? 'Update' : 'New'} ${p.platform} draft for ${p.venue_name || 'show'}${p.show_date ? ` ${p.show_date}` : ''} (not posted)`;
+    default:
+      return kind;
+  }
 }

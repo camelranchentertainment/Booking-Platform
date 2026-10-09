@@ -67,7 +67,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .select('booking_id, personnel_id, amount')
       .in('booking_id', bookingIds)
       .in('personnel_id', personnelIds as string[])
-      .eq('category', 'band_pay');
+      .eq('category', 'band_pay')
+      .is('archived_at', null);
 
     for (const e of (expenses ?? [])) {
       expenseMap.set(`${e.booking_id}:${e.personnel_id}`, Number(e.amount));

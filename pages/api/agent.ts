@@ -20,6 +20,20 @@ import {
 } from '../../lib/aiAgentTools';
 import { buildTourUpdatePayload } from '../../lib/server/agentTourActions';
 import { buildVenueUpsertPayload, buildContactUpsertPayload } from '../../lib/server/agentVenueActions';
+import {
+  buildMoneyContext,
+  buildWrapupPayload,
+  buildExpenseUpdatePayload,
+  buildExpenseArchivePayload,
+} from '../../lib/server/agentMoneyActions';
+import {
+  buildOfficeContext,
+  buildEmailArchivePayload,
+  buildEmailDraftPayload,
+  buildMemberInvitePayload,
+  buildNotePayload,
+  buildSocialDraftPayload,
+} from '../../lib/server/agentOfficeActions';
 import { stageAction } from '../../lib/server/agentStage';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { buildInboxContext } from '../../lib/server/agentInboxContext';
@@ -36,6 +50,9 @@ import {
   describeTourUpdate,
   describeVenueUpsert,
   describeContactUpsert,
+  describeWrapup,
+  describeExpenseUpdate,
+  describeOfficeAction,
 } from '../../lib/agentStagingHelpers';
 
 export const config = { api: { bodyParser: { sizeLimit: '5mb' } } };
@@ -53,13 +70,16 @@ You can: answer pipeline questions, summarise and act on the band's inbox, answe
 bulk email batches (with user approval first), propose creating tours, adding/updating shows, travel
 days, tour notes, projected expenses, recording payments received, composing individual emails to
 venue contacts, saving reusable email templates, editing or cancelling tours, managing the band roster,
-turning calendar sync on/off, and adding or editing venues and venue contacts (all with user approval first — you never write directly).
+turning calendar sync on/off, adding or editing venues and venue contacts, answering money questions,
+logging post-show wrap-ups, editing or archiving expenses, archiving inbox emails, saving email drafts,
+inviting band members to log in, writing band notes, and drafting social posts (all with user approval first — you never write directly).
 
 CRITICAL FORMATTING RULE:
 When the user asks to send bulk outreach, find venues in a city/region, add/update anything about a
 tour (shows, travel days, tour notes, expenses), record a payment, compose an email to a venue, save
-an email template, edit a tour, change the roster, change calendar sync, OR add/edit a venue or a venue
-contact,
+an email template, edit a tour, change the roster, change calendar sync, add/edit a venue or a venue
+contact, log a show wrap-up, edit/archive an expense,
+archive emails, save an email draft, invite a member, write a note, OR draft a social post,
 respond ONLY with valid JSON in the exact shape for that action. Output the raw JSON object only —
 no markdown code fences (no \`\`\`), no text before or after it. For ALL other messages: respond with
 plain text only — no JSON, no wrapper.
@@ -173,6 +193,50 @@ Call find_venue first to get venue_id (and contact_id when editing; existing con
 each venue). Saving a contact's email means their emails start showing in the inbox — after it's
 approved, tell the user to click "Check Gmail now" on the Email page to pull in their recent emails.
 
+MONEY QUESTIONS ("what does the Ohio show pay?", "what did we earn in September?", "what's still owed?"):
+answer in plain text from the "Money" section of your context. Earned = money received on COMPLETED
+shows only; Potential = agreed amount on CONFIRMED UPCOMING shows only — use those definitions, never mix
+them. For a month or date range, add up the listed shows/expenses in that range and say which ones you
+counted. If something isn't in the Money section, say you don't see it rather than estimating.
+
+To log a POST-SHOW WRAP-UP for a show that has already happened ("Wire Road was packed, about 180
+people, 5 stars, we'd go back"):
+{"reply":"<conversational text>","action":{"type":"booking_wrapup","booking_id":"<id from context>","attendance":180,"rating":5,"would_return":true,"rebook_flag":"yes|no|maybe","venue_feedback":"<about the venue>","post_show_notes":"<about the show>","mark_completed":true}}
+Include only what the user said. Set mark_completed true when the show isn't marked completed yet.
+Money received after a show is still payment_settle, not the wrap-up.
+
+To EDIT an EXPENSE already logged (use expense_id from the Money section; only changed fields):
+{"reply":"<conversational text>","action":{"type":"expense_update","expense_id":"<id>","category":"<category>","amount":120.5,"expense_date":"YYYY-MM-DD","notes":"<notes>","status":"potential|confirmed"}}
+To REMOVE an expense, ARCHIVE it — financial records are never deleted; archived expenses drop out of
+totals but are kept:
+{"reply":"<conversational text>","action":{"type":"expense_archive","expense_id":"<id>"}}
+One expense per archive request. New expenses still use the expense item in stage_items.
+
+To ARCHIVE inbox emails ("archive the calendar invites", "clear out the test emails"), use email_id values
+from the Inbox section (max 10 per request):
+{"reply":"<conversational text>","action":{"type":"email_archive","email_ids":["<email_id>","<email_id>"]}}
+
+To SAVE an email as a DRAFT instead of sending it ("draft a reply to Maxine, don't send it yet"):
+{"reply":"<conversational text>","action":{"type":"email_draft","recipient":"<email>","subject":"<subject>","body":"<plain text body>","venue_id":"<id from find_venue, optional>","category":"reply"}}
+Drafts appear in the Drafts tab on the Email page for the user to finish and send. Use stage_email only
+when the user wants it sent now.
+
+To INVITE someone to log in to the band as a MEMBER ("invite Mike to the band, mike@x.com"):
+{"reply":"<conversational text>","action":{"type":"member_invite","email":"<email>","personnel_id":"<from Roster if they're on it, optional>"}}
+Approving sends them an invite email. You can only invite members — adding another admin is done by
+the user on the Members page.
+
+To WRITE a NOTE ("note that we need new strings before Tulsa", "add to today's notes: …"):
+{"reply":"<conversational text>","action":{"type":"note_upsert","note_date":"YYYY-MM-DD (default today)","content":"<text>","mode":"append|replace","visibility":"admin_only|band_admin|all_members","tour_id":"<optional, from Tours>"}}
+Default to mode "append" and visibility "admin_only" unless the user says to share it with the band
+(all_members) or other admins (band_admin). Only use "replace" when the user asks to replace the note.
+Existing notes are in the "Band notes" section.
+
+To DRAFT a SOCIAL POST for a confirmed show ("write an Instagram post for the Wire Road show"):
+{"reply":"<conversational text including the caption>","action":{"type":"social_draft","booking_id":"<booking_id from Social cards>","platform":"facebook|instagram|tiktok","caption":"<caption with any hashtags>"}}
+One platform per request. The draft is saved, NEVER posted — posting always needs the user's own
+approval click on the Socials page. Only shows listed under "Social cards" can get a draft.
+
 To CANCEL or UPDATE an existing show (not create a new one), find it in the "Tours" section or the
 "Standalone shows" section of your context — each show is listed with its real id (e.g. "id=abc123").
 Include that as "booking_id" on a "show" item, along with "status":"cancelled" (or whatever's changing).
@@ -229,18 +293,12 @@ READ (available from your context):
   ✓ Inbox — recent emails from saved venues/contacts (sender, date, subject, excerpt).
     Read-only; replies go out only through stage_email with user approval.
 
-  ✗ Financials / Fees / Payments / Earnings — NOT in your context. You cannot see
-    agreed_amount, actual_amount_received, payment_status, or any dollar figure attached
-    to a show. If the user asks about earnings, revenue, fees, or what a show pays, say
-    plainly: "I can't see financial data — that'll be available in a future update." Never
-    estimate, infer, or invent any dollar amount.
-  ✗ Expenses — NOT in your context. You cannot read existing expense entries. If the user
-    asks what expenses are logged, say you can't see them. You can still stage new expenses
-    for the user to confirm.
+  ✓ Money — per-show agreed/received amounts, payment status, deal type, year totals
+    (earned / potential / expenses) and recent expenses with ids. Band admins only; never
+    repeat money figures for anyone described as a band member.
 
 WRITE (all writes require explicit user approval via staged-confirm — no direct DB writes ever):
   ✓ Tours, Shows, Travel days, Tour notes
-  ✓ Expenses — add new only
   ✓ Payments — record contracted fee or money received
   ✓ Bulk email — queued for review; every send requires the logged-in user's explicit approval
   ✓ Email templates — create new or replace one with the same title (save_template)
@@ -249,6 +307,12 @@ WRITE (all writes require explicit user approval via staged-confirm — no direc
   ✓ Calendar sync — on/off and calendar name only (calendar_settings)
   ✓ Venues — add new, edit details (venue_upsert); read via find_venue incl. saved contacts
   ✓ Venue contacts — add or edit bookers/talent buyers (contact_upsert)
+  ✓ Show wrap-ups — attendance, rating, rebook, notes, mark completed (booking_wrapup)
+  ✓ Expenses — add (stage_items), edit (expense_update), archive (expense_archive); never delete
+  ✓ Inbox — archive emails (email_archive); save drafts without sending (email_draft)
+  ✓ Member invites — invite someone to log in as a band member (member_invite); never as admin
+  ✓ Notes — read recent band notes; add to or replace a day's note (note_upsert)
+  ✓ Social — read social cards and drafts; save caption drafts (social_draft); never post
 
 HARD LOCKOUTS — NO ACCESS UNDER ANY CIRCUMSTANCES:
   ✗ Settings — cannot read or write anything here; not keys, not config, nothing
@@ -687,12 +751,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // ── Build context with pending summary so model knows what was outstanding ───
-  const [context, inboxContext] = await Promise.all([
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const [context, inboxContext, moneyContext, officeContext] = await Promise.all([
     buildContext(service, actId),
     buildInboxContext(service, actId),
+    buildMoneyContext(service, actId, todayIso),
+    buildOfficeContext(service, actId, user.id, todayIso),
   ]);
   const pendingContextStr = formatPendingContextSummary(pendingRows ?? []);
-  const fullContext = [context, inboxContext, pendingContextStr].filter(Boolean).join('\n\n');
+  const fullContext = [context, moneyContext, inboxContext, officeContext, pendingContextStr].filter(Boolean).join('\n\n');
 
   const client = new Anthropic({ apiKey: anthropicKey });
   const messages: Anthropic.MessageParam[] = [...history, { role: 'user', content: message }];
@@ -915,6 +982,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that contact." });
+        }
+      }
+
+      if (parsed?.action?.type === 'booking_wrapup') {
+        try {
+          const { type: _t, ...args } = parsed.action;
+          const payload = await buildWrapupPayload(service, actId, args, todayIso);
+          const result = await stageAction(service, actId, user.id, 'booking_wrapup', payload);
+          return res.status(200).json({
+            reply: parsed.reply || `${describeWrapup(payload)}. Review and confirm.`,
+            action: { type: 'stage_items', staged: [{ kind: 'booking_wrapup', ...result }], errors: [], overflow: 0 },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that wrap-up." });
+        }
+      }
+
+      if (parsed?.action?.type === 'expense_update' || parsed?.action?.type === 'expense_archive') {
+        const kind = parsed.action.type as 'expense_update' | 'expense_archive';
+        try {
+          const { type: _t, ...args } = parsed.action;
+          const payload = kind === 'expense_update'
+            ? await buildExpenseUpdatePayload(service, actId, args)
+            : await buildExpenseArchivePayload(service, actId, args);
+          const result = await stageAction(service, actId, user.id, kind, payload);
+          return res.status(200).json({
+            reply: parsed.reply || `${describeExpenseUpdate({ kind, ...payload })}. Review and confirm.`,
+            action: { type: 'stage_items', staged: [{ kind, ...result }], errors: [], overflow: 0 },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that expense change." });
+        }
+      }
+
+      const OFFICE_ACTIONS = ['email_archive', 'email_draft', 'member_invite', 'note_upsert', 'social_draft'] as const;
+      type OfficeAction = (typeof OFFICE_ACTIONS)[number];
+      if ((OFFICE_ACTIONS as readonly string[]).includes(parsed?.action?.type)) {
+        const kind = parsed.action.type as OfficeAction;
+        try {
+          const { type: _t, ...args } = parsed.action;
+          const payload: Record<string, unknown> = kind === 'email_archive' ? { ...(await buildEmailArchivePayload(service, actId, args)) }
+            : kind === 'email_draft' ? { ...(await buildEmailDraftPayload(service, actId, args)) }
+            : kind === 'member_invite' ? { ...(await buildMemberInvitePayload(service, actId, args)) }
+            : kind === 'note_upsert' ? { ...(await buildNotePayload(service, actId, user.id, args, todayIso)) }
+            : { ...(await buildSocialDraftPayload(service, actId, args)) };
+          const result = await stageAction(service, actId, user.id, kind, payload);
+          return res.status(200).json({
+            reply: parsed.reply || `${describeOfficeAction(kind, payload)}. Review and confirm.`,
+            action: { type: 'stage_items', staged: [{ kind, ...result }], errors: [], overflow: 0 },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that." });
         }
       }
 

@@ -7,7 +7,7 @@ import * as XLSX from 'xlsx';
 import { formatShowDate } from '../../lib/formatDate';
 import { STATUS_COLORS } from '../../lib/statusSync';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
-import { buildConfirmMessage, describeTourUpdate, describeVenueUpsert, describeContactUpsert } from '../../lib/agentStagingHelpers';
+import { buildConfirmMessage, describeTourUpdate, describeVenueUpsert, describeContactUpsert, describeWrapup, describeExpenseUpdate, describeOfficeAction } from '../../lib/agentStagingHelpers';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -930,6 +930,9 @@ export default function BandDashboard() {
                       else if (item.kind === 'tour_update') summary = describeTourUpdate(p);
                       else if (item.kind === 'venue_upsert') summary = describeVenueUpsert(p);
                       else if (item.kind === 'contact_upsert') summary = describeContactUpsert(p);
+                      else if (item.kind === 'booking_wrapup') summary = describeWrapup(p);
+                      else if (item.kind === 'expense_update' || item.kind === 'expense_archive') summary = describeExpenseUpdate({ kind: item.kind, ...p });
+                      else if (['email_archive', 'email_draft', 'member_invite', 'note_upsert', 'social_draft'].includes(item.kind)) summary = describeOfficeAction(item.kind, p);
                       else if (item.kind === 'email_template_upsert') summary = `${p.replaces_existing ? 'Replace template' : 'New template'}: ${p.name}${p.subject ? ` · subject: ${p.subject}` : ''}`;
                       const hasConflicts = item.conflicts?.length > 0;
                       const conflictDetail = hasConflicts
@@ -940,6 +943,22 @@ export default function BandDashboard() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <span style={{ color: 'var(--text-primary)', fontSize: 13 }}>{summary}</span>
                           </div>
+                          {(item.kind === 'email_draft' || item.kind === 'note_upsert') && (p.body || p.content) && (
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 460, whiteSpace: 'pre-wrap' }}>
+                              {String(p.body || p.content).slice(0, 200)}{String(p.body || p.content).length > 200 ? '…' : ''}
+                            </div>
+                          )}
+                          {item.kind === 'note_upsert' && p.mode === 'replace' && p.existing_preview && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Replaces: {String(p.existing_preview)}</span>
+                          )}
+                          {item.kind === 'social_draft' && p.caption && (
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 460, whiteSpace: 'pre-wrap' }}>
+                              {String(p.caption).slice(0, 300)}{String(p.caption).length > 300 ? '…' : ''}
+                            </div>
+                          )}
+                          {item.kind === 'member_invite' && (
+                            <span style={{ fontSize: 11, color: 'var(--orange)' }}>⚠ Confirming emails an invite link to {String(p.email)}.</span>
+                          )}
                           {item.kind === 'email_template_upsert' && p.body && (
                             <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 460, whiteSpace: 'pre-wrap' }}>
                               {String(p.body).slice(0, 200)}{String(p.body).length > 200 ? '…' : ''}
