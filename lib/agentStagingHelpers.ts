@@ -181,6 +181,12 @@ function formatItemLabel(item: { kind: string; proposal: Record<string, unknown>
     case 'expense_update':
     case 'expense_archive':
       return describeExpenseUpdate({ kind: item.kind, ...(p as ExpenseCard) });
+    case 'email_archive':
+    case 'email_draft':
+    case 'member_invite':
+    case 'note_upsert':
+    case 'social_draft':
+      return describeOfficeAction(item.kind, p);
     case 'personnel_upsert':
       return `Roster: ${(p.name as string | undefined) ?? 'member'}${p.instrument_role ? ` (${p.instrument_role})` : ''}`;
     case 'calendar_settings_update':
@@ -232,6 +238,12 @@ export function formatPendingContextSummary(
       case 'expense_update':
       case 'expense_archive':
         return `  • ${describeExpenseUpdate({ kind: r.action_type, ...(p as ExpenseCard) })}`;
+      case 'email_archive':
+      case 'email_draft':
+      case 'member_invite':
+      case 'note_upsert':
+      case 'social_draft':
+        return `  • ${describeOfficeAction(r.action_type, p)}`;
       case 'personnel_upsert':
         return `  • Roster: ${p.name ?? 'member'}`;
       case 'calendar_settings_update':
@@ -318,4 +330,24 @@ export function describeExpenseUpdate(p: ExpenseCard): string {
   const c = p.changes ?? {};
   const parts = Object.entries(c).map(([k, v]) => `${k} → ${k === 'amount' ? `$${v}` : v ?? '(blank)'}`);
   return `Edit expense ${p.label ?? ''}: ${parts.join(', ')}`;
+}
+
+/** One-line description of the office actions (inbox, drafts, invites, notes, social). */
+export function describeOfficeAction(kind: string, p: Record<string, unknown>): string {
+  switch (kind) {
+    case 'email_archive': {
+      const labels = (p.labels as string[] | undefined) ?? [];
+      return `Archive ${labels.length} email${labels.length === 1 ? '' : 's'}: ${labels.slice(0, 3).join('; ')}${labels.length > 3 ? '…' : ''}`;
+    }
+    case 'email_draft':
+      return `Save draft (not sent) to ${p.recipient}${p.venue_name ? ` (${p.venue_name})` : ''}: ${p.subject || '(no subject)'}`;
+    case 'member_invite':
+      return `Invite ${p.email} to log in as a band member${p.personnel_name ? ` (roster: ${p.personnel_name})` : ''} — sends an email`;
+    case 'note_upsert':
+      return `${p.mode === 'replace' ? 'Replace' : 'Add to'} note for ${p.note_date} [${p.visibility}]${p.tour_name ? ` · ${p.tour_name}` : ''}`;
+    case 'social_draft':
+      return `${p.replaces_existing ? 'Update' : 'New'} ${p.platform} draft for ${p.venue_name || 'show'}${p.show_date ? ` ${p.show_date}` : ''} (not posted)`;
+    default:
+      return kind;
+  }
 }

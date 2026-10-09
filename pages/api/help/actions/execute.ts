@@ -7,6 +7,13 @@ import { saveTemplate, templateSaveSchema, TemplateExistsError } from '../../../
 import { executeTourUpdate } from '../../../../lib/server/agentTourActions';
 import { executeVenueUpsert, executeContactUpsert } from '../../../../lib/server/agentVenueActions';
 import { executeWrapup, executeExpenseUpdate, executeExpenseArchive } from '../../../../lib/server/agentMoneyActions';
+import {
+  executeEmailArchive,
+  executeEmailDraft,
+  executeMemberInvite,
+  executeNote,
+  executeSocialDraft,
+} from '../../../../lib/server/agentOfficeActions';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -392,6 +399,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } else if (staged.action_type === 'expense_archive') {
         // Financial data is archived, never deleted.
         result = await executeExpenseArchive(supabase, profile.act_id, p);
+      } else if (staged.action_type === 'email_archive') {
+        result = await executeEmailArchive(supabase, profile.act_id, p);
+      } else if (staged.action_type === 'email_draft') {
+        result = await executeEmailDraft(supabase, profile.act_id, user.id, p);
+      } else if (staged.action_type === 'member_invite') {
+        // EXTERNAL SIDE EFFECT: sends an invite email. Member role only.
+        const { data: inviter } = await supabase
+          .from('profiles').select('display_name, agency_name').eq('id', user.id).maybeSingle();
+        const inviterName = inviter?.agency_name || inviter?.display_name || user.email || 'Your band';
+        result = await executeMemberInvite(supabase, profile.act_id, { id: user.id, name: inviterName }, p);
+      } else if (staged.action_type === 'note_upsert') {
+        result = await executeNote(supabase, profile.act_id, user.id, p);
+      } else if (staged.action_type === 'social_draft') {
+        // Saves a draft only; posting always needs its own approval on the Socials page.
+        result = await executeSocialDraft(supabase, profile.act_id, p);
       } else if (staged.action_type === 'email_template_upsert') {
         // Re-validate the stored payload; only overwrite when the card the user
         // approved said it would replace an existing template.

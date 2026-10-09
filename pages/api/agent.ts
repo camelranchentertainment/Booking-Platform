@@ -26,6 +26,14 @@ import {
   buildExpenseUpdatePayload,
   buildExpenseArchivePayload,
 } from '../../lib/server/agentMoneyActions';
+import {
+  buildOfficeContext,
+  buildEmailArchivePayload,
+  buildEmailDraftPayload,
+  buildMemberInvitePayload,
+  buildNotePayload,
+  buildSocialDraftPayload,
+} from '../../lib/server/agentOfficeActions';
 import { stageAction } from '../../lib/server/agentStage';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { buildInboxContext } from '../../lib/server/agentInboxContext';
@@ -44,6 +52,7 @@ import {
   describeContactUpsert,
   describeWrapup,
   describeExpenseUpdate,
+  describeOfficeAction,
 } from '../../lib/agentStagingHelpers';
 
 export const config = { api: { bodyParser: { sizeLimit: '5mb' } } };
@@ -62,13 +71,15 @@ bulk email batches (with user approval first), propose creating tours, adding/up
 days, tour notes, projected expenses, recording payments received, composing individual emails to
 venue contacts, saving reusable email templates, editing or cancelling tours, managing the band roster,
 turning calendar sync on/off, adding or editing venues and venue contacts, answering money questions,
-logging post-show wrap-ups, and editing or archiving expenses (all with user approval first — you never write directly).
+logging post-show wrap-ups, editing or archiving expenses, archiving inbox emails, saving email drafts,
+inviting band members to log in, writing band notes, and drafting social posts (all with user approval first — you never write directly).
 
 CRITICAL FORMATTING RULE:
 When the user asks to send bulk outreach, find venues in a city/region, add/update anything about a
 tour (shows, travel days, tour notes, expenses), record a payment, compose an email to a venue, save
 an email template, edit a tour, change the roster, change calendar sync, add/edit a venue or a venue
-contact, log a show wrap-up, OR edit/archive an expense,
+contact, log a show wrap-up, edit/archive an expense,
+archive emails, save an email draft, invite a member, write a note, OR draft a social post,
 respond ONLY with valid JSON in the exact shape for that action. Output the raw JSON object only —
 no markdown code fences (no \`\`\`), no text before or after it. For ALL other messages: respond with
 plain text only — no JSON, no wrapper.
@@ -201,6 +212,31 @@ totals but are kept:
 {"reply":"<conversational text>","action":{"type":"expense_archive","expense_id":"<id>"}}
 One expense per archive request. New expenses still use the expense item in stage_items.
 
+To ARCHIVE inbox emails ("archive the calendar invites", "clear out the test emails"), use email_id values
+from the Inbox section (max 10 per request):
+{"reply":"<conversational text>","action":{"type":"email_archive","email_ids":["<email_id>","<email_id>"]}}
+
+To SAVE an email as a DRAFT instead of sending it ("draft a reply to Maxine, don't send it yet"):
+{"reply":"<conversational text>","action":{"type":"email_draft","recipient":"<email>","subject":"<subject>","body":"<plain text body>","venue_id":"<id from find_venue, optional>","category":"reply"}}
+Drafts appear in the Drafts tab on the Email page for the user to finish and send. Use stage_email only
+when the user wants it sent now.
+
+To INVITE someone to log in to the band as a MEMBER ("invite Mike to the band, mike@x.com"):
+{"reply":"<conversational text>","action":{"type":"member_invite","email":"<email>","personnel_id":"<from Roster if they're on it, optional>"}}
+Approving sends them an invite email. You can only invite members — adding another admin is done by
+the user on the Members page.
+
+To WRITE a NOTE ("note that we need new strings before Tulsa", "add to today's notes: …"):
+{"reply":"<conversational text>","action":{"type":"note_upsert","note_date":"YYYY-MM-DD (default today)","content":"<text>","mode":"append|replace","visibility":"admin_only|band_admin|all_members","tour_id":"<optional, from Tours>"}}
+Default to mode "append" and visibility "admin_only" unless the user says to share it with the band
+(all_members) or other admins (band_admin). Only use "replace" when the user asks to replace the note.
+Existing notes are in the "Band notes" section.
+
+To DRAFT a SOCIAL POST for a confirmed show ("write an Instagram post for the Wire Road show"):
+{"reply":"<conversational text including the caption>","action":{"type":"social_draft","booking_id":"<booking_id from Social cards>","platform":"facebook|instagram|tiktok","caption":"<caption with any hashtags>"}}
+One platform per request. The draft is saved, NEVER posted — posting always needs the user's own
+approval click on the Socials page. Only shows listed under "Social cards" can get a draft.
+
 To CANCEL or UPDATE an existing show (not create a new one), find it in the "Tours" section or the
 "Standalone shows" section of your context — each show is listed with its real id (e.g. "id=abc123").
 Include that as "booking_id" on a "show" item, along with "status":"cancelled" (or whatever's changing).
@@ -273,6 +309,10 @@ WRITE (all writes require explicit user approval via staged-confirm — no direc
   ✓ Venue contacts — add or edit bookers/talent buyers (contact_upsert)
   ✓ Show wrap-ups — attendance, rating, rebook, notes, mark completed (booking_wrapup)
   ✓ Expenses — add (stage_items), edit (expense_update), archive (expense_archive); never delete
+  ✓ Inbox — archive emails (email_archive); save drafts without sending (email_draft)
+  ✓ Member invites — invite someone to log in as a band member (member_invite); never as admin
+  ✓ Notes — read recent band notes; add to or replace a day's note (note_upsert)
+  ✓ Social — read social cards and drafts; save caption drafts (social_draft); never post
 
 HARD LOCKOUTS — NO ACCESS UNDER ANY CIRCUMSTANCES:
   ✗ Settings — cannot read or write anything here; not keys, not config, nothing
@@ -712,13 +752,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // ── Build context with pending summary so model knows what was outstanding ───
   const todayIso = new Date().toISOString().slice(0, 10);
-  const [context, inboxContext, moneyContext] = await Promise.all([
+  const [context, inboxContext, moneyContext, officeContext] = await Promise.all([
     buildContext(service, actId),
     buildInboxContext(service, actId),
     buildMoneyContext(service, actId, todayIso),
+    buildOfficeContext(service, actId, user.id, todayIso),
   ]);
   const pendingContextStr = formatPendingContextSummary(pendingRows ?? []);
-  const fullContext = [context, moneyContext, inboxContext, pendingContextStr].filter(Boolean).join('\n\n');
+  const fullContext = [context, moneyContext, inboxContext, officeContext, pendingContextStr].filter(Boolean).join('\n\n');
 
   const client = new Anthropic({ apiKey: anthropicKey });
   const messages: Anthropic.MessageParam[] = [...history, { role: 'user', content: message }];
@@ -972,6 +1013,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that expense change." });
+        }
+      }
+
+      const OFFICE_ACTIONS = ['email_archive', 'email_draft', 'member_invite', 'note_upsert', 'social_draft'] as const;
+      type OfficeAction = (typeof OFFICE_ACTIONS)[number];
+      if ((OFFICE_ACTIONS as readonly string[]).includes(parsed?.action?.type)) {
+        const kind = parsed.action.type as OfficeAction;
+        try {
+          const { type: _t, ...args } = parsed.action;
+          const payload: Record<string, unknown> = kind === 'email_archive' ? { ...(await buildEmailArchivePayload(service, actId, args)) }
+            : kind === 'email_draft' ? { ...(await buildEmailDraftPayload(service, actId, args)) }
+            : kind === 'member_invite' ? { ...(await buildMemberInvitePayload(service, actId, args)) }
+            : kind === 'note_upsert' ? { ...(await buildNotePayload(service, actId, user.id, args, todayIso)) }
+            : { ...(await buildSocialDraftPayload(service, actId, args)) };
+          const result = await stageAction(service, actId, user.id, kind, payload);
+          return res.status(200).json({
+            reply: parsed.reply || `${describeOfficeAction(kind, payload)}. Review and confirm.`,
+            action: { type: 'stage_items', staged: [{ kind, ...result }], errors: [], overflow: 0 },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that." });
         }
       }
 
