@@ -60,9 +60,12 @@ export default function Register() {
     displayName: '',
     actName: '',
     inviteCode: '',
+    signupCode: '',
   });
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
+  // Set when a code was entered but could not be applied (e.g. all uses taken): sign-up still succeeded.
+  const [codeNotice, setCodeNotice] = useState('');
 
   useEffect(() => {
     const role = router.query.role as string;
@@ -97,7 +100,11 @@ export default function Register() {
       role: cfg!.apiRole,
       displayName: form.displayName,
     };
-    if (tier === 'band_admin') { body.planTier = 'band_admin'; body.actName = form.actName; }
+    if (tier === 'band_admin') {
+      body.planTier = 'band_admin';
+      body.actName = form.actName;
+      if (form.signupCode.trim()) body.signupCode = form.signupCode.trim();
+    }
 
     const apiRes = await fetch('/api/auth/register', {
       method: 'POST',
@@ -109,6 +116,13 @@ export default function Register() {
 
     const { error: signInErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
     if (signInErr) { setError(signInErr.message); setLoading(false); return; }
+
+    if (tier === 'band_admin' && form.signupCode.trim() && apiData.codeApplied === false) {
+      // Account exists and is signed in; tell them the code did not apply before moving on.
+      setCodeNotice('Your account is ready, but that code is no longer valid, so you have the standard 14-day free trial.');
+      setLoading(false);
+      return;
+    }
 
     if (tier === 'band_admin') router.replace('/band');
     else router.replace('/member');
@@ -247,11 +261,29 @@ export default function Register() {
                   <label className="field-label">Confirm Password *</label>
                   <input className="input" type="password" value={form.confirmPassword} onChange={set('confirmPassword')} placeholder="Repeat password" required />
                 </div>
-                {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
-                <button className="btn btn-lg" type="submit" disabled={loading}
-                  style={{ width: '100%', justifyContent: 'center', background: '#a78bfa', color: '#000', border: '1px solid #a78bfa' }}>
-                  {loading ? 'Creating account...' : 'Create Band Account'}
-                </button>
+                <div className="field">
+                  <label className="field-label" htmlFor="signup-code">Signup Code (optional)</label>
+                  <input
+                    id="signup-code" className="input" value={form.signupCode} onChange={set('signupCode')}
+                    placeholder="Have a code? Enter it here" autoComplete="off" autoCapitalize="characters"
+                    spellCheck={false} maxLength={40} disabled={!!codeNotice}
+                  />
+                </div>
+                {error && <div role="alert" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
+                {codeNotice ? (
+                  <>
+                    <div role="status" style={{ background: 'var(--bg-overlay)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '0.75rem', color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.5 }}>{codeNotice}</div>
+                    <button className="btn btn-lg" type="button" onClick={() => router.replace('/band')}
+                      style={{ width: '100%', justifyContent: 'center', background: '#a78bfa', color: '#000', border: '1px solid #a78bfa' }}>
+                      Continue
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn btn-lg" type="submit" disabled={loading}
+                    style={{ width: '100%', justifyContent: 'center', background: '#a78bfa', color: '#000', border: '1px solid #a78bfa' }}>
+                    {loading ? 'Creating account...' : 'Create Band Account'}
+                  </button>
+                )}
                 <div style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                   Band member?{' '}
                   <button type="button" onClick={() => setTier('member')} style={{ background: 'none', border: 'none', color: '#a78bfa', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>

@@ -1,12 +1,13 @@
 ﻿import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 import { validateRegistration } from '../../../lib/domain/registration';
-import { grantBetaYearOnRegistration } from '../../../lib/server/betaProgram';
+import { isValidSignupCodeShape, normalizeSignupCode } from '../../../lib/domain/signupCode';
+import { notifyCodeRedeemed, redeemSignupCode, signupCodeExists } from '../../../lib/server/signupCodes';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { email, password, role, displayName, actName, planTier } = req.body;
+  const { email, password, role, displayName, actName, planTier, signupCode } = req.body;
 
   const validation = validateRegistration({ email, password, role, displayName, planTier });
   if (!validation.valid) {
@@ -14,6 +15,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const admin = getServiceClient();
+
+  // Check the code BEFORE creating anything, so a typo can be fixed without a half-made account.
+  // Recognised-but-used-up codes are handled after sign-up (the account still gets the standard trial).
+  const code = normalizeSignupCode(signupCode);
+  if (code) {
+    let known = false;
+    try {
+      known = isValidSignupCodeShape(code) && (await signupCodeExists(admin, code));
+    } catch (err) {
+      console.error('[register] signup code lookup failed', err);
+      return res.status(500).json({ error: 'Could not check the code. Please try again.' });
+    }
+    if (!known) {
+      return res.status(400).json({
+        error: "That code isn't recognized. Check it and try again, or leave it blank to start the standard 14-day trial.",
+      });
+    }
+  }
 
   // Create auth user server-side — email_confirm skips the confirmation email entirely,
   // avoiding Supabase's email rate limit on the free tier.
@@ -68,11 +87,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await admin.auth.admin.deleteUser(userId);
       return res.status(500).json({ error: linkErr.message });
     }
+  }
 
-    // Founding beta: an approved applicant gets their free year as soon as they sign up.
-    // Never throws, so sign-up cannot fail because of the beta program.
-    await grantBetaYearOnRegistration(admin, userId, email);
+  if (code) {
+    const outcome = await applySignupCode(admin, code, userId, { email, displayName, actName: actName || null });
+    return res.status(200).json({ ok: true, ...outcome });
   }
 
   return res.status(200).json({ ok: true });
+}
+
+type CodeOutcome = { codeApplied: true; trialEndsAt: string } | { codeApplied: false };
+
+/**
+ * Applies the code after the account exists. Never throws and never fails sign-up:
+ * if the code ran out (or anything else goes wrong) the account simply keeps the
+ * standard 14-day trial, and codeApplied tells the page what to say.
+ */
+async function applySignupCode(
+  admin: ReturnType<typeof getServiceClient>,
+  code: string,
+  userId: string,
+  who: { email: string; displayName: string; actName: string | null },
+): Promise<CodeOutcome> {
+  try {
+    const outcome = await redeemSignupCode(admin, code, userId);
+    if (!outcome.ok) return { codeApplied: false };
+    await notifyCodeRedeemed(outcome.result, who);
+    return { codeApplied: true, trialEndsAt: outcome.result.trial_ends_at };
+  } catch (err) {
+    console.error('[register] applying signup code failed', { userId, err });
+    return { codeApplied: false };
+  }
 }
