@@ -74,6 +74,8 @@ export function normalizeItemKey(
       return `payment:${payload.booking_id ?? ''}`;
     case 'email_send':
       return `email:${String(payload.recipient ?? '').toLowerCase()}:${String(payload.subject ?? '').slice(0, 60).toLowerCase()}`;
+    case 'email_template_upsert':
+      return `email_template:${String(payload.name ?? '').toLowerCase().trim()}`;
     default:
       return `${action_type}:${JSON.stringify(payload).slice(0, 100)}`;
   }
@@ -166,6 +168,8 @@ function formatItemLabel(item: { kind: string; proposal: Record<string, unknown>
     }
     case 'email_send':
       return `Email → ${p.recipient}: ${p.subject}`;
+    case 'email_template_upsert':
+      return `${p.replaces_existing ? 'Replaced' : 'Saved'} template: ${p.name}`;
     default:
       return String(item.kind);
   }
@@ -200,6 +204,8 @@ export function formatPendingContextSummary(
         return `  • Payment update for ${(p.venue_name as string | undefined) ?? ''} ${(p.show_date as string | undefined) ?? ''}`.trimEnd();
       case 'email_send':
         return `  • Email to ${p.recipient}: "${p.subject}"`;
+      case 'email_template_upsert':
+        return `  • Email template "${p.name}"${p.replaces_existing ? ' (replaces existing)' : ''}`;
       default:
         return `  • ${r.action_type}`;
     }
