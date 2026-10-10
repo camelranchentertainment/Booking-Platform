@@ -15,6 +15,21 @@ const TIERS = [
   { role: 'member',    label: 'Band Member', icon: '◉', color: '#34d399', desc: 'Free via invite'       },
 ];
 
+/** Only same-site paths inside the agent workspace are honoured as ?next= targets. */
+function isBookerPath(path: string): boolean {
+  return /^\/booker(\/[A-Za-z0-9/_-]*)?(\?[^\s]*)?$/.test(path) && !path.startsWith('//');
+}
+
+/** True when the user has a Booking Agent workspace. Failures fall back to the normal landing. */
+async function hasBookerProfile(userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase.from('booker_profiles').select('id').eq('user_id', userId).is('deleted_at', null).maybeSingle();
+    return Boolean(data);
+  } catch {
+    return false;
+  }
+}
+
 export default function Login() {
   const router = useRouter();
   const [email, setEmail]         = useState('');
@@ -43,10 +58,11 @@ export default function Login() {
     if (!session?.user) { setError('Login failed. Please try again.'); setLoading(false); return; }
 
     let role = 'band_admin';
+    let hasAct = true;
     try {
       const profilePromise = supabase
         .from('profiles')
-        .select('role')
+        .select('role, act_id')
         .eq('id', session.user.id)
         .maybeSingle();
 
@@ -57,9 +73,19 @@ export default function Login() {
       const result = await Promise.race([profilePromise, timeoutPromise]);
       if (result && 'data' in result && result.data?.role) {
         role = result.data.role;
+        hasAct = Boolean(result.data.act_id);
       }
     } catch {
       // use default role
+    }
+
+    // Booking Agent workspace: a deep link into /booker wins; an account with no band
+    // but an agent profile (an agent-only account) lands on /booker.
+    const next = typeof router.query.next === 'string' ? router.query.next : '';
+    if (isBookerPath(next)) { window.location.href = next; return; }
+    if (role !== 'superadmin' && role !== 'member' && !hasAct && (await hasBookerProfile(session.user.id))) {
+      window.location.href = '/booker';
+      return;
     }
 
     if (role === 'superadmin') window.location.href = '/admin';
