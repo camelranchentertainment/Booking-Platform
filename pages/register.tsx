@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
@@ -203,6 +203,22 @@ export default function Register() {
               );
             })}
           </div>
+          <Link href="/booker/signup" style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem',
+            marginTop: '0.65rem', padding: '0.85rem 1rem',
+            border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',
+            background: 'var(--bg-panel)', textDecoration: 'none',
+          }}>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#33c9b0' }}>
+                ◈ I'm a Booking Agent
+              </span>
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                Book several bands? Create an agent workspace — $35/mo after your trial.
+              </span>
+            </span>
+            <span aria-hidden="true" style={{ color: '#33c9b0', fontWeight: 700 }}>→</span>
+          </Link>
         </div>
 
         {/* Step 2 — Form (only shown after tier is chosen) */}

@@ -17,6 +17,7 @@ const NAV_LINKS: { label: string; href: string }[] = [
   { label: 'AI Agent', href: '#ai-agent' },
   { label: 'Features', href: '#features' },
   { label: 'Pricing',  href: '#pricing' },
+  { label: 'For Agents', href: '/booking-agents' },
   { label: 'Contact',  href: '#contact' },
 ];
 
@@ -113,6 +114,43 @@ function Nav() {
         </div>
       )}
     </nav>
+  );
+}
+
+/* ── For Booking Agents strip ──────────────────────────────── */
+function AgentStrip() {
+  return (
+    <section aria-labelledby="agents-strip-h" style={{ borderTop: BORDER, background: BG }}>
+      <div className="cr-hero-content" style={{ paddingTop: '3.5rem', paddingBottom: '3.5rem' }}>
+        <div style={{
+          maxWidth: '68rem', margin: '0 auto', display: 'flex', flexWrap: 'wrap',
+          alignItems: 'center', justifyContent: 'space-between', gap: '1.5rem',
+          border: '1px solid rgba(51,201,176,0.35)', borderLeft: '3px solid #33c9b0',
+          background: 'rgba(51,201,176,0.05)', padding: '1.75rem 2rem',
+        }}>
+          <div style={{ maxWidth: '40rem' }}>
+            <div style={{ color: '#33c9b0', letterSpacing: '0.4em', fontSize: '0.68rem', textTransform: 'uppercase', marginBottom: '0.6rem' }}>For booking agents</div>
+            <h2 id="agents-strip-h" style={{
+              fontFamily: 'var(--font-display)', fontWeight: 900, lineHeight: 1,
+              textTransform: 'uppercase', margin: '0 0 0.6rem',
+              fontSize: 'clamp(1.6rem,3.5vw,2.6rem)', color: CREAM,
+            }}>
+              Book more than one band?
+            </h2>
+            <p style={{ color: 'rgba(239,224,189,0.55)', fontSize: '0.92rem', lineHeight: 1.65, margin: 0 }}>
+              The Booking Agent workspace puts every act you carry in one place: shows and holds, your venue book and contacts, and the commission each band owes you.
+            </p>
+          </div>
+          <Link href="/booking-agents" style={{
+            display: 'inline-block', padding: '0.9rem 2rem', background: '#33c9b0', color: BG,
+            fontWeight: 700, letterSpacing: '0.2em', fontSize: '0.75rem', textTransform: 'uppercase',
+            textDecoration: 'none', whiteSpace: 'nowrap',
+          }}>
+            Agent Workspace →
+          </Link>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -482,6 +520,10 @@ type PricingTier = {
   id: string; label: string; price: string; period: string;
   desc: string; color: string; role: string; recommended: boolean;
   features: string[]; note?: string;
+  /** Overrides the default /register?role=… sign-up link */
+  href?: string;
+  /** Overrides the default button label */
+  cta?: string;
 };
 const PRICING_TIERS: PricingTier[] = [
   {
@@ -523,6 +565,26 @@ const PRICING_TIERS: PricingTier[] = [
       'Band calendar access',
     ],
     note: 'Invited by your band manager',
+  },
+  {
+    id: 'booking_agent',
+    label: 'Booking Agent',
+    price: '$35',
+    period: '/month',
+    desc: 'For independent agents who book several bands',
+    color: '#33c9b0',
+    role: 'booking_agent',
+    recommended: false,
+    features: [
+      'Every band you carry in one workspace',
+      'This weekend across all your acts',
+      'Your own venue book and private contacts',
+      'Commission tracking per band',
+      'Bands don\'t need their own account',
+    ],
+    note: '20+ bands $45/mo · 50+ custom',
+    href: '/booking-agents',
+    cta: 'See Agent Workspace',
   },
 ];
 
@@ -593,7 +655,7 @@ function Pricing() {
                   {tier.note}
                 </div>
               )}
-              <Link href={`/register?role=${tier.role}`} style={{
+              <Link href={tier.href ?? `/register?role=${tier.role}`} style={{
                 display: 'block', textAlign: 'center',
                 padding: '0.75rem 1rem',
                 background: tier.recommended ? tier.color : 'transparent',
@@ -609,7 +671,7 @@ function Pricing() {
                   (e.currentTarget as HTMLAnchorElement).style.color = tier.recommended ? BG : tier.color;
                 }}
               >
-                {tier.price === 'Free' ? 'Join Your Band' : 'Start Free Trial'}
+                {tier.cta ?? (tier.price === 'Free' ? 'Join Your Band' : 'Start Free Trial')}
               </Link>
             </div>
           ))}
@@ -908,6 +970,15 @@ function Footer() {
             >
               Create Free Account →
             </Link>
+            <Link href="/booking-agents" style={{
+              color: 'rgba(239,224,189,0.52)', fontSize: '0.82rem',
+              textDecoration: 'none', display: 'block', marginBottom: '0.5rem', transition: 'color 0.2s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.color = CREAM)}
+              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(239,224,189,0.52)')}
+            >
+              For Booking Agents
+            </Link>
             <Link href="/login" style={{
               color: 'rgba(239,224,189,0.35)', fontSize: '0.82rem',
               textDecoration: 'none', transition: 'color 0.2s',
@@ -1043,6 +1114,7 @@ export default function Home() {
           <ArtistSpotlight />
         </section>
 
+        <AgentStrip />
         <Pricing />
         <SignUpCTA />
         <Footer />
