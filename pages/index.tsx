@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import ArtistSpotlight from '../components/public/ArtistSpotlight';
 import BrandLogo from '../components/BrandLogo';
+import SectionBackdrop from '../components/public/SectionBackdrop';
+import { HOME_BACKDROPS } from '../lib/homeBackdrops';
 
 const GOLD   = '#E07820';
 const CREAM  = '#EFE0BD';
@@ -247,7 +249,8 @@ const PROBLEMS = [
 
 function Problem() {
   return (
-    <section id="problem" style={{ borderTop: BORDER, background: BG }}>
+    <section id="problem" className="cr-has-backdrop" style={{ borderTop: BORDER, background: BG }}>
+      <SectionBackdrop photo={HOME_BACKDROPS.problem} side="right" opacity={0.24} />
       <div className="cr-hero-content" style={{ paddingTop: '5rem', paddingBottom: '5rem' }}>
         <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
           <Eyebrow>Sound Familiar?</Eyebrow>
@@ -295,7 +298,8 @@ const AGENT_POINTS = [
 
 function AgentSection() {
   return (
-    <section id="ai-agent" style={{ borderTop: BORDER, background: DARK }}>
+    <section id="ai-agent" className="cr-has-backdrop" style={{ borderTop: BORDER, background: DARK }}>
+      <SectionBackdrop photo={HOME_BACKDROPS.agent} side="left" opacity={0.18} />
       <div className="cr-hero-content" style={{ paddingTop: '5rem', paddingBottom: '5rem' }}>
         <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
           <Eyebrow>Your AI Booking Agent</Eyebrow>
@@ -415,7 +419,8 @@ const FEATURES = [
 
 function Features() {
   return (
-    <section id="features" style={{ borderTop: BORDER, background: DARK }}>
+    <section id="features" className="cr-has-backdrop" style={{ borderTop: BORDER, background: DARK }}>
+      <SectionBackdrop photo={HOME_BACKDROPS.features} side="right" opacity={0.24} />
       <div className="cr-hero-content" style={{ paddingBottom: '1rem', paddingTop: '5rem' }}>
         <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
@@ -528,7 +533,8 @@ const PRICING_TIERS: PricingTier[] = [
 
 function Pricing() {
   return (
-    <section id="pricing" style={{ borderTop: BORDER, background: DARK }}>
+    <section id="pricing" className="cr-has-backdrop" style={{ borderTop: BORDER, background: DARK }}>
+      <SectionBackdrop photo={HOME_BACKDROPS.pricing} side="right" opacity={0.26} />
       <div className="cr-hero-content" style={{ paddingTop: '5rem', paddingBottom: '1.5rem' }}>
         <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
@@ -622,10 +628,11 @@ function Pricing() {
 /* ── Sign-Up CTA ──────────────────────────────────────────── */
 function SignUpCTA() {
   return (
-    <section style={{
+    <section className="cr-has-backdrop" style={{
       position: 'relative', background: DARK,
       borderTop: BORDER, overflow: 'hidden',
     }}>
+      <SectionBackdrop photo={HOME_BACKDROPS.signup} side="center" opacity={0.3} />
       <div className="cr-hero-content" style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
         <div style={{ maxWidth: '52rem', margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1 }}>
 
@@ -982,6 +989,24 @@ export default function Home() {
           grid-template-columns: 1fr;
           gap: 2.5rem;
         }
+        /* Section background photos (components/public/SectionBackdrop.tsx).
+           The photo sits under everything else in the section. */
+        .cr-has-backdrop { position: relative; overflow: hidden; isolation: isolate; }
+        .cr-has-backdrop > :not(.cr-backdrop) { position: relative; z-index: 1; }
+        .cr-backdrop {
+          position: absolute; inset: 0; z-index: 0; pointer-events: none;
+          /* Phones: text runs full-width over the photo, so fade it further. */
+          opacity: calc(var(--cr-bd-opacity, 0.2) * 0.7);
+        }
+        .cr-backdrop-img {
+          position: absolute; inset: 0; width: 100%; height: 100%;
+          object-fit: cover;
+          /* Warm, muted treatment so every photo sits in the navy/orange palette. */
+          filter: grayscale(30%) sepia(35%) saturate(90%) contrast(1.05);
+        }
+        @media (prefers-contrast: more) {
+          .cr-backdrop { display: none; }
+        }
         html { scroll-padding-top: 6rem; } /* keep anchored sections clear of the fixed nav */
         .cr-footer-grid {
           display: grid;
@@ -1001,6 +1026,7 @@ export default function Home() {
           .cr-hero-bottom  { flex-direction: row; align-items: flex-end; justify-content: space-between; }
 
           .cr-features-grid { grid-template-columns: repeat(2, 1fr); }
+          .cr-backdrop     { opacity: var(--cr-bd-opacity, 0.2); }
           .cr-agent-grid   { grid-template-columns: 1.15fr 1fr; gap: 3.5rem; align-items: start; }
           .cr-booking-grid { grid-template-columns: 1fr 1fr; gap: 5rem; }
           .cr-footer-grid  { grid-template-columns: repeat(3, 1fr); }
@@ -1021,8 +1047,9 @@ export default function Home() {
         <Features />
 
         {/* Artist success stories */}
-        <section id="artists" style={{ borderTop: BORDER }}>
-          <div className="cr-hero-content" style={{ background: BG, paddingBottom: '1.5rem', paddingTop: '3.5rem' }}>
+        <section id="artists" className="cr-has-backdrop" style={{ borderTop: BORDER, background: BG }}>
+          <SectionBackdrop photo={HOME_BACKDROPS.artists} side="right" opacity={0.26} />
+          <div className="cr-hero-content" style={{ paddingBottom: '1.5rem', paddingTop: '3.5rem' }}>
             <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
                 <div style={{ height: 1, width: 48, background: GOLD }} />
