@@ -8,7 +8,7 @@
 // exists to give the person a clear message before anything is sent.
 
 import { z } from 'zod';
-import { DEAL_TYPES, PAYMENT_METHODS, ROSTER_STATUSES, SHOW_STATUSES } from './types';
+import { DEAL_TYPES, PAYMENT_METHODS, ROSTER_STATUSES, SHOW_STATUSES, VENUE_KINDS } from './types';
 import { isIsoDate } from './dates';
 
 /** Blank (or whitespace-only) input becomes null; otherwise trimmed. */
@@ -103,7 +103,10 @@ export type RosterBandInput = z.infer<typeof RosterBandSchema>;
 
 // ── Venue ───────────────────────────────────────────────────────────────────
 export const VenueSchema = z.object({
-  name: requiredText('Venue name', 160),
+  name: requiredText('Name', 160),
+  kind: z.enum(VENUE_KINDS).default('venue'),
+  email: optionalEmail('Email'),
+  phone: optionalText('Phone', 40),
   address: optionalText('Address', 200),
   city: optionalText('City', 100),
   state: optionalText('State', 100),
@@ -116,12 +119,13 @@ export type VenueInput = z.infer<typeof VenueSchema>;
 
 // ── Contact ─────────────────────────────────────────────────────────────────
 export const ContactSchema = z.object({
-  venue_id: optionalUuid,
+  venue_id: z.uuid('Choose a venue'),
   name: requiredText('Name', 120),
   title: optionalText('Title', 80),
   email: optionalEmail('Email'),
   phone: optionalText('Phone', 40),
   notes: optionalText('Notes', 5000),
+  share_with_bands: z.preprocess(v => v === true || v === 'true', z.boolean()).default(false),
 });
 export type ContactInput = z.infer<typeof ContactSchema>;
 

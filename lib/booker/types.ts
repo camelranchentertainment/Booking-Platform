@@ -16,6 +16,18 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export const ROSTER_STATUSES = ['active', 'inactive'] as const;
 export type RosterStatus = (typeof ROSTER_STATUSES)[number];
 
+/** Venue-book entries are venues, or the other kinds of buyer an agent books with. */
+export const VENUE_KINDS = ['venue', 'festival', 'fair', 'promoter', 'private_event'] as const;
+export type VenueKind = (typeof VENUE_KINDS)[number];
+
+export const VENUE_KIND_LABEL: Record<VenueKind, string> = {
+  venue: 'Venue',
+  festival: 'Festival',
+  fair: 'Fair',
+  promoter: 'Promoter',
+  private_event: 'Private event',
+};
+
 interface Timestamps {
   created_at: string;
   updated_at: string;
@@ -59,6 +71,11 @@ export interface BookerVenue extends Timestamps {
   capacity: number | null;
   website: string | null;
   notes: string | null;
+  kind: VenueKind;
+  place_id: string | null;
+  email: string | null;
+  phone: string | null;
+  last_scanned_at: string | null;
 }
 
 export interface BookerContact extends Timestamps {
@@ -70,6 +87,9 @@ export interface BookerContact extends Timestamps {
   email: string | null;
   phone: string | null;
   notes: string | null;
+  /** "Show to my bands" — off by default; bands never see a contact unless the agent ticks it */
+  share_with_bands: boolean;
+  source: 'manual' | 'website';
 }
 
 export interface BookerShow extends Timestamps {

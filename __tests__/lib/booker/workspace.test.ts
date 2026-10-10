@@ -46,7 +46,7 @@ const show = (over: Partial<BookerShow> = {}): BookerShow => ({
   ...over,
 });
 
-const venue: BookerVenue = { id: 'v1', booker_id: 'k', name: 'Saloon', address: null, city: 'Coleman', state: null, postal_code: null, capacity: null, website: null, notes: null, ...ts };
+const venue: BookerVenue = { id: 'v1', booker_id: 'k', name: 'Saloon', address: null, city: 'Coleman', state: null, postal_code: null, capacity: null, website: null, notes: null, kind: 'venue', place_id: null, email: null, phone: null, last_scanned_at: null, ...ts };
 const venues = byId([venue]);
 
 describe('venueLabel', () => {

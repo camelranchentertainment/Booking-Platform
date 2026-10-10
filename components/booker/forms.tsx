@@ -34,6 +34,8 @@ import {
   PAYMENT_METHOD_LABEL,
   SHOW_STATUSES,
   SHOW_STATUS_LABEL,
+  VENUE_KINDS,
+  VENUE_KIND_LABEL,
   type BookerContact,
   type BookerShow,
   type BookerVenue,
@@ -168,19 +170,36 @@ export function RosterBandForm({
   );
 }
 
-// ── Venue ───────────────────────────────────────────────────────────────────
-const VENUE_KEYS = ['name', 'address', 'city', 'state', 'postal_code', 'capacity', 'website', 'notes'] as const;
+// ── Venue / buyer ───────────────────────────────────────────────────────────
+const VENUE_KEYS = ['name', 'kind', 'address', 'city', 'state', 'postal_code', 'capacity', 'website', 'email', 'phone', 'notes'] as const;
 
 export function VenueForm({ venue, onClose, onSaved }: { venue?: BookerVenue; onClose: () => void; onSaved: (v: BookerVenue) => void }) {
   const { booker } = useBooker();
-  const f = useFormState(toFormValues(venue, VENUE_KEYS), VenueSchema, payload => (venue ? updateVenue(venue.id, payload) : createVenue(booker.id, payload)), onSaved);
+  const initial = toFormValues(venue, VENUE_KEYS);
+  if (!venue) initial.kind = 'venue';
+  const f = useFormState(initial, VenueSchema, payload => (venue ? updateVenue(venue.id, payload) : createVenue(booker.id, payload)), onSaved);
   return (
-    <Modal title={venue ? 'Edit venue' : 'Add a venue'} onClose={onClose} wide>
+    <Modal title={venue ? 'Edit details' : 'Add a venue or buyer'} onClose={onClose} wide>
       {f.formError && <ErrorBanner message={f.formError} />}
       <form onSubmit={f.submit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
-        <Field label="Venue name" required error={f.errors.name}>
-          {p => <input {...p} className="input" value={f.values.name} onChange={f.set('name')} />}
-        </Field>
+        <div className="grid-3">
+          <div style={{ gridColumn: 'span 2' }}>
+            <Field label="Name" required error={f.errors.name}>
+              {p => <input {...p} className="input" value={f.values.name} onChange={f.set('name')} />}
+            </Field>
+          </div>
+          <Field label="Type" error={f.errors.kind}>
+            {p => (
+              <select {...p} className="select" value={f.values.kind} onChange={f.set('kind')}>
+                {VENUE_KINDS.map(k => (
+                  <option key={k} value={k}>
+                    {VENUE_KIND_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+        </div>
         <Field label="Street address" error={f.errors.address}>
           {p => <input {...p} className="input" value={f.values.address} onChange={f.set('address')} autoComplete="street-address" />}
         </Field>
@@ -195,45 +214,54 @@ export function VenueForm({ venue, onClose, onSaved }: { venue?: BookerVenue; on
             {p => <input {...p} className="input" inputMode="numeric" value={f.values.postal_code} onChange={f.set('postal_code')} />}
           </Field>
         </div>
-        <div className="grid-2">
-          <Field label="Capacity" error={f.errors.capacity}>
-            {p => <input {...p} className="input" inputMode="numeric" value={f.values.capacity} onChange={f.set('capacity')} />}
-          </Field>
-          <Field label="Website" error={f.errors.website}>
+        <div className="grid-3">
+          <Field label="Website" hint="Needed to scan for contacts" error={f.errors.website}>
             {p => <input {...p} className="input" type="url" value={f.values.website} onChange={f.set('website')} placeholder="https://" />}
           </Field>
+          <Field label="Booking email" error={f.errors.email}>
+            {p => <input {...p} className="input" type="email" value={f.values.email} onChange={f.set('email')} />}
+          </Field>
+          <Field label="Phone" error={f.errors.phone}>
+            {p => <input {...p} className="input" type="tel" value={f.values.phone} onChange={f.set('phone')} />}
+          </Field>
         </div>
+        <Field label="Capacity" error={f.errors.capacity}>
+          {p => <input {...p} className="input" inputMode="numeric" value={f.values.capacity} onChange={f.set('capacity')} style={{ maxWidth: 200 }} />}
+        </Field>
         <Field label="Notes" hint="Private to you" error={f.errors.notes}>
           {p => <textarea {...p} className="textarea" value={f.values.notes} onChange={f.set('notes')} />}
         </Field>
-        <FormActions busy={f.busy} submitLabel={venue ? 'Save venue' : 'Add venue'} onCancel={onClose} />
+        <FormActions busy={f.busy} submitLabel={venue ? 'Save' : 'Add'} onCancel={onClose} />
       </form>
     </Modal>
   );
 }
 
-// ── Contact ─────────────────────────────────────────────────────────────────
-const CONTACT_KEYS = ['venue_id', 'name', 'title', 'email', 'phone', 'notes'] as const;
+// ── Contact (always on a venue) ─────────────────────────────────────────────
+const CONTACT_KEYS = ['venue_id', 'name', 'title', 'email', 'phone', 'notes', 'share_with_bands'] as const;
 
 export function ContactForm({
   contact,
-  venues,
-  defaultVenueId,
+  venueId,
+  venueName,
   onClose,
   onSaved,
 }: {
   contact?: BookerContact;
-  venues: BookerVenue[];
-  defaultVenueId?: string;
+  /** The venue this contact belongs to */
+  venueId: string;
+  venueName: string;
   onClose: () => void;
   onSaved: (c: BookerContact) => void;
 }) {
   const { booker } = useBooker();
   const initial = toFormValues(contact, CONTACT_KEYS);
-  if (!contact && defaultVenueId) initial.venue_id = defaultVenueId;
+  initial.venue_id = venueId;
+  initial.share_with_bands = contact?.share_with_bands ? 'true' : 'false';
   const f = useFormState(initial, ContactSchema, payload => (contact ? updateContact(contact.id, payload) : createContact(booker.id, payload)), onSaved);
+  const shared = f.values.share_with_bands === 'true';
   return (
-    <Modal title={contact ? 'Edit contact' : 'Add a contact'} onClose={onClose}>
+    <Modal title={contact ? 'Edit contact' : `Add a contact at ${venueName}`} onClose={onClose}>
       {f.formError && <ErrorBanner message={f.formError} />}
       <form onSubmit={f.submit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
         <div className="grid-2">
@@ -244,19 +272,6 @@ export function ContactForm({
             {p => <input {...p} className="input" value={f.values.title} onChange={f.set('title')} />}
           </Field>
         </div>
-        <Field label="Venue" error={f.errors.venue_id}>
-          {p => (
-            <select {...p} className="select" value={f.values.venue_id} onChange={f.set('venue_id')}>
-              <option value="">No venue</option>
-              {venues.map(v => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                  {v.city ? ` — ${v.city}` : ''}
-                </option>
-              ))}
-            </select>
-          )}
-        </Field>
         <div className="grid-2">
           <Field label="Email" error={f.errors.email}>
             {p => <input {...p} className="input" type="email" value={f.values.email} onChange={f.set('email')} />}
@@ -268,9 +283,20 @@ export function ContactForm({
         <Field label="Notes" error={f.errors.notes}>
           {p => <textarea {...p} className="textarea" value={f.values.notes} onChange={f.set('notes')} />}
         </Field>
-        <p className="text-xs text-muted" style={{ margin: 0 }}>
-          Contacts are private to you. Bands never see them.
-        </p>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={shared}
+            onChange={e => f.setValues(v => ({ ...v, share_with_bands: e.target.checked ? 'true' : 'false' }))}
+            style={{ width: 18, height: 18, marginTop: 2 }}
+          />
+          <span>
+            <span style={{ color: 'var(--text)', fontWeight: 800, fontSize: '0.9rem' }}>Show to my bands</span>
+            <span className="text-xs text-muted" style={{ display: 'block' }}>
+              Off: only you see this contact. On: bands you represent will be able to see it once they link to you.
+            </span>
+          </span>
+        </label>
         <FormActions busy={f.busy} submitLabel={contact ? 'Save contact' : 'Add contact'} onCancel={onClose} />
       </form>
     </Modal>
@@ -304,6 +330,7 @@ export function ShowForm({
   venues,
   defaultBandId,
   defaultDate,
+  defaultVenueId,
   conflictsFor,
   onClose,
   onSaved,
@@ -314,6 +341,8 @@ export function ShowForm({
   venues: BookerVenue[];
   defaultBandId?: string;
   defaultDate?: string;
+  /** Pre-select a saved venue (e.g. "Book a show here" on a venue profile) */
+  defaultVenueId?: string;
   /** Returns other active shows for the same band on the same date, to warn about double-booking. */
   conflictsFor?: (bandId: string, date: string, excludeId?: string) => BookerShow[];
   onClose: () => void;
@@ -329,6 +358,7 @@ export function ShowForm({
   if (!show) {
     initial.status = 'hold';
     if (defaultBandId) initial.roster_id = defaultBandId;
+    if (defaultVenueId) initial.venue_id = defaultVenueId;
     initial.show_date = defaultDate ?? '';
   }
   const f = useFormState(initial, ShowSchema, payload => (show ? updateShow(show.id, payload) : createShow(booker.id, payload)), onSaved);

@@ -128,6 +128,62 @@ export const createContact = (bookerId: string, input: ContactInput) =>
   insertOwned<BookerContact>('booker_contacts', bookerId, input, 'add the contact');
 export const updateContact = (id: string, input: ContactInput) => updateOwned<BookerContact>('booker_contacts', id, input, 'save the contact');
 export const archiveContact = (id: string) => archiveOwned<BookerContact>('booker_contacts', id, 'remove the contact');
+/** Sets whether a contact is shown to the agent's bands. */
+export const setContactShared = (id: string, share: boolean) =>
+  updateOwned<BookerContact>('booker_contacts', id, { share_with_bands: share }, share ? 'share the contact' : 'hide the contact');
+
+// ── Venue search (server routes: Google Places + website scan) ─────────────
+export interface VenueSearchResult {
+  place_id: string;
+  name: string;
+  address: string;
+  formatted_address: string;
+  city: string;
+  state: string;
+  rating: number | null;
+  user_ratings_total: number;
+  google_maps_url: string;
+  already_added: boolean;
+  venue_id: string | null;
+}
+
+export interface VenueScanResult {
+  filled: string[];
+  contactAdded: boolean;
+  pagesScanned: number;
+}
+
+async function callBookerApi<T>(path: string, init: RequestInit, action: string): Promise<T> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new BookerDataError('Your session has expired. Sign in again.');
+  let res: Response;
+  try {
+    res = await fetch(path, { ...init, headers: { ...(init.headers ?? {}), Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+  } catch {
+    throw new BookerDataError(`Could not ${action}. Check your connection and try again.`);
+  }
+  const body = (await res.json().catch(() => ({}))) as { error?: string } & T;
+  if (!res.ok) throw new BookerDataError(body.error ?? `Could not ${action}.`, String(res.status));
+  return body as T;
+}
+
+export function searchVenuesNear(city: string, state: string, kind?: string): Promise<VenueSearchResult[]> {
+  const q = new URLSearchParams({ city, state, ...(kind ? { kind } : {}) });
+  return callBookerApi<VenueSearchResult[]>(`/api/booker/venues/search?${q}`, { method: 'GET' }, 'search venues');
+}
+
+export function addVenueFromSearch(result: VenueSearchResult, kind: string): Promise<{ venue: BookerVenue; existed: boolean }> {
+  return callBookerApi(
+    '/api/booker/venues/add',
+    { method: 'POST', body: JSON.stringify({ place_id: result.place_id, name: result.name, address: result.address, city: result.city, state: result.state, kind }) },
+    'add the venue',
+  );
+}
+
+export function scanVenueWebsite(venueId: string): Promise<VenueScanResult> {
+  return callBookerApi('/api/booker/venues/scan', { method: 'POST', body: JSON.stringify({ venueId }) }, 'scan the website');
+}
 
 // ── Shows ───────────────────────────────────────────────────────────────────
 export interface ShowFilter {
