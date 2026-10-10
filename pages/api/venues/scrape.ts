@@ -1,8 +1,10 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+﻿import { NextApiRequest, NextApiResponse } from 'next';
 import FirecrawlApp from '@mendable/firecrawl-js';
 import Anthropic from '@anthropic-ai/sdk';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
+import { requireBandAdmin } from '../../../lib/server/requireBandAdmin';
+import { AppError } from '../../../lib/apiError';
 
 const EXTRACT_PROMPT = `You are extracting booking/contact information from a venue website.
 
@@ -44,18 +46,34 @@ function hasEmail(extracted: Record<string, any>): boolean {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  // Auth check — required to save contacts/venues
-  const token = req.headers.authorization?.replace('Bearer ', '');
+  // This route uses the service role (bypasses RLS), so it must check the caller
+  // itself: only a band admin may scan, and only their own band's venues.
   const service = getServiceClient();
-  const { data: { user } } = await service.auth.getUser(token || '');
-  if (!user) return res.status(401).json({ error: 'Session expired — please refresh the page and try again' });
-
-  const { data: profileRow } = await service
-    .from('profiles').select('act_id').eq('id', user.id).single();
-  const actId = profileRow?.act_id;
+  let actId: string;
+  try {
+    ({ actId } = await requireBandAdmin(req, service));
+  } catch (err) {
+    if (err instanceof AppError) {
+      const message = err.statusCode === 401 ? 'Session expired — please refresh the page and try again' : err.message;
+      return res.status(err.statusCode).json({ error: message });
+    }
+    throw err;
+  }
 
   const { url, venueId } = req.body;
   if (!url) return res.status(400).json({ error: 'url required' });
+
+  if (venueId !== undefined && venueId !== null) {
+    if (typeof venueId !== 'string') return res.status(400).json({ error: 'Invalid venueId' });
+    const { data: ownVenue, error: ownErr } = await service
+      .from('venues')
+      .select('id')
+      .eq('id', venueId)
+      .eq('act_id', actId)
+      .maybeSingle();
+    if (ownErr) return res.status(500).json({ error: 'Could not check the venue' });
+    if (!ownVenue) return res.status(404).json({ error: 'Venue not found' });
+  }
 
   let parsed: URL;
   try { parsed = new URL(url); }
@@ -140,13 +158,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (extracted.venue_type)         patch.venue_type = extracted.venue_type;
       if (extracted.notes)              patch.notes      = extracted.notes;
 
-      const { error: patchErr } = await service.from('venues').update(patch).eq('id', venueId);
+      const { error: patchErr } = await service.from('venues').update(patch).eq('id', venueId).eq('act_id', actId);
 
       // If last_enriched_at column doesn't exist yet, retry without it
       if (patchErr) {
         const { last_enriched_at: _dropped, ...patchWithoutEnriched } = patch;
         if (Object.keys(patchWithoutEnriched).length > 0) {
-          await service.from('venues').update(patchWithoutEnriched).eq('id', venueId);
+          await service.from('venues').update(patchWithoutEnriched).eq('id', venueId).eq('act_id', actId);
         }
       }
 
