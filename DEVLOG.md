@@ -1,5 +1,21 @@
 # Dev Log
 
+## 2026-10-09 — Booking Agent workspace, phases 1–2
+
+**Branches:** `feat/booker-db-foundation` (migration only) → `feat/booker-workspace` (pages, stacked on it)
+**Spec:** "Booking Agent Workspace — Spec" (Claude Docs). Code name for the role is **booker**; "agent" already means the AI assistant.
+
+- Separate workspace under `/booker/*` with its own shell (`components/booker/BookerShell.tsx`), same login and database. No existing page, table or policy changed.
+- Data: `booker_profiles`, `booker_roster`, `booker_venues`, `booker_contacts`, `booker_shows`, `booker_commission_payments`. RLS = owning agent only; composite FKs stop cross-agent references; no DELETE grant (archive via `deleted_at`).
+- Browser reads/writes go straight through RLS (`lib/booker/data.ts`); the only server route is `/api/booker/register` (agent-only sign-up, accepts signup codes).
+- Agent-only accounts are a normal `profiles` row (role `band_admin`, no `act_id`) plus a `booker_profiles` row. `pages/login.tsx` sends band-less accounts with an agent profile to `/booker` and honours `?next=/booker…`.
+- Existing users open `/booker` and set up the workspace in place.
+- Pricing tiers live in `lib/booker/pricing.ts` (1–19 bands $35, 20–49 $45, 50+ sales). Billing not wired yet.
+- Commission: earned on played shows (actual amount if entered, else fee); projected on confirmed future shows; totals per calendar year.
+
+**Not built yet (later phases):** linking to band accounts + read-only doorway, proposals, sharing checkboxes, multi-act events, agent Gmail, AI assistant in the workspace, Booking Agent billing, a band-side link into `/booker`.
+
+
 ## 2026-09-18 — Band Admin Dashboard Layout Redesign
 
 **Branch:** feature/band-dashboard-redesign  
