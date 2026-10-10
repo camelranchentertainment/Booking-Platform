@@ -34,6 +34,12 @@ describe('RosterBandSchema', () => {
 });
 
 describe('VenueSchema', () => {
+  it('defaults the type to venue and accepts festivals and promoters', () => {
+    expect(VenueSchema.parse({ name: 'Hall' }).kind).toBe('venue');
+    expect(VenueSchema.parse({ name: 'Fest', kind: 'festival' }).kind).toBe('festival');
+    expect(VenueSchema.safeParse({ name: 'X', kind: 'bar' }).success).toBe(false);
+  });
+
   it('requires a whole-number capacity', () => {
     expect(VenueSchema.safeParse({ name: 'Hall', capacity: '250.5' }).success).toBe(false);
     expect(VenueSchema.parse({ name: 'Hall', capacity: '250' }).capacity).toBe(250);
@@ -41,8 +47,13 @@ describe('VenueSchema', () => {
 });
 
 describe('ContactSchema', () => {
-  it('allows a contact with no venue', () => {
-    expect(ContactSchema.parse({ name: 'Pat', venue_id: '' }).venue_id).toBeNull();
+  it('requires a venue: contacts live on the venue profile', () => {
+    expect(ContactSchema.safeParse({ name: 'Pat', venue_id: '' }).success).toBe(false);
+  });
+
+  it('keeps contacts private unless the box is ticked', () => {
+    expect(ContactSchema.parse({ name: 'Pat', venue_id: UUID }).share_with_bands).toBe(false);
+    expect(ContactSchema.parse({ name: 'Pat', venue_id: UUID, share_with_bands: true }).share_with_bands).toBe(true);
   });
 });
 
