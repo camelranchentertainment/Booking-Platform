@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /band
+Disallow: /booker/
+Allow: /booker/signup
+
+Sitemap: https://camelranchbooking.com/sitemap.xml

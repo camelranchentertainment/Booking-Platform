@@ -11,8 +11,9 @@ const MUTED = 'rgba(224,120,32,0.55)';
 
 
 const TIERS = [
-  { role: 'band_admin', label: 'Band Admin',  icon: '♪', color: '#a78bfa', desc: '$18/mo · 14-day trial' },
-  { role: 'member',    label: 'Band Member', icon: '◉', color: '#34d399', desc: 'Free via invite'       },
+  { role: 'band_admin',    label: 'Band Admin',    icon: '♪', color: '#a78bfa', desc: '$18/mo · 14-day trial', href: '/register?role=band_admin' },
+  { role: 'member',        label: 'Band Member',   icon: '◉', color: '#34d399', desc: 'Free via invite',       href: '/register?role=member' },
+  { role: 'booking_agent', label: 'Booking Agent', icon: '◈', color: '#33c9b0', desc: 'Book several bands',    href: '/booker/signup' },
 ];
 
 /** Only same-site paths inside the agent workspace are honoured as ?next= targets. */
@@ -264,9 +265,9 @@ export default function Login() {
         }}>
           New here? Create an account
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '0.5rem' }}>
           {TIERS.map(t => (
-            <Link key={t.role} href={`/register?role=${t.role}`} style={{
+            <Link key={t.role} href={t.href} style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem',
               padding: '0.9rem 0.5rem',
               background: 'rgba(14,6,3,0.75)',
