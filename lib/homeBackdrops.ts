@@ -26,9 +26,19 @@ export interface BackdropPhoto {
   focus: string;
 }
 
-export type HomeSectionKey = 'problem' | 'agent' | 'features' | 'artists' | 'pricing' | 'signup';
+export type HomeSectionKey = 'hero' | 'problem' | 'agent' | 'features' | 'artists' | 'pricing' | 'signup';
 
 export const HOME_BACKDROPS: Readonly<Record<HomeSectionKey, BackdropPhoto>> = {
+  // Hero, right side (behind the ghost "CR") — looking down the rows into a
+  // rock amphitheater at night. Rendered blurred so it reads as a big outdoor
+  // show rather than an identifiable venue.
+  hero: {
+    id: 'photo-1518307944026-f2d91a0f087c',
+    subject: 'Night concert seen from high in a red-rock amphitheater',
+    photographer: 'Ryan Loughlin',
+    sourceUrl: 'https://unsplash.com/photos/landscaped-photo-of-a-concert-sZhVIOMOwiw',
+    focus: '50% 55%',
+  },
   // "Disorganization Costs You Shows" — a desk buried in paper.
   problem: {
     id: 'photo-1566699270403-3f7e3f340664',
