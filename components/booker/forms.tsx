@@ -44,6 +44,8 @@ import {
 } from '../../lib/booker/types';
 import { toFormValues } from '../../lib/booker/useLoad';
 import { todayIso } from '../../lib/booker/dates';
+import { mergeVenues } from '../../lib/booker/venueSearch';
+import VenueSearchPanel from './VenueSearchPanel';
 import { ErrorBanner, Field, FormActions, Modal } from './ui';
 import { useBooker } from './BookerShell';
 
@@ -367,6 +369,20 @@ export function ShowForm({
   const usingSavedVenue = f.values.venue_id !== '';
   const isPlayed = f.values.status === 'played';
 
+  // Venues added from the inline search while this dialog is open. The parent's
+  // list refreshes after save; until then they are merged in here so the new
+  // venue appears (and stays selected) in the picker.
+  const [addedVenues, setAddedVenues] = useState<BookerVenue[]>([]);
+  // Open by default for a new show when the venue book is still empty.
+  const [venueSearchOpen, setVenueSearchOpen] = useState(!show && venues.length === 0);
+  const venueOptions = mergeVenues(venues, addedVenues);
+  const selectedBand = bands.find(b => b.id === f.values.roster_id);
+  const useVenue = (venue: BookerVenue) => {
+    setAddedVenues(prev => (prev.some(v => v.id === venue.id) ? prev : [...prev, venue]));
+    f.setValues(v => ({ ...v, venue_id: venue.id }));
+    setVenueSearchOpen(false);
+  };
+
   return (
     <Modal title={show ? 'Edit show' : 'Add a show'} onClose={onClose} wide>
       {f.formError && <ErrorBanner message={f.formError} />}
@@ -411,11 +427,11 @@ export function ShowForm({
               </span>
             </div>
           )}
-          <Field label="Venue" hint={venues.length === 0 ? 'Save venues on the Venues page to pick them here.' : undefined} error={f.errors.venue_id}>
+          <Field label="Venue" error={f.errors.venue_id}>
             {p => (
               <select {...p} className="select" value={f.values.venue_id} onChange={f.set('venue_id')}>
                 <option value="">Not in my venue book — type it below</option>
-                {venues.map(v => (
+                {venueOptions.map(v => (
                   <option key={v.id} value={v.id}>
                     {v.name}
                     {v.city ? ` — ${v.city}` : ''}
@@ -424,6 +440,30 @@ export function ShowForm({
               </select>
             )}
           </Field>
+          <div>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setVenueSearchOpen(o => !o)}
+              aria-expanded={venueSearchOpen}
+              aria-controls="show-venue-search"
+              style={{ paddingLeft: 0, color: 'var(--accent)' }}
+            >
+              {venueSearchOpen ? '× Close venue search' : '⌕ Search for a venue'}
+            </button>
+            {venueSearchOpen && (
+              <div id="show-venue-search" style={{ marginTop: '0.5rem', padding: '0.9rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-2)' }}>
+                <VenueSearchPanel
+                  key={selectedBand?.id ?? 'none'}
+                  compact
+                  onUse={useVenue}
+                  knownVenues={venueOptions}
+                  initialCity={selectedBand?.home_city ?? ''}
+                  initialState={selectedBand?.home_state ?? ''}
+                />
+              </div>
+            )}
+          </div>
           {!usingSavedVenue && (
             <div className="grid-2">
               <Field label="Venue name" required error={f.errors.venue_name}>

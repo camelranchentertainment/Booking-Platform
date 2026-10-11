@@ -1,12 +1,16 @@
 // pages/booker/venues/index.tsx
 // Venues & Buyers: the agent's venue book. Venues, festivals, fairs, promoters
-// and private-event buyers, each with its contacts on one profile. Search
-// matches contact names and emails too, so there is no separate Contacts page.
+// and private-event buyers, each with its contacts on one profile.
+//
+// Two searches, deliberately separate and both always visible:
+//   • "Find new venues" (top) searches Google by city and adds to the book.
+//   • "Search your book" filters what is already saved, including contacts'
+//     names and emails, so there is no separate Contacts page.
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import BookerShell from '../../../components/booker/BookerShell';
-import FindVenues from '../../../components/booker/FindVenues';
+import VenueSearchPanel from '../../../components/booker/VenueSearchPanel';
 import { VenueForm } from '../../../components/booker/forms';
 import { EmptyState, ErrorBanner, PageHeader, SkeletonRows } from '../../../components/booker/ui';
 import { listContacts, listShows, listVenues } from '../../../lib/booker/data';
@@ -19,7 +23,6 @@ function VenuesContent() {
     return { venues, contacts, shows };
   });
   const [adding, setAdding] = useState(false);
-  const [finding, setFinding] = useState(false);
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<VenueKind | ''>('');
 
@@ -52,26 +55,25 @@ function VenuesContent() {
         title="Venues & Buyers"
         sub={data ? `${data.venues.length} in your book` : undefined}
         actions={
-          <>
-            <button type="button" className="btn btn-secondary" onClick={() => setAdding(true)}>
-              + Add manually
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => setFinding(true)}>
-              Find venues
-            </button>
-          </>
+          <button type="button" className="btn btn-secondary" onClick={() => setAdding(true)}>
+            + Add manually
+          </button>
         }
       />
+
+      <div id="find" className="card mb-3" style={{ scrollMarginTop: '1rem' }}>
+        <VenueSearchPanel heading="Find new venues" onAdded={() => void reload()} />
+      </div>
       {error && <ErrorBanner message={error} onRetry={reload} />}
       {loading && !data && <SkeletonRows />}
 
       {data && data.venues.length === 0 && (
         <EmptyState
-          title="Build your venue book"
-          body="Search a city to find live-music venues, or add a venue, festival, fair or promoter yourself. Each one keeps its own contacts, and you decide which contacts your bands can see."
+          title="Your venue book is empty"
+          body="Search a city above to find live-music venues, or add a venue, festival, fair or promoter yourself. Each one keeps its own contacts, and you decide which contacts your bands can see."
           action={
-            <button type="button" className="btn btn-primary" onClick={() => setFinding(true)}>
-              Find venues
+            <button type="button" className="btn btn-secondary" onClick={() => setAdding(true)}>
+              + Add manually
             </button>
           }
         />
@@ -82,7 +84,7 @@ function VenuesContent() {
           <div className="mb-3" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'end' }}>
             <div style={{ flex: '1 1 260px', maxWidth: 420 }}>
               <label className="field-label" htmlFor="v-search" style={{ display: 'block', marginBottom: 4 }}>
-                Search
+                Search your book
               </label>
               <input id="v-search" className="input" type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Venue, city, or a contact’s name or email" />
             </div>
@@ -148,7 +150,6 @@ function VenuesContent() {
           }}
         />
       )}
-      {finding && <FindVenues onClose={() => setFinding(false)} onAdded={() => void reload()} />}
     </>
   );
 }

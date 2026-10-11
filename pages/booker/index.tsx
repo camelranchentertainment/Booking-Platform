@@ -89,6 +89,9 @@ function HomeContent() {
             <button type="button" className="btn btn-secondary" onClick={() => setAddingBand(true)}>
               + Add band
             </button>
+            <Link href="/booker/venues#find" className="btn btn-secondary">
+              ⌕ Find venues
+            </Link>
             <button type="button" className="btn btn-primary" onClick={() => setEditing('new')} disabled={!data || data.bands.length === 0}>
               + Add show
             </button>
