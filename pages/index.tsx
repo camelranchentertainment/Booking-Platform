@@ -159,7 +159,9 @@ function AgentStrip() {
 /* ── Hero ─────────────────────────────────────────────────── */
 function Hero() {
   return (
-    <section style={{ position: 'relative', background: BG, overflow: 'hidden' }}>
+    <section className="cr-has-backdrop" style={{ position: 'relative', background: BG, overflow: 'hidden' }}>
+      {/* Right-side amphitheater photo — fills the space between the headline and the ghost "CR" */}
+      <SectionBackdrop photo={HOME_BACKDROPS.hero} side="right" opacity={0.42} blur={2} eager />
       {/* Background concert photo — faded to match color palette */}
       <img
         src="https://images.unsplash.com/photo-1501386761578-eee87e8fc6b7?w=1920&q=80"
@@ -288,7 +290,7 @@ const PROBLEMS = [
 function Problem() {
   return (
     <section id="problem" className="cr-has-backdrop" style={{ borderTop: BORDER, background: BG }}>
-      <SectionBackdrop photo={HOME_BACKDROPS.problem} side="right" opacity={0.24} />
+      <SectionBackdrop photo={HOME_BACKDROPS.problem} side="right" opacity={0.32} />
       <div className="cr-hero-content" style={{ paddingTop: '5rem', paddingBottom: '5rem' }}>
         <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
           <Eyebrow>Sound Familiar?</Eyebrow>
@@ -337,7 +339,7 @@ const AGENT_POINTS = [
 function AgentSection() {
   return (
     <section id="ai-agent" className="cr-has-backdrop" style={{ borderTop: BORDER, background: DARK }}>
-      <SectionBackdrop photo={HOME_BACKDROPS.agent} side="left" opacity={0.18} />
+      <SectionBackdrop photo={HOME_BACKDROPS.agent} side="left" opacity={0.26} />
       <div className="cr-hero-content" style={{ paddingTop: '5rem', paddingBottom: '5rem' }}>
         <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
           <Eyebrow>Your AI Booking Agent</Eyebrow>
@@ -458,7 +460,7 @@ const FEATURES = [
 function Features() {
   return (
     <section id="features" className="cr-has-backdrop" style={{ borderTop: BORDER, background: DARK }}>
-      <SectionBackdrop photo={HOME_BACKDROPS.features} side="right" opacity={0.24} />
+      <SectionBackdrop photo={HOME_BACKDROPS.features} side="right" opacity={0.32} />
       <div className="cr-hero-content" style={{ paddingBottom: '1rem', paddingTop: '5rem' }}>
         <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
@@ -596,7 +598,7 @@ const PRICING_TIERS: PricingTier[] = [
 function Pricing() {
   return (
     <section id="pricing" className="cr-has-backdrop" style={{ borderTop: BORDER, background: DARK }}>
-      <SectionBackdrop photo={HOME_BACKDROPS.pricing} side="right" opacity={0.26} />
+      <SectionBackdrop photo={HOME_BACKDROPS.pricing} side="right" opacity={0.34} />
       <div className="cr-hero-content" style={{ paddingTop: '5rem', paddingBottom: '1.5rem' }}>
         <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
@@ -694,7 +696,7 @@ function SignUpCTA() {
       position: 'relative', background: DARK,
       borderTop: BORDER, overflow: 'hidden',
     }}>
-      <SectionBackdrop photo={HOME_BACKDROPS.signup} side="center" opacity={0.3} />
+      <SectionBackdrop photo={HOME_BACKDROPS.signup} side="center" opacity={0.38} />
       <div className="cr-hero-content" style={{ paddingTop: '6rem', paddingBottom: '6rem' }}>
         <div style={{ maxWidth: '52rem', margin: '0 auto', textAlign: 'center', position: 'relative', zIndex: 1 }}>
 
@@ -1119,7 +1121,7 @@ export default function Home() {
 
         {/* Artist success stories */}
         <section id="artists" className="cr-has-backdrop" style={{ borderTop: BORDER, background: BG }}>
-          <SectionBackdrop photo={HOME_BACKDROPS.artists} side="right" opacity={0.26} />
+          <SectionBackdrop photo={HOME_BACKDROPS.artists} side="right" opacity={0.34} />
           <div className="cr-hero-content" style={{ paddingBottom: '1.5rem', paddingTop: '3.5rem' }}>
             <div style={{ maxWidth: '68rem', margin: '0 auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
