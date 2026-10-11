@@ -1,12 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
+import { pickActPhoto } from '../../../lib/publicActPhoto';
 
 export type PublicAct = {
   id: string;
   act_name: string;
   genre: string | null;
   bio: string | null;
-  logo_url: string | null;
+  /** Band profile photo, falling back to the logo; null when the band has neither. */
+  photo_url: string | null;
   instagram: string | null;
   website: string | null;
   confirmed_count: number;
@@ -20,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Fetch active acts
   const { data: acts, error } = await service
     .from('acts')
-    .select('id, act_name, genre, bio, logo_url, instagram, website')
+    .select('id, act_name, genre, bio, logo_url, profile_photo_url, instagram, website')
     .eq('is_active', true)
     .order('created_at', { ascending: true })
     .limit(6);
@@ -42,7 +44,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const result: PublicAct[] = acts
-    .map((a: any) => ({ ...a, confirmed_count: countMap[a.id] || 0 }))
+    .map((a: any): PublicAct => ({
+      id: a.id,
+      act_name: a.act_name,
+      genre: a.genre,
+      bio: a.bio,
+      photo_url: pickActPhoto({ profile_photo_url: a.profile_photo_url, logo_url: a.logo_url }),
+      instagram: a.instagram,
+      website: a.website,
+      confirmed_count: countMap[a.id] || 0,
+    }))
     .sort((a: PublicAct, b: PublicAct) => b.confirmed_count - a.confirmed_count)
     .slice(0, 3);
 

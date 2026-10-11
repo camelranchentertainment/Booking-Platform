@@ -33,7 +33,7 @@ function GhostNum({ n, color = CREAM }: { n: string; color?: string }) {
 function FeaturedCard({ act }: { act: PublicAct }) {
   const [imgFailed, setImgFailed] = useState(false);
   const onImgError = useCallback(() => setImgFailed(true), []);
-  const showImg = act.logo_url && !imgFailed;
+  const showImg = act.photo_url && !imgFailed;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', borderBottom: `1px solid ${BORDER}` }}
@@ -46,7 +46,7 @@ function FeaturedCard({ act }: { act: PublicAct }) {
         flexShrink: 0,
       }}>
         {showImg && (
-          <img src={act.logo_url!} alt={act.act_name} onError={onImgError} style={{
+          <img src={act.photo_url!} alt={act.act_name} onError={onImgError} style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             objectFit: 'cover', objectPosition: 'center top', opacity: 0.85,
           }} />
@@ -137,6 +137,9 @@ function FeaturedCard({ act }: { act: PublicAct }) {
 function SupportingCard({ act, index, last }: { act: PublicAct; index: number; last: boolean }) {
   const accent = ACCENTS[index % ACCENTS.length];
   const num    = String(index + 2).padStart(2, '0');
+  const [imgFailed, setImgFailed] = useState(false);
+  const onImgError = useCallback(() => setImgFailed(true), []);
+  const showImg = act.photo_url && !imgFailed;
 
   return (
     <div style={{
@@ -145,9 +148,23 @@ function SupportingCard({ act, index, last }: { act: PublicAct; index: number; l
       borderRight: last ? 'none' : `1px solid ${BORDER}`,
     }}>
 
+      {/* Band photo banner — only when the band has a profile photo or logo */}
+      {showImg && (
+        <div style={{ position: 'relative', height: 200, flexShrink: 0, background: SURF, overflow: 'hidden', borderBottom: `1px solid ${BORDER}` }}>
+          <img src={act.photo_url!} alt={act.act_name} onError={onImgError} loading="lazy" style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', objectPosition: 'center 30%', opacity: 0.85,
+          }} />
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to top, rgba(13,27,42,0.9) 0%, rgba(13,27,42,0.15) 55%, transparent 100%)',
+          }} />
+        </div>
+      )}
+
       <GhostNum n={num} />
 
-      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', padding: '2.5rem' }}>
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, padding: '2.5rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
             <div style={{ height: 1, width: 24, background: accent }} />
