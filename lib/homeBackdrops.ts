@@ -30,14 +30,15 @@ export type HomeSectionKey = 'hero' | 'problem' | 'agent' | 'features' | 'artist
 
 export const HOME_BACKDROPS: Readonly<Record<HomeSectionKey, BackdropPhoto>> = {
   // Hero, right side (behind the ghost "CR") — looking down the rows into a
-  // rock amphitheater at night. Rendered blurred so it reads as a big outdoor
-  // show rather than an identifiable venue.
+  // red-rock amphitheater. A daytime shot: a night shot was too dark to read
+  // against the navy hero. Rendered blurred so it reads as a big outdoor venue
+  // rather than an identifiable one.
   hero: {
-    id: 'photo-1518307944026-f2d91a0f087c',
-    subject: 'Night concert seen from high in a red-rock amphitheater',
-    photographer: 'Ryan Loughlin',
-    sourceUrl: 'https://unsplash.com/photos/landscaped-photo-of-a-concert-sZhVIOMOwiw',
-    focus: '50% 55%',
+    id: 'photo-1763421816618-0c3a625b33c6',
+    subject: 'Looking down the seating rows into a red-rock amphitheater under a cloudy sky',
+    photographer: 'Gennady Zakharin',
+    sourceUrl: 'https://unsplash.com/photos/amphitheater-in-a-rocky-landscape-under-a-cloudy-sky-iIezpcBQ2gA',
+    focus: '50% 60%',
   },
   // "Disorganization Costs You Shows" — a desk buried in paper.
   problem: {
