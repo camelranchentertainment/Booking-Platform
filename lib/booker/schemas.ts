@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import { DEAL_TYPES, PAYMENT_METHODS, ROSTER_STATUSES, SHOW_STATUSES, VENUE_KINDS } from './types';
 import { isIsoDate } from './dates';
+import { TEMPLATE_KEYS } from './templates';
 
 /** Blank (or whitespace-only) input becomes null; otherwise trimmed. */
 function blankToNull(value: unknown): unknown {
@@ -188,8 +189,25 @@ export const MessageSendSchema = z.object({
   show_id: optionalUuid,
   followup_on: optionalIsoDate('Follow-up date'),
   copy_to_self: z.preprocess(v => v === true || v === 'true', z.boolean()).default(true),
+  /** Starter template the message began from, if any */
+  template_key: z.preprocess(blankToNull, z.enum(TEMPLATE_KEYS).nullable()).default(null),
+  /** The agent used "Draft with AI" for this message */
+  ai_assisted: z.preprocess(v => v === true || v === 'true', z.boolean()).default(false),
 });
 export type MessageSendInput = z.infer<typeof MessageSendSchema>;
+
+/** "Draft with AI": what the email is about, plus optional instructions. */
+export const DraftRequestSchema = z.object({
+  template_key: z.preprocess(blankToNull, z.enum(TEMPLATE_KEYS).nullable()).default(null),
+  instructions: optionalText('Instructions', 1000),
+  to_name: optionalText('Recipient name', 120),
+  audience: z.enum(['venue', 'band']).default('venue'),
+  roster_id: optionalUuid,
+  venue_id: optionalUuid,
+  contact_id: optionalUuid,
+  show_id: optionalUuid,
+});
+export type DraftRequestInput = z.infer<typeof DraftRequestSchema>;
 
 // ── Agent-only signup ───────────────────────────────────────────────────────
 export const BookerSignupSchema = z.object({

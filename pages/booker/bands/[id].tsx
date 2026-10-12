@@ -223,6 +223,7 @@ function BandContent({ bandId }: { bandId: string }) {
           shows={data.shows}
           venuesById={view.venuesById}
           defaultBandId={band.id}
+          audience="band"
           onClose={() => setComposing(false)}
           onSent={result => {
             setComposing(false);

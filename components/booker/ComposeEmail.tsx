@@ -5,6 +5,11 @@
 // contact and show so it shows up in each history, with an optional follow-up
 // reminder that appears on Home when it comes due.
 //
+// Start from a template or "Draft with AI": both fill the subject and message
+// for the agent to edit; neither sends anything. Filling over something the
+// agent already typed asks first. Anything left in [brackets] must be filled
+// in before the email can go.
+//
 // The submit button is disabled while sending (no double sends) and nothing
 // typed is lost when a send fails.
 
@@ -12,10 +17,12 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBooker } from './BookerShell';
 import { ErrorBanner, Field, Modal } from './ui';
-import { sendMessage, type SendResult } from '../../lib/booker/data';
+import { draftMessage, sendMessage, type SendResult } from '../../lib/booker/data';
 import { MessageSendSchema, fieldErrors } from '../../lib/booker/schemas';
 import { defaultFollowup, replyAddress } from '../../lib/booker/emailFormat';
-import { formatShowDate, todayIso } from '../../lib/booker/dates';
+import { formatShowDate, formatTime, todayIso } from '../../lib/booker/dates';
+import { formatMoney } from '../../lib/booker/commission';
+import { EMAIL_TEMPLATES, firstName, hasPlaceholders, renderTemplate, templateByKey, type TemplateAudience } from '../../lib/booker/templates';
 import { venueLabel } from '../../lib/booker/workspace';
 import type { BookerShow, BookerVenue, RosterBand } from '../../lib/booker/types';
 
@@ -38,6 +45,8 @@ interface Props {
   defaultBandId?: string;
   defaultShowId?: string;
   defaultSubject?: string;
+  /** Who this is usually written to; that template set is listed first. */
+  audience?: TemplateAudience;
   onClose: () => void;
   onSent: (result: SendResult) => void;
 }
@@ -45,7 +54,7 @@ interface Props {
 const OTHER = 'other';
 const ERROR_STYLE = { fontSize: '0.78rem', color: 'var(--red)', fontWeight: 700 } as const;
 
-export default function ComposeEmail({ recipients, bands, shows = [], venuesById = new Map(), venueId, defaultRecipient = 0, defaultBandId, defaultShowId, defaultSubject = '', onClose, onSent }: Props) {
+export default function ComposeEmail({ recipients, bands, shows = [], venuesById = new Map(), venueId, defaultRecipient = 0, defaultBandId, defaultShowId, defaultSubject = '', audience = 'venue', onClose, onSent }: Props) {
   const { booker } = useBooker();
   const { user } = useAuth();
   const today = todayIso();
@@ -64,6 +73,14 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [templateKey, setTemplateKey] = useState('');
+  const [aiAssisted, setAiAssisted] = useState(false);
+  const [aiInstructions, setAiInstructions] = useState('');
+  const [drafting, setDrafting] = useState(false);
+  const [assistError, setAssistError] = useState('');
+  /** A fill waiting for "Replace what you wrote?" */
+  const [pending, setPending] = useState<{ subject: string; body: string; source: 'template' | 'ai'; key: string } | null>(null);
+  const [lastFilled, setLastFilled] = useState('');
 
   const replyTo = replyAddress(booker.contact_email, user?.email ?? null);
   const activeBands = bands.filter(b => b.status === 'active' || b.id === rosterId);
@@ -71,6 +88,74 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
     () => shows.filter(s => s.status !== 'cancelled' && (!rosterId || s.roster_id === rosterId) && (!venueId || s.venue_id === venueId)).sort((a, b) => a.show_date.localeCompare(b.show_date)),
     [shows, rosterId, venueId],
   );
+
+  const chosenRecipient = to === OTHER ? null : recipients[Number(to)];
+  const recipientName = chosenRecipient ? chosenRecipient.name : otherName;
+
+  /** What the templates can fill from the agent's own data. */
+  const templateContext = () => {
+    const band = bands.find(b => b.id === rosterId);
+    const show = showOptions.find(s => s.id === showId);
+    const venue = venuesById.get(venueId ?? show?.venue_id ?? '');
+    return {
+      band: band?.band_name,
+      date: show ? formatShowDate(show.show_date, year) : null,
+      venue: venue?.name ?? show?.venue_name ?? null,
+      city: venue?.city ?? show?.venue_city ?? null,
+      contactFirst: audience === 'band' ? firstName(recipientName ?? band?.contact_name) : firstName(recipientName),
+      setTime: formatTime(show?.set_time),
+      loadIn: formatTime(show?.load_in_time),
+      fee: show?.fee !== null && show?.fee !== undefined ? formatMoney(show.fee) : null,
+      agentName: booker.contact_name,
+      agency: booker.agency_name,
+      agentPhone: booker.contact_phone,
+    };
+  };
+
+  const applyFill = (fill: { subject: string; body: string; source: 'template' | 'ai'; key: string }, confirmed = false) => {
+    const typedSomething = body.trim() !== '' && body !== lastFilled;
+    if (typedSomething && !confirmed) {
+      setPending(fill);
+      return;
+    }
+    setPending(null);
+    setSubject(fill.subject);
+    setBody(fill.body);
+    setLastFilled(fill.body);
+    setTemplateKey(fill.source === 'template' ? fill.key : templateKey);
+    setAiAssisted(fill.source === 'ai' ? true : aiAssisted);
+    setErrors({});
+  };
+
+  const fillFromTemplate = (key: string) => {
+    const tpl = templateByKey(key);
+    if (!tpl) return;
+    applyFill({ ...renderTemplate(tpl, templateContext()), source: 'template', key });
+  };
+
+  const draftWithAi = async () => {
+    setAssistError('');
+    setDrafting(true);
+    try {
+      const { draft } = await draftMessage({
+        template_key: templateKey || null,
+        instructions: aiInstructions.trim() || null,
+        to_name: recipientName ?? null,
+        audience,
+        roster_id: rosterId || null,
+        venue_id: venueId ?? null,
+        contact_id: chosenRecipient?.contactId ?? null,
+        show_id: showOptions.some(s => s.id === showId) ? showId : null,
+      });
+      applyFill({ ...draft, source: 'ai', key: templateKey });
+    } catch (err) {
+      setAssistError(err instanceof Error ? err.message : 'AI drafting failed.');
+    } finally {
+      setDrafting(false);
+    }
+  };
+
+  const orderedTemplates = [...EMAIL_TEMPLATES].sort((a, b) => Number(b.audience === audience) - Number(a.audience === audience));
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -88,6 +173,8 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
       show_id: showOptions.some(s => s.id === showId) ? showId : '',
       followup_on: followup ? followupOn : '',
       copy_to_self: copyToSelf,
+      template_key: templateKey,
+      ai_assisted: aiAssisted,
     };
     const parsed = MessageSendSchema.safeParse(raw);
     if (!parsed.success) {
@@ -96,6 +183,12 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
       const first = Object.keys(errs)[0];
       const idByField: Record<string, string> = { to_email: 'ce-other-email', subject: 'ce-subject', body: 'ce-body', followup_on: 'ce-followup' };
       if (first && idByField[first]) document.getElementById(idByField[first])?.focus();
+      return;
+    }
+    if (hasPlaceholders(parsed.data.subject) || hasPlaceholders(parsed.data.body)) {
+      const where = hasPlaceholders(parsed.data.subject) ? 'subject' : 'body';
+      setErrors({ [where]: 'Fill in the [bracketed] parts before sending.' });
+      document.getElementById(where === 'subject' ? 'ce-subject' : 'ce-body')?.focus();
       return;
     }
     if (parsed.data.followup_on && parsed.data.followup_on < today) {
@@ -195,6 +288,97 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
             </Field>
           </div>
         )}
+
+        <section aria-labelledby="ce-assist-h" style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-2)', padding: '0.8rem 0.9rem', display: 'grid', gap: '0.65rem' }}>
+          <h3 id="ce-assist-h" className="eyebrow" style={{ color: 'var(--accent)', fontSize: '0.9rem', margin: 0 }}>
+            Get a head start
+          </h3>
+          <div style={{ display: 'grid', gap: '0.65rem', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', alignItems: 'end' }}>
+            <div>
+              <label className="field-label" htmlFor="ce-template" style={{ display: 'block', marginBottom: 4 }}>
+                Start from a template
+              </label>
+              <select
+                id="ce-template"
+                className="select"
+                value={templateKey}
+                onChange={e => {
+                  // The key is recorded only once the template is actually applied.
+                  if (e.target.value) fillFromTemplate(e.target.value);
+                  else setTemplateKey('');
+                }}
+                disabled={busy || drafting}
+              >
+                <option value="">Blank email</option>
+                <optgroup label={audience === 'band' ? 'To your band' : 'To venues and buyers'}>
+                  {orderedTemplates.filter(t => t.audience === audience).map(t => (
+                    <option key={t.key} value={t.key}>
+                      {t.label}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label={audience === 'band' ? 'To venues and buyers' : 'To your band'}>
+                  {orderedTemplates.filter(t => t.audience !== audience).map(t => (
+                    <option key={t.key} value={t.key}>
+                      {t.label}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+            <div>
+              <label className="field-label" htmlFor="ce-ai" style={{ display: 'block', marginBottom: 4 }}>
+                Or tell AI what to write <span className="text-muted">(optional)</span>
+              </label>
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <input
+                  id="ce-ai"
+                  className="input"
+                  value={aiInstructions}
+                  onChange={e => setAiInstructions(e.target.value)}
+                  maxLength={1000}
+                  placeholder="e.g. ask for a Saturday in November, mention the Austin show"
+                  disabled={busy || drafting}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void draftWithAi();
+                    }
+                  }}
+                />
+                <button type="button" className="btn btn-secondary" onClick={() => void draftWithAi()} disabled={busy || drafting} aria-busy={drafting} style={{ whiteSpace: 'nowrap' }}>
+                  {drafting ? 'Drafting…' : '✨ Draft'}
+                </button>
+              </div>
+            </div>
+          </div>
+          <div aria-live="polite">
+            {drafting && <p className="text-xs text-muted" style={{ margin: 0 }}>Writing a draft from your band, venue and show details…</p>}
+            {assistError && (
+              <p role="alert" className="text-xs" style={{ color: 'var(--red)', margin: 0 }}>
+                {assistError}
+              </p>
+            )}
+            {pending && (
+              <div role="alertdialog" aria-label="Replace your message?" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span className="text-sm" style={{ color: 'var(--text)' }}>
+                  Replace what you’ve written with the {pending.source === 'ai' ? 'AI draft' : 'template'}?
+                </span>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => applyFill(pending, true)}>
+                  Replace
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPending(null)}>
+                  Keep mine
+                </button>
+              </div>
+            )}
+            {!pending && !drafting && hasPlaceholders(body) && (
+              <p className="text-xs" style={{ color: 'var(--accent)', margin: 0 }}>
+                Fill in the [bracketed] parts before sending. Always read a draft before it goes out.
+              </p>
+            )}
+          </div>
+        </section>
 
         <div className="field">
           <label className="field-label" htmlFor="ce-subject">
