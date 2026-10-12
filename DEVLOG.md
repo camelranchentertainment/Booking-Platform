@@ -1,5 +1,15 @@
 # Dev Log
 
+## 2026-10-12 — Contacts: each band only sees and changes its own (security)
+
+**Branch:** `fix/contacts-rls-tenant-isolation` · **Migration:** `20261012200000_contacts_act_id_and_rls.sql` (+ rollback) · needs `20261012180000` (venues) applied first
+
+- **Bug:** the only contacts policy was `contacts_access FOR ALL USING (auth.uid() IS NOT NULL)`: any signed-in user, Members included, could read, edit and delete every band's venue contacts.
+- **Second bug fixed by the same change:** venue page "Add contact", the website scan and the venue spreadsheet import all send `act_id`, but the column didn't exist, so those saves were rejected (400 in the API logs on 2026-10-12) and silently lost. Only the AI agent's path (no `act_id`) worked.
+- **Now:** `contacts.act_id` NOT NULL, backfilled from the venue (21 rows, all one band), FK + indexes. Trigger `contacts_set_act_id` (SECURITY DEFINER) fills `act_id` from the venue when omitted and rejects a band that doesn't match the venue's, so no caller (browser, agent, mobile) can attach a contact to another band's venue. Policies mirror venues: read = superadmin or the band; write = superadmin or the band's band_admin.
+- **No code changes on purpose:** code deploys on merge, the column arrives when the migration is applied; code that reads `act_id` would break in between. Follow-up: switch `lib/server/actOwnership.ts#ownedContactId` to `act_id` so contacts whose venue was deleted still resolve.
+- **Verified locally:** PGlite replica of prod with the venues fix applied, 35 checks (bug reproduced; reads/writes per role; all four insert paths; cross-band attach/move blocked; venue-delete keeps the contact in its band; re-run safe; rollback exact).
+
 ## 2026-10-12 — Venues: each band only sees and changes its own (security)
 
 **Branch:** `fix/venues-rls-tenant-isolation` · **Migration:** `20261012180000_venues_rls_tenant_isolation.sql` (+ rollback in `rollback/`)
