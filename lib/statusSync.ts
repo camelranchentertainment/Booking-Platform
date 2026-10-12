@@ -52,48 +52,60 @@ export const STATUS_COLORS: Record<string, string> = {
   cancelled:   '#888888',
 };
 
-// Syncs the bookings record that mirrors a tour_venue, reading the current tv status.
-// Call this after the tour_venue row has already been updated.
+/**
+ * Keeps an existing show (bookings row) for a tour target in step with the
+ * target's outreach status. Call after the tour_venue row has been updated.
+ *
+ * A tour target is NOT a show: this never creates a bookings row. Shows are
+ * created only when a venue confirms (pages/api/tours/venue-confirm.ts). It
+ * used to insert a "pitch" show for every target, dated on the tour's last day,
+ * which crowded the calendar and, on confirm, produced a duplicate show.
+ *
+ * @param _userId kept for call-site compatibility; no longer used
+ */
 export async function syncBooking(
   sb: SupabaseClient,
   tourVenueId: string,
-  userId: string
+  _userId: string
 ): Promise<void> {
-  const { data: tv } = await sb
+  const { data: tv, error: tvErr } = await sb
     .from('tour_venues')
-    .select('id, venue_id, tour_id, status, tour:tours(id, act_id, end_date)')
+    .select('id, venue_id, tour_id, status, tour:tours(id, act_id)')
     .eq('id', tourVenueId)
-    .single();
+    .maybeSingle();
+  if (tvErr) {
+    console.error('[statusSync] tour_venue lookup failed', { tourVenueId, error: tvErr.message });
+    return;
+  }
   if (!tv) return;
 
-  const tour = tv.tour as any;
-  if (!tour?.act_id) return;
+  // PostgREST types an embedded to-one relation as an array; accept either shape.
+  const tourRel: unknown = tv.tour;
+  const tour = (Array.isArray(tourRel) ? tourRel[0] : tourRel) as { act_id?: unknown } | null | undefined;
+  const actId = typeof tour?.act_id === 'string' ? tour.act_id : null;
+  if (!actId || !tv.venue_id) return;
 
-  const bookingStatus: BookingStatus =
-    TOUR_VENUE_TO_BOOKING_STATUS[tv.status as OutreachStatus] ?? 'pitch';
+  const bookingStatus = TOUR_VENUE_TO_BOOKING_STATUS[tv.status as OutreachStatus];
+  // Only outcomes that matter to a real show are mirrored. Moving a target
+  // between "target" and "follow up" never touches the calendar.
+  if (bookingStatus !== 'confirmed' && bookingStatus !== 'cancelled') return;
 
-  const { data: existing } = await sb
+  // Update in place (all matching shows), so two rows can never make the lookup
+  // ambiguous and trigger an extra insert as the old code did.
+  // "confirmed" only lifts shows that are not yet confirmed — it never pulls an
+  // advancing/completed show backwards. "cancelled" closes any open show.
+  const notIn = bookingStatus === 'confirmed'
+    ? '("confirmed","advancing","completed","cancelled")'
+    : '("completed","cancelled")';
+  const { error: updErr } = await sb
     .from('bookings')
-    .select('id')
+    .update({ status: bookingStatus })
     .eq('venue_id', tv.venue_id)
-    .eq('act_id', tour.act_id)
+    .eq('act_id', actId)
     .eq('tour_id', tv.tour_id)
-    .not('status', 'in', '("completed","cancelled")')
-    .maybeSingle();
-
-  if (existing) {
-    await sb.from('bookings').update({ status: bookingStatus }).eq('id', existing.id);
-  } else if (bookingStatus !== 'cancelled') {
-    await sb.from('bookings').insert({
-      act_id:          tour.act_id,
-      venue_id:        tv.venue_id,
-      tour_id:         tv.tour_id,
-      status:          bookingStatus,
-      source:          'tour',
-      created_by:      userId,
-      show_date:       tour.end_date || null,
-      details_pending: true,
-    });
+    .not('status', 'in', notIn);
+  if (updErr) {
+    console.error('[statusSync] booking status update failed', { tourVenueId, error: updErr.message });
   }
 }
 

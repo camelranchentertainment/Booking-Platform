@@ -1,5 +1,16 @@
 # Dev Log
 
+## 2026-10-12 — Tour targets are not calendar shows (step 1 of tour placeholders)
+
+**Branch:** `fix/tour-targets-not-calendar-shows` · **Migration:** `20261012220000_remove_tour_target_calendar_shows.sql` (data only, + rollback)
+
+- **Bug:** `syncBooking` inserted a `pitch` booking for every tour target, dated on the tour's `end_date`. LONE STAR (Jan 7–9 2027, Jake's band) showed 34 entries on Jan 9 for 17 targets; 17 had lost their venue after venue deletions. Across all bands: 51 such rows.
+- **Second bug, same code:** on confirm, `venue-confirm` inserts the real show, then `syncBooking` did `maybeSingle()` on bookings for that tour+venue, found two (pitch + confirmed), got an error/null and inserted a third.
+- **Now:** `syncBooking` never inserts. It only moves an existing show to `confirmed` (never pulling advancing/completed back) or `cancelled`; target ↔ follow-up changes don't touch bookings. Shows are created only by the confirm flow.
+- **Cleanup:** removes `source='tour'`, `status='pitch'` tour bookings that are not on Google Calendar and have nothing attached (email_log, drafts, posters, social, personnel, expenses). All 51 eligible at authoring. Full rows backed up in `_fix_20261012_tour_target_shows`. The 47 targets (tour_venues) are untouched.
+- **Known gap until steps 2–3:** pipeline/dashboard pitch counts drop by the tour targets (they were these fake rows); step 3 reads targets instead. Calendar placeholder per date (admins only; Members see confirmed shows only) is step 2.
+- **Verified:** new `__tests__/lib/statusSync.test.ts` (11 cases; all fail on the old code, pass on the new); PGlite test of migration + rollback 9/9.
+
 ## 2026-10-12 — Contacts: each band only sees and changes its own (security)
 
 **Branch:** `fix/contacts-rls-tenant-isolation` · **Migration:** `20261012200000_contacts_act_id_and_rls.sql` (+ rollback) · needs `20261012180000` (venues) applied first
