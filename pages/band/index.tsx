@@ -202,6 +202,16 @@ export default function BandDashboard() {
     if (!agentLoading) agentInputRef.current?.focus();
   }, [agentLoading]);
 
+  // Auto-grow the agent text box with its content. CSS max-height on
+  // textarea.dash-agent-input caps it (~5 lines) and it scrolls past that.
+  // Runs on every value change, so clearing the input after send shrinks it back.
+  useEffect(() => {
+    const el = agentInputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + 2}px`; // +2 for the 1px top/bottom border (box-sizing: border-box)
+  }, [agentInput]);
+
   const load = async () => {
     setLoading(true);
     const timeout = setTimeout(() => setLoading(false), 5000);
@@ -537,6 +547,34 @@ export default function BandDashboard() {
         .dash-draft-grid    { display:grid; grid-template-columns:1fr; gap:0.5rem; align-items:start; }
         .dash-msg-ai        { max-width:90%; }
         .dash-msg-user      { max-width:88%; }
+
+        /* AI Booking Agent card — mobile-first. Below 768px the card is a single
+           column: the 220px mascot column is hidden and a small avatar moves into
+           the chat header, so the composer gets the full card width. */
+        .dash-agent             { display:flex; flex-direction:column; background:var(--bg-panel); border:1px solid var(--border); margin-bottom:1.25rem; height:min(640px, 80vh); height:min(640px, 80dvh); }
+        .dash-agent-mascot      { display:none; }
+        .dash-agent-chat        { flex:1 1 auto; display:flex; flex-direction:column; min-width:0; min-height:0; }
+        .dash-agent-hdr-avatar  { width:32px; height:32px; border-radius:50%; border:2px solid var(--accent); object-fit:cover; flex-shrink:0; }
+        .dash-agent-hdr-status  { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text-muted); font-weight:700; }
+        .dash-agent-chips       { display:flex; flex-wrap:nowrap; gap:0.4rem; padding:0.6rem 0.75rem 0.15rem; flex-shrink:0; overflow-x:auto; overscroll-behavior-x:contain; scroll-snap-type:x proximity; scrollbar-width:none; }
+        .dash-agent-chips::-webkit-scrollbar { display:none; }
+        .dash-agent-chip        { flex:0 0 auto; white-space:nowrap; min-height:44px; display:inline-flex; align-items:center; scroll-snap-align:start; }
+        .dash-agent-form        { display:flex; align-items:flex-end; gap:0.5rem; padding:0.5rem 0.75rem 0.75rem; }
+        textarea.dash-agent-input { flex:1 1 auto; min-width:0; width:auto; font-size:16px; line-height:1.5; resize:none; overflow-y:auto; max-height:8.5rem; }
+        .dash-agent-btn         { flex:0 0 auto; min-width:44px; min-height:44px; justify-content:center; }
+        .dash-sr-only           { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+        @media(min-width:768px){
+          .dash-agent             { flex-direction:row; height:min(450px, 70vh); overflow:hidden; }
+          .dash-agent-mascot      { display:flex; }
+          .dash-agent-hdr-avatar,
+          .dash-agent-hdr-status  { display:none; }
+          .dash-agent-chips       { flex-wrap:wrap; overflow-x:visible; padding:0.6rem 1.25rem 0; scroll-snap-type:none; }
+          .dash-agent-chip        { min-height:0; }
+          .dash-agent-form        { padding:0.5rem 1.25rem 0.75rem; align-items:stretch; }
+          .dash-agent-btn         { min-width:0; min-height:0; }
+          textarea.dash-agent-input { font-size:14px; }
+        }
+
         @media(min-width:640px){
           .dash-act-header    { height:80px; padding:0 1.25rem; }
           .dash-act-name      { font-size:32px; }
@@ -808,11 +846,11 @@ export default function BandDashboard() {
             )}
           </div>
 
-          {/* ── AI Booking Agent — two-column layout ──────────────────────── */}
-          <div style={{ display: 'flex', flexDirection: 'row', background: 'var(--bg-panel)', border: '1px solid var(--border)', marginBottom: '1.25rem', height: 'min(450px, 70vh)', overflow: 'hidden' }}>
+          {/* ── AI Booking Agent — single column on mobile, two columns ≥768px (see .dash-agent CSS) ── */}
+          <div className="dash-agent">
 
-            {/* Left — mascot column */}
-            <div style={{ width: 220, flexShrink: 0, background: 'var(--surface-2)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16 }}>
+            {/* Left — mascot column (hidden below 768px; a small avatar shows in the header instead) */}
+            <div className="dash-agent-mascot" style={{ width: 220, flexShrink: 0, background: 'var(--surface-2)', borderRight: '1px solid var(--border)', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16 }}>
               <div style={{ width: 120, height: 120, borderRadius: '50%', background: '#0d1420', border: '3px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', flexShrink: 0 }}>
                 <img src="/Agent-Camel.jpg" alt="Booking agent mascot" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
@@ -823,10 +861,20 @@ export default function BandDashboard() {
             </div>
 
             {/* Right — chat column */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+            <div className="dash-agent-chat">
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>AI BOOKING AGENT</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', minWidth: 0 }}>
+                {/* Mobile-only avatar + status; decorative here because the status text carries the meaning */}
+                <img src="/Agent-Camel.jpg" alt="" className="dash-agent-hdr-avatar" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>AI BOOKING AGENT</span>
+                  <span className="dash-agent-hdr-status">
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--green)', display: 'inline-block', flexShrink: 0 }} />
+                    Online · ready
+                  </span>
+                </div>
+              </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 {messages.length > 1 && (
                   <button onClick={startNewChat} className="btn btn-ghost btn-sm" style={{ color: 'var(--text-muted)' }} disabled={agentLoading}>
@@ -1059,16 +1107,16 @@ export default function BandDashboard() {
             </div>
 
             {/* Quick chips */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', padding: '0.6rem 1.25rem 0', flexShrink: 0 }}>
+            <div className="dash-agent-chips" role="group" aria-label="Suggested questions">
               {QUICK_CHIPS.map(chip =>
                 chip.href ? (
-                  <Link key={chip.label} href={chip.href} style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, padding: '0.3rem 0.75rem', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', background: 'rgba(255,255,255,0.08)', textDecoration: 'none', transition: 'all 0.15s' }}
+                  <Link key={chip.label} href={chip.href} className="dash-agent-chip" style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, padding: '0.3rem 0.75rem', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', background: 'rgba(255,255,255,0.08)', textDecoration: 'none', transition: 'all 0.15s' }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.background = 'rgba(224,120,32,0.15)'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}>
                     {chip.label}
                   </Link>
                 ) : (
-                  <button key={chip.label} onClick={() => sendMessage(chip.prompt!)} disabled={agentLoading} style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, padding: '0.3rem 0.75rem', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', background: 'rgba(255,255,255,0.08)', cursor: 'pointer', transition: 'all 0.15s' }}
+                  <button key={chip.label} type="button" className="dash-agent-chip" onClick={() => sendMessage(chip.prompt!)} disabled={agentLoading} style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, padding: '0.3rem 0.75rem', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', background: 'rgba(255,255,255,0.08)', cursor: 'pointer', transition: 'all 0.15s' }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.background = 'rgba(224,120,32,0.15)'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}>
                     {chip.label}
@@ -1104,7 +1152,7 @@ export default function BandDashboard() {
               )}
               <form
                 onSubmit={e => { e.preventDefault(); sendMessage(agentInput); }}
-                style={{ display: 'flex', gap: '0.5rem', padding: '0.5rem 1.25rem 0.75rem' }}
+                className="dash-agent-form"
               >
                 {/* Hidden file input */}
                 <input
@@ -1117,11 +1165,13 @@ export default function BandDashboard() {
                 {/* Paperclip button */}
                 <button
                   type="button"
+                  className="dash-agent-btn"
                   title="Attach file (CSV, Excel, PDF)"
+                  aria-label="Attach file (CSV, Excel, PDF)"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={agentLoading || fileLoading}
                   style={{
-                    flexShrink: 0, background: 'rgba(255,255,255,0.08)',
+                    background: 'rgba(255,255,255,0.08)',
                     border: '1px solid rgba(255,255,255,0.3)', color: fileLoading ? '#c47b2b' : 'rgba(255,255,255,0.7)',
                     cursor: agentLoading || fileLoading ? 'not-allowed' : 'pointer',
                     fontSize: 16, padding: '0 0.6rem', borderRadius: 4,
@@ -1130,19 +1180,19 @@ export default function BandDashboard() {
                 >
                   {fileLoading ? '⏳' : '📎'}
                 </button>
+                <label htmlFor="dash-agent-input" className="dash-sr-only">Message the booking agent</label>
+                {/* Sizing (flex, min-width:0, 16px font on mobile to stop iOS zoom) lives in
+                    textarea.dash-agent-input — inline flex/fontSize would override the media query. */}
                 <textarea
+                  id="dash-agent-input"
                   ref={agentInputRef}
-                  className="input"
+                  className="input dash-agent-input"
                   rows={1}
                   style={{
-                    flex: 1, fontSize: 14,
                     background: 'rgba(255,255,255,0.08)',
                     border: '1px solid rgba(255,255,255,0.3)',
                     color: '#fff',
                     opacity: 1,
-                    resize: 'none',
-                    overflow: 'auto',
-                    lineHeight: '1.5',
                   }}
                   placeholder={attachedFile ? 'Add a message or just hit send…' : `Ask about ${myAct?.act_name || 'your pipeline'}, or attach a show list…`}
                   value={agentInput}
@@ -1156,9 +1206,9 @@ export default function BandDashboard() {
                 />
                 <button
                   type="submit"
-                  className="btn"
+                  className="btn dash-agent-btn"
+                  aria-label="Send message"
                   style={{
-                    flexShrink: 0,
                     background: '#c47b2b',
                     border: 'none',
                     color: '#fff',
