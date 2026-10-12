@@ -64,7 +64,8 @@ export default function ImportModal({ defaultType = 'venues', onClose, onComplet
   const validateFile = (file: File): string | null => {
     const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
     if (!ALLOWED_EXTS.includes(ext)) return 'Unsupported file type. Use CSV, Excel (.xlsx, .xls), or PDF.';
-    if (file.size > 20 * 1024 * 1024) return 'File exceeds the 20 MB limit.';
+    // Vercel rejects request bodies over 4.5 MB before they reach the route.
+    if (file.size > 4 * 1024 * 1024) return 'File is over the 4 MB limit. Try a smaller file.';
     return null;
   };
 
@@ -250,7 +251,7 @@ export default function ImportModal({ defaultType = 'venues', onClose, onComplet
                     Drag &amp; drop or click to browse
                   </div>
                   <div style={{ color: 'var(--text-muted)', fontSize: '0.76rem', fontFamily: 'var(--font-mono)' }}>
-                    CSV · Excel (.xlsx, .xls) · PDF · Max 20 MB
+                    CSV · Excel (.xlsx, .xls) · PDF · Max 4 MB
                   </div>
                 </div>
               )}

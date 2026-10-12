@@ -375,6 +375,7 @@ export default function BandDashboard() {
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setAgentError('');
     setFileLoading(true);
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || '';
@@ -397,6 +398,10 @@ export default function BandDashboard() {
         setAttachedFile({ name: file.name, content: truncate(csv) });
 
       } else if (ext === 'pdf') {
+        if (file.size > 3 * 1024 * 1024) {
+          setAgentError('That PDF is over 3 MB. Try a smaller file, or export just the pages you need.');
+          return;
+        }
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => {
@@ -412,8 +417,12 @@ export default function BandDashboard() {
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
           body: JSON.stringify({ base64, mimeType: 'application/pdf' }),
         });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || 'PDF parse failed');
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          // The server explains what's wrong (scanned image, too large, password).
+          setAgentError(json.error || (res.status === 413 ? 'That PDF is too large. Try one under 3 MB.' : 'Could not read that PDF.'));
+          return;
+        }
         setAttachedFile({ name: file.name, content: truncate(json.text) });
 
       } else {
