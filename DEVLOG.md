@@ -1,5 +1,18 @@
 # Dev Log
 
+## 2026-10-12 — Venues: each band only sees and changes its own (security)
+
+**Branch:** `fix/venues-rls-tenant-isolation` · **Migration:** `20261012180000_venues_rls_tenant_isolation.sql` (+ rollback in `rollback/`)
+
+- **Bug:** `venues_select` allowed any signed-in user (Members included) to read every band's venues; `venues_insert/update/delete` only checked "is a band_admin", not "of this band". Permissive policies are OR'd, so any band admin could edit or delete any band's venues.
+- **Policies now:** read = superadmin or anyone in the venue's band; write = superadmin or that band's band_admin. `WITH CHECK` stops a venue moving between bands. New helpers `app_current_act_id()`, `app_current_role()`, `app_is_superadmin()` (SECURITY DEFINER, authenticated only) for this and later policies.
+- **Data fix in the same migration:** rows pointing at another band's venue get a copy of that venue in their own band (`source = 'tenant_split'`), originals untouched, everything logged in `_fix_20261012_venue_split_*` for an exact rollback. Production at authoring: 1 booking (Jake's Sept 25 Wire Road Brewing show pointed at John D. Hale Band's venue).
+- **Service-role leaks closed in code** (RLS doesn't cover these):
+  - `pages/api/agent.ts` city search returned every band's venues and emails → now `act_id`-scoped.
+  - `POST /api/tours/venues` linked any venue id to a tour → now requires the venue to belong to the tour's band (`ownedVenueId`). Likely origin of the Wire Road cross-link.
+  - `pages/tours/[id].tsx` venue search and "already added" lookups scoped to the tour's band.
+- **Verified:** local PGlite replica of the prod schema, 31/31 checks (bug reproduced before; each role's read/write after; re-run is a no-op; rollback restores exactly). New `__tests__/api/tourVenuesOwnership.test.ts`. lint (no new warnings), typecheck, 62 suites / 553 tests, build all pass. Live verification runs after the migration is applied.
+
 ## 2026-10-12 — AI Booking Agent card usable on mobile
 
 **Branch:** `fix/agent-card-mobile-layout` · **File:** `pages/band/index.tsx` (layout/CSS only)

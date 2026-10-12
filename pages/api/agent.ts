@@ -502,9 +502,12 @@ async function resolveCitySearch(
     .in('status', ['active', 'planning']).order('created_at', { ascending: false }).limit(1);
   const activeTour = tours?.[0] || null;
 
-  // Find venues in city, excluding ones already on the active tour
+  // Find this band's venues in the city, excluding ones already on the active tour.
+  // Service role bypasses RLS, so the act_id filter is what keeps other bands'
+  // venues (and their contact emails) out of this band's agent results.
   let query: any = service.from('venues')
     .select('id, name, city, state, email, capacity, venue_type')
+    .eq('act_id', actId)
     .ilike('city', `%${city}%`)
     .order('name').limit(20);
   if (state) query = query.ilike('state', state);

@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 import { syncBooking } from '../../../lib/statusSync';
+import { ownedVenueId } from '../../../lib/server/actOwnership';
 
 async function getUser(req: NextApiRequest) {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -41,6 +42,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { tour_id, venue_id } = req.body;
     if (!tour_id || !venue_id) return res.status(400).json({ error: 'tour_id and venue_id required' });
     if (!await canAccessTour(service, tour_id, user.id)) return res.status(403).json({ error: 'Forbidden' });
+
+    // Service role bypasses RLS: the venue must belong to the tour's band, or a
+    // caller could link (and then read, via the venue join) another band's venue.
+    const { data: tourRow, error: tourErr } = await service
+      .from('tours').select('act_id').eq('id', tour_id).maybeSingle();
+    if (tourErr) {
+      console.error('[tour_venues POST] tour lookup failed', { tour_id, error: tourErr.message });
+      return res.status(500).json({ error: 'Could not load the tour' });
+    }
+    const tourActId = (tourRow as { act_id: string | null } | null)?.act_id;
+    if (!tourActId) return res.status(409).json({ error: 'This tour is not linked to a band' });
+
+    let venueOk: string | null;
+    try {
+      venueOk = await ownedVenueId(service, tourActId, venue_id);
+    } catch (e: unknown) {
+      console.error('[tour_venues POST] venue ownership check failed', {
+        tour_id, error: e instanceof Error ? e.message : String(e),
+      });
+      return res.status(500).json({ error: 'Could not verify the venue' });
+    }
+    if (!venueOk) return res.status(404).json({ error: "That venue wasn't found for this band" });
 
     const { data, error } = await service.from('tour_venues').insert({
       tour_id, venue_id, status: 'target', added_by: user.id,
