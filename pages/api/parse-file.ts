@@ -1,33 +1,36 @@
+// pages/api/parse-file.ts
+// POST { base64, mimeType: 'application/pdf' } — returns the PDF's text so the
+// AI agent can read an attached file. Signed-in users only.
+//
+//   200 { text }
+//   400 not a PDF / too large / unreadable / password-protected
+//   401 not signed in · 405 wrong method · 422 no text layer (scanned image)
+
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../lib/supabase';
+import { AppError, withHandler } from '../../lib/apiError';
+import { extractPdfText } from '../../lib/server/pdfText';
 
-export const config = { api: { bodyParser: { sizeLimit: '10mb' } } };
+// Vercel caps request bodies at 4.5 MB; base64 of a 3 MB PDF fits under it.
+export const config = { api: { bodyParser: { sizeLimit: '4.5mb' } } };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') return res.status(405).end();
-
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
-
-  const service = getServiceClient();
-  const { data: { user } } = await service.auth.getUser(token);
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-
-  const { base64, mimeType } = req.body;
-  if (!base64 || !mimeType) return res.status(400).json({ error: 'base64 and mimeType required' });
-
-  try {
-    // pdfjs-dist (bundled in pdf-parse v2) references DOMMatrix at init time.
-    // Polyfill before the dynamic import so the module loads cleanly in Node.js serverless.
-    (globalThis as any).DOMMatrix ??= class DOMMatrix {};
-    const pdfParseModule = await import('pdf-parse');
-    const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
-
-    const buffer = Buffer.from(base64, 'base64');
-    const parsed = await pdfParse(buffer);
-    const text = parsed.text?.trim() || '';
-    return res.status(200).json({ text });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'Failed to parse PDF' });
+/** Extracts text from an uploaded PDF for the signed-in user. */
+async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    throw new AppError(405, 'Method not allowed');
   }
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) throw new AppError(401, 'Sign in again to attach files.');
+  const { data } = await getServiceClient().auth.getUser(token);
+  if (!data.user) throw new AppError(401, 'Sign in again to attach files.');
+
+  const { base64, mimeType } = (req.body ?? {}) as { base64?: unknown; mimeType?: unknown };
+  if (typeof base64 !== 'string' || !base64) throw new AppError(400, 'No file was received. Try attaching it again.');
+  if (mimeType !== 'application/pdf') throw new AppError(400, 'Only PDF files are read here.');
+
+  const text = await extractPdfText(Buffer.from(base64, 'base64'));
+  res.status(200).json({ text });
 }
+
+export default withHandler(handler);

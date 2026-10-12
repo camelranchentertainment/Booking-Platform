@@ -5,6 +5,8 @@ import * as XLSX from 'xlsx';
 import Anthropic from '@anthropic-ai/sdk';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
+import { AppError } from '../../../lib/apiError';
+import { extractPdfText } from '../../../lib/server/pdfText';
 
 export const config = { api: { bodyParser: false } };
 
@@ -95,7 +97,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(403).json({ error: 'Insufficient permissions' });
   }
 
-  const form = formidable({ maxFileSize: 20 * 1024 * 1024 });
+  const form = formidable({ maxFileSize: 4 * 1024 * 1024 }); // Vercel caps bodies at 4.5 MB
   let fields: formidable.Fields;
   let files: formidable.Files;
   try {
@@ -122,12 +124,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let rawText = '';
   try {
     if (ext === 'pdf') {
-      const buf = fs.readFileSync(file.filepath);
-      (globalThis as any).DOMMatrix ??= class DOMMatrix {};
-      const pdfParseModule = await import('pdf-parse');
-      const pdf = (pdfParseModule as any).default ?? pdfParseModule;
-      const pdfData = await pdf(buf);
-      rawText = pdfData.text;
+      rawText = await extractPdfText(fs.readFileSync(file.filepath), 4 * 1024 * 1024);
     } else if (ext === 'xlsx' || ext === 'xls') {
       const buf = fs.readFileSync(file.filepath);
       const wb = XLSX.read(buf, { type: 'buffer' });
@@ -137,6 +134,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       rawText = fs.readFileSync(file.filepath, 'utf-8');
     }
   } catch (e: any) {
+    if (e instanceof AppError) return res.status(e.statusCode).json({ error: e.message });
     return res.status(400).json({ error: 'Failed to read file: ' + e.message });
   } finally {
     try { fs.unlinkSync(file.filepath); } catch {}
