@@ -6,7 +6,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AppError } from '../apiError';
 import type { MessageSendInput } from '../booker/schemas';
-import { replyAddress } from '../booker/emailFormat';
 
 /** Sends allowed per agent in a rolling hour / day. Generous for real booking work, low enough to stop abuse. */
 export const SEND_LIMITS = { perHour: 40, perDay: 250 } as const;
@@ -86,24 +85,13 @@ export async function assertWithinSendLimit(service: SupabaseClient, bookerId: s
   }
 }
 
-export interface SenderIdentity {
-  agencyName: string;
-  replyTo: string;
-}
-
 /**
- * Who the email is from and where replies go: the agency name, and the
- * workspace contact email (Settings) or, failing that, the sign-in email.
+ * The agency name shown as the sender's display name.
  *
- * @throws AppError 400 when the agent has no address replies could reach
+ * @throws AppError 500 when the agent profile cannot be read
  */
-export async function loadSenderIdentity(service: SupabaseClient, bookerId: string, userId: string): Promise<SenderIdentity> {
-  const [{ data: booker, error: bErr }, { data: profile }] = await Promise.all([
-    service.from('booker_profiles').select('agency_name, contact_email').eq('id', bookerId).maybeSingle(),
-    service.from('profiles').select('email').eq('id', userId).maybeSingle(),
-  ]);
-  if (bErr || !booker) throw new AppError(500, 'Could not load your agent profile', false);
-  const replyTo = replyAddress(booker.contact_email as string | null, (profile?.email as string | null) ?? null);
-  if (!replyTo) throw new AppError(400, 'Add your email address in Settings so replies can reach you.');
-  return { agencyName: String(booker.agency_name), replyTo };
+export async function loadAgencyName(service: SupabaseClient, bookerId: string): Promise<string> {
+  const { data, error } = await service.from('booker_profiles').select('agency_name').eq('id', bookerId).maybeSingle();
+  if (error || !data) throw new AppError(500, 'Could not load your agent profile', false);
+  return String(data.agency_name);
 }

@@ -1,5 +1,5 @@
 // __tests__/lib/booker/emailFormat.test.ts
-import { bodyToHtml, defaultFollowup, escapeHtml, fromHeader, replyAddress, safeDisplayName } from '../../../lib/booker/emailFormat';
+import { bodyToHtml, defaultFollowup, escapeHtml, fromHeader, safeDisplayName } from '../../../lib/booker/emailFormat';
 
 describe('escapeHtml', () => {
   it('escapes markup characters', () => {
@@ -34,14 +34,6 @@ describe('safeDisplayName / fromHeader', () => {
   });
   it('caps length', () => {
     expect(safeDisplayName('x'.repeat(200))).toHaveLength(80);
-  });
-});
-
-describe('replyAddress', () => {
-  it('prefers the workspace contact email, then the sign-in email', () => {
-    expect(replyAddress('agent@agency.com', 'login@hotmail.com')).toBe('agent@agency.com');
-    expect(replyAddress('  ', 'login@hotmail.com')).toBe('login@hotmail.com');
-    expect(replyAddress(null, null)).toBeNull();
   });
 });
 

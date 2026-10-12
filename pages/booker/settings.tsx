@@ -1,11 +1,9 @@
 // pages/booker/settings.tsx
-// The agent's profile, how their email is sent, and their plan.
+// The agent's profile, their Gmail connection (required to send) and their plan.
 
 import { useState, type FormEvent } from 'react';
 import BookerShell, { useBooker } from '../../components/booker/BookerShell';
 import GmailConnection from '../../components/booker/GmailConnection';
-import { useAuth } from '../../contexts/AuthContext';
-import { replyAddress } from '../../lib/booker/emailFormat';
 import { ErrorBanner, Field, PageHeader } from '../../components/booker/ui';
 import { listRoster, updateBookerProfile } from '../../lib/booker/data';
 import { BookerProfileSchema, fieldErrors } from '../../lib/booker/schemas';
@@ -16,7 +14,6 @@ const PROFILE_KEYS = ['agency_name', 'contact_name', 'contact_email', 'contact_p
 
 function SettingsContent() {
   const { booker, refreshBooker } = useBooker();
-  const { user } = useAuth();
   const [values, setValues] = useState(() => toFormValues(booker, PROFILE_KEYS));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
@@ -69,7 +66,7 @@ function SettingsContent() {
               {p => <input {...p} className="input" value={values.contact_name} onChange={set('contact_name')} />}
             </Field>
             <div className="grid-2">
-              <Field label="Email" hint="Replies to emails you send from the workspace come here. Leave blank to use your sign-in email." error={errors.contact_email}>
+              <Field label="Email" hint="Your agency contact address. Workspace email is sent from your connected Gmail." error={errors.contact_email}>
                 {p => <input {...p} className="input" type="email" value={values.contact_email} onChange={set('contact_email')} />}
               </Field>
               <Field label="Phone" error={errors.contact_phone}>
@@ -90,7 +87,7 @@ function SettingsContent() {
           </form>
         </section>
 
-        <GmailConnection replyTo={replyAddress(booker.contact_email, user?.email ?? null)} />
+        <GmailConnection />
 
         <section aria-labelledby="plan-h" className="card">
           <h2 id="plan-h" className="eyebrow" style={{ color: 'var(--accent)', fontSize: '1.05rem', margin: '0 0 0.9rem' }}>

@@ -181,9 +181,9 @@ async function accessToken(service: SupabaseClient, row: BookerGmailRow): Promis
   const t = await tokenRequest({ refresh_token: row.google_refresh_token, client_id: clientId, client_secret: clientSecret, grant_type: 'refresh_token' });
   if (!t.access_token) {
     if (t.error === 'invalid_grant') {
-      // Revoked or expired at Google: forget it so the next send uses the platform sender.
+      // Revoked or expired at Google: forget it so Settings shows "not connected" and the agent reconnects.
       await service.from('booker_credentials').delete().eq('booker_id', row.booker_id);
-      throw new AppError(409, 'Your Gmail connection has expired. Reconnect Gmail in Settings, or send again to use Camel Ranch’s sender.');
+      throw new AppError(409, 'Your Gmail connection has expired. Reconnect Gmail in Settings to send.');
     }
     console.error('[bookerGmail] token refresh failed', { error: t.error ?? 'no access_token' });
     throw new AppError(502, 'Gmail is not responding right now. Try again in a minute.');

@@ -1,8 +1,9 @@
 // components/booker/GmailConnection.tsx
-// Settings card: how the agent's email goes out. Connect Gmail to send from
-// their own address (and keep copies in Gmail's Sent folder), or use the
-// platform sender with replies going to them. Reads the result of Google's
-// redirect back (?gmail=connected / ?gmail_error=…) and shows it once.
+// Settings card: the agent's Gmail connection. Sending email from the
+// workspace requires it: mail goes out from the agent's own Gmail (the same
+// model as the band side), never from a platform sender. The card says so
+// plainly, lists what is and is not accessed, and reads the result of Google's
+// redirect back (?gmail=connected / ?gmail_error=…) once.
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
@@ -18,7 +19,22 @@ const ERROR_TEXT: Record<string, string> = {
   not_configured: 'Gmail connection is not set up on this site yet.',
 };
 
-export default function GmailConnection({ replyTo }: { replyTo: string | null }) {
+/** Plain-language disclosure shown whether or not Gmail is connected. */
+function WhatThisMeans() {
+  return (
+    <ul className="text-xs text-muted" style={{ paddingLeft: '1.1rem', lineHeight: 1.7, margin: '0.25rem 0 0.9rem' }}>
+      <li>
+        <strong style={{ color: 'var(--text)' }}>Required to send.</strong> Email from the workspace only goes out through your own Gmail or Google Workspace account. Without it you can still write drafts, track venues and set follow-ups.
+      </li>
+      <li>Venues see your address, replies land in your inbox, and every email stays in your Gmail Sent folder.</li>
+      <li>Camel Ranch Booking asks Google only for permission to compose and send. It cannot read your inbox.</li>
+      <li>Your Gmail is used only for your agent workspace. It is never connected to any band’s account.</li>
+      <li>Normal Gmail sending limits apply. You can disconnect here at any time, or remove access from your Google account.</li>
+    </ul>
+  );
+}
+
+export default function GmailConnection() {
   const router = useRouter();
   const [status, setStatus] = useState<GmailStatus | null>(null);
   const [loadError, setLoadError] = useState('');
@@ -66,7 +82,7 @@ export default function GmailConnection({ replyTo }: { replyTo: string | null })
       await disconnectGmail();
       setStatus({ connected: false });
       setConfirmDisconnect(false);
-      setNotice({ kind: 'ok', text: 'Gmail disconnected. Email now goes out through Camel Ranch Booking, with replies to you.' });
+      setNotice({ kind: 'ok', text: 'Gmail disconnected. Connect it again to send email from the workspace.' });
     } catch (err) {
       setNotice({ kind: 'error', text: err instanceof Error ? err.message : 'Could not disconnect Gmail.' });
     } finally {
@@ -77,9 +93,9 @@ export default function GmailConnection({ replyTo }: { replyTo: string | null })
   const year = new Date().getFullYear();
 
   return (
-    <section aria-labelledby="mail-h" className="card">
+    <section id="gmail" aria-labelledby="mail-h" className="card" style={{ scrollMarginTop: '1rem' }}>
       <h2 id="mail-h" className="eyebrow" style={{ color: 'var(--accent)', fontSize: '1.05rem', margin: '0 0 0.9rem' }}>
-        How your email is sent
+        Gmail — required to send email
       </h2>
       <div aria-live="polite">
         {notice && (
@@ -103,7 +119,7 @@ export default function GmailConnection({ replyTo }: { replyTo: string | null })
             </span>
             Sending from <strong>{status.gmail_address}</strong> since {formatShowDate(status.connected_at.slice(0, 10), year)}.
           </p>
-          <p className="text-xs text-muted">Venues see your own address, replies land in your Gmail, and every email is kept in your Sent folder.</p>
+          <WhatThisMeans />
           {!confirmDisconnect ? (
             <button type="button" className="btn btn-ghost btn-sm" style={{ paddingLeft: 0 }} onClick={() => setConfirmDisconnect(true)}>
               Disconnect Gmail
@@ -127,17 +143,14 @@ export default function GmailConnection({ replyTo }: { replyTo: string | null })
       {status && !status.connected && (
         <>
           <p className="text-sm" style={{ color: 'var(--text)', marginTop: 0 }}>
-            Email goes out through Camel Ranch Booking under your agency name.{' '}
-            {replyTo ? (
-              <>
-                Replies go to <strong>{replyTo}</strong>.
-              </>
-            ) : (
-              <>Add your email above so replies reach you.</>
-            )}
+            <span className="badge" style={{ marginRight: 8, border: '1px solid var(--accent)', color: 'var(--accent)' }}>
+              Not connected
+            </span>
+            Connect a Gmail or Google Workspace account to send email from the workspace.
           </p>
-          <p className="text-xs text-muted">Use Gmail or Google Workspace? Connect it to send from your own address and keep every email in your Sent folder. Any other email provider works fine as it is.</p>
-          <button type="button" className="btn btn-secondary" onClick={connect} disabled={busy === 'connect'} aria-busy={busy === 'connect'}>
+          <WhatThisMeans />
+          <p className="text-xs text-muted">No Gmail account? Creating one is free at accounts.google.com.</p>
+          <button type="button" className="btn btn-primary" onClick={connect} disabled={busy === 'connect'} aria-busy={busy === 'connect'}>
             {busy === 'connect' ? 'Opening Google…' : 'Connect Gmail'}
           </button>
         </>

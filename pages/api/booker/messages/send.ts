@@ -2,16 +2,18 @@
 // POST — sends one email from the Booking Agent workspace and logs it.
 //
 // Body (MessageSendSchema): to_email, to_name?, subject, body, roster_id?,
-// venue_id?, contact_id?, show_id?, followup_on?, copy_to_self?
+// venue_id?, contact_id?, show_id?, followup_on?, template_key?, ai_assisted?
 //
 //   200 { message }            sent and logged
-//   400 invalid body / reference not the caller's / no reply address
+//   400 invalid body / reference not the caller's
 //   401/403 not an agent
+//   409 Gmail not connected (or the connection expired)
 //   429 send limit reached
-//   501 email not configured, 502 provider rejected (a failed row is logged)
+//   502 Gmail rejected the send (a failed row is logged)
 //
-// Delivery: the agent's own Gmail when connected (copy_to_self is then moot:
-// Gmail keeps it in Sent), else the platform sender with Reply-To the agent.
+// Delivery: always the agent's own connected Gmail, the same model as the
+// band side. There is no platform sender for agents: the email comes from
+// their address, replies land in their inbox and Gmail keeps the copy in Sent.
 //
 // Service role: bypasses RLS, so the caller is resolved with requireBooker and
 // every read and write is scoped to that bookerId. The browser has no INSERT
@@ -22,9 +24,8 @@ import { getServiceClient } from '../../../../lib/supabase';
 import { AppError, withHandler } from '../../../../lib/apiError';
 import { requireBooker } from '../../../../lib/server/requireBooker';
 import { MessageSendSchema } from '../../../../lib/booker/schemas';
-import { bodyToHtml, fromHeader } from '../../../../lib/booker/emailFormat';
-import { assertWithinSendLimit, loadSenderIdentity, resolveLinks } from '../../../../lib/server/bookerMessages';
-import { deliverViaPlatform, platformFromAddress } from '../../../../lib/server/bookerMailer';
+import { bodyToHtml } from '../../../../lib/booker/emailFormat';
+import { assertWithinSendLimit, loadAgencyName, resolveLinks } from '../../../../lib/server/bookerMessages';
 import { getBookerGmail, sendViaBookerGmail } from '../../../../lib/server/bookerGmail';
 
 /** Sends an agent's email and records it in booker_messages. */
@@ -34,19 +35,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     throw new AppError(405, 'Method not allowed');
   }
   const service = getServiceClient();
-  const { bookerId, userId } = await requireBooker(req, service);
+  const { bookerId } = await requireBooker(req, service);
 
   const parsed = MessageSendSchema.safeParse(req.body ?? {});
   if (!parsed.success) throw new AppError(400, parsed.error.issues[0]?.message ?? 'Check the email and try again');
   const input = parsed.data;
 
+  const gmail = await getBookerGmail(service, bookerId);
+  if (!gmail) throw new AppError(409, 'Connect your Gmail in Settings to send email from the workspace.');
   const links = await resolveLinks(service, bookerId, input);
   await assertWithinSendLimit(service, bookerId);
-  const sender = await loadSenderIdentity(service, bookerId, userId);
-  // The agent's own Gmail when connected (lands in their Sent folder); otherwise
-  // the platform sender with Reply-To set to the agent.
-  const gmail = await getBookerGmail(service, bookerId);
-  const fromAddress = gmail ? gmail.gmail_address : await platformFromAddress();
+  const agencyName = await loadAgencyName(service, bookerId);
 
   const base = {
     booker_id: bookerId,
@@ -54,11 +53,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     direction: 'outbound' as const,
     to_email: input.to_email,
     to_name: input.to_name,
-    copy_to_self: input.copy_to_self,
+    // Gmail keeps the agent's copy in Sent; no separate copy is sent.
+    copy_to_self: false,
     subject: input.subject,
     body: input.body,
-    reply_to: gmail ? gmail.gmail_address : sender.replyTo,
-    sent_via: gmail ? ('gmail' as const) : ('platform' as const),
+    reply_to: gmail.gmail_address,
+    sent_via: 'gmail' as const,
     followup_on: input.followup_on,
     template_key: input.template_key,
     ai_assisted: input.ai_assisted,
@@ -66,21 +66,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   let delivery;
   try {
-    delivery = gmail
-      ? await sendViaBookerGmail(service, gmail, { displayName: sender.agencyName, to: input.to_email, subject: input.subject, html: bodyToHtml(input.body) })
-      : await deliverViaPlatform({
-          from: fromHeader(sender.agencyName, fromAddress),
-          to: input.to_email,
-          replyTo: sender.replyTo,
-          bcc: input.copy_to_self && sender.replyTo.toLowerCase() !== input.to_email.toLowerCase() ? sender.replyTo : undefined,
-          subject: input.subject,
-          html: bodyToHtml(input.body),
-          text: input.body,
-        });
+    delivery = await sendViaBookerGmail(service, gmail, { displayName: agencyName, to: input.to_email, subject: input.subject, html: bodyToHtml(input.body) });
   } catch (err) {
     const message = err instanceof AppError && err.isOperational ? err.message : 'The email could not be sent.';
     // Record the attempt so the agent sees it failed (and it counts toward the limit).
-    const { error: logErr } = await service.from('booker_messages').insert({ ...base, from_address: fromAddress, status: 'failed', error: message.slice(0, 500), followup_on: null });
+    const { error: logErr } = await service.from('booker_messages').insert({ ...base, from_address: gmail.gmail_address, status: 'failed', error: message.slice(0, 500), followup_on: null });
     if (logErr) console.error('[booker/messages/send] could not log failed send', { code: logErr.code });
     throw err;
   }
