@@ -54,9 +54,3 @@ export function fromHeader(displayName: string | null | undefined, address: stri
 export function defaultFollowup(today: string): string {
   return addDays(today, DEFAULT_FOLLOWUP_DAYS);
 }
-
-/** The address replies should reach: the agent's workspace email, else their sign-in email. */
-export function replyAddress(contactEmail: string | null | undefined, accountEmail: string | null | undefined): string | null {
-  const pick = (contactEmail ?? '').trim() || (accountEmail ?? '').trim();
-  return pick || null;
-}

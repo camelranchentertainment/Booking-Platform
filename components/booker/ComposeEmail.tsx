@@ -10,16 +10,20 @@
 // agent already typed asks first. Anything left in [brackets] must be filled
 // in before the email can go.
 //
+// Email always goes out through the agent's own connected Gmail (the same
+// model as the band side). Until Gmail is connected, Send stays disabled and
+// the dialog points to Settings; the agent can still write and draft.
+//
 // The submit button is disabled while sending (no double sends) and nothing
 // typed is lost when a send fails.
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import Link from 'next/link';
 import { useBooker } from './BookerShell';
 import { ErrorBanner, Field, Modal } from './ui';
 import { draftMessage, getGmailStatus, sendMessage, type GmailStatus, type SendResult } from '../../lib/booker/data';
 import { MessageSendSchema, fieldErrors } from '../../lib/booker/schemas';
-import { defaultFollowup, replyAddress } from '../../lib/booker/emailFormat';
+import { defaultFollowup } from '../../lib/booker/emailFormat';
 import { formatShowDate, formatTime, todayIso } from '../../lib/booker/dates';
 import { formatMoney } from '../../lib/booker/commission';
 import { EMAIL_TEMPLATES, firstName, hasPlaceholders, renderTemplate, templateByKey, type TemplateAudience } from '../../lib/booker/templates';
@@ -58,7 +62,6 @@ const ERROR_STYLE = { fontSize: '0.78rem', color: 'var(--red)', fontWeight: 700 
 
 export default function ComposeEmail({ recipients, bands, shows = [], venuesById = new Map(), venueId, defaultRecipient = 0, defaultBandId, defaultShowId, defaultSubject = '', defaultBody = '', audience = 'venue', onClose, onSent }: Props) {
   const { booker } = useBooker();
-  const { user } = useAuth();
   const today = todayIso();
   const year = Number(today.slice(0, 4));
 
@@ -71,7 +74,6 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
   const [showId, setShowId] = useState(defaultShowId ?? '');
   const [followup, setFollowup] = useState(true);
   const [followupOn, setFollowupOn] = useState(defaultFollowup(today));
-  const [copyToSelf, setCopyToSelf] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -84,20 +86,20 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
   const [pending, setPending] = useState<{ subject: string; body: string; source: 'template' | 'ai'; key: string } | null>(null);
   const [lastFilled, setLastFilled] = useState(defaultBody);
   const [gmail, setGmail] = useState<GmailStatus | null>(null);
+  const [gmailCheckFailed, setGmailCheckFailed] = useState(false);
 
-  // Best effort: only changes the "how this is sent" note and hides "Send me a copy".
+  // Sending needs a connected Gmail; until the check answers, Send stays off.
   useEffect(() => {
     let cancelled = false;
     getGmailStatus()
       .then(s => !cancelled && setGmail(s))
-      .catch(() => undefined);
+      .catch(() => !cancelled && setGmailCheckFailed(true));
     return () => {
       cancelled = true;
     };
   }, []);
-  const viaGmail = gmail?.connected === true;
-
-  const replyTo = replyAddress(booker.contact_email, user?.email ?? null);
+  const gmailReady = gmail?.connected === true;
+  const gmailMissing = gmail !== null && !gmail.connected;
   const activeBands = bands.filter(b => b.status === 'active' || b.id === rosterId);
   const showOptions = useMemo(
     () => shows.filter(s => s.status !== 'cancelled' && (!rosterId || s.roster_id === rosterId) && (!venueId || s.venue_id === venueId)).sort((a, b) => a.show_date.localeCompare(b.show_date)),
@@ -174,7 +176,7 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (busy) return;
+    if (busy || !gmailReady) return;
     setFormError('');
     const chosen = to === OTHER ? null : recipients[Number(to)];
     const raw = {
@@ -187,7 +189,8 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
       contact_id: chosen?.contactId ?? '',
       show_id: showOptions.some(s => s.id === showId) ? showId : '',
       followup_on: followup ? followupOn : '',
-      copy_to_self: copyToSelf,
+      // Gmail keeps the agent's copy in Sent.
+      copy_to_self: false,
       template_key: templateKey,
       ai_assisted: aiAssisted,
     };
@@ -224,6 +227,17 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
   return (
     <Modal title="Send email" onClose={busy ? () => undefined : onClose} wide>
       {formError && <ErrorBanner message={formError} />}
+      {gmailMissing && (
+        <div role="status" style={{ border: '1px solid var(--accent)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-2)', padding: '0.75rem 0.9rem', marginBottom: '0.9rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="text-sm" style={{ color: 'var(--text)', flex: '1 1 260px' }}>
+            <strong>Connect your Gmail to send.</strong> Email from the workspace goes out from your own Gmail account. You can still write and draft here.
+          </span>
+          <Link href="/booker/settings#gmail" className="btn btn-secondary btn-sm">
+            Go to Settings
+          </Link>
+        </div>
+      )}
+      {gmailCheckFailed && <ErrorBanner message="Could not check your Gmail connection. Reload to try again." />}
       <form onSubmit={submit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
         <Field label="To" required error={to !== OTHER ? errors.to_email : undefined}>
           {p => (
@@ -455,12 +469,6 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
             aria-invalid={errors.followup_on ? true : undefined}
             style={{ width: 'auto' }}
           />
-          {!viaGmail && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text)' }}>
-              <input type="checkbox" checked={copyToSelf} onChange={e => setCopyToSelf(e.target.checked)} disabled={busy} style={{ width: 18, height: 18 }} />
-              Send me a copy
-            </label>
-          )}
         </div>
         {errors.followup_on && (
           <div role="alert" style={ERROR_STYLE}>
@@ -468,30 +476,17 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
           </div>
         )}
 
-        <p className="text-xs text-muted" style={{ margin: 0, lineHeight: 1.6 }}>
-          {gmail?.connected ? (
-            <>
-              Sends from your Gmail, <strong style={{ color: 'var(--text)' }}>{gmail.gmail_address}</strong>. A copy stays in your Sent folder.
-            </>
-          ) : (
-            <>
-              Sends as <strong style={{ color: 'var(--text)' }}>{booker.agency_name}</strong> through Camel Ranch Booking.{' '}
-              {replyTo ? (
-                <>
-                  Replies go straight to <strong style={{ color: 'var(--text)' }}>{replyTo}</strong>.
-                </>
-              ) : (
-                <>Add your email in Settings so replies reach you.</>
-              )}
-            </>
-          )}
-        </p>
+        {gmail?.connected && (
+          <p className="text-xs text-muted" style={{ margin: 0, lineHeight: 1.6 }}>
+            Sends from your Gmail, <strong style={{ color: 'var(--text)' }}>{gmail.gmail_address}</strong>. Replies come to that inbox and a copy stays in your Sent folder.
+          </p>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
           <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button type="submit" className="btn btn-primary" disabled={busy || (!replyTo && !viaGmail)} aria-busy={busy}>
+          <button type="submit" className="btn btn-primary" disabled={busy || !gmailReady} aria-busy={busy}>
             {busy ? 'Sending…' : 'Send email'}
           </button>
         </div>

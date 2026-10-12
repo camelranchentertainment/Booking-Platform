@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import BookerShell from '../../components/booker/BookerShell';
 import ShowRow from '../../components/booker/ShowRow';
+import WorkspaceRequirements from '../../components/booker/WorkspaceRequirements';
 import { RosterBandForm, ShowForm } from '../../components/booker/forms';
 import { BandDot, EmptyState, ErrorBanner, PageHeader, SkeletonRows } from '../../components/booker/ui';
 import { listMessages, listRoster, listShows, listVenues, setFollowupDone } from '../../lib/booker/data';
@@ -118,6 +119,8 @@ function HomeContent() {
           </>
         }
       />
+
+      <WorkspaceRequirements />
 
       {error && <ErrorBanner message={error} onRetry={reload} />}
       {loading && !data && <SkeletonRows rows={6} />}
