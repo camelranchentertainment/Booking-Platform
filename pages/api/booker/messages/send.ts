@@ -53,6 +53,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     reply_to: sender.replyTo,
     sent_via: 'platform' as const,
     followup_on: input.followup_on,
+    template_key: input.template_key,
+    ai_assisted: input.ai_assisted,
   };
 
   let delivery;

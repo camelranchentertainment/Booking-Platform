@@ -22,6 +22,7 @@ import type {
 import type {
   BookerProfileInput,
   ContactInput,
+  DraftRequestInput,
   MessageSendInput,
   PaymentInput,
   RosterBandInput,
@@ -214,6 +215,11 @@ export interface SendResult {
 
 export function sendMessage(input: MessageSendInput): Promise<SendResult> {
   return callBookerApi<SendResult>('/api/booker/messages/send', { method: 'POST', body: JSON.stringify(input) }, 'send the email');
+}
+
+/** "Draft with AI": returns a subject and body to review. Nothing is sent. */
+export function draftMessage(input: DraftRequestInput): Promise<{ draft: { subject: string; body: string } }> {
+  return callBookerApi('/api/booker/messages/draft', { method: 'POST', body: JSON.stringify(input) }, 'draft the email');
 }
 
 /** Marks a follow-up reminder done (or reopens it). */
