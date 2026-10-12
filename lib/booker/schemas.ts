@@ -175,6 +175,22 @@ export const PaymentSchema = z.object({
 });
 export type PaymentInput = z.infer<typeof PaymentSchema>;
 
+// ── Email from the workspace ────────────────────────────────────────────────
+// Limits mirror booker_messages CHECK constraints.
+export const MessageSendSchema = z.object({
+  to_email: z.preprocess(v => (typeof v === 'string' ? v.trim() : v), z.email('Enter a valid email address').max(254)),
+  to_name: optionalText('Recipient name', 120),
+  subject: requiredText('Subject', 200),
+  body: requiredText('Message', 20000),
+  roster_id: optionalUuid,
+  venue_id: optionalUuid,
+  contact_id: optionalUuid,
+  show_id: optionalUuid,
+  followup_on: optionalIsoDate('Follow-up date'),
+  copy_to_self: z.preprocess(v => v === true || v === 'true', z.boolean()).default(true),
+});
+export type MessageSendInput = z.infer<typeof MessageSendSchema>;
+
 // ── Agent-only signup ───────────────────────────────────────────────────────
 export const BookerSignupSchema = z.object({
   email: z.preprocess(v => (typeof v === 'string' ? v.trim().toLowerCase() : v), z.email('Enter a valid email address').max(254)),

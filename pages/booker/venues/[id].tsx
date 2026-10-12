@@ -1,16 +1,18 @@
 // pages/booker/venues/[id].tsx
 // One venue (or festival, fair, promoter, private-event buyer): details, its
 // contacts with a "Show to my bands" checkbox each, website scan, and the shows
-// the agent's bands have played or booked there.
+// the agent's bands have played or booked there, and the emails sent about it.
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import BookerShell from '../../../components/booker/BookerShell';
 import ShowRow from '../../../components/booker/ShowRow';
+import ComposeEmail, { type Recipient } from '../../../components/booker/ComposeEmail';
+import MessageHistory from '../../../components/booker/MessageHistory';
 import { ContactForm, ShowForm, VenueForm } from '../../../components/booker/forms';
 import { EmptyState, ErrorBanner, PageHeader, SkeletonRows } from '../../../components/booker/ui';
-import { archiveContact, archiveVenue, listContacts, listRoster, listShows, listVenues, scanVenueWebsite, setContactShared } from '../../../lib/booker/data';
+import { archiveContact, archiveVenue, listContacts, listMessages, listRoster, listShows, listVenues, scanVenueWebsite, setContactShared } from '../../../lib/booker/data';
 import { todayIso } from '../../../lib/booker/dates';
 import { byId, findConflicts } from '../../../lib/booker/workspace';
 import { useLoad } from '../../../lib/booker/useLoad';
@@ -23,8 +25,8 @@ function VenueContent({ venueId }: { venueId: string }) {
   const today = todayIso();
   const year = Number(today.slice(0, 4));
   const { data, loading, error, reload } = useLoad(async () => {
-    const [venues, contacts, shows, bands] = await Promise.all([listVenues(), listContacts(), listShows(), listRoster()]);
-    return { venues, contacts, shows, bands };
+    const [venues, contacts, shows, bands, messages] = await Promise.all([listVenues(), listContacts(), listShows(), listRoster(), listMessages({ venueId })]);
+    return { venues, contacts, shows, bands, messages };
   }, venueId);
 
   const [editingVenue, setEditingVenue] = useState(false);
@@ -35,14 +37,21 @@ function VenueContent({ venueId }: { venueId: string }) {
   const [actionError, setActionError] = useState('');
   const [confirmContact, setConfirmContact] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [composing, setComposing] = useState<number | null>(null);
+  const [sentNotice, setSentNotice] = useState('');
 
   const venue = data?.venues.find(v => v.id === venueId);
   const view = useMemo(() => {
     if (!data || !venue) return null;
     const contacts = data.contacts.filter(c => c.venue_id === venue.id);
     const shows = data.shows.filter(s => s.venue_id === venue.id);
+    const recipients: Array<Recipient & { contactId?: string }> = [
+      ...contacts.filter(c => c.email).map(c => ({ email: c.email!, name: c.name, contactId: c.id, label: c.title ? `${c.name} — ${c.title}` : c.name })),
+      ...(venue.email && !contacts.some(c => c.email?.toLowerCase() === venue.email!.toLowerCase()) ? [{ email: venue.email, name: null, label: `${venue.name} booking inbox` }] : []),
+    ];
     return {
       contacts,
+      recipients,
       upcoming: shows.filter(s => s.show_date >= today),
       past: shows.filter(s => s.show_date < today).reverse(),
       bandsById: byId(data.bands),
@@ -137,6 +146,9 @@ function VenueContent({ venueId }: { venueId: string }) {
             <button type="button" className="btn btn-secondary" onClick={() => setEditingVenue(true)}>
               Edit details
             </button>
+            <button type="button" className="btn btn-secondary" onClick={() => setComposing(0)}>
+              ✉ Email
+            </button>
             <button type="button" className="btn btn-primary" onClick={() => setEditingShow('new')} disabled={data.bands.length === 0}>
               + Book a show here
             </button>
@@ -144,6 +156,13 @@ function VenueContent({ venueId }: { venueId: string }) {
         }
       />
       {actionError && <ErrorBanner message={actionError} />}
+      <div aria-live="polite">
+        {sentNotice && (
+          <p role="status" className="card text-sm" style={{ color: 'var(--green)', borderColor: 'rgba(74,222,128,0.35)', padding: '0.7rem 1rem' }}>
+            {sentNotice}
+          </p>
+        )}
+      </div>
 
       <div style={{ display: 'grid', gap: '1.25rem', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', alignItems: 'start' }} className="mb-6">
         {/* Details */}
@@ -227,6 +246,16 @@ function VenueContent({ venueId }: { venueId: string }) {
                       </div>
                     </div>
                     <span style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
+                      {c.email && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setComposing(Math.max(0, view.recipients.findIndex(r => r.contactId === c.id)))}
+                          aria-label={`Email ${c.name}`}
+                        >
+                          Email
+                        </button>
+                      )}
                       <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditingContact(c)} aria-label={`Edit ${c.name}`}>
                         Edit
                       </button>
@@ -266,6 +295,18 @@ function VenueContent({ venueId }: { venueId: string }) {
           </p>
         </section>
       </div>
+
+      <section aria-labelledby="vmail-h" className="card mb-6">
+        <div className="flex items-center justify-between mb-3" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+          <h2 id="vmail-h" className="eyebrow" style={{ color: 'var(--accent)', fontSize: '1.05rem', margin: 0 }}>
+            Emails
+          </h2>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setComposing(0)}>
+            ✉ New email
+          </button>
+        </div>
+        <MessageHistory messages={data.messages} onChanged={() => void reload()} emptyText="No emails sent from here yet. Emails you send to this venue’s contacts are kept here with their follow-up dates." />
+      </section>
 
       <section aria-labelledby="vshows-h" className="mb-6">
         <h2 id="vshows-h" className="display" style={{ fontSize: '1.6rem', margin: '0 0 0.75rem' }}>
@@ -326,6 +367,23 @@ function VenueContent({ venueId }: { venueId: string }) {
           onClose={() => setEditingContact(null)}
           onSaved={() => {
             setEditingContact(null);
+            void reload();
+          }}
+        />
+      )}
+      {composing !== null && (
+        <ComposeEmail
+          recipients={view.recipients}
+          defaultRecipient={composing}
+          bands={data.bands}
+          shows={data.shows}
+          venuesById={view.venuesById}
+          venueId={venue.id}
+          onClose={() => setComposing(null)}
+          onSent={result => {
+            setComposing(null);
+            setSentNotice(result.warning ?? 'Email sent. It’s saved below with its follow-up date.');
+            setTimeout(() => setSentNotice(''), 6000);
             void reload();
           }}
         />

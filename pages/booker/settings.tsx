@@ -65,7 +65,7 @@ function SettingsContent() {
               {p => <input {...p} className="input" value={values.contact_name} onChange={set('contact_name')} />}
             </Field>
             <div className="grid-2">
-              <Field label="Email" error={errors.contact_email}>
+              <Field label="Email" hint="Replies to emails you send from the workspace come here. Leave blank to use your sign-in email." error={errors.contact_email}>
                 {p => <input {...p} className="input" type="email" value={values.contact_email} onChange={set('contact_email')} />}
               </Field>
               <Field label="Phone" error={errors.contact_phone}>

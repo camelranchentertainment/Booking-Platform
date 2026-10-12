@@ -1,14 +1,17 @@
 // pages/booker/bands/[id].tsx
-// One band in the agent's roster: details, upcoming and past shows, commission.
+// One band in the agent's roster: details, upcoming and past shows, commission,
+// and the emails sent about the band.
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import BookerShell from '../../../components/booker/BookerShell';
 import ShowRow from '../../../components/booker/ShowRow';
+import ComposeEmail, { type Recipient } from '../../../components/booker/ComposeEmail';
+import MessageHistory from '../../../components/booker/MessageHistory';
 import { RosterBandForm, ShowForm } from '../../../components/booker/forms';
 import { EmptyState, ErrorBanner, PageHeader, SkeletonRows } from '../../../components/booker/ui';
-import { archiveRosterBand, listPayments, listRoster, listShows, listVenues } from '../../../lib/booker/data';
+import { archiveRosterBand, listMessages, listPayments, listRoster, listShows, listVenues } from '../../../lib/booker/data';
 import { todayIso } from '../../../lib/booker/dates';
 import { commissionTotals, formatMoney } from '../../../lib/booker/commission';
 import { byId, findConflicts } from '../../../lib/booker/workspace';
@@ -20,14 +23,16 @@ function BandContent({ bandId }: { bandId: string }) {
   const today = todayIso();
   const year = Number(today.slice(0, 4));
   const { data, loading, error, reload } = useLoad(async () => {
-    const [bands, venues, shows, payments] = await Promise.all([listRoster(), listVenues(), listShows({ rosterId: bandId }), listPayments()]);
-    return { bands, venues, shows, payments };
+    const [bands, venues, shows, payments, messages] = await Promise.all([listRoster(), listVenues(), listShows({ rosterId: bandId }), listPayments(), listMessages({ rosterId: bandId })]);
+    return { bands, venues, shows, payments, messages };
   }, bandId);
   const [editingShow, setEditingShow] = useState<BookerShow | 'new' | null>(null);
   const [editingBand, setEditingBand] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [removeError, setRemoveError] = useState('');
   const [removing, setRemoving] = useState(false);
+  const [composing, setComposing] = useState(false);
+  const [sentNotice, setSentNotice] = useState('');
 
   const band = data?.bands.find(b => b.id === bandId);
 
@@ -91,12 +96,23 @@ function BandContent({ bandId }: { bandId: string }) {
             <button type="button" className="btn btn-secondary" onClick={() => setEditingBand(true)}>
               Edit band
             </button>
+            <button type="button" className="btn btn-secondary" onClick={() => setComposing(true)}>
+              ✉ Email band
+            </button>
             <button type="button" className="btn btn-primary" onClick={() => setEditingShow('new')}>
               + Add show
             </button>
           </>
         }
       />
+
+      <div aria-live="polite">
+        {sentNotice && (
+          <p role="status" className="card text-sm" style={{ color: 'var(--green)', borderColor: 'rgba(74,222,128,0.35)', padding: '0.7rem 1rem' }}>
+            {sentNotice}
+          </p>
+        )}
+      </div>
 
       <div className="grid-4 mb-6">
         <div className="card stat-block">
@@ -161,6 +177,18 @@ function BandContent({ bandId }: { bandId: string }) {
         </section>
       )}
 
+      <section aria-labelledby="bmail-h" className="card mb-6">
+        <div className="flex items-center justify-between mb-3" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+          <h2 id="bmail-h" className="eyebrow" style={{ color: 'var(--accent)', fontSize: '1.05rem', margin: 0 }}>
+            Emails about {band.band_name}
+          </h2>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setComposing(true)}>
+            ✉ New email
+          </button>
+        </div>
+        <MessageHistory messages={data.messages} onChanged={() => void reload()} emptyText="Nothing yet. Emails to the band, and to venues about this band, are kept here." />
+      </section>
+
       <section aria-labelledby="danger-h" className="card" style={{ borderColor: 'rgba(240,104,95,0.35)' }}>
         <h2 id="danger-h" className="eyebrow" style={{ color: 'var(--red)', fontSize: '1rem', margin: '0 0 0.4rem' }}>
           Remove from roster
@@ -188,6 +216,22 @@ function BandContent({ bandId }: { bandId: string }) {
         )}
       </section>
 
+      {composing && (
+        <ComposeEmail
+          recipients={band.contact_email ? [{ email: band.contact_email, name: band.contact_name, label: band.contact_name ? `${band.contact_name} (${band.band_name})` : `${band.band_name} contact` } satisfies Recipient] : []}
+          bands={data.bands}
+          shows={data.shows}
+          venuesById={view.venuesById}
+          defaultBandId={band.id}
+          onClose={() => setComposing(false)}
+          onSent={result => {
+            setComposing(false);
+            setSentNotice(result.warning ?? 'Email sent. It’s saved under Emails below.');
+            setTimeout(() => setSentNotice(''), 6000);
+            void reload();
+          }}
+        />
+      )}
       {editingShow && (
         <ShowForm
           show={editingShow === 'new' ? undefined : editingShow}
