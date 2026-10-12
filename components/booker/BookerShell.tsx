@@ -37,6 +37,7 @@ export const BOOKER_NAV = [
   { label: 'Shows', href: '/booker/shows', icon: '◷' },
   { label: 'Venues', href: '/booker/venues', icon: '⌂' },
   { label: 'Commission', href: '/booker/commission', icon: '$' },
+  { label: 'Assistant', href: '/booker/assistant', icon: '✦' },
   { label: 'Settings', href: '/booker/settings', icon: '⚙' },
 ] as const;
 

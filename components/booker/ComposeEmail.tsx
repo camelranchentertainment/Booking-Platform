@@ -45,6 +45,8 @@ interface Props {
   defaultBandId?: string;
   defaultShowId?: string;
   defaultSubject?: string;
+  /** Pre-filled message, e.g. a draft the assistant proposed */
+  defaultBody?: string;
   /** Who this is usually written to; that template set is listed first. */
   audience?: TemplateAudience;
   onClose: () => void;
@@ -54,7 +56,7 @@ interface Props {
 const OTHER = 'other';
 const ERROR_STYLE = { fontSize: '0.78rem', color: 'var(--red)', fontWeight: 700 } as const;
 
-export default function ComposeEmail({ recipients, bands, shows = [], venuesById = new Map(), venueId, defaultRecipient = 0, defaultBandId, defaultShowId, defaultSubject = '', audience = 'venue', onClose, onSent }: Props) {
+export default function ComposeEmail({ recipients, bands, shows = [], venuesById = new Map(), venueId, defaultRecipient = 0, defaultBandId, defaultShowId, defaultSubject = '', defaultBody = '', audience = 'venue', onClose, onSent }: Props) {
   const { booker } = useBooker();
   const { user } = useAuth();
   const today = todayIso();
@@ -64,7 +66,7 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
   const [otherEmail, setOtherEmail] = useState('');
   const [otherName, setOtherName] = useState('');
   const [subject, setSubject] = useState(defaultSubject);
-  const [body, setBody] = useState('');
+  const [body, setBody] = useState(defaultBody);
   const [rosterId, setRosterId] = useState(defaultBandId ?? '');
   const [showId, setShowId] = useState(defaultShowId ?? '');
   const [followup, setFollowup] = useState(true);
@@ -74,13 +76,13 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
   const [templateKey, setTemplateKey] = useState('');
-  const [aiAssisted, setAiAssisted] = useState(false);
+  const [aiAssisted, setAiAssisted] = useState(defaultBody !== '');
   const [aiInstructions, setAiInstructions] = useState('');
   const [drafting, setDrafting] = useState(false);
   const [assistError, setAssistError] = useState('');
   /** A fill waiting for "Replace what you wrote?" */
   const [pending, setPending] = useState<{ subject: string; body: string; source: 'template' | 'ai'; key: string } | null>(null);
-  const [lastFilled, setLastFilled] = useState('');
+  const [lastFilled, setLastFilled] = useState(defaultBody);
   const [gmail, setGmail] = useState<GmailStatus | null>(null);
 
   // Best effort: only changes the "how this is sent" note and hides "Send me a copy".
