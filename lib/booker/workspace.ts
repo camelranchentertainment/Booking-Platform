@@ -2,7 +2,7 @@
 // Pure helpers that combine the agent's rows for display: lookups, venue labels,
 // grouping by date and the "needs attention" list. No I/O, so they are unit-tested.
 
-import type { BookerShow, BookerVenue, RosterBand } from './types';
+import type { BookerMessage, BookerShow, BookerVenue, RosterBand } from './types';
 import { commissionDue } from './commission';
 import { formatShowDate } from './dates';
 
@@ -35,7 +35,7 @@ export function findConflicts(shows: readonly BookerShow[], rosterId: string, da
   return shows.filter(s => s.roster_id === rosterId && s.show_date === date && s.status !== 'cancelled' && s.id !== excludeId && !s.deleted_at);
 }
 
-export type AttentionKind = 'followup_due' | 'stale_hold' | 'needs_settling' | 'band_without_rate';
+export type AttentionKind = 'email_followup' | 'followup_due' | 'stale_hold' | 'needs_settling' | 'band_without_rate';
 
 export interface AttentionItem {
   kind: AttentionKind;
@@ -44,6 +44,10 @@ export interface AttentionItem {
   message: string;
   showId?: string;
   rosterId?: string;
+  /** For email follow-ups: the message to mark done */
+  messageId?: string;
+  /** Where "Open" goes when it is not a show dialog */
+  href?: string;
 }
 
 /**
@@ -123,5 +127,26 @@ export function payableShows(
     .map(s => {
       const band = bandsById.get(s.roster_id);
       return { id: s.id, label: `${formatShowDate(s.show_date)} · ${band?.band_name ?? 'Unknown band'} · ${venueLabel(s, venuesById)}`, due: commissionDue(s, band) };
+    });
+}
+
+/**
+ * Email follow-ups that are due today or overdue and not yet marked done,
+ * oldest first. "Open" goes to the venue, else the band, the email is about.
+ */
+export function emailFollowups(messages: readonly BookerMessage[], venuesById: ReadonlyMap<string, Pick<BookerVenue, 'name'>>, today: string): AttentionItem[] {
+  return messages
+    .filter(m => m.status === 'sent' && !m.deleted_at && m.followup_on && !m.followup_done_at && m.followup_on <= today)
+    .sort((a, b) => (a.followup_on ?? '').localeCompare(b.followup_on ?? ''))
+    .map(m => {
+      const venue = m.venue_id ? venuesById.get(m.venue_id)?.name : undefined;
+      const who = m.to_name ?? m.to_email;
+      return {
+        kind: 'email_followup' as const,
+        key: `e-${m.id}`,
+        messageId: m.id,
+        href: m.venue_id ? `/booker/venues/${m.venue_id}` : m.roster_id ? `/booker/bands/${m.roster_id}` : undefined,
+        message: `Follow up with ${who}${venue ? ` (${venue})` : ''}: “${m.subject}”`,
+      };
     });
 }

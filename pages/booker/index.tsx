@@ -8,9 +8,9 @@ import BookerShell from '../../components/booker/BookerShell';
 import ShowRow from '../../components/booker/ShowRow';
 import { RosterBandForm, ShowForm } from '../../components/booker/forms';
 import { BandDot, EmptyState, ErrorBanner, PageHeader, SkeletonRows } from '../../components/booker/ui';
-import { listRoster, listShows, listVenues } from '../../lib/booker/data';
+import { listMessages, listRoster, listShows, listVenues, setFollowupDone } from '../../lib/booker/data';
 import { addDays, formatShowDate, formatTime, todayIso, weekendRange } from '../../lib/booker/dates';
-import { attentionItems, bandTiles, byId, findConflicts, groupByDate, venueLabel } from '../../lib/booker/workspace';
+import { attentionItems, bandTiles, byId, emailFollowups, findConflicts, groupByDate, venueLabel } from '../../lib/booker/workspace';
 import { useLoad } from '../../lib/booker/useLoad';
 import type { BookerShow, BookerVenue, RosterBand } from '../../lib/booker/types';
 
@@ -34,14 +34,21 @@ function HomeContent() {
   const year = Number(today.slice(0, 4));
   const { data, loading, error, reload } = useLoad(
     async () => {
-      const [bands, venues, shows] = await Promise.all([listRoster(), listVenues(), listShows({ from: addDays(today, -LOOKBACK_DAYS) })]);
-      return { bands, venues, shows };
+      const [bands, venues, shows, followups] = await Promise.all([
+        listRoster(),
+        listVenues(),
+        listShows({ from: addDays(today, -LOOKBACK_DAYS) }),
+        listMessages({ openFollowups: true, limit: 200 }),
+      ]);
+      return { bands, venues, shows, followups };
     },
     today,
   );
   const [editing, setEditing] = useState<BookerShow | 'new' | null>(null);
   const [addingBand, setAddingBand] = useState(false);
   const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [doneBusy, setDoneBusy] = useState<string | null>(null);
+  const [doneError, setDoneError] = useState('');
 
   const view = useMemo(() => {
     if (!data) return null;
@@ -57,7 +64,8 @@ function HomeContent() {
       weekend,
       weekendGroups,
       agenda,
-      attention: attentionItems(data.shows, data.bands, venuesById, today),
+      // Email follow-ups first: they are the agent's own promises to get back to someone.
+      attention: [...emailFollowups(data.followups, venuesById, today), ...attentionItems(data.shows, data.bands, venuesById, today)],
       tiles: bandTiles(data.bands, data.shows, today),
     };
   }, [data, today]);
@@ -74,6 +82,18 @@ function HomeContent() {
   };
 
   const openShow = (s: BookerShow) => setEditing(s);
+  const markDone = async (messageId: string) => {
+    setDoneBusy(messageId);
+    setDoneError('');
+    try {
+      await setFollowupDone(messageId, true);
+      await reload();
+    } catch (err) {
+      setDoneError(err instanceof Error ? err.message : 'Could not mark it done.');
+    } finally {
+      setDoneBusy(null);
+    }
+  };
   const onSaved = () => {
     setEditing(null);
     void reload();
@@ -157,13 +177,32 @@ function HomeContent() {
               <h2 id="attention-h" className="display" style={{ fontSize: '1.4rem', margin: '0 0 0.6rem' }}>
                 Needs attention <span className="text-sm text-muted">({view.attention.length})</span>
               </h2>
+              {doneError && (
+                <p role="alert" className="text-sm" style={{ color: 'var(--red)', marginTop: 0 }}>
+                  {doneError}
+                </p>
+              )}
               <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '0.35rem' }}>
                 {view.attention.slice(0, 12).map(item => {
                   const target = item.showId ? data.shows.find(s => s.id === item.showId) : undefined;
                   return (
                     <li key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-                      <span style={{ fontSize: '0.9rem', color: 'var(--text)' }}>{item.message}</span>
-                      {target ? (
+                      <span style={{ fontSize: '0.9rem', color: 'var(--text)' }}>
+                        {item.kind === 'email_followup' && <span aria-hidden="true">✉ </span>}
+                        {item.message}
+                      </span>
+                      {item.messageId ? (
+                        <span style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
+                          {item.href && (
+                            <Link className="btn btn-ghost btn-sm" href={item.href}>
+                              Open
+                            </Link>
+                          )}
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => markDone(item.messageId!)} disabled={doneBusy === item.messageId} aria-busy={doneBusy === item.messageId}>
+                            ✓ Done
+                          </button>
+                        </span>
+                      ) : target ? (
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => openShow(target)}>
                           Open
                         </button>

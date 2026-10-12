@@ -127,6 +127,34 @@ export interface CommissionPayment extends Timestamps {
   notes: string | null;
 }
 
+/** An email the agent sent from the workspace (written server-side only). */
+export interface BookerMessage extends Timestamps {
+  id: string;
+  booker_id: string;
+  roster_id: string | null;
+  venue_id: string | null;
+  contact_id: string | null;
+  show_id: string | null;
+  direction: 'outbound' | 'inbound';
+  to_email: string;
+  to_name: string | null;
+  copy_to_self: boolean;
+  subject: string;
+  body: string;
+  from_address: string | null;
+  reply_to: string | null;
+  sent_via: 'platform' | 'gmail';
+  provider_message_id: string | null;
+  status: 'sent' | 'failed';
+  error: string | null;
+  template_key: string | null;
+  ai_assisted: boolean;
+  sent_at: string | null;
+  /** ISO date, YYYY-MM-DD */
+  followup_on: string | null;
+  followup_done_at: string | null;
+}
+
 export const SHOW_STATUS_LABEL: Record<ShowStatus, string> = {
   hold: 'Hold',
   pending: 'Pending',

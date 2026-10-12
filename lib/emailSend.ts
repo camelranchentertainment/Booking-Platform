@@ -29,7 +29,7 @@ function plainToHtml(text: string): string {
     .join('\n');
 }
 
-async function getResendConfig(service: ReturnType<typeof getServiceClient>) {
+export async function getResendConfig(service: ReturnType<typeof getServiceClient>) {
   if (process.env.RESEND_API_KEY) {
     return {
       apiKey: process.env.RESEND_API_KEY,

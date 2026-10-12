@@ -12,6 +12,7 @@ import type { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import type {
   BookerContact,
+  BookerMessage,
   BookerProfile,
   BookerShow,
   BookerVenue,
@@ -21,6 +22,7 @@ import type {
 import type {
   BookerProfileInput,
   ContactInput,
+  MessageSendInput,
   PaymentInput,
   RosterBandInput,
   ShowInput,
@@ -91,7 +93,7 @@ export function updateBookerProfile(id: string, input: BookerProfileInput): Prom
 
 // ── Generic owned-table helpers ─────────────────────────────────────────────
 
-type OwnedTable = 'booker_roster' | 'booker_venues' | 'booker_contacts' | 'booker_shows' | 'booker_commission_payments';
+type OwnedTable = 'booker_roster' | 'booker_venues' | 'booker_contacts' | 'booker_shows' | 'booker_commission_payments' | 'booker_messages';
 
 function listActive<T>(table: OwnedTable, action: string, order: { column: string; ascending: boolean }): Promise<T[]> {
   return run<T[]>(action, supabase.from(table).select('*').is('deleted_at', null).order(order.column, { ascending: order.ascending }));
@@ -184,6 +186,43 @@ export function addVenueFromSearch(result: VenueSearchResult, kind: string): Pro
 export function scanVenueWebsite(venueId: string): Promise<VenueScanResult> {
   return callBookerApi('/api/booker/venues/scan', { method: 'POST', body: JSON.stringify({ venueId }) }, 'scan the website');
 }
+
+// ── Email (sent server-side; the browser can only read and set follow-ups) ──
+export interface MessageFilter {
+  venueId?: string;
+  rosterId?: string;
+  showId?: string;
+  /** Only messages with an open follow-up (not marked done) */
+  openFollowups?: boolean;
+  limit?: number;
+}
+
+export function listMessages(filter: MessageFilter = {}): Promise<BookerMessage[]> {
+  let q = supabase.from('booker_messages').select('*').is('deleted_at', null);
+  if (filter.venueId) q = q.eq('venue_id', filter.venueId);
+  if (filter.rosterId) q = q.eq('roster_id', filter.rosterId);
+  if (filter.showId) q = q.eq('show_id', filter.showId);
+  if (filter.openFollowups) q = q.not('followup_on', 'is', null).is('followup_done_at', null);
+  return run<BookerMessage[]>('load emails', q.order('created_at', { ascending: false }).limit(filter.limit ?? 100));
+}
+
+export interface SendResult {
+  message: BookerMessage | null;
+  /** Set when the email went out but could not be saved to the history */
+  warning?: string;
+}
+
+export function sendMessage(input: MessageSendInput): Promise<SendResult> {
+  return callBookerApi<SendResult>('/api/booker/messages/send', { method: 'POST', body: JSON.stringify(input) }, 'send the email');
+}
+
+/** Marks a follow-up reminder done (or reopens it). */
+export const setFollowupDone = (id: string, done: boolean) =>
+  updateOwned<BookerMessage>('booker_messages', id, { followup_done_at: done ? nowIso() : null }, done ? 'mark the follow-up done' : 'reopen the follow-up');
+
+/** Moves (or clears) a follow-up date. */
+export const setMessageFollowup = (id: string, date: string | null) =>
+  updateOwned<BookerMessage>('booker_messages', id, { followup_on: date, followup_done_at: null }, 'change the follow-up date');
 
 // ── Shows ───────────────────────────────────────────────────────────────────
 export interface ShowFilter {
