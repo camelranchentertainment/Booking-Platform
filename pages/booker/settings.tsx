@@ -1,8 +1,11 @@
 // pages/booker/settings.tsx
-// The agent's profile and plan.
+// The agent's profile, how their email is sent, and their plan.
 
 import { useState, type FormEvent } from 'react';
 import BookerShell, { useBooker } from '../../components/booker/BookerShell';
+import GmailConnection from '../../components/booker/GmailConnection';
+import { useAuth } from '../../contexts/AuthContext';
+import { replyAddress } from '../../lib/booker/emailFormat';
 import { ErrorBanner, Field, PageHeader } from '../../components/booker/ui';
 import { listRoster, updateBookerProfile } from '../../lib/booker/data';
 import { BookerProfileSchema, fieldErrors } from '../../lib/booker/schemas';
@@ -13,6 +16,7 @@ const PROFILE_KEYS = ['agency_name', 'contact_name', 'contact_email', 'contact_p
 
 function SettingsContent() {
   const { booker, refreshBooker } = useBooker();
+  const { user } = useAuth();
   const [values, setValues] = useState(() => toFormValues(booker, PROFILE_KEYS));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
@@ -85,6 +89,8 @@ function SettingsContent() {
             </div>
           </form>
         </section>
+
+        <GmailConnection replyTo={replyAddress(booker.contact_email, user?.email ?? null)} />
 
         <section aria-labelledby="plan-h" className="card">
           <h2 id="plan-h" className="eyebrow" style={{ color: 'var(--accent)', fontSize: '1.05rem', margin: '0 0 0.9rem' }}>

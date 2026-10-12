@@ -1,10 +1,18 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../../lib/supabase';
+import { BOOKER_STATE_PREFIX } from '../../../../lib/server/bookerGmail';
+import { handleBookerGmailCallback } from '../../../../lib/server/bookerGmailCallback';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).end();
+
+  // Booking Agent workspace connections share this registered redirect URI;
+  // they carry a signed "bk." state and are handled separately (band flow unchanged).
+  if (typeof req.query.state === 'string' && req.query.state.startsWith(BOOKER_STATE_PREFIX)) {
+    return handleBookerGmailCallback(req, res);
+  }
 
   const { code, state, error } = req.query;
 
