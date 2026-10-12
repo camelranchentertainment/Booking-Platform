@@ -222,6 +222,16 @@ export function draftMessage(input: DraftRequestInput): Promise<{ draft: { subje
   return callBookerApi('/api/booker/messages/draft', { method: 'POST', body: JSON.stringify(input) }, 'draft the email');
 }
 
+// ── Gmail connection (the agent's own mailbox) ─────────────────────────────
+export type GmailStatus = { connected: false } | { connected: true; gmail_address: string; connected_at: string };
+
+export const getGmailStatus = () => callBookerApi<GmailStatus>('/api/booker/gmail/status', { method: 'GET' }, 'check your Gmail connection');
+
+/** Returns Google's consent URL; the caller navigates to it. */
+export const startGmailConnect = () => callBookerApi<{ url: string }>('/api/booker/gmail/connect', { method: 'POST', body: '{}' }, 'start connecting Gmail');
+
+export const disconnectGmail = () => callBookerApi<{ ok: true }>('/api/booker/gmail/disconnect', { method: 'POST', body: '{}' }, 'disconnect Gmail');
+
 /** Marks a follow-up reminder done (or reopens it). */
 export const setFollowupDone = (id: string, done: boolean) =>
   updateOwned<BookerMessage>('booker_messages', id, { followup_done_at: done ? nowIso() : null }, done ? 'mark the follow-up done' : 'reopen the follow-up');
