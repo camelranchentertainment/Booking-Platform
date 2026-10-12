@@ -191,21 +191,26 @@ const overdue = (poolData as any[]).filter((tv: any) =>
     setSaving(false);
   };
 
+  const tourActId: string | null = tour?.act_id ?? null;
+
   const searchVenues = useCallback(async (q: string) => {
-    if (q.length < 2) { setSearchResults([]); return; }
+    if (q.length < 2 || !tourActId) { setSearchResults([]); return; }
     // Strip chars that break PostgREST or() filter parsing (commas, parens)
     const safe = q.replace(/[(),]/g, ' ').trim();
     if (safe.length < 2) { setSearchResults([]); return; }
     setSearching(true);
+    // RLS already limits band users to their own venues; the explicit filter
+    // keeps a superadmin working inside this band from picking another band's.
     const { data } = await supabase
       .from('venues')
       .select('id, name, city, state, capacity, venue_type')
+      .eq('act_id', tourActId)
       .or(`name.ilike.%${safe}%,city.ilike.%${safe}%,state.ilike.%${safe}%`)
       .order('name')
       .limit(20);
     setSearchResults(data || []);
     setSearching(false);
-  }, []);
+  }, [tourActId]);
 
   useEffect(() => {
     const t = setTimeout(() => searchVenues(searchQuery), 300);
@@ -253,12 +258,17 @@ const overdue = (poolData as any[]).filter((tv: any) =>
     let venueId: string | null = null;
 
     if (p.already_added) {
-      // Look up existing venue by place_id, fall back to name+city match
-      const { data: byPlaceId } = await supabase.from('venues').select('id').eq('place_id', p.place_id).maybeSingle();
-      venueId = byPlaceId?.id ?? null;
-      if (!venueId) {
-        const { data: byName } = await supabase.from('venues').select('id').ilike('name', p.name).ilike('city', p.city).maybeSingle();
-        venueId = byName?.id ?? null;
+      // Look up this band's existing venue by place_id, fall back to name+city.
+      // Scoped to the tour's band so a match can never be another band's venue.
+      if (tourActId) {
+        const { data: byPlaceId } = await supabase.from('venues').select('id')
+          .eq('act_id', tourActId).eq('place_id', p.place_id).limit(1).maybeSingle();
+        venueId = byPlaceId?.id ?? null;
+        if (!venueId) {
+          const { data: byName } = await supabase.from('venues').select('id')
+            .eq('act_id', tourActId).ilike('name', p.name).ilike('city', p.city).limit(1).maybeSingle();
+          venueId = byName?.id ?? null;
+        }
       }
     } else {
       const { data: inserted } = await supabase.from('venues').insert({
