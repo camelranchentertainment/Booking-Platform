@@ -1,5 +1,15 @@
 # Dev Log
 
+## 2026-10-12 — AI Booking Agent card usable on mobile
+
+**Branch:** `fix/agent-card-mobile-layout` · **File:** `pages/band/index.tsx` (layout/CSS only)
+
+- Bug: on phones the card kept its desktop two-column layout. The fixed 220px mascot column left the chat ~130px wide, so the text box collapsed to a sliver (it showed only the "A" of its placeholder) and users had nowhere to type.
+- Below 768px the card is now one column: mascot column hidden, small avatar + "Online · ready" in the chat header, card height `min(640px, 80dvh)`.
+- Quick chips become one sideways-scrolling row on mobile (44px tap targets); they still wrap on desktop.
+- Composer: text box gets the remaining width (`min-width: 0`), 16px font on mobile so iOS doesn't zoom on tap, auto-grows to ~5 lines. Added a visually hidden label and aria-labels on the attach/send buttons.
+- Desktop (≥768px) layout unchanged.
+
 ## 2026-10-09 — Booking Agent workspace, phases 1–2
 
 **Branches:** `feat/booker-db-foundation` (migration only) → `feat/booker-workspace` (pages, stacked on it)
