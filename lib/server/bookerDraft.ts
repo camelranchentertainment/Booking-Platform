@@ -11,6 +11,7 @@ import { templateByKey } from '../booker/templates';
 import type { DraftRequestInput } from '../booker/schemas';
 import type { ResolvedLinks } from './bookerMessages';
 import type { DraftFacts } from './bookerDraftPrompt';
+import { claimAi } from './bookerAi';
 
 export const AI_DRAFT_LIMITS = { perHour: 30, perDay: 150 } as const;
 
@@ -25,26 +26,22 @@ async function one(service: SupabaseClient, table: string, columns: string, id: 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v : null);
 
 /**
- * Counts recent AI requests and records this one. Recording before the model
- * call means a burst of parallel requests cannot all slip under the limit.
+ * Records one AI draft for the agent, enforcing AI_DRAFT_LIMITS.
  *
  * @throws AppError 429 when the agent is over the hourly or daily limit
  */
-export async function claimAiDraft(service: SupabaseClient, bookerId: string, now: Date = new Date()): Promise<void> {
-  const count = async (sinceMs: number) => {
-    const { count: n, error } = await service
-      .from('booker_ai_events')
-      .select('id', { count: 'exact', head: true })
-      .eq('booker_id', bookerId)
-      .eq('kind', 'email_draft')
-      .gte('created_at', new Date(now.getTime() - sinceMs).toISOString());
-    if (error) throw new AppError(500, 'Could not check your AI limit', false);
-    return n ?? 0;
-  };
-  if ((await count(3_600_000)) >= AI_DRAFT_LIMITS.perHour) throw new AppError(429, 'You have used AI drafting a lot this hour. Try again in a little while, or start from a template.');
-  if ((await count(86_400_000)) >= AI_DRAFT_LIMITS.perDay) throw new AppError(429, "You have reached today's AI drafting limit. Templates still work.");
-  const { error } = await service.from('booker_ai_events').insert({ booker_id: bookerId, kind: 'email_draft' });
-  if (error) throw new AppError(500, 'Could not start the AI draft', false);
+export function claimAiDraft(service: SupabaseClient, bookerId: string, now: Date = new Date()): Promise<void> {
+  return claimAi(
+    service,
+    bookerId,
+    'email_draft',
+    {
+      ...AI_DRAFT_LIMITS,
+      hourMessage: 'You have used AI drafting a lot this hour. Try again in a little while, or start from a template.',
+      dayMessage: "You have reached today's AI drafting limit. Templates still work.",
+    },
+    now,
+  );
 }
 
 /** Gathers the facts for the prompt from the agent's own data. */

@@ -222,6 +222,20 @@ export function draftMessage(input: DraftRequestInput): Promise<{ draft: { subje
   return callBookerApi('/api/booker/messages/draft', { method: 'POST', body: JSON.stringify(input) }, 'draft the email');
 }
 
+// ── AI assistant (answers and proposals only; approval runs normal calls) ──
+export interface AssistantTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export function askAssistant(messages: AssistantTurn[], today: string): Promise<{ reply: string; actions: unknown[] }> {
+  return callBookerApi('/api/booker/assistant', { method: 'POST', body: JSON.stringify({ messages, today }) }, 'reach the assistant');
+}
+
+/** Sets (or clears) a show's follow-up date without touching anything else on it. */
+export const setShowFollowup = (id: string, date: string | null) =>
+  updateOwned<BookerShow>('booker_shows', id, { followup_on: date }, 'set the follow-up date');
+
 // ── Gmail connection (the agent's own mailbox) ─────────────────────────────
 export type GmailStatus = { connected: false } | { connected: true; gmail_address: string; connected_at: string };
 
