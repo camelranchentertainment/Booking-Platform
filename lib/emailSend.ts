@@ -67,6 +67,11 @@ export async function sendActEmail(params: {
   attachments?: ResolvedAttachment[];
   /** The references those files came from — stored on the email_log row. */
   attachmentRefs?: AttachmentRef[];
+  /**
+   * Post the per-email "Email sent to …" notification (default true). Batch
+   * senders turn it off and post one summary instead.
+   */
+  notify?: boolean;
 }): Promise<{ email_log_id: string }> {
   const service = getServiceClient();
   const { apiKey, baseFrom } = await getResendConfig(service);
@@ -158,6 +163,14 @@ export async function sendActEmail(params: {
       .from('tour_venues')
       .update({ last_contacted_at: now, updated_at: now })
       .eq('id', params.tourVenueId);
+    // The first email to a tour target marks it pitched (the tour card's
+    // "Pitched" count reads this). Its outreach status is left to the user.
+    const { error: pitchErr } = await service
+      .from('tour_venues')
+      .update({ pitched_at: now })
+      .eq('id', params.tourVenueId)
+      .is('pitched_at', null);
+    if (pitchErr) console.error('[emailSend] could not mark target pitched', { tourVenueId: params.tourVenueId, code: pitchErr.code });
   }
 
   if (params.bookingId) {
@@ -167,6 +180,8 @@ export async function sendActEmail(params: {
       .eq('id', params.bookingId)
       .eq('act_id', params.actId);
   }
+
+  if (params.notify === false) return { email_log_id: logRow.id };
 
   // Resolve venue name + tour id for notification
   let venueName = 'the venue';

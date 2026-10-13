@@ -14,20 +14,37 @@
 // - Pre-planning = getting shows confirmed. A run leaves pre-planning for
 //   "advancing" once every night is filled, and is "on the road" while today
 //   falls inside its dates.
+// - "Pitched" = distinct venues being pitched for the run: bookings in pitch /
+//   followup, plus open targets (tour_venues target / follow_up) that have
+//   been emailed (pitched_at). A venue in both counts once.
 // - Money follows the platform rules: Potential = agreed_amount on confirmed
 //   FUTURE shows only; Earned = actual_amount_received on completed shows only.
 
 import { BOOKED_SHOW_STATUSES } from '../types';
+import { OPEN_TARGET_STATUSES } from './tourPlaceholders';
 import { parseLocalDate } from '../formatDate';
 
 /** Booking fields this module reads. Status is a plain string because the
  *  database enum has values (e.g. `followup`) the TS union doesn't list. */
 export interface TourBookingRow {
   tour_id: string | null;
+  /** Used to count a venue once when it is both a pitch booking and a pitched target. */
+  venue_id?: string | null;
   status: string | null;
   show_date: string | null;
   agreed_amount: number | string | null;
   actual_amount_received: number | string | null;
+}
+
+/**
+ * A venue on a run's target list (tour_venues). It counts as pitched once an
+ * email has gone to it (pitched_at set) while it is still an open target.
+ */
+export interface TourTargetRow {
+  tour_id: string | null;
+  venue_id: string | null;
+  status: string | null;
+  pitched_at: string | null;
 }
 
 export interface TourRow {
@@ -87,6 +104,7 @@ export const NEEDS_DATES_WINDOW_DAYS = 30;
 
 const PITCH_STATUSES: ReadonlySet<string> = new Set(['pitch', 'followup']);
 const HOLD_STATUSES: ReadonlySet<string> = new Set(['hold', 'negotiation']);
+const OPEN_TARGET: ReadonlySet<string> = new Set(OPEN_TARGET_STATUSES);
 const BOOKED: ReadonlySet<string> = new Set(BOOKED_SHOW_STATUSES);
 const MS_PER_DAY = 86_400_000;
 
@@ -127,10 +145,12 @@ export function computeTourProgress(
   tour: TourRow,
   bookings: readonly TourBookingRow[],
   today: string,
+  targets: readonly TourTargetRow[] = [],
 ): TourProgress {
   const filledDays = new Set<string>();
   let bookedShows = 0;
-  let pitched = 0;
+  const pitchedVenues = new Set<string>();
+  let pitchedWithoutVenue = 0;
   let holds = 0;
   let potential = 0;
   let earned = 0;
@@ -141,13 +161,19 @@ export function computeTourProgress(
       bookedShows += 1;
       if (b.show_date) filledDays.add(b.show_date);
     } else if (PITCH_STATUSES.has(status)) {
-      pitched += 1;
+      if (b.venue_id) pitchedVenues.add(b.venue_id);
+      else pitchedWithoutVenue += 1;
     } else if (HOLD_STATUSES.has(status)) {
       holds += 1;
     }
     if (status === 'confirmed' && b.show_date && b.show_date >= today) potential += toAmount(b.agreed_amount);
     if (status === 'completed') earned += toAmount(b.actual_amount_received);
   }
+
+  for (const t of targets) {
+    if (t.pitched_at && t.venue_id && OPEN_TARGET.has(t.status ?? '')) pitchedVenues.add(t.venue_id);
+  }
+  const pitched = pitchedVenues.size + pitchedWithoutVenue;
 
   const nights = nightsInWindow(tour.start_date, tour.end_date);
   // Only count filled days that fall inside the window, so a stray show
@@ -176,20 +202,28 @@ export function computeTourProgress(
   };
 }
 
-/** Groups bookings by tour and builds a progress row for every tour. */
+/** Groups rows by tour_id, skipping rows without one. */
+function groupByTour<T extends { tour_id: string | null }>(rows: readonly T[]): Map<string, T[]> {
+  const byTour = new Map<string, T[]>();
+  for (const r of rows) {
+    if (!r.tour_id) continue;
+    const list = byTour.get(r.tour_id);
+    if (list) list.push(r);
+    else byTour.set(r.tour_id, [r]);
+  }
+  return byTour;
+}
+
+/** Groups bookings and targets by tour and builds a progress row for every tour. */
 export function buildTourProgress(
   tours: readonly TourRow[],
   bookings: readonly TourBookingRow[],
   today: string,
+  targets: readonly TourTargetRow[] = [],
 ): TourProgress[] {
-  const byTour = new Map<string, TourBookingRow[]>();
-  for (const b of bookings) {
-    if (!b.tour_id) continue;
-    const list = byTour.get(b.tour_id);
-    if (list) list.push(b);
-    else byTour.set(b.tour_id, [b]);
-  }
-  return tours.map(t => computeTourProgress(t, byTour.get(t.id) ?? [], today));
+  const bookingsByTour = groupByTour(bookings);
+  const targetsByTour = groupByTour(targets);
+  return tours.map(t => computeTourProgress(t, bookingsByTour.get(t.id) ?? [], today, targetsByTour.get(t.id) ?? []));
 }
 
 /** Roll-up numbers for the metric trackers and stage strip. */
