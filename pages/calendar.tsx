@@ -1,9 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { getActId, getBandBookings } from '../lib/bookingQueries';
 import { BOOKING_STATUS_LABELS, BOOKED_SHOW_STATUSES, isVisibleOnAppCalendar } from '../lib/types';
+import {
+  buildTourPlaceholders,
+  type PlaceholderTarget,
+  type PlaceholderTour,
+  type TourPlaceholder,
+} from '../lib/domain/tourPlaceholders';
 import { parseLocalDate, formatShowDate, localToday } from '../lib/formatDate';
 import { STATUS_COLORS } from '../lib/statusSync';
 import { buildIcal, downloadIcal } from '../lib/ical';
@@ -17,6 +23,38 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const ACT_COLORS = [
   '#E07820','#BF5FFF','#FF3CAC','#34d399','#60a5fa','#f97316','#e879f9','#22d3ee',
 ];
+
+const TARGET_STATUS_LABEL: Record<string, string> = {
+  target: 'Targeted',
+  follow_up: 'Following up',
+};
+
+/**
+ * Shapes a tour_venues row for the placeholder builder. PostgREST may return the
+ * venue join as an object or a one-item array; anything malformed is dropped.
+ */
+function normalizeTarget(row: unknown): PlaceholderTarget | null {
+  if (!row || typeof row !== 'object') return null;
+  const r = row as Record<string, unknown>;
+  if (typeof r.id !== 'string' || typeof r.tour_id !== 'string' || typeof r.status !== 'string') return null;
+  const rawVenue = Array.isArray(r.venue) ? r.venue[0] : r.venue;
+  const v = rawVenue && typeof rawVenue === 'object' ? (rawVenue as Record<string, unknown>) : null;
+  const str = (x: unknown) => (typeof x === 'string' ? x : null);
+  return {
+    id: r.id,
+    tour_id: r.tour_id,
+    status: r.status,
+    booking_date: str(r.booking_date),
+    last_contacted_at: str(r.last_contacted_at),
+    venue: v && typeof v.id === 'string' ? { id: v.id, name: str(v.name), city: str(v.city), state: str(v.state) } : null,
+  };
+}
+
+/** "LONE STAR · 17 targeted" — the text on a placeholder tile. */
+function placeholderLabel(p: TourPlaceholder): string {
+  const n = p.targets.length;
+  return `${p.tourName} · ${n === 0 ? 'no venues yet' : `${n} targeted`}`;
+}
 
 const STATUS_LEGEND: [string, string][] = [
   ['#34d399', 'Confirmed'],
@@ -33,6 +71,8 @@ export default function AgentCalendar() {
   const [shows, setShows]         = useState<any[]>([]);
   const [acts, setActs]           = useState<any[]>([]);
   const [venueList, setVenueList] = useState<any[]>([]);
+  const [tours, setTours]         = useState<PlaceholderTour[]>([]);
+  const [targets, setTargets]     = useState<PlaceholderTarget[]>([]);
   const [actId, setActId]         = useState<string | null>(null);
   const [loading, setLoading]     = useState(true);
   const [today]     = useState(new Date());
@@ -58,14 +98,38 @@ export default function AgentCalendar() {
       const aid = await getActId(supabase, user.id);
       if (!aid) return;
       setActId(aid);
-      const [data, actRes, venueRes] = await Promise.all([
+      const [data, actRes, venueRes, tourRes] = await Promise.all([
         getBandBookings(supabase, aid),
         supabase.from('acts').select('id, act_name').eq('id', aid).single(),
         supabase.from('venues').select('id, name, city, state').order('name').limit(300),
+        supabase.from('tours').select('id, name, start_date, end_date, status')
+          .eq('act_id', aid).not('status', 'in', '("completed","cancelled")'),
       ]);
       if (actRes.data) setActs([actRes.data]);
       setShows(data.filter((b: any) => isVisibleOnAppCalendar(b, localToday())));
       setVenueList(venueRes.data || []);
+
+      // Tour placeholders: one tile per open night, built from the tour's
+      // target list (never stored as shows). A failure here must not hide shows.
+      if (tourRes.error) {
+        console.error('calendar tours:', tourRes.error.message);
+        setTours([]);
+        setTargets([]);
+      } else {
+        const tourRows = (tourRes.data ?? []) as PlaceholderTour[];
+        setTours(tourRows);
+        if (tourRows.length > 0) {
+          const { data: tvRows, error: tvErr } = await supabase
+            .from('tour_venues')
+            .select('id, tour_id, status, booking_date, last_contacted_at, venue:venues(id, name, city, state)')
+            .in('tour_id', tourRows.map(t => t.id))
+            .in('status', ['target', 'follow_up']);
+          if (tvErr) console.error('calendar targets:', tvErr.message);
+          setTargets(((tvRows ?? []) as unknown[]).map(normalizeTarget).filter((t): t is PlaceholderTarget => t !== null));
+        } else {
+          setTargets([]);
+        }
+      }
     } catch (err) {
       console.error('calendar load:', err);
     } finally {
@@ -92,6 +156,11 @@ export default function AgentCalendar() {
 
   const todayStr     = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   const selectedShows = selected ? (showsByDate[selected] || []) : [];
+  const placeholdersByDate = useMemo(
+    () => buildTourPlaceholders(tours, targets, shows, todayStr),
+    [tours, targets, shows, todayStr],
+  );
+  const selectedPlaceholders: TourPlaceholder[] = selected ? (placeholdersByDate[selected] || []) : [];
   const upcoming     = filtered.filter(s => s.show_date >= todayStr).sort((a, b) => a.show_date < b.show_date ? -1 : 1).slice(0, 12);
   const actName      = (id: string) => acts.find(a => a.id === id)?.act_name || '';
   const tileColor    = (status: string) => STATUS_COLORS[status] || '#64748b';
@@ -204,6 +273,10 @@ export default function AgentCalendar() {
             <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.04em' }}>{label}</span>
           </div>
         ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <div aria-hidden="true" style={{ width: 12, height: 12, borderRadius: 3, border: '1.5px dashed var(--accent)', flexShrink: 0 }} />
+          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.04em' }}>Tour night · working on it</span>
+        </div>
       </div>
 
       {/* ── LIST VIEW ── */}
@@ -303,13 +376,14 @@ export default function AgentCalendar() {
                     const day      = i + 1;
                     const dateStr  = `${current.year}-${String(current.month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
                     const dayShows = showsByDate[dateStr] || [];
+                    const dayPlaceholders = placeholdersByDate[dateStr] || [];
                     const isToday    = dateStr === todayStr;
                     const isSelected = dateStr === selected;
                     return (
                       <div
                         key={day}
                         onClick={() => {
-                          if (dayShows.length) {
+                          if (dayShows.length || dayPlaceholders.length) {
                             setSelected(isSelected ? null : dateStr);
                           } else {
                             openAddModal(dateStr);
@@ -337,6 +411,25 @@ export default function AgentCalendar() {
                           background: isToday ? 'var(--accent)' : 'transparent',
                           marginBottom: '0.3rem', flexShrink: 0,
                         }}>{day}</div>
+
+                        {/* Tour placeholders: one tile per tour per open night */}
+                        {dayPlaceholders.map(p => (
+                          <div
+                            key={`ph-${p.tourId}`}
+                            title={`${p.tourName}: working on this night (${p.targets.length} venues targeted)`}
+                            style={{
+                              fontSize: '0.76rem', padding: '0.25rem 0.45rem',
+                              borderRadius: 5, marginBottom: '0.2rem',
+                              border: '1.5px dashed var(--accent)',
+                              color: 'var(--text-primary)', fontWeight: 700,
+                              fontFamily: 'var(--font-body)',
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              width: '100%', minWidth: 0, boxSizing: 'border-box',
+                            }}
+                          >
+                            {placeholderLabel(p)}
+                          </div>
+                        ))}
 
                         {/* Event tiles */}
                         {dayShows.slice(0, 3).map((s: any) => (
@@ -372,14 +465,66 @@ export default function AgentCalendar() {
 
           {/* Side panel */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {selected && selectedShows.length > 0 && (
+            {selected && (selectedShows.length > 0 || selectedPlaceholders.length > 0) && (
               <div className="card">
                 <div className="card-header">
                   <span className="card-title" style={{ fontSize: '0.85rem' }}>
                     {formatShowDate(selected, { weekday: 'long', month: 'long', day: 'numeric' })}
                   </span>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>✕</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)} aria-label="Close">✕</button>
                 </div>
+                {selectedPlaceholders.map(p => (
+                  <section
+                    key={`panel-${p.tourId}`}
+                    aria-label={`${p.tourName} — venues targeted for this night`}
+                    style={{
+                      border: '1.5px dashed var(--accent)', borderRadius: 'var(--radius-sm)',
+                      padding: '0.75rem 0.85rem', marginBottom: '0.75rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.5rem' }}>
+                      <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.92rem' }}>{p.tourName}</div>
+                      <Link href={`/tours/${p.tourId}`} style={{ color: 'var(--accent)', fontSize: '0.78rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        Open tour →
+                      </Link>
+                    </div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: '0.2rem 0 0.6rem' }}>
+                      Working on this night · {p.targets.length === 0 ? 'no venues targeted yet' : `${p.targets.length} venue${p.targets.length === 1 ? '' : 's'} targeted`}
+                    </div>
+                    {p.targets.length === 0 ? (
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                        Add target venues on the tour page to start outreach for this night.
+                      </div>
+                    ) : (
+                      <ul style={{ listStyle: 'none', margin: 0, padding: 0, maxHeight: 320, overflowY: 'auto' }}>
+                        {p.targets.map(t => (
+                          <li key={t.id} style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem',
+                            padding: '0.4rem 0', borderTop: '1px solid var(--border)',
+                          }}>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {t.venue?.name || 'Venue'}
+                              </div>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem' }}>
+                                {[t.venue?.city, t.venue?.state].filter(Boolean).join(', ')}
+                                {t.last_contacted_at ? ` · last contact ${formatShowDate(t.last_contacted_at.slice(0, 10), { month: 'short', day: 'numeric' })}` : ''}
+                                {t.booking_date ? ' · this night only' : ''}
+                              </div>
+                            </div>
+                            <span style={{
+                              flexShrink: 0, border: '1px solid var(--border)', borderRadius: 4,
+                              padding: '0.1rem 0.4rem', fontSize: '0.68rem', fontWeight: 700,
+                              letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-muted)',
+                            }}>
+                              {TARGET_STATUS_LABEL[t.status] || t.status}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                ))}
                 {selectedShows.map((s: any) => (
                   <Link key={s.id} href={`/bookings/${s.id}`} style={{
                     display: 'block', textDecoration: 'none',
@@ -494,20 +639,39 @@ export default function AgentCalendar() {
               {weekDays.map((d, i) => {
                 const dateStr  = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                 const dayShows = showsByDate[dateStr] || [];
+                const dayPlaceholders = placeholdersByDate[dateStr] || [];
+                const busy = dayShows.length > 0 || dayPlaceholders.length > 0;
                 return (
                   <div
                     key={i}
-                    onClick={() => { if (!dayShows.length) openAddModal(dateStr); }}
+                    onClick={() => { if (!busy) openAddModal(dateStr); }}
                     style={{
                       borderRight: i < 6 ? '1px solid var(--border)' : 'none',
-                      padding: '0.5rem 0.4rem', cursor: dayShows.length ? 'default' : 'pointer',
+                      padding: '0.5rem 0.4rem', cursor: busy ? 'default' : 'pointer',
                       minHeight: 160, display: 'flex', flexDirection: 'column',
                       overflow: 'hidden', minWidth: 0,
                       transition: 'background 0.12s',
                     }}
-                    onMouseEnter={e => { if (!dayShows.length) (e.currentTarget as HTMLDivElement).style.background = 'rgba(224,120,32,0.05)'; }}
+                    onMouseEnter={e => { if (!busy) (e.currentTarget as HTMLDivElement).style.background = 'rgba(224,120,32,0.05)'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
                   >
+                    {dayPlaceholders.map(p => (
+                      <Link
+                        key={`wph-${p.tourId}`}
+                        href={`/tours/${p.tourId}`}
+                        onClick={e => e.stopPropagation()}
+                        title={`${p.tourName}: working on this night`}
+                        style={{
+                          display: 'block', textDecoration: 'none', marginBottom: '0.3rem',
+                          fontSize: '0.76rem', padding: '0.25rem 0.45rem', borderRadius: 5,
+                          border: '1.5px dashed var(--accent)', color: 'var(--text-primary)', fontWeight: 700,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          width: '100%', boxSizing: 'border-box', minWidth: 0,
+                        }}
+                      >
+                        {placeholderLabel(p)}
+                      </Link>
+                    ))}
                     {dayShows.map((s: any) => (
                       <Link key={s.id} href={`/bookings/${s.id}`}
                         style={{ display: 'block', textDecoration: 'none', marginBottom: '0.3rem', minWidth: 0 }}
@@ -529,7 +693,7 @@ export default function AgentCalendar() {
                         )}
                       </Link>
                     ))}
-                    {dayShows.length === 0 && (
+                    {!busy && (
                       <div style={{ color: 'rgba(224,120,32,0.2)', fontSize: '1.4rem', textAlign: 'center', marginTop: '1rem', lineHeight: 1, userSelect: 'none', fontWeight: 700 }}>+</div>
                     )}
                   </div>
