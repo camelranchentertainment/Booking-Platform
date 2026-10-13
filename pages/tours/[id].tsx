@@ -906,6 +906,7 @@ const overdue = (poolData as any[]).filter((tv: any) =>
           venueId={drawerVenueId}
           isOpen={true}
           onClose={() => setDrawerVenueId(null)}
+          onSaved={() => { void loadPool(); }}
         />
       )}
 
