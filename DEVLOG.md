@@ -1,5 +1,14 @@
 # Dev Log
 
+## 2026-10-13 — Agent sees tour targets again; "send to targets" works (step 3)
+
+**Branch:** `fix/agent-tour-targets` · no migration
+
+- **Bug 1:** "Send this to the targets on LONE STAR" answered *No venues with "target" status* although the tour has 17. `resolveTourOutreach` embedded `contact:contacts(...)` on `tour_venues`, which has no contact relationship, so PostgREST rejected the query; the error was ignored and read as zero rows.
+- **Bug 2:** asked "what venues are in Targets", the agent said *0 targets*. Its context listed only bookings per tour; it used to "see" targets through the fake pitch shows removed in step 1.
+- **Fix:** targets load with the venue only; the band's saved contacts load separately (`act_id`-scoped, never `do_not_contact`). Venue email first, contact email as fallback. Query errors are logged and reported, never shown as "none". Tour name matching ignores case/spaces/underscores and no longer silently falls back to the first tour. Agent context now lists each open tour's targets (count by status, venue, pinned night, missing email) and a pipeline summary line.
+- **Code:** `lib/domain/tourOutreach.ts` (pure, 20 tests), `pages/api/agent.ts`. Recipient shape for `/band` and `/api/agent-bulk-send` is unchanged; nothing sends without the existing approval click.
+
 ## 2026-10-12 — Calendar: one "working on it" tile per open tour night (step 2)
 
 **Branch:** `feat/tour-date-placeholders` · no migration
