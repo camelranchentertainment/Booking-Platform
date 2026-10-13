@@ -8,7 +8,7 @@ import VenueDrawer from '../../components/VenueDrawer';
 import { mergeSavedVenue } from '../../lib/venueList';
 import ImportModal from '../../components/ImportModal';
 import VenueTownCheck from '../../components/VenueTownCheck';
-import { nearbyTag, searchSummary } from '../../lib/placeLocality';
+import { nearbyTag, searchSummary, townForSave } from '../../lib/placeLocality';
 
 declare global {
   interface Window { google: any; initGooglePlaces: () => void; }
@@ -477,11 +477,14 @@ export default function VenuesPage() {
     // Step 2: Insert venue with full details
     const user = session?.user ?? null;
     const actId = user ? await import('../../lib/bookingQueries').then(m => m.getActId(supabase, user.id)) : null;
-    const { data: newVenue } = await supabase.from('venues').insert({
+    // venues.city/state are required: fall back to the searched town only when
+    // Google gave none for the venue itself.
+    const town = townForSave({ city, state }, { city: p.searched_city, state: p.searched_state });
+    const { data: newVenue, error: insertError } = await supabase.from('venues').insert({
       act_id:          actId,
       name:            p.name,
-      city:            city,
-      state:           state,
+      city:            town.city,
+      state:           town.state,
       address:         street,
       place_id:        p.place_id,
       google_maps_url: p.google_maps_url,
@@ -489,6 +492,13 @@ export default function VenuesPage() {
       phone:           phone             || null,
       created_by:      user!.id,
     }).select().single();
+
+    if (insertError || !newVenue) {
+      console.error('[venues] add prospect failed', { placeId: p.place_id, code: insertError?.code });
+      setProspectStatus(prev => { const next = { ...prev }; delete next[p.place_id]; return next; });
+      setProspectErr(`Couldn't save ${p.name}. Try again, or add it by hand.`);
+      return;
+    }
 
     setProspects(prev => prev.map(r => r.place_id === p.place_id ? { ...r, already_added: true } : r));
     await loadVenues();

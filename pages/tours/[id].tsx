@@ -8,7 +8,7 @@ import { formatShowDate } from '../../lib/formatDate';
 import EmailComposer from '../../components/email/EmailComposer';
 import VenueDrawer from '../../components/VenueDrawer';
 import Link from 'next/link';
-import { nearbyTag, searchSummary } from '../../lib/placeLocality';
+import { nearbyTag, searchSummary, townForSave } from '../../lib/placeLocality';
 
 
 const STATUS_COLOR: Record<OutreachStatus, string> = {
@@ -290,12 +290,19 @@ const overdue = (poolData as any[]).filter((tv: any) =>
           street = d.street ?? street;
         }
       } catch { /* continue with the search result's address */ }
-      const { data: inserted } = await supabase.from('venues').insert({
-        act_id: dp?.act_id, name: p.name, city, state,
+      // venues.city/state are required: fall back to the searched town only
+      // when Google gave none for the venue itself.
+      const town = townForSave({ city, state }, { city: p.searched_city, state: p.searched_state });
+      const { data: inserted, error: insertError } = await supabase.from('venues').insert({
+        act_id: dp?.act_id, name: p.name, city: town.city, state: town.state,
         address: street, place_id: p.place_id, google_maps_url: p.google_maps_url,
         created_by: user!.id,
       }).select('id').single();
       venueId = inserted?.id ?? null;
+      if (insertError || !venueId) {
+        console.error('[tours] add discovered venue failed', { placeId: p.place_id, code: insertError?.code });
+        setDiscoverErr(`Couldn't save ${p.name}. Try again, or add it from Venues.`);
+      }
     }
 
     if (venueId) {
