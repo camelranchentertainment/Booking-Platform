@@ -7,6 +7,7 @@ import { getActId } from '../../lib/bookingQueries';
 import VenueDrawer from '../../components/VenueDrawer';
 import { mergeSavedVenue } from '../../lib/venueList';
 import ImportModal from '../../components/ImportModal';
+import VenueTownCheck from '../../components/VenueTownCheck';
 import { nearbyTag, searchSummary, townForSave } from '../../lib/placeLocality';
 
 declare global {
@@ -568,6 +569,7 @@ export default function VenuesPage() {
               {bulkEnriching ? '✉ Finding…' : `✉ Find Emails (${venues.filter(v => !v.email && v.website).length})`}
             </button>
           )}
+          <VenueTownCheck endpoint="/api/venues/towns" onApplied={() => void loadVenues()} />
           <button className="btn btn-secondary" onClick={() => setShowAiImport(true)}>⬆ Import File</button>
           <button className="btn btn-secondary" onClick={() => { setShowImport(true); setImportParsed(false); setImportText(''); setImportRows([]); setImportDone(null); setImportError(''); }}>⬆ Bulk Import</button>
           <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ Add Venue</button>

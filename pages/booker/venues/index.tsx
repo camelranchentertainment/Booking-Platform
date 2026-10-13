@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import BookerShell from '../../../components/booker/BookerShell';
 import VenueSearchPanel from '../../../components/booker/VenueSearchPanel';
+import VenueTownCheck from '../../../components/VenueTownCheck';
 import { VenueForm } from '../../../components/booker/forms';
 import { EmptyState, ErrorBanner, PageHeader, SkeletonRows } from '../../../components/booker/ui';
 import { listContacts, listShows, listVenues } from '../../../lib/booker/data';
@@ -55,9 +56,12 @@ function VenuesContent() {
         title="Venues & Buyers"
         sub={data ? `${data.venues.length} in your book` : undefined}
         actions={
-          <button type="button" className="btn btn-secondary" onClick={() => setAdding(true)}>
-            + Add manually
-          </button>
+          <>
+            <VenueTownCheck endpoint="/api/booker/venues/towns" onApplied={() => void reload()} />
+            <button type="button" className="btn btn-secondary" onClick={() => setAdding(true)}>
+              + Add manually
+            </button>
+          </>
         }
       />
 

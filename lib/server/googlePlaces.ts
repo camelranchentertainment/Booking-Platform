@@ -68,6 +68,17 @@ async function mapsKey(): Promise<string> {
   return key;
 }
 
+/**
+ * Fails fast when Places is not configured. placeDetails() deliberately never
+ * throws, so callers that make many lookups check this first; otherwise a
+ * missing key would look like "Google had no answer" for every venue.
+ *
+ * @throws AppError 501 when no Google Maps key is configured
+ */
+export async function assertPlacesConfigured(): Promise<void> {
+  await mapsKey();
+}
+
 /** Maps one raw Text Search result; the town comes from the result's own address. */
 function toPlaceResult(p: Record<string, unknown>): PlaceResult {
   const formatted = String(p.formatted_address ?? '');
