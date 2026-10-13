@@ -40,6 +40,14 @@ import { buildInboxContext } from '../../lib/server/agentInboxContext';
 import { formatShowDate } from '../../lib/formatDate';
 import { buildVoiceSystemPrompt } from '../../lib/emailVoice';
 import {
+  matchTour,
+  buildOutreachVenues,
+  formatTargetLines,
+  type TargetRow,
+  type VenueContact,
+} from '../../lib/domain/tourOutreach';
+import { OPEN_TARGET_STATUSES } from '../../lib/domain/tourPlaceholders';
+import {
   BATCH_CAP,
   StageItem,
   validateItems,
@@ -348,6 +356,28 @@ async function buildContext(service: ReturnType<typeof getServiceClient>, actId:
   const bookings = bookingsRes.data || [];
   const tours = toursRes.data || [];
   const roster = (rosterRes.data || []) as Array<{ id: string; name: string; instrument_role: string | null; is_active: boolean }>;
+
+  // Tour targets (tour_venues) are not bookings, so they need their own read.
+  // Without this the agent tells the user a tour has "0 targets" when it has many.
+  // Tours are already scoped to this act, so their targets are too.
+  const targetsByTour = new Map<string, TargetRow[]>();
+  let targetsLoadFailed = false;
+  if (tours.length) {
+    const { data: targetRows, error: targetErr } = await service.from('tour_venues')
+      .select('id, tour_id, status, booking_date, last_contacted_at, venue:venues(id, name, city, state, email)')
+      .in('tour_id', tours.map((t: any) => t.id))
+      .limit(1000);
+    if (targetErr) {
+      // Never hide this: an unreadable target list must not read as "no targets".
+      targetsLoadFailed = true;
+      console.error('[agent] tour targets load failed', { actId, message: targetErr.message });
+    }
+    for (const r of (targetRows || []) as unknown as TargetRow[]) {
+      const list = targetsByTour.get(r.tour_id) ?? [];
+      list.push(r);
+      targetsByTour.set(r.tour_id, list);
+    }
+  }
   const upcoming = bookings.filter((b: any) => ['confirmed', 'advancing'].includes(b.status) && b.show_date >= today).slice(0, 5);
   const pipeline = bookings.filter((b: any) => ['pitch', 'negotiation', 'hold'].includes(b.status));
 
@@ -367,7 +397,18 @@ async function buildContext(service: ReturnType<typeof getServiceClient>, actId:
         tourLines.push(`    - id=${b.id} ${b.show_date} [${b.status}] ${label}${venue ? `: ${venue}` : ''}`);
       }
     }
+    tourLines.push(...(targetsLoadFailed
+      ? ['    Targets: could not be loaded right now — do not say there are none; point the user to the tour page']
+      : formatTargetLines(targetsByTour.get(t.id) ?? [])));
   }
+
+  const openTargetSummary = tours
+    .map((t: any) => {
+      const open = (targetsByTour.get(t.id) ?? []).filter(r => (OPEN_TARGET_STATUSES as readonly string[]).includes(r.status)).length;
+      return open ? `${t.name} ${open}` : null;
+    })
+    .filter(Boolean)
+    .join(', ');
 
   // Standalone shows have no tour_id — list them separately with IDs so the agent
   // can reference them for linking, cancellation, or updates.
@@ -389,11 +430,14 @@ async function buildContext(service: ReturnType<typeof getServiceClient>, actId:
     '',
     `Pipeline (${pipeline.length} pitching/negotiating):`,
     ...pipeline.slice(0, 5).map((b: any) => `  - id=${b.id} ${b.venue?.name || 'TBD'}${b.venue?.city ? `, ${b.venue.city}` : ''} [${b.status}]`),
+    targetsLoadFailed
+      ? 'Tour targets: could not be loaded right now.'
+      : `Tour targets still being worked (Targeted or Following up): ${openTargetSummary || 'none'} — listed per tour below.`,
     '',
     `Standalone shows — not linked to any tour (${standaloneBookings.length}):`,
     ...standaloneLines,
     '',
-    `Tours (${tours.length}) — full show detail per tour:`,
+    `Tours (${tours.length}) — full show detail and targeted venues per tour:`,
     ...tourLines,
     '',
     `Roster (${roster.length}) — names and roles only:`,
@@ -410,31 +454,47 @@ async function resolveTourOutreach(
   tourName: string,
   anthropicKey: string,
 ): Promise<{ tourId: string; tourName: string; venues: any[]; draft: { subject: string; body: string } } | { error: string }> {
-  // Find tour by name (fuzzy)
-  const { data: tours } = await service.from('tours')
+  // Find the tour the user named. No silent fallback to "some tour": emailing
+  // the wrong tour's venues is worse than asking.
+  const { data: tours, error: toursErr } = await service.from('tours')
     .select('id, name, start_date, end_date, routing_notes')
-    .eq('act_id', actId).neq('status', 'cancelled');
+    .eq('act_id', actId).not('status', 'in', '(cancelled,completed)');
+  if (toursErr) {
+    console.error('[agent] tour outreach: tours load failed', { actId, message: toursErr.message });
+    return { error: 'I couldn’t load your tours just now. Please try again in a moment.' };
+  }
 
-  const tour = (tours || []).find((t: any) =>
-    t.name.toLowerCase().includes(tourName.toLowerCase()) ||
-    tourName.toLowerCase().includes(t.name.toLowerCase())
-  ) || tours?.[0];
+  const tour = matchTour((tours || []) as Array<{ id: string; name: string; start_date: string | null; end_date: string | null; routing_notes: string | null }>, tourName);
+  if (!tour) return { error: `I couldn’t tell which tour you mean by "${tourName}". Your open tours: ${(tours || []).map((t: any) => t.name).join(', ') || 'none'}.` };
 
-  if (!tour) return { error: `No tour found matching "${tourName}". Available tours: ${(tours || []).map((t: any) => t.name).join(', ') || 'none'}` };
-
-  // Get target venues for this tour
-  const { data: tvRows } = await service
+  // Targets on this tour, with their venue. Contacts hang off the venue (not the
+  // target), so they are loaded separately below.
+  const { data: tvRows, error: tvErr } = await service
     .from('tour_venues')
-    .select(`
-      id,
-      venue:venues(id, name, city, state, email, capacity),
-      contact:contacts(first_name, last_name, email)
-    `)
+    .select('id, tour_id, status, booking_date, venue:venues(id, name, city, state, email)')
     .eq('tour_id', tour.id)
     .eq('status', 'target');
+  if (tvErr) {
+    // Previously this error was swallowed and read as "no targets".
+    console.error('[agent] tour outreach: targets load failed', { actId, tourId: tour.id, message: tvErr.message });
+    return { error: `I couldn’t load the targets on "${tour.name}" just now. Please try again in a moment.` };
+  }
 
-  const venues = (tvRows || []).filter((tv: any) => tv.venue);
-  if (!venues.length) return { error: `No venues with "target" status found on "${tour.name}". Add some targets first.` };
+  const rows = ((tvRows || []) as unknown as TargetRow[]).filter(r => r.venue);
+  if (!rows.length) return { error: `"${tour.name}" has no venues still marked Targeted. Add targets on the tour page, or ask me about ones you're following up with.` };
+
+  // Saved contacts for those venues. Service role bypasses RLS, so act_id scopes
+  // this to the caller's band — another band's contacts at the same venue never leak.
+  const venueIds = rows.map(r => (r.venue as NonNullable<TargetRow['venue']>).id);
+  const { data: contactRows, error: contactErr } = await service.from('contacts')
+    .select('venue_id, first_name, last_name, email, status')
+    .eq('act_id', actId)
+    .in('venue_id', venueIds);
+  if (contactErr) {
+    // Not fatal: venue emails still work; the greeting just falls back to a generic one.
+    console.error('[agent] tour outreach: contacts load failed', { actId, tourId: tour.id, message: contactErr.message });
+  }
+  const venues = buildOutreachVenues(rows, (contactRows || []) as VenueContact[]);
 
   // Fetch act for draft
   const { data: act } = await service.from('acts').select('act_name, genre, bio, website, spotify, instagram').eq('id', actId).single();
@@ -476,15 +536,7 @@ Output ONLY valid JSON: { "subject": "...", "body": "..." }`;
   return {
     tourId: tour.id,
     tourName: tour.name,
-    venues: venues.map((tv: any) => ({
-      tourVenueId: tv.id,
-      venueId:     tv.venue.id,
-      name:        tv.venue.name,
-      city:        tv.venue.city,
-      state:       tv.venue.state,
-      email:       tv.venue.email || tv.contact?.email || null,
-      contactName: tv.contact ? `${tv.contact.first_name || ''} ${tv.contact.last_name || ''}`.trim() : null,
-    })),
+    venues,
     draft,
   };
 }
