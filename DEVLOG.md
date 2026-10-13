@@ -1,5 +1,14 @@
 # Dev Log
 
+## 2026-10-12 — Calendar: one "working on it" tile per open tour night (step 2)
+
+**Branch:** `feat/tour-date-placeholders` · no migration
+
+- **What:** `/calendar` (Band Admins only, via `AppShell requireRole`) shows one dashed tile per tour per open night, e.g. "LONE STAR · 17 targeted", instead of a show per target. Members' `/member/calendar` is untouched.
+- **Click a night:** side panel lists that night's targets (venue, city, Targeted / Following up, last contact) with "Open tour →" (outreach/emails live on the tour page). Week view shows the same tiles, linking to the tour.
+- **Rules** (`lib/domain/tourPlaceholders.ts`, pure, 13 tests): every night start→end; a target counts on its pinned `booking_date` or on every night when unpinned; only `target`/`follow_up` count; no tile on a night that already has a booked show; skips completed/cancelled tours and past nights; max 62 nights per tour.
+- **Data:** tours + open tour_venues read with the user's own client (existing RLS). A failure loading tours never hides shows.
+
 ## 2026-10-12 — Email "Save draft" works
 
 **Branch:** `fix/email-drafts-save` · **Migration:** `20261012230000_email_log_allow_draft_status.sql` (+ rollback)
