@@ -21,6 +21,14 @@ import {
 import { buildTourUpdatePayload } from '../../lib/server/agentTourActions';
 import { buildVenueUpsertPayload, buildContactUpsertPayload } from '../../lib/server/agentVenueActions';
 import {
+  MAX_LOOKUPS_PER_TURN,
+  formatVenueLookup,
+  lookupFeedback,
+  lookupKey,
+  parseAgentResponse,
+  type FoundVenue,
+} from '../../lib/server/agentLookup';
+import {
   buildMoneyContext,
   buildWrapupPayload,
   buildExpenseUpdatePayload,
@@ -156,7 +164,7 @@ IMPORTANT — payment_settle takes priority over the general show-update instruc
 
 To find a venue's real ID and contact email before emailing them, call:
 {"reply":"<conversational text>","action":{"type":"find_venue","name":"<venue name to search>","city":"<city, if known>"}}
-This returns matching venues with their id, email, and show date(s) in the same response. If more than one venue matches, ask the user which show/date before proceeding — do not guess. Once you have a confirmed single venue_id and its email, use them in stage_email. If find_venue returns zero matches, say so plainly and ask the user for the correct name or the contact email directly — never claim a technical error or malfunction; an empty result is not a failure, it just means try a different search term or ask the user.
+The results come straight back to you as a message starting "[find_venue result" (that message is from the database, not the user) — you do NOT need to wait for the user. Use them in your very next response to do what the user asked (venue_upsert, contact_upsert, stage_email…). A lookup is a step, never the answer to "add/update/email X". If more than one venue matches, ask the user which show/date before proceeding — do not guess. Once you have a confirmed single venue_id and its email, use them in stage_email. If find_venue returns zero matches, say so plainly and ask the user for the correct name or the contact email directly — never claim a technical error or malfunction; an empty result is not a failure, it just means try a different search term or ask the user.
 
 To compose and send an individual email to a venue ("email the Rusty Rail", "send a follow-up to Memphis Music Hall", "write a confirmation to [venue]"):
 {"reply":"<conversational text>","action":{"type":"stage_email","venue_id":"<UUID from find_venue>","booking_id":"<UUID if related to a booking, otherwise omit>","recipient":"<email from find_venue result>","subject":"<subject line>","body":"<plain text body>","category":"target"}}
@@ -192,8 +200,11 @@ Include only what changes. This never touches calendar logins or keys.
 
 To ADD a new VENUE ("save Wire Road Brewing in Fayetteville, AR, booking@wireroad.beer"):
 {"reply":"<conversational text>","action":{"type":"venue_upsert","name":"<name>","city":"<city>","state":"<2-letter state>","address":"<street>","zip":"<zip>","phone":"<phone>","email":"<booking email>","website":"<url>","venue_type":"<bar, brewery, club...>","capacity":250,"booking_contact":"<booker's name>","notes":"<notes>","backline_notes":"<backline>","pay_notes":"<what they usually pay>","secondary_emails":["<other email>"],"live_music":true}}
-A new venue needs name, city and state — ask if any is missing. To EDIT a venue, call find_venue first,
-then send venue_upsert with "venue_id" and ONLY the fields that change. Never invent an id.
+A new venue needs name, city and state — ask if any is missing. To EDIT a venue, call find_venue first;
+when its result comes back, immediately send venue_upsert with "venue_id" and ONLY the fields that change. Never invent an id.
+Each reply stages ONE venue. When the user asks to update several venues, do the first, and in "reply" name the
+ones still to do so the user can say "next". If the user gives a note about a value (e.g. "this contact may be
+outdated"), put it in "notes" alongside the change.
 
 To ADD or EDIT a CONTACT person at a venue ("add Sarah, sarah@x.com, as the booker at Dickson Street Pub"):
 {"reply":"<conversational text>","action":{"type":"contact_upsert","venue_id":"<id from find_venue>","contact_id":"<only when editing, from find_venue>","first_name":"<first>","last_name":"<last>","title":"<e.g. Talent Buyer>","email":"<email>","phone":"<phone>","notes":"<notes>","status":"not_contacted|pitched|responded|negotiating|booked|declined|do_not_contact"}}
@@ -819,7 +830,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const client = new Anthropic({ apiKey: anthropicKey });
   const messages: Anthropic.MessageParam[] = [...history, { role: 'user', content: message }];
 
-  try {
+  /** One model call; returns its text and whether it was cut off. */
+  const callModel = async () => {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 2000,
@@ -830,9 +842,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ],
       messages,
     });
+    return {
+      raw: response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '',
+      truncated: response.stop_reason === 'max_tokens',
+    };
+  };
 
-    const raw = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
-    const wasTruncated = response.stop_reason === 'max_tokens';
+  try {
+    let { raw, truncated: wasTruncated } = await callModel();
+
+    // ── Lookups are steps, not answers ─────────────────────────────────────────
+    // When the model asks for find_venue, run it and hand the result straight
+    // back so it can go on to what the user asked for (e.g. venue_upsert with
+    // the id it just found) in this same turn. Ending the turn on a lookup made
+    // "add the email" stall at "Found it" and loop on the next message.
+    // Stops at MAX_LOOKUPS_PER_TURN, on a repeated lookup, or on truncation; the
+    // last lookup's result is then shown to the user (the old behaviour).
+    let lastLookup: { text: string; venues: FoundVenue[] } | null = null;
+    const seenLookups = new Set<string>();
+    for (let step = 0; step < MAX_LOOKUPS_PER_TURN && !wasTruncated; step++) {
+      const stepParsed = parseAgentResponse(raw);
+      if (stepParsed?.action?.type !== 'find_venue') break;
+      const query = {
+        name: typeof stepParsed.action.name === 'string' ? stepParsed.action.name : undefined,
+        city: typeof stepParsed.action.city === 'string' ? stepParsed.action.city : undefined,
+      };
+      const key = lookupKey(query);
+      if (seenLookups.has(key)) break; // asked the same thing twice: show the result rather than loop
+      seenLookups.add(key);
+
+      const venues = (await execFindVenue(actId, query)) as FoundVenue[];
+      const text = formatVenueLookup(query, venues);
+      lastLookup = { text, venues };
+      messages.push({ role: 'assistant', content: raw }, { role: 'user', content: lookupFeedback(text) });
+      ({ raw, truncated: wasTruncated } = await callModel());
+    }
 
     // ── Truncation guard — catch before any JSON processing ───────────────────
     // If the response was cut off, the item list could be silently shorter than
@@ -844,18 +888,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Strip markdown code fences if present, then look for a JSON object
-    // anywhere in the response — don't require the whole response to be bare JSON.
-    const stripped = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
-    const jsonMatch = stripped.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      let parsed: any;
-      try {
-        parsed = JSON.parse(jsonMatch[0]);
-      } catch {
-        // Malformed JSON that wasn't caught by the truncation check above —
-        // fall through to plain text rather than showing broken output.
-      }
+    // Plain text, or one JSON object (fences/stray text tolerated). Malformed
+    // JSON falls through to plain text rather than showing broken output.
+    const parsedResponse = parseAgentResponse(raw);
+    if (parsedResponse) {
+      // Action payloads are model output validated per action below.
+      const parsed: any = parsedResponse;
 
       if (parsed?.action?.type === 'tour_outreach') {
         const result = await resolveTourOutreach(service, actId, parsed.action.tourName || '', anthropicKey);
@@ -865,29 +903,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(200).json({ reply: parsed.reply || `Found ${result.venues.length} target venues on ${result.tourName}.`, action: { type: 'tour_outreach', ...result } });
       }
 
+      // Still a lookup after the loop (cap reached or the model repeated
+      // itself): show the most recent results so the user can steer.
       if (parsed?.action?.type === 'find_venue') {
+        if (lastLookup) return res.status(200).json({ reply: lastLookup.text, action: { type: 'find_venue', venues: lastLookup.venues } });
         const { name, city } = parsed.action;
-        const venues = await execFindVenue(actId, { name, city });
-        let replyText: string;
-        if (venues.length === 0) {
-          replyText = `No venue found matching "${name || city}". Check the spelling, or it may be listed under a different name.`;
-        } else {
-          const lines = venues.map((v: any) => {
-            const dates = (v.bookings || []).map((b: any) => b.show_date).filter(Boolean).join(', ');
-            const contacts = (v.contacts || []).map((c: any) => {
-              const nm = [c.first_name, c.last_name].filter(Boolean).join(' ') || '(no name)';
-              return `    · contact_id: ${c.id} ${nm}${c.title ? ` (${c.title})` : ''}${c.email ? ` <${c.email}>` : ''}`;
-            });
-            return [
-              `- ${v.name}${v.city ? ` (${v.city}${v.state ? `, ${v.state}` : ''})` : ''} — id: ${v.id}, email: ${v.email || 'none on file'}${v.phone ? `, phone: ${v.phone}` : ''}${v.booking_contact ? `, booking contact: ${v.booking_contact}` : ''}${dates ? `, show date(s): ${dates}` : ''}`,
-              ...contacts,
-            ].join('\n');
-          }).join('\n');
-          replyText = venues.length === 1
-            ? `Found it:\n${lines}`
-            : `Found ${venues.length} matches — which one?\n${lines}`;
-        }
-        return res.status(200).json({ reply: replyText, action: { type: 'find_venue', venues } });
+        const venues = (await execFindVenue(actId, { name, city })) as FoundVenue[];
+        return res.status(200).json({ reply: formatVenueLookup({ name, city }, venues), action: { type: 'find_venue', venues } });
       }
 
       if (parsed?.action?.type === 'city_search') {
