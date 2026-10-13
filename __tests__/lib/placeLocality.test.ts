@@ -9,6 +9,7 @@ import {
   sameLocality,
   searchSummary,
   streetFromComponents,
+  townForSave,
   type AddressComponent,
 } from '../../lib/placeLocality';
 
@@ -109,5 +110,17 @@ describe('labels', () => {
     expect(nearbyTag({ in_searched_city: false, city: 'Lebanon', state: 'TN' })).toBe('Nearby · Lebanon, TN');
     expect(nearbyTag({ in_searched_city: false, city: null, state: null })).toBe('Nearby · town not listed');
     expect(nearbyTag({ in_searched_city: true, city: 'Decherd', state: 'TN' })).toBeNull();
+  });
+});
+
+describe('townForSave', () => {
+  const searched = { city: 'Decherd', state: 'Tennessee' };
+  it("uses the venue's own town when Google gave one", () => {
+    expect(townForSave({ city: 'Lebanon', state: 'TN' }, searched)).toEqual({ city: 'Lebanon', state: 'TN', fromSearch: false });
+  });
+  it('falls back to the searched town (state normalised) when the town or state is missing', () => {
+    expect(townForSave({ city: null, state: null }, searched)).toEqual({ city: 'Decherd', state: 'TN', fromSearch: true });
+    expect(townForSave({ city: 'Lebanon', state: null }, searched)).toEqual({ city: 'Decherd', state: 'TN', fromSearch: true });
+    expect(townForSave({ city: '  ', state: 'TN' }, searched).fromSearch).toBe(true);
   });
 });

@@ -167,3 +167,19 @@ export function nearbyTag(r: { in_searched_city: boolean; city: string | null; s
   const where = formatLocality(r.city, r.state);
   return `Nearby · ${where || 'town not listed'}`;
 }
+
+/**
+ * Town and state to save for a venue from a search. The band `venues` table
+ * requires both, so when Google gave no complete town for the venue itself we
+ * fall back to the searched town — the only case where it is used.
+ *
+ * @param found    the venue's own town (Place Details, else its search result)
+ * @param searched the town that was searched
+ */
+export function townForSave(
+  found: { city: string | null; state: string | null },
+  searched: { city: string; state: string },
+): { city: string; state: string; fromSearch: boolean } {
+  if (found.city?.trim() && found.state?.trim()) return { city: found.city.trim(), state: found.state.trim(), fromSearch: false };
+  return { city: searched.city.trim(), state: normalizeState(searched.state), fromSearch: true };
+}
