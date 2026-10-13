@@ -53,9 +53,16 @@ interface Props {
   venueId: string | null;
   isOpen: boolean;
   onClose: () => void;
+  /**
+   * Called with the venue row as saved in the database after any change made
+   * in the drawer (edit + save, or a website scan that filled in details).
+   * Pages that list venues use it to update their copy, so the list matches
+   * without a manual browser reload.
+   */
+  onSaved?: (venue: Record<string, unknown>) => void;
 }
 
-export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
+export default function VenueDrawer({ venueId, isOpen, onClose, onSaved }: Props) {
   const [actId, setActId]         = useState<string | null>(null);
   const [venue, setVenue]         = useState<any>(null);
   const [contacts, setContacts]   = useState<any[]>([]);
@@ -66,6 +73,7 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
   const [form, setForm]           = useState<any>({});
   const [saving, setSaving]       = useState(false);
   const [saved, setSaved]         = useState(false);
+  const [saveErr, setSaveErr]     = useState('');
   const [showEmail, setShowEmail] = useState(false);
   const [emailTvId, setEmailTvId] = useState<string | undefined>(undefined);
   const [scraping, setScraping]           = useState(false);
@@ -89,6 +97,7 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
     setEditing(false);
     setShowEmail(false);
     setSaved(false);
+    setSaveErr('');
     setScrapeResult(null);
     setScrapeErr('');
 
@@ -158,7 +167,11 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
   const saveVenue = async () => {
     if (!venue) return;
     setSaving(true);
-    await supabase.from('venues').update({
+    setSaveErr('');
+    // .select() returns the row as the database stored it. An empty result
+    // means RLS refused the write (e.g. a venue owned by another band), which
+    // Supabase reports as success with zero rows, so check for it explicitly.
+    const { data: savedRows, error } = await supabase.from('venues').update({
       name:            form.name            || null,
       address:         form.address         || null,
       city:            form.city            || null,
@@ -173,11 +186,23 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
       backline_notes:  form.backline_notes  || null,
       pay_notes:       form.pay_notes       || null,
       notes:           form.notes           || null,
-    }).eq('id', venue.id);
-    setVenue((prev: any) => ({ ...prev, ...form, capacity: form.capacity ? Number(form.capacity) : null }));
+    }).eq('id', venue.id).select('*');
+
+    const row = savedRows?.[0];
+    if (error || !row) {
+      console.error('[VenueDrawer] save failed', { venueId: venue.id, message: error?.message ?? 'no row updated' });
+      setSaveErr(error
+        ? 'Couldn’t save your changes. Please try again.'
+        : 'Couldn’t save — only the band admin of the band that owns this venue can edit it.');
+      setSaving(false);
+      return; // stay in edit mode so nothing typed is lost
+    }
+
+    setVenue(row);
     setEditing(false);
     setSaving(false);
     setSaved(true);
+    onSaved?.(row);
     setTimeout(() => setSaved(false), 2500);
   };
 
@@ -200,7 +225,12 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
         setScrapeErr(data.error || 'Scan failed');
       } else {
         setScrapeResult(data);
-        if (data.updated && venueId) await load(venueId);
+        if (data.updated && venueId) {
+          await load(venueId);
+          // The scan wrote new details (email/phone) to the venue: pass the fresh row up too.
+          const { data: fresh } = await supabase.from('venues').select('*').eq('id', venueId).single();
+          if (fresh) onSaved?.(fresh);
+        }
       }
     } catch (e: any) {
       setScrapeErr(e.message || 'Scan failed');
@@ -429,8 +459,13 @@ export default function VenueDrawer({ venueId, isOpen, onClose }: Props) {
                 />
               </Field>
 
+              {saveErr && (
+                <div role="alert" style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--red)' }}>
+                  {saveErr}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: '0.6rem', paddingTop: '4px' }}>
-                <button onClick={() => setEditing(false)} style={{ ...btnStyle, flex: 1, background: 'rgba(255,255,255,0.06)', color: TEXT_PRI, border: `1px solid ${BORDER}`, justifyContent: 'center' }}>Cancel</button>
+                <button onClick={() => { setSaveErr(''); setEditing(false); }} style={{ ...btnStyle, flex: 1, background: 'rgba(255,255,255,0.06)', color: TEXT_PRI, border: `1px solid ${BORDER}`, justifyContent: 'center' }}>Cancel</button>
                 <button onClick={saveVenue} disabled={saving} style={{ ...btnStyle, flex: 2, background: ACCENT, color: '#fff', border: 'none', justifyContent: 'center' }}>
                   {saving ? 'Saving…' : 'Save Changes'}
                 </button>

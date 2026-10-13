@@ -5,6 +5,7 @@ import { Venue } from '../../lib/types';
 import { useLookup } from '../../lib/hooks/useLookup';
 import { getActId } from '../../lib/bookingQueries';
 import VenueDrawer from '../../components/VenueDrawer';
+import { mergeSavedVenue } from '../../lib/venueList';
 import ImportModal from '../../components/ImportModal';
 
 declare global {
@@ -1185,6 +1186,11 @@ export default function VenuesPage() {
           venueId={drawerVenueId}
           isOpen={true}
           onClose={() => setDrawerVenueId(null)}
+          onSaved={saved => {
+            // Show the saved details at once, then re-sync with the server.
+            setVenues(vs => mergeSavedVenue(vs, saved as Partial<Venue> & { id: string }));
+            void loadVenues();
+          }}
         />
       )}
 

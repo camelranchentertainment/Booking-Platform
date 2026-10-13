@@ -1,5 +1,13 @@
 # Dev Log
 
+## 2026-10-13 — Venue edits show up in the list without a browser reload
+
+**Branch:** `fix/venue-save-refresh-list` · no migration
+
+- **Bug:** saving a venue (e.g. its email) in the venue drawer updated the database, but the Venues list underneath kept its first-load copy, so the save looked lost until a hard reload (Ctrl+Shift+R).
+- **Fix:** `VenueDrawer` gets an `onSaved(venue)` callback, fired after an edit is saved and after a website scan fills in details. `/venues` swaps the saved row into its list at once (`lib/venueList.ts` `mergeSavedVenue`, 5 tests) and then re-syncs from `/api/venues/list`. `/tours/[id]` reloads its targets list. No forced page reload.
+- **Also fixed:** the drawer showed "✓ Saved" even when the write failed. It now uses `.update(...).select()`, treats an error *or* zero updated rows (RLS refusal, e.g. a venue owned by another band) as a failure, shows the reason, and stays in edit mode so nothing typed is lost.
+
 ## 2026-10-13 — Agent sees tour targets again; "send to targets" works (step 3)
 
 **Branch:** `fix/agent-tour-targets` · no migration
