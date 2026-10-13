@@ -1,6 +1,11 @@
 // pages/api/booker/venues/add.ts
-// POST { place_id, name, address?, city, state, kind? } — saves a search result
-// to the caller's venue book, with the website and phone from Google.
+// POST { place_id, name, address?, city?, state?, kind? } — saves a search
+// result to the caller's venue book, with the website and phone from Google.
+//
+// The town and state saved are the venue's own, read from Google's structured
+// address (Place Details). The posted city/state are only a fallback for when
+// Google returns no address, so a venue found by searching a neighbouring town
+// is never filed under that town.
 //
 //   200 { venue, existed }  existed=true when it was already in the book
 //   400 invalid body, 401/403 not an agent
@@ -12,13 +17,16 @@ import { AppError, withHandler } from '../../../../lib/apiError';
 import { requireBooker } from '../../../../lib/server/requireBooker';
 import { placeDetails } from '../../../../lib/server/googlePlaces';
 import { VENUE_KINDS } from '../../../../lib/booker/types';
+import { normalizeState } from '../../../../lib/placeLocality';
 
 const BodySchema = z.object({
   place_id: z.string().trim().min(1).max(300),
   name: z.string().trim().min(1).max(160),
   address: z.string().trim().max(200).optional(),
-  city: z.string().trim().min(1).max(100),
-  state: z.string().trim().min(1).max(100),
+  // Optional and nullable: a search result's town is null when Google's
+  // address had none. Empty strings are treated as absent.
+  city: z.string().trim().max(100).nullish().transform(v => v || null),
+  state: z.string().trim().max(100).nullish().transform(v => v || null),
   kind: z.enum(VENUE_KINDS).default('venue'),
 });
 
@@ -50,15 +58,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (already) return res.status(200).json({ venue: already, existed: true });
 
   const details = await placeDetails(v.place_id);
+  const city = details.city ?? v.city;
+  const state = details.state ?? (v.state ? normalizeState(v.state) : null);
+  if (!details.city && v.city) {
+    console.warn('[booker/venues/add] Google returned no town; using the search result value', { placeId: v.place_id });
+  }
   const { data: venue, error } = await service
     .from('booker_venues')
     .insert({
       booker_id: bookerId,
       place_id: v.place_id,
       name: (details.name ?? v.name).slice(0, 160),
-      address: v.address || null,
-      city: v.city,
-      state: v.state,
+      address: (details.street ?? v.address)?.slice(0, 200) || null,
+      city,
+      state,
+      postal_code: details.postal_code,
       website: details.website?.slice(0, 300) ?? null,
       phone: details.phone?.slice(0, 40) ?? null,
       kind: v.kind,

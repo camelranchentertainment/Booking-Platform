@@ -1,82 +1,78 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+// pages/api/venues/prospect.ts
+// GET ?city=&state= — Google Places search for venues in and around a city,
+// for the band's Venues page (Prospect) and a tour's Discover tab.
+//
+// Each result carries the town it is actually in. Google also returns venues
+// in nearby towns; those are kept (they are often worth booking) but marked
+// `in_searched_city: false` and listed after the in-town ones, and they are
+// saved under their own town, never the searched one.
+//
+//   200 LabelledPlaceResult[] with already_added
+//   400 missing or invalid query, 401 not signed in, 501 not configured, 502 Google error
+
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { z } from 'zod';
 import { getServiceClient } from '../../../lib/supabase';
-import { getSetting } from '../../../lib/platformSettings';
+import { AppError, withHandler } from '../../../lib/apiError';
+import { searchVenues } from '../../../lib/server/googlePlaces';
+import { normalizeCity } from '../../../lib/placeLocality';
 
-// Google Places Text Search — finds real venues in a city/state
-// Returns results annotated with whether they're already in the agent's database
+const QuerySchema = z.object({
+  city: z.string().trim().min(1, 'City is required').max(100),
+  state: z.string().trim().min(1, 'State is required').max(100),
+});
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+/** Searches venues for the signed-in user, marking ones already in their band's venue list. */
+async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET');
+    throw new AppError(405, 'Method not allowed');
+  }
 
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
-
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  if (!token) throw new AppError(401, 'Unauthorized');
   const service = getServiceClient();
-  const { data: { user } } = await service.auth.getUser(token);
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  const {
+    data: { user },
+  } = await service.auth.getUser(token);
+  if (!user) throw new AppError(401, 'Unauthorized');
 
-  const { city, state } = req.query;
-  if (!city || !state) return res.status(400).json({ error: 'city and state required' });
+  const parsed = QuerySchema.safeParse(req.query);
+  if (!parsed.success) throw new AppError(400, parsed.error.issues[0]?.message ?? 'Invalid search');
+  const { city, state } = parsed.data;
 
-  // Prefer the unrestricted server key; fall back to the browser key
-  const apiKey = (await getSetting('google_maps_server_key')) || (await getSetting('google_maps_api_key'));
-  if (!apiKey || apiKey === 'YOUR_GOOGLE_MAPS_API_KEY') {
-    return res.status(501).json({ error: 'Google Maps not configured. Add your server API key in Settings → Google Maps.' });
-  }
+  const places = await searchVenues(city, state);
 
-  try {
-    // Search Google Places for music venues, bars, clubs in this city
-    const query = encodeURIComponent(`music venues bars nightclubs live music ${city} ${state}`);
-    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&key=${apiKey}`;
+  // The band always comes from the caller's profile, never the request.
+  const { data: profile } = await service.from('profiles').select('act_id').eq('id', user.id).maybeSingle();
+  const actId = profile?.act_id ? String(profile.act_id) : null;
 
-    const gRes = await fetch(url);
-    const gData = await gRes.json();
-
-    if (gData.status !== 'OK' && gData.status !== 'ZERO_RESULTS') {
-      return res.status(502).json({ error: `Google Places error: ${gData.status}` });
+  // All of the band's venues, not just ones filed under the searched town:
+  // nearby results live in other towns, and older rows may carry the wrong town.
+  let mine: Array<{ id: unknown; name: unknown; place_id: unknown; city: unknown }> = [];
+  if (actId) {
+    const { data, error } = await service.from('venues').select('id, name, place_id, city').eq('act_id', actId);
+    if (error) {
+      console.error('[venues/prospect] venue lookup failed', { code: error.code });
+      throw new AppError(500, 'Could not check your venue list', false);
     }
-
-    const places = (gData.results || []).slice(0, 20);
-
-    // Get only THIS agent's venues in this city to mark duplicates
-    const cityStr = String(city).toLowerCase();
-    const { data: profileRow } = await service
-      .from('profiles').select('act_id').eq('id', user.id).single();
-    const actId = profileRow?.act_id;
-
-    const { data: existing } = actId
-      ? await service
-          .from('venues')
-          .select('id, name, place_id')
-          .eq('act_id', actId)
-          .ilike('city', `%${cityStr}%`)
-      : { data: [] };
-
-    const existingPlaceIds = new Set((existing || []).map((v: any) => v.place_id).filter(Boolean));
-    const existingNames    = new Set((existing || []).map((v: any) => v.name.toLowerCase()));
-
-    const results = places.map((p: any) => {
-      // Extract city and state from address_components if available, else parse formatted_address
-      const formatted: string = p.formatted_address || '';
-      const parts = formatted.split(',').map((s: string) => s.trim());
-
-      return {
-        place_id:          p.place_id,
-        name:              p.name,
-        address:           parts[0] || '',
-        city:              String(city),
-        state:             String(state),
-        formatted_address: formatted,
-        rating:            p.rating || null,
-        user_ratings_total: p.user_ratings_total || 0,
-        types:             p.types || [],
-        google_maps_url:   `https://www.google.com/maps/place/?q=place_id:${p.place_id}`,
-        already_added:     existingPlaceIds.has(p.place_id) || existingNames.has(p.name.toLowerCase()),
-      };
-    });
-
-    return res.status(200).json(results);
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    mine = data ?? [];
   }
+
+  const nameKey = (name: string, town: string) => `${name.trim().toLowerCase()}|${normalizeCity(town)}`;
+  const placeIds = new Set<string>();
+  const names = new Set<string>();
+  for (const v of mine) {
+    if (v.place_id) placeIds.add(String(v.place_id));
+    if (v.name && v.city) names.add(nameKey(String(v.name), String(v.city)));
+  }
+
+  res.status(200).json(
+    places.map(p => ({
+      ...p,
+      already_added: placeIds.has(p.place_id) || (p.city !== null && names.has(nameKey(p.name, p.city))),
+    })),
+  );
 }
+
+export default withHandler(handler);

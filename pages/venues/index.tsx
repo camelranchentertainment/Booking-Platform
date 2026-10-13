@@ -7,6 +7,7 @@ import { getActId } from '../../lib/bookingQueries';
 import VenueDrawer from '../../components/VenueDrawer';
 import { mergeSavedVenue } from '../../lib/venueList';
 import ImportModal from '../../components/ImportModal';
+import { nearbyTag, searchSummary } from '../../lib/placeLocality';
 
 declare global {
   interface Window { google: any; initGooglePlaces: () => void; }
@@ -26,7 +27,10 @@ const BLANK: VenueForm = {
 };
 
 type ProspectResult = {
-  place_id: string; name: string; address: string; city: string; state: string;
+  place_id: string; name: string; address: string;
+  /** The venue's own town from its Google address (null if Google gave none) — not the searched town. */
+  city: string | null; state: string | null;
+  searched_city: string; searched_state: string; in_searched_city: boolean;
   formatted_address: string; rating: number | null; user_ratings_total: number;
   types: string[]; google_maps_url: string; already_added: boolean;
 };
@@ -448,12 +452,24 @@ export default function VenuesPage() {
     // Step 1: Fetch Place Details for website + phone
     let website: string | null = null;
     let phone: string | null = null;
+    // Town/state/street from Google's structured address win over the search
+    // result's (parsed from text), and neither is ever the searched town.
+    let city: string | null = p.city;
+    let state: string | null = p.state;
+    let street: string | null = p.address || null;
     try {
       const dr = await fetch(`/api/venues/place-details?place_id=${encodeURIComponent(p.place_id)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (dr.ok) { const d = await dr.json(); website = d.website; phone = d.phone; }
-    } catch { /* continue without */ }
+      if (dr.ok) {
+        const d = await dr.json();
+        website = d.website;
+        phone = d.phone;
+        city = d.city ?? city;
+        state = d.state ?? state;
+        street = d.street ?? street;
+      }
+    } catch { /* continue with the search result's address */ }
 
     setStatus('saving');
 
@@ -463,9 +479,9 @@ export default function VenuesPage() {
     const { data: newVenue } = await supabase.from('venues').insert({
       act_id:          actId,
       name:            p.name,
-      city:            p.city,
-      state:           p.state,
-      address:         p.address         || null,
+      city:            city,
+      state:           state,
+      address:         street,
       place_id:        p.place_id,
       google_maps_url: p.google_maps_url,
       website:         website           || null,
@@ -605,7 +621,7 @@ export default function VenuesPage() {
         {prospects.length > 0 && (
           <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
-              {prospects.length} results — {prospects.filter(p => p.already_added).length} already in your database
+              {searchSummary(prospects, prospects[0]?.searched_city ?? prospectCity.trim())} — {prospects.filter(p => p.already_added).length} already in your database
             </div>
             {prospects.map(p => {
               const status = prospectStatus[p.place_id];
@@ -632,6 +648,7 @@ export default function VenuesPage() {
                       {p.name}
                       {p.already_added && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#34d399', letterSpacing: '0.1em', textTransform: 'uppercase' }}>✓ In DB</span>}
                       {p.rating && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#fbbf24' }}>★ {p.rating}</span>}
+                      {nearbyTag(p) && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '0 0.4rem' }}>{nearbyTag(p)}</span>}
                     </div>
                     <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {p.formatted_address}

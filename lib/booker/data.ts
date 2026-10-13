@@ -141,8 +141,13 @@ export interface VenueSearchResult {
   name: string;
   address: string;
   formatted_address: string;
-  city: string;
-  state: string;
+  /** The venue's own town (null when Google's address has none), not the searched one. */
+  city: string | null;
+  state: string | null;
+  searched_city: string;
+  searched_state: string;
+  /** False for venues Google returned from nearby towns. */
+  in_searched_city: boolean;
   rating: number | null;
   user_ratings_total: number;
   google_maps_url: string;

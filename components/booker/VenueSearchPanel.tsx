@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { addVenueFromSearch, searchVenuesNear, type VenueSearchResult } from '../../lib/booker/data';
 import { VENUE_KINDS, VENUE_KIND_LABEL, type BookerVenue, type VenueKind } from '../../lib/booker/types';
 import { SEARCH_SUGGESTIONS, searchInputError } from '../../lib/booker/venueSearch';
+import { nearbyTag, searchSummary } from '../../lib/placeLocality';
 import { ErrorBanner } from './ui';
 
 type RowState = { state: 'idle' | 'adding' | 'added' | 'error'; venueId?: string; message?: string };
@@ -169,12 +170,13 @@ export default function VenueSearchPanel({ onAdded, onUse, knownVenues = [], ini
       )}
 
       <div aria-live="polite" style={{ marginTop: results || searching ? '0.75rem' : 0 }}>
-        {searching && <p className="text-sm text-muted">Searching Google for venues in {city.trim()}…</p>}
+        {searching && <p className="text-sm text-muted">Searching Google for venues in and around {city.trim()}…</p>}
         {results && !searching && results.length === 0 && <p className="text-sm text-muted">No venues found. Try a nearby city, or a different name or type.</p>}
         {results && !searching && results.length > 0 && (
           <>
             <p className="text-xs text-muted" style={{ margin: '0 0 0.4rem' }}>
-              {results.length} result{results.length === 1 ? '' : 's'} near {searchedCity}
+              {searchSummary(results, searchedCity)}
+              {results.some(r => !r.in_searched_city) && ' — nearby venues are saved under their own town'}
             </p>
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '0.5rem', maxHeight: compact ? '16rem' : '28rem', overflowY: 'auto' }}>
               {results.map(r => (
@@ -197,6 +199,7 @@ function ResultRow({ result: r, row, pickMode, onAdd, onUse }: { result: VenueSe
   const inBook = r.already_added || row?.state === 'added';
   const venueId = row?.venueId ?? r.venue_id;
   const busy = row?.state === 'adding';
+  const tag = nearbyTag(r);
 
   let action;
   if (pickMode) {
@@ -226,6 +229,11 @@ function ResultRow({ result: r, row, pickMode, onAdd, onUse }: { result: VenueSe
           {r.name}
           {pickMode && inBook && <span className="text-xs text-muted" style={{ fontWeight: 600 }}> · in your book</span>}
         </span>
+        {tag && (
+          <span className="text-xs" style={{ display: 'inline-block', margin: '0.15rem 0', padding: '0.05rem 0.45rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-muted)' }}>
+            {tag}
+          </span>
+        )}
         <span className="text-xs text-muted" style={{ display: 'block' }}>
           {r.formatted_address}
           {r.rating !== null ? ` · ★ ${r.rating} (${r.user_ratings_total})` : ''}
