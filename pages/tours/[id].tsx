@@ -8,6 +8,7 @@ import { formatShowDate } from '../../lib/formatDate';
 import EmailComposer from '../../components/email/EmailComposer';
 import VenueDrawer from '../../components/VenueDrawer';
 import Link from 'next/link';
+import { nearbyTag, searchSummary } from '../../lib/placeLocality';
 
 
 const STATUS_COLOR: Record<OutreachStatus, string> = {
@@ -264,16 +265,34 @@ const overdue = (poolData as any[]).filter((tv: any) =>
         const { data: byPlaceId } = await supabase.from('venues').select('id')
           .eq('act_id', tourActId).eq('place_id', p.place_id).limit(1).maybeSingle();
         venueId = byPlaceId?.id ?? null;
-        if (!venueId) {
+        // Name fallback only with the venue's own town; a town-less result
+        // cannot be matched safely by name alone.
+        if (!venueId && p.city) {
           const { data: byName } = await supabase.from('venues').select('id')
             .eq('act_id', tourActId).ilike('name', p.name).ilike('city', p.city).limit(1).maybeSingle();
           venueId = byName?.id ?? null;
         }
       }
     } else {
+      // Save under the venue's own town from Google's structured address,
+      // falling back to the search result's; never the searched town.
+      let city: string | null = p.city;
+      let state: string | null = p.state;
+      let street: string | null = p.address || null;
+      try {
+        const dr = await fetch(`/api/venues/place-details?place_id=${encodeURIComponent(p.place_id)}`, {
+          headers: { Authorization: `Bearer ${session!.access_token}` },
+        });
+        if (dr.ok) {
+          const d = await dr.json();
+          city = d.city ?? city;
+          state = d.state ?? state;
+          street = d.street ?? street;
+        }
+      } catch { /* continue with the search result's address */ }
       const { data: inserted } = await supabase.from('venues').insert({
-        act_id: dp?.act_id, name: p.name, city: p.city, state: p.state,
-        address: p.address || null, place_id: p.place_id, google_maps_url: p.google_maps_url,
+        act_id: dp?.act_id, name: p.name, city, state,
+        address: street, place_id: p.place_id, google_maps_url: p.google_maps_url,
         created_by: user!.id,
       }).select('id').single();
       venueId = inserted?.id ?? null;
@@ -859,7 +878,7 @@ const overdue = (poolData as any[]).filter((tv: any) =>
                   )}
                   {discoverResults.length > 0 && (
                     <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
-                      {discoverResults.length} results from Google
+                      {searchSummary(discoverResults, discoverResults[0]?.searched_city ?? discoverCity.trim())} — from Google
                     </div>
                   )}
                   {discoverResults.map(p => {
@@ -870,6 +889,7 @@ const overdue = (poolData as any[]).filter((tv: any) =>
                           <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                             {p.name}
                             {p.already_added && !inPool && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)' }}>in DB</span>}
+                            {nearbyTag(p) && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.74rem', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '0 0.4rem', whiteSpace: 'nowrap' }}>{nearbyTag(p)}</span>}
                           </div>
                           <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {p.formatted_address}
