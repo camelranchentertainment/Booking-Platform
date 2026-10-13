@@ -9,6 +9,14 @@
 - **Rules** (`lib/domain/tourPlaceholders.ts`, pure, 13 tests): every night start→end; a target counts on its pinned `booking_date` or on every night when unpinned; only `target`/`follow_up` count; no tile on a night that already has a booked show; skips completed/cancelled tours and past nights; max 62 nights per tour.
 - **Data:** tours + open tour_venues read with the user's own client (existing RLS). A failure loading tours never hides shows.
 
+## 2026-10-12 — Email "Save draft" works
+
+**Branch:** `fix/email-drafts-save` · **Migration:** `20261012230000_email_log_allow_draft_status.sql` (+ rollback)
+
+- **Bug:** Save draft failed with `violates check constraint "email_log_status_check"`. `lib/server/draftPayload.ts` writes `status: 'draft'`; the constraint only allowed sent/delivered/bounced/failed and no migration ever added `draft`.
+- **Fix:** constraint now also allows `draft`. No code change. All existing values still allowed; anything else still rejected.
+- **Verified:** PGlite: reproduced the exact error, then 10/10 (draft saves, other statuses unchanged, junk rejected, re-run safe, rollback works with drafts present).
+
 ## 2026-10-12 — Tour targets are not calendar shows (step 1 of tour placeholders)
 
 **Branch:** `fix/tour-targets-not-calendar-shows` · **Migration:** `20261012220000_remove_tour_target_calendar_shows.sql` (data only, + rollback)
