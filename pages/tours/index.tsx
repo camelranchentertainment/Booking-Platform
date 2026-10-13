@@ -21,7 +21,7 @@ import { getActId } from '../../lib/bookingQueries';
 import { formatShowDate, localToday } from '../../lib/formatDate';
 import {
   buildTourProgress, summarizeTours, rowsForTab,
-  type TourProgress, type TourRow, type TourBookingRow, type TourTab, type TourStage,
+  type TourProgress, type TourRow, type TourBookingRow, type TourTargetRow, type TourTab, type TourStage,
 } from '../../lib/domain/tourProgress';
 
 type ActPick = { id: string; act_name: string };
@@ -82,7 +82,7 @@ function badgeFor(p: TourProgress): { text: string; variant: string } {
 }
 
 type LoadResult =
-  | { kind: 'ok'; act: ActPick | null; tours: TourRow[]; bookings: TourBookingRow[] }
+  | { kind: 'ok'; act: ActPick | null; tours: TourRow[]; bookings: TourBookingRow[]; targets: TourTargetRow[] }
   | { kind: 'no-band' }
   | { kind: 'error' };
 
@@ -100,7 +100,7 @@ async function loadToursData(): Promise<LoadResult> {
     const actId = await getActId(supabase, user.id);
     if (!actId) return { kind: 'no-band' };
 
-    const [actRes, toursRes, bookingsRes] = await Promise.all([
+    const [actRes, toursRes, bookingsRes, targetsRes] = await Promise.all([
       supabase.from('acts').select('id, act_name').eq('id', actId).single(),
       supabase
         .from('tours')
@@ -108,12 +108,17 @@ async function loadToursData(): Promise<LoadResult> {
         .eq('act_id', actId),
       supabase
         .from('bookings')
-        .select('tour_id, status, show_date, agreed_amount, actual_amount_received')
+        .select('tour_id, venue_id, status, show_date, agreed_amount, actual_amount_received')
         .eq('act_id', actId)
         .not('tour_id', 'is', null),
+      // Targets on this band's runs, for the "Pitched" count (emailed targets).
+      supabase
+        .from('tour_venues')
+        .select('tour_id, venue_id, status, pitched_at, tour:tours!inner(act_id)')
+        .eq('tour.act_id', actId),
     ]);
-    if (toursRes.error || bookingsRes.error) {
-      console.error('[tours] load failed', { tours: toursRes.error, bookings: bookingsRes.error });
+    if (toursRes.error || bookingsRes.error || targetsRes.error) {
+      console.error('[tours] load failed', { tours: toursRes.error, bookings: bookingsRes.error, targets: targetsRes.error });
       return { kind: 'error' };
     }
     return {
@@ -121,6 +126,7 @@ async function loadToursData(): Promise<LoadResult> {
       act: (actRes.data as ActPick | null) ?? null,
       tours: (toursRes.data ?? []) as TourRow[],
       bookings: (bookingsRes.data ?? []) as TourBookingRow[],
+      targets: (targetsRes.data ?? []).map(t => ({ tour_id: t.tour_id, venue_id: t.venue_id, status: t.status, pitched_at: t.pitched_at })),
     };
   } catch (err) {
     console.error('[tours] load threw', err);
@@ -197,6 +203,7 @@ export default function ToursPage() {
   const router = useRouter();
   const [tours, setTours] = useState<TourRow[]>([]);
   const [bookings, setBookings] = useState<TourBookingRow[]>([]);
+  const [targets, setTargets] = useState<TourTargetRow[]>([]);
   const [acts, setActs] = useState<ActPick[]>([]);
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [tab, setTab] = useState<TourTab>('upcoming');
@@ -222,6 +229,7 @@ export default function ToursPage() {
         }
         setTours(result.tours);
         setBookings(result.bookings);
+        setTargets(result.targets);
       }
       setLoadState('ready');
     });
@@ -230,7 +238,7 @@ export default function ToursPage() {
 
   const retry = (): void => { setLoadState('loading'); setReloadKey(k => k + 1); };
 
-  const rows = useMemo(() => buildTourProgress(tours, bookings, today), [tours, bookings, today]);
+  const rows = useMemo(() => buildTourProgress(tours, bookings, today, targets), [tours, bookings, today, targets]);
   const summary = useMemo(() => summarizeTours(rows), [rows]);
   const shown = useMemo(() => rowsForTab(rows, tab), [rows, tab]);
   const tabCounts: Record<TourTab, number> = {

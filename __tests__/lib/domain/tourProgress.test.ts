@@ -185,3 +185,41 @@ describe('summarizeTours / rowsForTab', () => {
     expect(empty.nextOut).toBeNull();
   });
 });
+
+describe('pitched count includes emailed tour targets', () => {
+  const lone = tour('lone', '2027-01-07', '2027-01-09');
+  const target = (venue_id: string | null, status: string, pitched_at: string | null) => ({ tour_id: 'lone', venue_id, status, pitched_at });
+  const SENT = '2026-10-13T14:58:44Z';
+
+  it('counts open targets that have been emailed (the Lone Star case)', () => {
+    const targets = Array.from({ length: 17 }, (_, i) => target(`v${i}`, 'target', SENT));
+    expect(computeTourProgress(lone, [], TODAY, targets).pitched).toBe(17);
+  });
+
+  it('ignores targets not yet emailed, and closed targets', () => {
+    const targets = [
+      target('v1', 'target', null),
+      target('v2', 'confirmed', SENT),
+      target('v3', 'declined', SENT),
+      target('v4', 'follow_up', SENT),
+    ];
+    expect(computeTourProgress(lone, [], TODAY, targets).pitched).toBe(1);
+  });
+
+  it('counts a venue once when it is both a pitch booking and a pitched target', () => {
+    const bookings: TourBookingRow[] = [
+      { ...bk('lone', 'pitch', null), venue_id: 'v1' },
+      { ...bk('lone', 'followup', null), venue_id: 'v2' },
+      bk('lone', 'pitch', null), // no venue: still counts
+    ];
+    const targets = [target('v1', 'target', SENT), target('v3', 'target', SENT)];
+    expect(computeTourProgress(lone, bookings, TODAY, targets).pitched).toBe(4);
+  });
+
+  it('groups targets by tour in buildTourProgress and keeps the old signature working', () => {
+    const other = tour('other', '2027-02-01', '2027-02-02');
+    const rows = buildTourProgress([lone, other], [], TODAY, [target('v1', 'target', SENT), { ...target('v9', 'target', SENT), tour_id: 'other' }]);
+    expect(rows.map(r => r.pitched)).toEqual([1, 1]);
+    expect(buildTourProgress([lone], [], TODAY).map(r => r.pitched)).toEqual([0]);
+  });
+});
