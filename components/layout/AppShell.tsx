@@ -9,9 +9,18 @@ import Sidebar from './Sidebar';
 import BrandLogo from '../BrandLogo';
 import { INBOX_SYNCED_EVENT, startInboxAutoSync, stopInboxAutoSync, type InboxSyncedEventDetail } from '../../lib/inboxSync';
 
+/** Decorative full-page photo shown behind a page's content (dark theme only). */
+export type ShellBackdrop = 'desert';
+
 interface Props {
   children: React.ReactNode;
   requireRole?: 'band_admin' | 'member' | 'superadmin' | ('band_admin' | 'member' | 'superadmin')[] | null;
+  /**
+   * Optional photo backdrop. When set, the photo is fixed behind the page,
+   * the banner turns see-through so the photo runs up into it, and panels
+   * become slightly translucent (see `.app-shell--photo` in styles/globals.css).
+   */
+  backdrop?: ShellBackdrop;
 }
 
 function daysLeft(trialEndsAt: string | null | undefined): number {
@@ -365,7 +374,7 @@ function NotifBell({ userId, email, displayName }: { userId: string; email: stri
   );
 }
 
-export default function AppShell({ children, requireRole = null }: Props) {
+export default function AppShell({ children, requireRole = null, backdrop }: Props) {
   const router = useRouter();
   const { user, profile, loading: authLoading } = useAuth();
   const [actName, setActName] = useState<string | null>(null);
@@ -475,7 +484,8 @@ export default function AppShell({ children, requireRole = null }: Props) {
   })();
 
   return (
-    <div className="app-shell">
+    <div className={backdrop ? `app-shell app-shell--photo app-shell--${backdrop}` : 'app-shell'}>
+      {backdrop && <div className="shell-backdrop" aria-hidden="true" />}
       <button className="mobile-menu-btn" onClick={() => setNavOpen(v => !v)} aria-label="Open menu">
         <span /><span /><span />
       </button>
@@ -485,11 +495,10 @@ export default function AppShell({ children, requireRole = null }: Props) {
       <Sidebar profile={profile} onSignOut={handleSignOut} open={navOpen} onClose={() => setNavOpen(false)} />
       <main className="main-content">
         {/* Banner strip with logo + bell */}
-        <div style={{
+        <div className="shell-banner" style={{
           margin: '-2rem -2rem 1.75rem',
           padding: '0.6rem 1.25rem 0.6rem 2rem',
           minHeight: 100,
-          background: 'linear-gradient(90deg, rgba(13,27,42,0.98) 0%, rgba(20,42,68,0.92) 40%, rgba(20,42,68,0.92) 60%, rgba(13,27,42,0.98) 100%)',
           borderBottom: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
@@ -518,10 +527,9 @@ export default function AppShell({ children, requireRole = null }: Props) {
         </div>
 
         {roleBadge && (
-          <div style={{
+          <div className="shell-role-bar" style={{
             margin: '-1.75rem -2rem 1.5rem',
             padding: '0.38rem 1.5rem',
-            background: 'rgba(0,0,0,0.22)',
             borderBottom: '1px solid var(--border)',
             display: 'flex', alignItems: 'center', gap: '0.65rem',
           }}>
@@ -543,10 +551,9 @@ export default function AppShell({ children, requireRole = null }: Props) {
           </div>
         )}
         {profile?.role === 'band_admin' && (
-          <div style={{
+          <div className="shell-pill-bar" style={{
             margin: '-1.5rem -2rem 1.5rem',
             padding: '0.3rem 1.5rem',
-            background: 'rgba(0,0,0,0.18)',
             borderBottom: '1px solid var(--border)',
             display: 'flex', alignItems: 'center', gap: '0.45rem',
           }}>
