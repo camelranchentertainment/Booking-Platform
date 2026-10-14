@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { z } from 'zod';
 import { getServiceClient } from '../../../lib/supabase';
 import { AppError, withHandler } from '../../../lib/apiError';
+import { withFeature } from '../../../lib/server/featureGate';
 import { requireBandAdmin } from '../../../lib/server/requireBandAdmin';
 import type { SocialAnnouncement } from '../../../lib/types';
 
@@ -28,7 +29,7 @@ function err(code: string, message: string) {
  *   dismiss  — moves ready/drafting to dismissed(user).
  *   restore  — reopens a user-dismissed card when the booking is still confirmed.
  */
-export default withHandler(async function handler(
+const handler = withHandler(async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
@@ -160,3 +161,6 @@ export default withHandler(async function handler(
   }
   return res.status(200).json({ ok: true });
 });
+
+// Hidden while Socials is switched off — see lib/featureFlags.ts.
+export default withFeature('socials', handler);

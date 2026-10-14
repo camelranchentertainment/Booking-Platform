@@ -2,6 +2,19 @@ import { useState, useEffect } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { formatShowDate } from '../lib/formatDate';
+import type { GetServerSideProps } from 'next';
+import { FEATURES } from '../lib/featureFlags';
+
+/**
+ * While Socials is switched off (lib/featureFlags.ts), anyone with a bookmark
+ * to /social is sent to the band dashboard instead of a half-finished page.
+ */
+export const getServerSideProps: GetServerSideProps = async () => {
+  if (!FEATURES.socials) {
+    return { redirect: { destination: '/band', permanent: false } };
+  }
+  return { props: {} };
+};
 
 type SocialStatus = 'pending' | 'approved' | 'posted' | 'dismissed';
 type Platform = 'instagram' | 'facebook' | 'youtube' | 'tiktok' | 'discord';
