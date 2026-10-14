@@ -16,11 +16,13 @@ interface Props {
   children: React.ReactNode;
   requireRole?: 'band_admin' | 'member' | 'superadmin' | ('band_admin' | 'member' | 'superadmin')[] | null;
   /**
-   * Optional photo backdrop. When set, the photo is fixed behind the page,
-   * the banner turns see-through so the photo runs up into it, and panels
-   * become slightly translucent (see `.app-shell--photo` in styles/globals.css).
+   * Photo backdrop behind the page. Defaults to the desert photo on every
+   * page; pass `null` for a plain background. When set, the photo is fixed
+   * behind the page, the banner turns see-through so the photo runs up into
+   * it, and panels become slightly translucent (see `.app-shell--photo` in
+   * styles/globals.css).
    */
-  backdrop?: ShellBackdrop;
+  backdrop?: ShellBackdrop | null;
 }
 
 function daysLeft(trialEndsAt: string | null | undefined): number {
@@ -374,7 +376,7 @@ function NotifBell({ userId, email, displayName }: { userId: string; email: stri
   );
 }
 
-export default function AppShell({ children, requireRole = null, backdrop }: Props) {
+export default function AppShell({ children, requireRole = null, backdrop = 'desert' }: Props) {
   const router = useRouter();
   const { user, profile, loading: authLoading } = useAuth();
   const [actName, setActName] = useState<string | null>(null);

@@ -543,7 +543,7 @@ export default function BandDashboard() {
   ].filter(Boolean).join(' · ') : '';
 
   return (
-    <AppShell requireRole="band_admin" backdrop="desert">
+    <AppShell requireRole="band_admin">
       <style>{`
         .dash-act-header    { display:flex; align-items:center; justify-content:space-between; min-height:70px; padding:0.75rem 1rem; background:var(--bg-panel); border:1px solid var(--border); margin-bottom:1.25rem; }
         .dash-act-name      { font-family:var(--font-display); font-size:28px; font-weight:900; color:var(--text-primary); line-height:1; letter-spacing:0.03em; }
