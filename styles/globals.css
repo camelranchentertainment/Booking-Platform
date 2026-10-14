@@ -134,6 +134,55 @@ h4 { font-size: 1.2rem; }
   z-index: 1;
 }
 
+/* ── Shell header strips (banner · role bar · quick-link pills) ── */
+.shell-banner {
+  background: linear-gradient(90deg, rgba(13,27,42,0.98) 0%, rgba(20,42,68,0.92) 40%, rgba(20,42,68,0.92) 60%, rgba(13,27,42,0.98) 100%);
+}
+.shell-role-bar { background: rgba(0,0,0,0.22); }
+.shell-pill-bar { background: rgba(0,0,0,0.18); }
+
+/* ── Photo backdrop (AppShell `backdrop` prop) ──────────────────
+   Dark theme only. The photo is pinned to the viewport on its own layer
+   (background-attachment: fixed is ignored by iOS Safari), sits under a
+   heavy navy wash so it reads as texture rather than a picture, and runs
+   up behind the banner. Panels drop to ~85% opacity so it shows through
+   faintly; the role and pill bars go near-solid so they stay readable. */
+.shell-backdrop { display: none; }
+
+:root:not([data-theme="light"]) .app-shell--photo .shell-backdrop {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--bg);
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center 65%;
+}
+:root:not([data-theme="light"]) .app-shell--desert .shell-backdrop {
+  background-image:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 72%, transparent), color-mix(in srgb, var(--bg) 86%, transparent)),
+    url('/backgrounds/dashboard-desert.webp');
+  /* Photo: Robert Murray (@fastturtle), Scottsdale AZ — Unsplash License,
+     https://unsplash.com/photos/9-WVTrFrlWI */
+}
+:root:not([data-theme="light"]) .app-shell--photo .main-content {
+  --bg-panel:   color-mix(in srgb, var(--surface) 84%, transparent);
+  --bg-raised:  color-mix(in srgb, var(--surface) 84%, transparent);
+  --bg-overlay: color-mix(in srgb, var(--surface-2) 85%, transparent);
+  --bg-muted:   color-mix(in srgb, var(--surface-2) 85%, transparent);
+}
+:root:not([data-theme="light"]) .app-shell--photo .shell-banner {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 30%, transparent), transparent);
+}
+:root:not([data-theme="light"]) .app-shell--photo .shell-role-bar {
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+}
+:root:not([data-theme="light"]) .app-shell--photo .shell-pill-bar {
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+}
+
 /* ── Sidebar ───────────────────────────────────────────────── */
 .sidebar-logo {
   padding: 1.25rem 1rem 1.1rem;

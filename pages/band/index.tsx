@@ -543,7 +543,7 @@ export default function BandDashboard() {
   ].filter(Boolean).join(' · ') : '';
 
   return (
-    <AppShell requireRole="band_admin">
+    <AppShell requireRole="band_admin" backdrop="desert">
       <style>{`
         .dash-act-header    { display:flex; align-items:center; justify-content:space-between; min-height:70px; padding:0.75rem 1rem; background:var(--bg-panel); border:1px solid var(--border); margin-bottom:1.25rem; }
         .dash-act-name      { font-family:var(--font-display); font-size:28px; font-weight:900; color:var(--text-primary); line-height:1; letter-spacing:0.03em; }
@@ -729,7 +729,7 @@ export default function BandDashboard() {
                 {upcomingShows.map((show: any) => {
                   const color = STATUS_COLORS[show.status] || '#6b7280';
                   return (
-                    <div key={show.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    <div key={show.id} style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                       <div style={{ height: 4, background: color, flexShrink: 0 }} />
                       <div style={{ padding: '0.45rem 0.6rem', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.25rem', overflow: 'hidden' }}>
@@ -859,7 +859,7 @@ export default function BandDashboard() {
           <div className="dash-agent">
 
             {/* Left — mascot column (hidden below 768px; a small avatar shows in the header instead) */}
-            <div className="dash-agent-mascot" style={{ width: 220, flexShrink: 0, background: 'var(--surface-2)', borderRight: '1px solid var(--border)', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16 }}>
+            <div className="dash-agent-mascot" style={{ width: 220, flexShrink: 0, background: 'var(--bg-overlay)', borderRight: '1px solid var(--border)', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16 }}>
               <div style={{ width: 120, height: 120, borderRadius: '50%', background: '#0d1420', border: '3px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', flexShrink: 0 }}>
                 <img src="/Agent-Camel.jpg" alt="Booking agent mascot" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
