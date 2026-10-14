@@ -9,6 +9,7 @@ import { mergeSavedVenue } from '../../lib/venueList';
 import ImportModal from '../../components/ImportModal';
 import VenueTownCheck from '../../components/VenueTownCheck';
 import { nearbyTag, searchSummary, townForSave } from '../../lib/placeLocality';
+import StateTileGrid from '../../components/venues/StateTileGrid';
 
 declare global {
   interface Window { google: any; initGooglePlaces: () => void; }
@@ -75,7 +76,9 @@ export default function VenuesPage() {
 
   // View mode: table vs by-state drill-down
   const [venueView, setVenueView] = useState<'table' | 'state'>('state');
-  const [expandedStates, setExpandedStates] = useState<Set<string>>(new Set());
+  // One state's venue list is open at a time, in a panel under the state tiles.
+  const [selectedState, setSelectedState] = useState<string | null>(null);
+  const statePanelRef = useRef<HTMLDivElement>(null);
 
   // Email enrichment
   const [enrichStatus, setEnrichStatus] = useState<Record<string, string>>({});
@@ -97,6 +100,13 @@ export default function VenuesPage() {
   const [addTourDone, setAddTourDone] = useState<string | null>(null);
 
   useEffect(() => { loadVenues(); loadGoogleMaps(); }, []);
+
+  // Bring a newly opened state's venue list into view under the tiles.
+  useEffect(() => {
+    if (!selectedState) return;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    statePanelRef.current?.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+  }, [selectedState]);
 
   const loadGoogleMaps = async () => {
     if (window.google?.maps?.places) { setMapsReady(true); return; }
@@ -727,32 +737,50 @@ export default function VenuesPage() {
           </div>
         );
 
+        const tiles = sortedStates.map(state => ({
+          state,
+          venueCount: byState[state].length,
+          emailCount: byState[state].filter(v => v.email).length,
+        }));
+        // The open state can drop out of view when search/filters change.
+        const openState = selectedState && byState[selectedState] ? selectedState : null;
+
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {sortedStates.map(state => {
+          <>
+            <StateTileGrid
+              tiles={tiles}
+              selected={openState}
+              onSelect={state => setSelectedState(prev => (prev === state ? null : state))}
+              panelId="state-venues-panel"
+            />
+            {openState && (() => {
+              const state = openState;
               const stateVenues = byState[state];
-              const isOpen = expandedStates.has(state);
               const emailCount = stateVenues.filter(v => v.email).length;
-              const toggle = () => setExpandedStates(prev => {
-                const next = new Set(prev);
-                if (next.has(state)) next.delete(state); else next.add(state);
-                return next;
-              });
               return (
-                <div key={state} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                  {/* State header row */}
-                  <div
-                    onClick={toggle}
+                <div
+                  ref={statePanelRef}
+                  id="state-venues-panel"
+                  role="region"
+                  aria-label={`${state} venues`}
+                  className="card"
+                  style={{ padding: 0, overflow: 'hidden', borderColor: 'var(--accent)', scrollMarginTop: '1rem' }}
+                >
+                  {/* State header row — click to close */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedState(null)}
+                    aria-expanded="true"
+                    aria-label={`Close ${state} venues`}
                     style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '0.85rem 1.25rem', cursor: 'pointer',
-                      borderBottom: isOpen ? '1px solid var(--border)' : 'none',
-                      background: isOpen ? 'var(--bg-overlay)' : 'transparent',
-                      transition: 'background 0.15s',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+                      padding: '0.85rem 1.25rem', cursor: 'pointer', font: 'inherit', textAlign: 'left',
+                      color: 'inherit', border: 'none', borderBottom: '1px solid var(--border)',
+                      background: 'var(--bg-overlay)',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', letterSpacing: '0.08em', color: 'var(--accent)' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', lineHeight: 1, letterSpacing: '0.06em', color: 'var(--accent)' }}>
                         {state}
                       </span>
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
@@ -763,13 +791,12 @@ export default function VenuesPage() {
                           ✉ {emailCount} with email
                         </span>
                       )}
-                    </div>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.9rem', color: 'var(--text-muted)', transition: 'transform 0.15s', display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none' }}>›</span>
-                  </div>
+                    </span>
+                    <span aria-hidden="true" style={{ fontFamily: 'var(--font-mono)', fontSize: '1rem', color: 'var(--text-muted)' }}>✕</span>
+                  </button>
 
-                  {/* Venue list */}
-                  {isOpen && (
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {/* Venue list — scrolls inside the panel so the tiles stay in view */}
+                  <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '55vh', overflowY: 'auto', overscrollBehavior: 'contain' }}>
                       {stateVenues.map((v, idx) => (
                         <div
                           key={v.id}
@@ -837,12 +864,11 @@ export default function VenuesPage() {
                           </div>
                         </div>
                       ))}
-                    </div>
-                  )}
+                  </div>
                 </div>
               );
-            })}
-          </div>
+            })()}
+          </>
         );
       })()}
 
