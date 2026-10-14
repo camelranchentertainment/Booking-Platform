@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
+import { withFeature } from '../../../lib/server/featureGate';
 
 async function postToDiscord(webhookUrl: string, content: string): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch(webhookUrl, {
@@ -27,7 +28,7 @@ async function postToFacebook(pageId: string, pageAccessToken: string, message: 
   return { ok: true };
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -94,3 +95,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   return res.status(200).json({ ok: true });
 }
+
+// Hidden while Socials is switched off — see lib/featureFlags.ts.
+export default withFeature('socials', handler);

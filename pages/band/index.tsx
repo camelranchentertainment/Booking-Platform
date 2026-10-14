@@ -5,6 +5,7 @@ import { getActId } from '../../lib/bookingQueries';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import { formatShowDate } from '../../lib/formatDate';
+import { FEATURES } from '../../lib/featureFlags';
 import { STATUS_COLORS } from '../../lib/statusSync';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
 import { buildConfirmMessage, describeTourUpdate, describeVenueUpsert, describeContactUpsert, describeWrapup, describeExpenseUpdate, describeOfficeAction } from '../../lib/agentStagingHelpers';
@@ -70,6 +71,16 @@ const QUICK_CHIPS: { label: string; href?: string; prompt?: string }[] = [
 ];
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
+type DashTile = { label: string; sub: string; href: string; accent: string; icon: string };
+
+/** Bottom-of-dashboard shortcut tiles. Socials only appears while that feature is switched on. */
+const dashTiles: DashTile[] = [
+  ...(FEATURES.socials ? [{ label: 'SOCIALS', sub: 'Social post queue', href: '/social', accent: '#e879f9', icon: '✦' }] : []),
+  { label: 'CALENDAR',   sub: 'View all shows',        href: '/calendar',   accent: '#60a5fa', icon: '◷' },
+  { label: 'FINANCIALS', sub: 'Track payments & fees', href: '/financials', accent: '#34d399', icon: '$' },
+  { label: 'HISTORY',    sub: 'Past shows & notes',    href: '/history',    accent: '#f59e0b', icon: '◎' },
+];
+
 export default function BandDashboard() {
   // Data
   const [myAct, setMyAct]             = useState<any>(null);
@@ -591,7 +602,7 @@ export default function BandDashboard() {
           .dash-upcoming-grid { grid-template-columns:repeat(4,1fr); }
           .dash-tours-grid    { grid-template-columns:repeat(4,1fr); }
           .dash-targets-grid  { grid-template-columns:repeat(4,1fr); }
-          .dash-tiles-grid    { grid-template-columns:repeat(4,1fr); }
+          .dash-tiles-grid    { grid-template-columns:repeat(var(--tile-cols, 4),1fr); }
           .dash-appr-grid     { grid-template-columns:repeat(2,1fr); gap:0.25rem 1.5rem; }
           .dash-draft-grid    { grid-template-columns:1fr 2fr; }
           .dash-msg-ai        { max-width:75%; }
@@ -1236,13 +1247,9 @@ export default function BandDashboard() {
           </div>{/* end agent panel */}
 
           {/* ── Bottom tiles ─────────────────────────────────────────────────── */}
-          <div className="dash-tiles-grid">
-            {([
-              { label: 'SOCIALS',    sub: 'Social post queue',     href: '/social',     accent: '#e879f9', icon: '✦' },
-              { label: 'CALENDAR',   sub: 'View all shows',        href: '/calendar',   accent: '#60a5fa', icon: '◷' },
-              { label: 'FINANCIALS', sub: 'Track payments & fees', href: '/financials', accent: '#34d399', icon: '$' },
-              { label: 'HISTORY',    sub: 'Past shows & notes',    href: '/history',   accent: '#f59e0b', icon: '◎' },
-            ] as any[]).map(tile => (
+          {/* --tile-cols keeps the desktop row full when a tile is switched off */}
+          <div className="dash-tiles-grid" style={{ '--tile-cols': dashTiles.length } as React.CSSProperties}>
+            {dashTiles.map(tile => (
               <Link key={tile.label} href={tile.href} style={{ display: 'block', height: 180, padding: '1rem 1.25rem', textDecoration: 'none', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderTop: `3px solid ${tile.accent}`, position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s' }}
                 onMouseEnter={e => (e.currentTarget.style.borderColor = tile.accent)}
                 onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>

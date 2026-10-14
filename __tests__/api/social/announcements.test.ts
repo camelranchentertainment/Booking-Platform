@@ -1,4 +1,6 @@
 jest.mock('../../../lib/supabase', () => ({ getServiceClient: jest.fn() }));
+// These tests cover the route's own behaviour, so run them with Socials switched on.
+jest.mock('../../../lib/featureFlags', () => ({ FEATURES: { socials: true }, isFeatureEnabled: () => true }));
 
 import handler from '../../../pages/api/social/announcements';
 import { getServiceClient } from '../../../lib/supabase';

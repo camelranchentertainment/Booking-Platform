@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { UserProfile } from '../../lib/types';
 import { supabase } from '../../lib/supabase';
 import BrandLogo from '../BrandLogo';
+import { FEATURES } from '../../lib/featureFlags';
 
 interface Props {
   profile: UserProfile | null;
@@ -38,7 +39,8 @@ const bandAdminNav = [
   { label: 'Financials', href: '/financials',   icon: '$' },
   { label: 'History',    href: '/history',      icon: '◎' },
   { label: 'Media',      href: '/media',        icon: '⬛' },
-  { label: 'Socials',    href: '/social',       icon: '✦' },
+  // Only listed while the Socials feature is switched on (lib/featureFlags.ts).
+  ...(FEATURES.socials ? [{ label: 'Socials', href: '/social', icon: '✦' }] : []),
   { label: 'Members',    href: '/band/members', icon: '♟' },
   { label: 'Settings',   href: '/settings',     icon: '⚙' },
   { label: 'Help',       href: '/help',         icon: '?' },

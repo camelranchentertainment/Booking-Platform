@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getServiceClient } from '../../lib/supabase';
 import { isBandAdminRole } from '../../lib/server/requireBandAdmin';
 import { getSetting } from '../../lib/platformSettings';
+import { FEATURES } from '../../lib/featureFlags';
 import {
   execFindVenue,
   execFindTour,
@@ -74,6 +75,14 @@ import {
 export const config = { api: { bodyParser: { sizeLimit: '5mb' } } };
 
 // ── System prompt ──────────────────────────────────────────────────────────────
+/**
+ * Sent with every request while Socials is switched off (lib/featureFlags.ts),
+ * so the agent stops offering social drafts the user has no page to approve.
+ */
+const SOCIALS_OFF_NOTICE = `SOCIALS IS SWITCHED OFF RIGHT NOW. Do not offer, suggest or draft social posts, and never
+output a social_draft action. If the user asks about social posts, tell them plainly that the
+Socials feature is being finished and isn't available yet.`;
+
 const SYSTEM_PROMPT = `You are an AI booking agent for Camel Ranch Booking. You help DIY bands book shows.
 Be direct, confident, and concise. Music industry voice. Bold key numbers with **asterisks**.
 
@@ -838,6 +847,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       system: [
         { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
         { type: 'text', text: HELP_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+        ...(FEATURES.socials ? [] : [{ type: 'text' as const, text: SOCIALS_OFF_NOTICE }]),
         { type: 'text', text: `Current pipeline context:\n\n${fullContext}` },
       ],
       messages,
@@ -1097,6 +1107,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       type OfficeAction = (typeof OFFICE_ACTIONS)[number];
       if ((OFFICE_ACTIONS as readonly string[]).includes(parsed?.action?.type)) {
         const kind = parsed.action.type as OfficeAction;
+        // Hard stop even if the model ignores SOCIALS_OFF_NOTICE.
+        if (kind === 'social_draft' && !FEATURES.socials) {
+          return res.status(200).json({ reply: "Social posts aren't available yet — that feature is still being finished." });
+        }
         try {
           const { type: _t, ...args } = parsed.action;
           const payload: Record<string, unknown> = kind === 'email_archive' ? { ...(await buildEmailArchivePayload(service, actId, args)) }
