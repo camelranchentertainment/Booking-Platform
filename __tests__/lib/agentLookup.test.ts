@@ -1,5 +1,5 @@
 // __tests__/lib/agentLookup.test.ts
-import { formatVenueLookup, lookupFeedback, lookupKey, parseAgentResponse, LOOKUP_RESULT_PREFIX } from '../../lib/server/agentLookup';
+import { formatMultiVenueLookup, formatVenueLookup, lookupFeedback, lookupKey, parseAgentResponse, LOOKUP_RESULT_PREFIX } from '../../lib/server/agentLookup';
 
 describe('parseAgentResponse', () => {
   it('parses bare JSON', () => {
@@ -49,5 +49,23 @@ describe('lookupKey / lookupFeedback', () => {
     expect(msg).toContain('id: v-1');
     expect(msg).toMatch(/venue_upsert/);
     expect(msg).toMatch(/Do not look up the same venue again/);
+  });
+});
+
+describe('multi-venue lookup', () => {
+  const v = (id: string, name: string) => ({ id, name, city: 'Fayetteville', state: 'AR', email: null, bookings: [], contacts: [] });
+  it('gives one section per name and counts exact matches', () => {
+    const out = formatMultiVenueLookup([
+      { name: 'Aggie', venues: [v('a', 'Aggie Lounge')] },
+      { name: 'Ghost', venues: [] },
+    ]);
+    expect(out).toMatch(/^Looked up 2 venues — 1 matched exactly once\./);
+    expect(out).toContain('"Aggie":\nFound it:');
+    expect(out).toContain('id: a');
+    expect(out).toContain('"Ghost":\nNo venue found matching "Ghost"');
+  });
+  it('treats the same names in any order as the same lookup', () => {
+    expect(lookupKey({ names: ['B', ' a '] })).toBe(lookupKey({ names: ['A', 'b'] }));
+    expect(lookupKey({ names: ['A'] })).not.toBe(lookupKey({ names: ['A', 'B'] }));
   });
 });
