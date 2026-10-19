@@ -193,4 +193,28 @@ describe('agent handler — lookups inside the turn', () => {
     expect(execFindVenue).not.toHaveBeenCalled();
     expect(body).toEqual({ reply: 'You have two tours.' });
   });
+
+  it('looks up several venues in one step and stages them together with venue_batch', async () => {
+    (execFindVenue as jest.Mock).mockImplementation(async (_a: string, q: { name: string }) =>
+      [{ ...POND, id: `v-${q.name.toLowerCase()}`, name: q.name }]);
+    const byId = async (_s: unknown, _a: string, raw: { venue_id: string }) => ({
+      mode: 'update', venue_id: raw.venue_id, venue_name: raw.venue_id, changes: { phone: 'x' }, previous: { phone: null },
+    });
+    (buildVenueUpsertPayload as jest.Mock).mockImplementationOnce(byId).mockImplementationOnce(byId);
+    getMockCreate()
+      .mockResolvedValueOnce(text('{"reply":"","action":{"type":"find_venue","names":["Aggie","Wire Road"]}}'))
+      .mockResolvedValueOnce(text('{"reply":"Updating both venues.","action":{"type":"venue_batch","venues":[{"venue_id":"v-aggie","phone":"479-555-0100"},{"venue_id":"v-wire road","email":"book@wireroad.beer"}]}}'));
+
+    const { body } = await send('update each of these venues');
+
+    expect(execFindVenue).toHaveBeenCalledTimes(2);
+    expect(execFindVenue).toHaveBeenCalledWith('act-1', { name: 'Aggie', city: undefined });
+    const fed = (getMockCreate().mock.calls[1][0].messages as Array<{ content: string }>).at(-1)!.content;
+    expect(fed).toContain('id: v-aggie');
+    expect(fed).toContain('id: v-wire road');
+    expect(stageAction).toHaveBeenCalledTimes(2);
+    expect(body.reply).toBe('Updating both venues.');
+    expect(body.action).toMatchObject({ type: 'stage_items', overflow: 0 });
+    expect(body.action.staged).toHaveLength(2);
+  });
 });

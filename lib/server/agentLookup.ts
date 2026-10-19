@@ -77,10 +77,28 @@ export function formatVenueLookup(query: { name?: string; city?: string }, venue
   return venues.length === 1 ? `Found it:\n${lines}` : `Found ${venues.length} matches — which one?\n${lines}`;
 }
 
+/**
+ * Lookup result for several venue names searched in one step
+ * ({"type":"find_venue","names":[...]}), one section per name so the model can
+ * see which names matched exactly once (safe to batch-edit) and which need the
+ * user to clarify.
+ */
+export function formatMultiVenueLookup(
+  results: Array<{ name: string; venues: FoundVenue[] }>,
+  city?: string,
+): string {
+  const sections = results.map(r => `"${r.name}":\n${formatVenueLookup({ name: r.name, city }, r.venues)}`);
+  const single = results.filter(r => r.venues.length === 1).length;
+  return [`Looked up ${results.length} venues — ${single} matched exactly once.`, ...sections].join('\n\n');
+}
+
 /** Identity of a lookup, to stop the model asking the same thing twice in a turn. */
-export function lookupKey(action: { name?: unknown; city?: unknown }): string {
+export function lookupKey(action: { name?: unknown; names?: unknown; city?: unknown; [key: string]: unknown }): string {
   const norm = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : '');
-  return `${norm(action.name)}|${norm(action.city)}`;
+  const name = Array.isArray(action.names)
+    ? action.names.map(norm).filter(Boolean).sort().join(',')
+    : norm(action.name);
+  return `${name}|${norm(action.city)}`;
 }
 
 /**
@@ -93,7 +111,8 @@ export function lookupFeedback(resultText: string): string {
     resultText,
     '',
     "Now continue with the user's request using these results, in the same JSON format. " +
-      'If they asked you to change something (e.g. add an email), respond with that action now (venue_upsert, contact_upsert, stage_email, …) using the id above. ' +
+      'If they asked you to change something (e.g. add an email), respond with that action now (venue_upsert, venue_batch, contact_upsert, stage_email, …) using the id(s) above. ' +
+      'If several venues were looked up, stage every one that matched exactly once in a single venue_batch. ' +
       'If more than one venue matched and you cannot tell which, ask the user in plain text. ' +
       'If nothing matched, try a different search or tell the user plainly. Do not look up the same venue again.',
   ].join('\n');

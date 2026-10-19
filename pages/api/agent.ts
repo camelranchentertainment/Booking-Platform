@@ -23,6 +23,7 @@ import { buildTourUpdatePayload } from '../../lib/server/agentTourActions';
 import { buildVenueUpsertPayload, buildContactUpsertPayload } from '../../lib/server/agentVenueActions';
 import {
   MAX_LOOKUPS_PER_TURN,
+  formatMultiVenueLookup,
   formatVenueLookup,
   lookupFeedback,
   lookupKey,
@@ -44,6 +45,7 @@ import {
   buildSocialDraftPayload,
 } from '../../lib/server/agentOfficeActions';
 import { stageAction } from '../../lib/server/agentStage';
+import { normaliseLookupNames, stageVenueBatch } from '../../lib/server/agentVenueBatch';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
 import { buildInboxContext } from '../../lib/server/agentInboxContext';
 import { formatShowDate } from '../../lib/formatDate';
@@ -173,6 +175,7 @@ IMPORTANT — payment_settle takes priority over the general show-update instruc
 
 To find a venue's real ID and contact email before emailing them, call:
 {"reply":"<conversational text>","action":{"type":"find_venue","name":"<venue name to search>","city":"<city, if known>"}}
+To look up several venues at once, send "names" instead of "name": {"reply":"","action":{"type":"find_venue","names":["<venue 1>","<venue 2>"]}}
 The results come straight back to you as a message starting "[find_venue result" (that message is from the database, not the user) — you do NOT need to wait for the user. Use them in your very next response to do what the user asked (venue_upsert, contact_upsert, stage_email…). A lookup is a step, never the answer to "add/update/email X". If more than one venue matches, ask the user which show/date before proceeding — do not guess. Once you have a confirmed single venue_id and its email, use them in stage_email. If find_venue returns zero matches, say so plainly and ask the user for the correct name or the contact email directly — never claim a technical error or malfunction; an empty result is not a failure, it just means try a different search term or ask the user.
 
 To compose and send an individual email to a venue ("email the Rusty Rail", "send a follow-up to Memphis Music Hall", "write a confirmation to [venue]"):
@@ -211,9 +214,17 @@ To ADD a new VENUE ("save Wire Road Brewing in Fayetteville, AR, booking@wireroa
 {"reply":"<conversational text>","action":{"type":"venue_upsert","name":"<name>","city":"<city>","state":"<2-letter state>","address":"<street>","zip":"<zip>","phone":"<phone>","email":"<booking email>","website":"<url>","venue_type":"<bar, brewery, club...>","capacity":250,"booking_contact":"<booker's name>","notes":"<notes>","backline_notes":"<backline>","pay_notes":"<what they usually pay>","secondary_emails":["<other email>"],"live_music":true}}
 A new venue needs name, city and state — ask if any is missing. To EDIT a venue, call find_venue first;
 when its result comes back, immediately send venue_upsert with "venue_id" and ONLY the fields that change. Never invent an id.
-Each reply stages ONE venue. When the user asks to update several venues, do the first, and in "reply" name the
-ones still to do so the user can say "next". If the user gives a note about a value (e.g. "this contact may be
-outdated"), put it in "notes" alongside the change.
+To ADD or EDIT SEVERAL VENUES at once ("update each of these venues", a pasted list, "fix the emails on all of them"),
+stage them together in ONE reply with venue_batch — never one at a time:
+{"reply":"<conversational text>","action":{"type":"venue_batch","venues":[{"venue_id":"<id from find_venue>","email":"<email>","phone":"<phone>"},{"name":"<new venue>","city":"<city>","state":"<ST>"}]}}
+Each entry takes exactly the venue_upsert fields above: "venue_id" plus ONLY the changing fields for an edit, or
+name/city/state (plus anything else given) for a new venue. Put all changes for one venue in a single entry.
+To get the ids, look them all up in ONE step: {"reply":"","action":{"type":"find_venue","names":["<venue 1>","<venue 2>","..."]}}
+(up to 8 names; add "city" only if every venue is in that city). Then send venue_batch with every id that matched
+exactly once. List any venue that matched nothing or more than one in "reply" so the user can clarify — stage the rest anyway.
+VENUE BATCH CAP: at most 8 venues per venue_batch. If there are more, stage the first 8 and say how many remain
+so the user can say "continue". The user approves the whole batch with one Confirm.
+If the user gives a note about a value (e.g. "this contact may be outdated"), put it in "notes" alongside the change.
 
 To ADD or EDIT a CONTACT person at a venue ("add Sarah, sarah@x.com, as the booker at Dickson Street Pub"):
 {"reply":"<conversational text>","action":{"type":"contact_upsert","venue_id":"<id from find_venue>","contact_id":"<only when editing, from find_venue>","first_name":"<first>","last_name":"<last>","title":"<e.g. Talent Buyer>","email":"<email>","phone":"<phone>","notes":"<notes>","status":"not_contacted|pitched|responded|negotiating|booked|declined|do_not_contact"}}
@@ -858,6 +869,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
   };
 
+  /**
+   * Runs a find_venue — one name, or several via "names" — and formats the
+   * result for both the model (mid-turn) and the user (if it ends the turn).
+   */
+  const runLookup = async (action: Record<string, unknown>): Promise<{ text: string; venues: FoundVenue[] }> => {
+    const city = typeof action.city === 'string' && action.city.trim() ? action.city : undefined;
+    const names = normaliseLookupNames(action.names);
+    if (names.length > 0) {
+      const results = await Promise.all(
+        names.map(async name => ({ name, venues: (await execFindVenue(actId, { name, city })) as FoundVenue[] })),
+      );
+      return { text: formatMultiVenueLookup(results, city), venues: results.flatMap(r => r.venues) };
+    }
+    const query = { name: typeof action.name === 'string' ? action.name : undefined, city };
+    const venues = (await execFindVenue(actId, query)) as FoundVenue[];
+    return { text: formatVenueLookup(query, venues), venues };
+  };
+
   try {
     let { raw, truncated: wasTruncated } = await callModel();
 
@@ -873,18 +902,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for (let step = 0; step < MAX_LOOKUPS_PER_TURN && !wasTruncated; step++) {
       const stepParsed = parseAgentResponse(raw);
       if (stepParsed?.action?.type !== 'find_venue') break;
-      const query = {
-        name: typeof stepParsed.action.name === 'string' ? stepParsed.action.name : undefined,
-        city: typeof stepParsed.action.city === 'string' ? stepParsed.action.city : undefined,
-      };
-      const key = lookupKey(query);
+      const key = lookupKey(stepParsed.action);
       if (seenLookups.has(key)) break; // asked the same thing twice: show the result rather than loop
       seenLookups.add(key);
 
-      const venues = (await execFindVenue(actId, query)) as FoundVenue[];
-      const text = formatVenueLookup(query, venues);
-      lastLookup = { text, venues };
-      messages.push({ role: 'assistant', content: raw }, { role: 'user', content: lookupFeedback(text) });
+      lastLookup = await runLookup(stepParsed.action);
+      messages.push({ role: 'assistant', content: raw }, { role: 'user', content: lookupFeedback(lastLookup.text) });
       ({ raw, truncated: wasTruncated } = await callModel());
     }
 
@@ -916,10 +939,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Still a lookup after the loop (cap reached or the model repeated
       // itself): show the most recent results so the user can steer.
       if (parsed?.action?.type === 'find_venue') {
-        if (lastLookup) return res.status(200).json({ reply: lastLookup.text, action: { type: 'find_venue', venues: lastLookup.venues } });
-        const { name, city } = parsed.action;
-        const venues = (await execFindVenue(actId, { name, city })) as FoundVenue[];
-        return res.status(200).json({ reply: formatVenueLookup({ name, city }, venues), action: { type: 'find_venue', venues } });
+        const found = lastLookup ?? await runLookup(parsed.action);
+        return res.status(200).json({ reply: found.text, action: { type: 'find_venue', venues: found.venues } });
       }
 
       if (parsed?.action?.type === 'city_search') {
@@ -1056,6 +1077,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } catch (e: any) {
           return res.status(200).json({ reply: e.message || "Couldn't stage that venue." });
         }
+      }
+
+      if (parsed?.action?.type === 'venue_batch') {
+        const { staged, errors, overflow } = await stageVenueBatch(service, actId, user.id, parsed.action.venues);
+        const overflowNote = overflow > 0
+          ? ` **${overflow} more** not staged yet — say "continue" to stage the next batch.`
+          : '';
+        const replyText = staged.length
+          ? (parsed.reply || `Staged ${staged.length} venue update${staged.length !== 1 ? 's' : ''}. Review and confirm.`) + overflowNote
+          : (errors[0] || "Couldn't stage those venues.");
+        return res.status(200).json({
+          reply: replyText,
+          ...(staged.length ? { action: { type: 'stage_items', staged, errors, overflow } } : {}),
+        });
       }
 
       if (parsed?.action?.type === 'contact_upsert') {
