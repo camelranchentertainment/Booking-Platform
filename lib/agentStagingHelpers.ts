@@ -11,6 +11,14 @@ export const StageItemSchema = z.object({
   venueName:       z.string().optional(),
   venueCity:       z.string().optional(),
   venueState:      z.string().optional(),
+  // Optional details for a venue that doesn't exist yet. They let one approval
+  // card save the new venue and its show together, instead of a venue-only
+  // card that leaves the show behind.
+  venueAddress:    z.string().optional(),
+  venueZip:        z.string().optional(),
+  venuePhone:      z.string().optional(),
+  venueEmail:      z.string().optional(),
+  venueWebsite:    z.string().optional(),
   date:            z.string().optional(),
   setTime:         z.string().optional(),
   loadInTime:      z.string().optional(),
@@ -136,6 +144,7 @@ function formatItemLabel(item: { kind: string; proposal: Record<string, unknown>
         p.show_date as string | undefined,
         (p.venue_name as string | undefined) ?? 'TBD',
         p.tour_name ? `(${p.tour_name})` : null,
+        item.kind === 'venue_and_booking' ? '+ new venue' : null,
         p.status ? `→ ${p.status}` : null,
         p.notes ? String(p.notes).slice(0, 40) : null,
       ].filter(Boolean);
@@ -350,4 +359,75 @@ export function describeOfficeAction(kind: string, p: Record<string, unknown>): 
     default:
       return kind;
   }
+}
+
+// ── Proposal replies must never claim a save ─────────────────────────────────
+
+/**
+ * Past-tense "it's done" language. When a staging response carries this, the
+ * model is describing a save that has not happened: nothing is written until
+ * the user clicks Confirm on the card, and the card may hold less than the
+ * reply promises (a venue but not its show, say).
+ */
+const COMPLETION_CLAIM = /\b(saved|logged|added|created|booked|recorded|updated|done|all set)\b/i;
+
+/**
+ * Picks the chat text shown next to an approval card.
+ *
+ * The model's own wording is kept when it reads as a proposal. When it claims
+ * the work is already done, the server's own description of what was actually
+ * staged is used instead, so the chat can never say more than the card holds.
+ *
+ * @param modelReply - The `reply` text the model sent with the action, if any.
+ * @param stagedSummary - Server-built description of exactly what was staged.
+ * @returns Text that describes the pending proposal truthfully.
+ */
+export function guardProposalReply(modelReply: unknown, stagedSummary: string): string {
+  const text = typeof modelReply === 'string' ? modelReply.trim() : '';
+  if (!text) return stagedSummary;
+  if (COMPLETION_CLAIM.test(text)) return stagedSummary;
+  return text;
+}
+
+/** Statuses a bookings row may hold (Postgres enum `booking_status`). */
+export const BOOKING_STATUSES = [
+  'pitch', 'followup', 'negotiation', 'hold', 'contract', 'confirmed', 'advancing', 'completed', 'cancelled',
+] as const;
+
+/**
+ * Normalises a status the model sent for a show. Unknown values return
+ * undefined so the caller's default applies instead of a failed insert.
+ */
+export function normaliseBookingStatus(raw: unknown): (typeof BOOKING_STATUSES)[number] | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const s = raw.trim().toLowerCase();
+  return (BOOKING_STATUSES as readonly string[]).includes(s) ? (s as (typeof BOOKING_STATUSES)[number]) : undefined;
+}
+
+/**
+ * True when the model's tourName means "no tour". The model has been told to
+ * omit tourName for standalone shows; this also catches the words it tends to
+ * send instead.
+ */
+export function isStandaloneTourName(tourName: unknown): boolean {
+  if (tourName == null) return true;
+  if (typeof tourName !== 'string') return true;
+  const t = tourName.trim().toLowerCase();
+  return t === '' || t === 'standalone' || t === 'none' || t === 'no tour' || t === 'n/a';
+}
+
+/**
+ * One-line-per-item summary of what is waiting on the approval card, used as
+ * the chat text when the model's own reply can't be trusted.
+ */
+export function describeStagedItems(
+  staged: ReadonlyArray<{ kind: string; proposal: object }>,
+): string {
+  if (staged.length === 0) return 'Nothing was staged.';
+  const lines = staged.map(item => {
+    // Proposal shapes vary per action; the label reader only looks up keys.
+    const proposal: Record<string, unknown> = { ...item.proposal };
+    return `• ${formatItemLabel({ kind: item.kind, proposal })}`;
+  });
+  return `Ready for your approval — nothing is saved until you click Confirm:\n${lines.join('\n')}`;
 }
