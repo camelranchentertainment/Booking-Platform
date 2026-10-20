@@ -5,5 +5,7 @@
   <url><loc>https://camelranchbooking.com/booker/signup</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://camelranchbooking.com/register</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://camelranchbooking.com/pricing</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://camelranchbooking.com/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://camelranchbooking.com/delete-account</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>
   <url><loc>https://camelranchbooking.com/login</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
 </urlset>

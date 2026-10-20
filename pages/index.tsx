@@ -1007,7 +1007,15 @@ function Footer() {
             © {new Date().getFullYear()} Camel Ranch Entertainment · All Rights Reserved
           </div>
           <div style={{ color: 'rgba(239,224,189,0.18)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase' }}>
-            camelranchbooking.com
+            {/* Legal links: required by the app stores; text colour meets 4.5:1 on the footer background */}
+            <Link href="/privacy" style={{ color: 'rgba(239,224,189,0.6)', textDecoration: 'none', display: 'inline-block', padding: '0.75rem 0' }}>
+              Privacy
+            </Link>
+            {' · '}
+            <Link href="/delete-account" style={{ color: 'rgba(239,224,189,0.6)', textDecoration: 'none', display: 'inline-block', padding: '0.75rem 0' }}>
+              Delete Account
+            </Link>
+            {' · '}camelranchbooking.com
           </div>
         </div>
       </div>
