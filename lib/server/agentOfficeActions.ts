@@ -293,25 +293,29 @@ export async function executeSocialDraft(service: SupabaseClient, actId: string,
 // ── Read context ────────────────────────────────────────────────────────────
 
 /**
- * Notes visible to this admin (own + band-shared, last 14 days) and the band's
- * open social cards with any draft captions. Fails soft.
+ * Notes visible to this admin (own + band-shared, last 14 days), the band's
+ * open social cards with any draft captions, and recent media files (ids so
+ * the agent can stage a delete). Fails soft.
  */
 export async function buildOfficeContext(service: SupabaseClient, actId: string, userId: string, today: string): Promise<string> {
   try {
     const since = new Date(new Date(`${today}T00:00:00Z`).getTime() - 14 * 86_400_000).toISOString().slice(0, 10);
-    const [nRes, sRes] = await Promise.all([
+    const [nRes, sRes, mRes] = await Promise.all([
       service.from('daily_notes')
-        .select('note_date, content, visibility, user_id')
+        .select('id, note_date, content, visibility, user_id')
         .or(`user_id.eq.${userId},and(act_id.eq.${actId},visibility.in.(band_admin,all_members))`)
         .gte('note_date', since).order('note_date', { ascending: false }).limit(20),
       service.from('social_announcements')
         .select('status, booking_id, booking:bookings(show_date, venue:venues(name)), posts:social_posts(platform, status, caption)')
         .eq('act_id', actId).in('status', ['ready', 'drafting']).limit(20),
+      service.from('media_library')
+        .select('id, file_name, file_type, is_primary_logo, created_at')
+        .eq('act_id', actId).order('created_at', { ascending: false }).limit(20),
     ]);
     const lines: string[] = [];
-    const notes = (nRes.data ?? []) as Array<{ note_date: string; content: string; visibility: string; user_id: string }>;
+    const notes = (nRes.data ?? []) as Array<{ id: string; note_date: string; content: string; visibility: string; user_id: string }>;
     lines.push(`Band notes, last 14 days (${notes.length}):`);
-    for (const n of notes) lines.push(`  - ${n.note_date}${n.user_id === userId ? ' (yours)' : ''} [${n.visibility}]: ${one(n.content, 240)}`);
+    for (const n of notes) lines.push(`  - note_id=${n.id} ${n.note_date}${n.user_id === userId ? ' (yours)' : ''} [${n.visibility}]: ${one(n.content, 240)}`);
     const cards = (sRes.data ?? []) as unknown as Array<{ status: string; booking_id: string; booking: { show_date: string | null; venue: { name: string } | { name: string }[] | null } | null; posts: Array<{ platform: string; status: string; caption: string }> | null }>;
     lines.push(`Social cards for confirmed shows (${cards.length}):`);
     for (const c of cards) {
@@ -319,6 +323,11 @@ export async function buildOfficeContext(service: SupabaseClient, actId: string,
       const venue = (Array.isArray(v) ? v[0]?.name : v?.name) ?? '';
       lines.push(`  - booking_id=${c.booking_id} ${c.booking?.show_date ?? ''} ${one(venue, 60)} [${c.status}]`);
       for (const p of c.posts ?? []) lines.push(`      · ${p.platform} [${p.status}]: ${one(p.caption, 160)}`);
+    }
+    const media = (mRes?.data ?? []) as Array<{ id: string; file_name: string | null; file_type: string | null; is_primary_logo: boolean | null; created_at: string }>;
+    lines.push(`Media, newest 20 (${media.length}):`);
+    for (const m of media) {
+      lines.push(`  - media_id=${m.id} ${one(m.file_name ?? 'file', 80)}${m.file_type ? ` [${m.file_type}]` : ''}${m.is_primary_logo ? ' (main logo)' : ''} ${m.created_at.slice(0, 10)}`);
     }
     return lines.join('\n');
   } catch (err) {

@@ -1,4 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk';
+import { BLOCKED_SEARCH_DOMAINS } from './agentContentGuard';
 
 /**
  * Web search for the /band agent, run by Anthropic on its side (a "server
@@ -7,11 +8,13 @@ import type Anthropic from '@anthropic-ai/sdk';
  * fetched from our servers, so no outbound HTTP or scraping code lives here.
  *
  * max_uses caps searches per model call to keep cost and latency bounded.
+ * blocked_domains keeps adult and piracy sites out of results (see agentContentGuard).
  */
 export const AGENT_WEB_SEARCH_TOOL: Anthropic.WebSearchTool20250305 = {
   type: 'web_search_20250305',
   name: 'web_search',
   max_uses: 5,
+  blocked_domains: [...BLOCKED_SEARCH_DOMAINS],
 };
 
 /** How many times a paused (long-running) search turn is resumed before giving up. */

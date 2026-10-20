@@ -255,6 +255,8 @@ export function formatPendingContextSummary(
         return `  • ${describeOfficeAction(r.action_type, p)}`;
       case 'personnel_upsert':
         return `  • Roster: ${p.name ?? 'member'}`;
+      case 'record_delete':
+        return `  • ${describeDelete(p as DeleteCard)}`;
       case 'calendar_settings_update':
         return `  • Calendar sync settings`;
       default:
@@ -430,4 +432,16 @@ export function describeStagedItems(
     return `• ${formatItemLabel({ kind: item.kind, proposal })}`;
   });
   return `Ready for your approval — nothing is saved until you click Confirm:\n${lines.join('\n')}`;
+}
+
+interface DeleteCard {
+  items?: Array<{ label?: string; mode?: 'delete' | 'retire'; note?: string }>;
+}
+
+/** One-line description of a staged delete (shows, tours, members, notes, media). */
+export function describeDelete(p: DeleteCard): string {
+  const items = p.items ?? [];
+  const list = items.map(i => `${i.mode === 'retire' ? 'Retire' : 'Delete'} ${i.label ?? 'item'}`).join('; ');
+  const notes = items.map(i => i.note).filter(Boolean).join(' ');
+  return `${list || 'Delete'}${notes ? ` — ${notes}` : ''}`;
 }

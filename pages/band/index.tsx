@@ -8,7 +8,7 @@ import { formatShowDate } from '../../lib/formatDate';
 import { FEATURES } from '../../lib/featureFlags';
 import { STATUS_COLORS } from '../../lib/statusSync';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
-import { buildConfirmMessage, describeTourUpdate, describeVenueUpsert, describeContactUpsert, describeWrapup, describeExpenseUpdate, describeOfficeAction } from '../../lib/agentStagingHelpers';
+import { buildConfirmMessage, describeTourUpdate, describeVenueUpsert, describeContactUpsert, describeWrapup, describeExpenseUpdate, describeOfficeAction, describeDelete } from '../../lib/agentStagingHelpers';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -996,6 +996,7 @@ export default function BandDashboard() {
                       }
                       else if (item.kind === 'email_send') summary = `Email to ${p.recipient}${p.venue_name ? ` (${p.venue_name})` : ''}: ${p.subject}`;
                       else if (item.kind === 'tour_update') summary = describeTourUpdate(p);
+                      else if (item.kind === 'record_delete') summary = `⚠ ${describeDelete(p)}`;
                       else if (item.kind === 'venue_upsert') summary = describeVenueUpsert(p);
                       else if (item.kind === 'contact_upsert') summary = describeContactUpsert(p);
                       else if (item.kind === 'booking_wrapup') summary = describeWrapup(p);
@@ -1023,6 +1024,17 @@ export default function BandDashboard() {
                             <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 460, whiteSpace: 'pre-wrap' }}>
                               {String(p.caption).slice(0, 300)}{String(p.caption).length > 300 ? '…' : ''}
                             </div>
+                          )}
+                          {item.kind === 'record_delete' && Array.isArray(p.items) && p.items.some((it: any) => Array.isArray(it.shows) && it.shows.length > 0) && (
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 460 }}>
+                              {p.include_shows ? 'Shows deleted with it:' : 'Shows kept on your calendar:'}
+                              {p.items.flatMap((it: any) => it.shows ?? []).map((sh: any) => (
+                                <div key={sh.id}>• {String(sh.label)}</div>
+                              ))}
+                            </div>
+                          )}
+                          {item.kind === 'record_delete' && (
+                            <span style={{ fontSize: 11, color: 'var(--orange)' }}>⚠ Deleting can&apos;t be undone. Past shows and money records are never touched.</span>
                           )}
                           {item.kind === 'member_invite' && (
                             <span style={{ fontSize: 11, color: 'var(--orange)' }}>⚠ Confirming emails an invite link to {String(p.email)}.</span>

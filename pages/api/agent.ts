@@ -34,7 +34,6 @@ import {
   buildMoneyContext,
   buildWrapupPayload,
   buildExpenseUpdatePayload,
-  buildExpenseArchivePayload,
 } from '../../lib/server/agentMoneyActions';
 import {
   buildOfficeContext,
@@ -45,6 +44,8 @@ import {
   buildSocialDraftPayload,
 } from '../../lib/server/agentOfficeActions';
 import { stageAction } from '../../lib/server/agentStage';
+import { buildDeletePayload, MAX_DELETES_PER_REQUEST } from '../../lib/server/agentDeletes';
+import { AGENT_CONTENT_RULES, CONTENT_REFUSAL, screenRequest } from '../../lib/server/agentContentGuard';
 import {
   AGENT_WEB_SEARCH_TOOL,
   MAX_PAUSE_CONTINUATIONS,
@@ -75,6 +76,7 @@ import {
   isDuplicateInRows,
   formatPendingContextSummary,
   describeTourUpdate,
+  describeDelete,
   describeVenueUpsert,
   describeContactUpsert,
   describeWrapup,
@@ -126,7 +128,7 @@ CRITICAL FORMATTING RULE:
 When the user asks to send bulk outreach, find venues in a city/region, add/update anything about a
 tour (shows, travel days, tour notes, expenses), record a payment, compose an email to a venue, save
 an email template, edit a tour, change the roster, change calendar sync, add/edit a venue or a venue
-contact, log a show wrap-up, edit/archive an expense,
+contact, log a show wrap-up, edit an expense, delete something (delete_record),
 archive emails, save an email draft, invite a member, write a note, OR draft a social post,
 respond ONLY with valid JSON in the exact shape for that action. Output the raw JSON object only —
 no markdown code fences (no \`\`\`), no text before or after it. For ALL other messages: respond with
@@ -279,10 +281,24 @@ Money received after a show is still payment_settle, not the wrap-up.
 
 To EDIT an EXPENSE already logged (use expense_id from the Money section; only changed fields):
 {"reply":"<conversational text>","action":{"type":"expense_update","expense_id":"<id>","category":"<category>","amount":120.5,"expense_date":"YYYY-MM-DD","notes":"<notes>","status":"potential|confirmed"}}
-To REMOVE an expense, ARCHIVE it — financial records are never deleted; archived expenses drop out of
-totals but are kept:
-{"reply":"<conversational text>","action":{"type":"expense_archive","expense_id":"<id>"}}
-One expense per archive request. New expenses still use the expense item in stage_items.
+You can never remove, archive or delete an expense, payment or any money record — if asked, say the
+user can archive it themselves on the Financials page. New expenses still use the expense item in stage_items.
+
+To DELETE something (only these kinds, at most ${MAX_DELETES_PER_REQUEST} per request, all the same kind):
+{"reply":"<conversational text>","action":{"type":"delete_record","target":"show|tour|member|note|media","ids":["<id from context>"]}}
+  • show   — an upcoming show or calendar day (booking_id). Past/completed shows and shows with money
+             received, expenses or email history can't be deleted — offer to set status "cancelled".
+  • tour   — ONE tour (tour id). FIRST ask the user whether its upcoming shows should be deleted too.
+             Then add "include_shows":true (delete them) or "include_shows":false (keep them as
+             standalone shows). Never guess — if they haven't answered, ask instead of sending JSON.
+  • member — a roster member (personnel_id). Members with a login, pay history or past shows are
+             retired (hidden, records kept) instead of erased; the card says which.
+  • note   — a band note (note_id from Band notes).
+  • media  — a photo or file (media_id from Media). The band's main logo and files used in posters or
+             social posts can't be deleted.
+Never delete: past shows, anything with money attached, expenses, payments, emails, venues, contacts,
+profiles, logins, the band itself. Never offer to "delete everything" — more than ${MAX_DELETES_PER_REQUEST} items is
+always refused; ask the user to pick.
 
 To ARCHIVE inbox emails ("archive the calendar invites", "clear out the test emails"), use email_id values
 from the Inbox section (max 10 per request):
@@ -409,7 +425,9 @@ WRITE (all writes require explicit user approval via staged-confirm — no direc
   ✓ Venues — add new, edit details (venue_upsert); read via find_venue incl. saved contacts
   ✓ Venue contacts — add or edit bookers/talent buyers (contact_upsert)
   ✓ Show wrap-ups — attendance, rating, rebook, notes, mark completed (booking_wrapup)
-  ✓ Expenses — add (stage_items), edit (expense_update), archive (expense_archive); never delete
+  ✓ Expenses — add (stage_items), edit (expense_update); never archive or delete
+  ✓ Delete (delete_record) — upcoming shows/calendar days, tours, roster members (retired if they
+    have history), notes, media; one kind and at most ${MAX_DELETES_PER_REQUEST} items per request
   ✓ Inbox — archive emails (email_archive); save drafts without sending (email_draft)
   ✓ Member invites — invite someone to log in as a band member (member_invite); never as admin
   ✓ Notes — read recent band notes; add to or replace a day's note (note_upsert)
@@ -417,6 +435,9 @@ WRITE (all writes require explicit user approval via staged-confirm — no direc
 
 HARD LOCKOUTS — NO ACCESS UNDER ANY CIRCUMSTANCES:
   ✗ Settings — cannot read or write anything here; not keys, not config, nothing
+  ✗ History and money — never delete past or completed shows, payments, deposits, expenses, pay
+    history, emails, profiles or logins, and never archive money records
+  ✗ Off-limits topics — no adult content, drugs or illegal activity (see OFF-LIMITS TOPICS)
   ✗ Sign out — cannot trigger, suggest, or assist with signing out under any circumstance
   ✗ Theme toggle — cannot change the visual theme or light/dark mode setting
   ✗ Help page — cannot navigate the user to or open the Help section as an action
@@ -882,6 +903,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   if (!actId) return res.status(400).json({ error: 'No act found' });
 
+  // Off-limits topics are refused before the model (or its web search) ever runs.
+  const blockedTopic = screenRequest(message);
+  if (blockedTopic) {
+    console.warn('[agent] refused off-limits request', { actId, category: blockedTopic });
+    return res.status(200).json({ reply: CONTENT_REFUSAL });
+  }
+
   const anthropicKey = await getSetting('anthropic_api_key');
   if (!anthropicKey) return res.status(500).json({ error: 'AI not configured. Add your Anthropic API key in Settings.' });
 
@@ -934,6 +962,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const system: Anthropic.TextBlockParam[] = [
     { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
     { type: 'text', text: HELP_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: AGENT_CONTENT_RULES },
     ...(FEATURES.socials ? [] : [{ type: 'text' as const, text: SOCIALS_OFF_NOTICE }]),
     { type: 'text', text: `Current pipeline context:\n\n${fullContext}` },
   ];
@@ -1238,13 +1267,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      if (parsed?.action?.type === 'expense_update' || parsed?.action?.type === 'expense_archive') {
-        const kind = parsed.action.type as 'expense_update' | 'expense_archive';
+      if (parsed?.action?.type === 'expense_archive') {
+        return res.status(200).json({
+          reply: "I can't archive or remove money records — you can archive an expense yourself on the Financials page.",
+        });
+      }
+
+      if (parsed?.action?.type === 'delete_record') {
         try {
           const { type: _t, ...args } = parsed.action;
-          const payload = kind === 'expense_update'
-            ? await buildExpenseUpdatePayload(service, actId, args)
-            : await buildExpenseArchivePayload(service, actId, args);
+          const payload = await buildDeletePayload(service, actId, user.id, args);
+          const result = await stageAction(service, actId, user.id, 'record_delete', payload);
+          return res.status(200).json({
+            reply: guardProposalReply(parsed.reply, `${describeDelete(payload)}. Nothing is removed until you confirm.`),
+            action: { type: 'stage_items', staged: [{ kind: 'record_delete', ...result }], errors: [], overflow: 0 },
+          });
+        } catch (e: any) {
+          return res.status(200).json({ reply: e.message || "Couldn't stage that delete." });
+        }
+      }
+
+      if (parsed?.action?.type === 'expense_update') {
+        const kind = 'expense_update' as const;
+        try {
+          const { type: _t, ...args } = parsed.action;
+          const payload = await buildExpenseUpdatePayload(service, actId, args);
           const result = await stageAction(service, actId, user.id, kind, payload);
           return res.status(200).json({
             reply: guardProposalReply(parsed.reply, `${describeExpenseUpdate({ kind, ...payload })}. Review and confirm.`),
