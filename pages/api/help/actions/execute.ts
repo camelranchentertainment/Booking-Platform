@@ -6,7 +6,8 @@ import { isBandAdminRole } from '../../../../lib/server/requireBandAdmin';
 import { saveTemplate, templateSaveSchema, TemplateExistsError } from '../../../../lib/server/emailTemplates';
 import { executeTourUpdate } from '../../../../lib/server/agentTourActions';
 import { executeVenueUpsert, executeContactUpsert } from '../../../../lib/server/agentVenueActions';
-import { executeWrapup, executeExpenseUpdate, executeExpenseArchive } from '../../../../lib/server/agentMoneyActions';
+import { executeWrapup, executeExpenseUpdate } from '../../../../lib/server/agentMoneyActions';
+import { executeDelete } from '../../../../lib/server/agentDeletes';
 import {
   executeEmailArchive,
   executeEmailDraft,
@@ -397,8 +398,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } else if (staged.action_type === 'expense_update') {
         result = await executeExpenseUpdate(supabase, profile.act_id, p);
       } else if (staged.action_type === 'expense_archive') {
-        // Financial data is archived, never deleted.
-        result = await executeExpenseArchive(supabase, profile.act_id, p);
+        // The agent may never archive or remove money records (policy, Oct 2026).
+        // Older cards of this type are refused rather than run.
+        throw new Error("The assistant can't archive money records. Archive the expense yourself on the Financials page.");
+      } else if (staged.action_type === 'record_delete') {
+        // Re-checks every item (history, money, logins, limits) before removing anything.
+        result = await executeDelete(supabase, profile.act_id, user.id, p, (bookingId, actId) =>
+          syncBookingToGoogleCalendar(bookingId, actId));
       } else if (staged.action_type === 'email_archive') {
         result = await executeEmailArchive(supabase, profile.act_id, p);
       } else if (staged.action_type === 'email_draft') {
