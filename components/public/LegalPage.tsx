@@ -8,6 +8,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { LegalSection } from '../../lib/legalContent';
 import { LEGAL_CONTACT_EMAIL, LEGAL_EFFECTIVE_DATE } from '../../lib/legalContent';
+import { SITE_ORIGIN } from '../../lib/siteUrl';
 
 interface LegalPageProps {
   title: string;
@@ -25,7 +26,7 @@ export default function LegalPage({ title, description, path, intro, sections }:
       <Head>
         <title>{`${title} · Camel Ranch Booking`}</title>
         <meta name="description" content={description} />
-        <link rel="canonical" href={`https://camelranchbooking.com${path}`} />
+        <link rel="canonical" href={`${SITE_ORIGIN}${path}`} />
       </Head>
 
       <a href="#legal-main" className="legal-skip">Skip to content</a>

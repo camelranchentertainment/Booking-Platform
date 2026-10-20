@@ -10,6 +10,7 @@
 
 import Head from 'next/head';
 import Link from 'next/link';
+import { SITE_ORIGIN } from '../lib/siteUrl';
 import BrandLogo from '../components/BrandLogo';
 import { AGENT_TIERS } from '../lib/booker/pricing';
 
@@ -21,7 +22,7 @@ const DARK = '#091725';
 const BORDER = 'rgba(224,120,32,0.13)';
 const MUTED = 'rgba(239,224,189,0.55)';
 
-const SITE = 'https://camelranchbooking.com';
+const SITE = SITE_ORIGIN;
 const TITLE = 'Booking Agent Software for Independent Agents | Camel Ranch Booking';
 const DESCRIPTION =
   'One workspace for every band you carry: shows and holds, your venue book and contacts, a weekend lineup across all your acts, and the commission each band owes you. Bands do not need an account.';

@@ -6,4 +6,4 @@ Disallow: /band
 Disallow: /booker/
 Allow: /booker/signup
 
-Sitemap: https://camelranchbooking.com/sitemap.xml
+Sitemap: https://www.camelranchbooking.com/sitemap.xml
