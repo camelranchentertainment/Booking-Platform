@@ -1,4 +1,5 @@
 import { Html, Head, Main, NextScript } from 'next/document';
+import { SITE_ORIGIN } from '../lib/siteUrl';
 
 export default function Document() {
   return (
@@ -16,13 +17,13 @@ export default function Document() {
         <meta property="og:type"      content="website" />
         <meta property="og:title"     content="Camel Ranch Booking" />
         <meta property="og:description" content="DIY booking workflow for independent touring artists. Manage venues, run email campaigns, and track every show." />
-        <meta property="og:image"     content="https://camelranchbooking.com/images/logo-banner.png" />
+        <meta property="og:image"     content={`${SITE_ORIGIN}/images/og-banner.png`} />
 
         {/* Twitter / X card */}
         <meta name="twitter:card"        content="summary_large_image" />
         <meta name="twitter:title"       content="Camel Ranch Booking" />
         <meta name="twitter:description" content="DIY booking workflow for independent touring artists. Manage venues, run email campaigns, and track every show." />
-        <meta name="twitter:image"       content="https://camelranchbooking.com/images/logo-banner.png" />
+        <meta name="twitter:image"       content={`${SITE_ORIGIN}/images/og-banner.png`} />
       </Head>
       <body>
         {/* Runs before React hydrates — prevents flash of wrong theme */}
