@@ -6,6 +6,10 @@
     {
       "path": "/api/cron/tour-status",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/push-show-day",
+      "schedule": "0 14 * * *"
     }
   ],
   "headers": [
