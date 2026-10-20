@@ -7,6 +7,7 @@ import { saveTemplate, templateSaveSchema, TemplateExistsError } from '../../../
 import { executeTourUpdate } from '../../../../lib/server/agentTourActions';
 import { executeVenueUpsert, executeContactUpsert } from '../../../../lib/server/agentVenueActions';
 import { executeWrapup, executeExpenseUpdate, executeExpenseArchive } from '../../../../lib/server/agentMoneyActions';
+import { MONEY_LOCKED_REPLY, isAgentMoneyAction, stripMoneyFields } from '../../../../lib/server/agentPolicy';
 import {
   executeEmailArchive,
   executeEmailDraft,
@@ -70,7 +71,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         throw new Error('This proposal expired. Ask the assistant to try again.');
       }
 
-      const p = staged.payload as any;
+      // Agent policy backstop: money changes never execute from an agent card,
+      // and money fields are stripped from any other write (agentPolicy.ts).
+      if (isAgentMoneyAction(staged.action_type)) {
+        await supabase.from('ai_staged_actions').update({ status: 'cancelled' }).eq('id', staged.id);
+        throw new Error(MONEY_LOCKED_REPLY);
+      }
+      const p = stripMoneyFields((staged.payload ?? {}) as Record<string, unknown>).payload as any;
       let result: unknown;
 
       if (staged.action_type === 'booking_upsert') {
