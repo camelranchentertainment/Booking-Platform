@@ -1,9 +1,11 @@
 // pages/booker/assistant.tsx
 // The agent's AI assistant: ask about bands, shows, venues, follow-ups and
-// money. It answers from the agent's own workspace and may suggest actions
-// (add a hold, set a follow-up, draft an email). Nothing happens until the
-// agent clicks Approve on a suggestion; approvals run the normal RLS-scoped
-// workspace calls, the same as doing it by hand.
+// money. It answers from the agent's own workspace (and the web) and may
+// suggest changes — shows, bands, venues, contacts, follow-ups and emails;
+// everything except money and deleting (lib/booker/assistantActions.ts).
+// Nothing happens until the agent clicks Approve on a suggestion; approvals
+// run the normal RLS-scoped workspace calls, the same as doing it by hand
+// (lib/booker/assistantApply.ts builds each write).
 //
 // The conversation lives in this browser tab (sessionStorage), so moving to
 // another page and back keeps it; nothing is stored on the server.
@@ -13,11 +15,27 @@ import Link from 'next/link';
 import BookerShell, { useBooker } from '../../components/booker/BookerShell';
 import ComposeEmail, { type Recipient } from '../../components/booker/ComposeEmail';
 import { ErrorBanner, PageHeader, SkeletonRows } from '../../components/booker/ui';
-import { askAssistant, createShow, listContacts, listRoster, listShows, listVenues, setShowFollowup, type AssistantTurn } from '../../lib/booker/data';
+import {
+  askAssistant,
+  createContact,
+  createRosterBand,
+  createShow,
+  createVenue,
+  listContacts,
+  listRoster,
+  listShows,
+  listVenues,
+  setShowFollowup,
+  updateContact,
+  updateRosterBand,
+  updateShow,
+  updateVenue,
+  type AssistantTurn,
+} from '../../lib/booker/data';
 import { STARTER_QUESTIONS, validActions, type AssistantAction } from '../../lib/booker/assistantActions';
-import { ShowSchema } from '../../lib/booker/schemas';
-import { addDays, formatShowDate, todayIso } from '../../lib/booker/dates';
-import { byId, venueLabel } from '../../lib/booker/workspace';
+import { buildWrite, describeAction, type AssistantWrite } from '../../lib/booker/assistantApply';
+import { addDays, todayIso } from '../../lib/booker/dates';
+import { byId } from '../../lib/booker/workspace';
 import { useLoad } from '../../lib/booker/useLoad';
 
 const STORAGE_KEY = 'crb.booker.assistant.v1';
@@ -83,13 +101,12 @@ function AssistantContent() {
   const lookups = useMemo(() => {
     if (!data) return null;
     return {
-      bandsById: byId(data.bands),
       venuesById: byId(data.venues),
-      showsById: byId(data.shows),
       known: {
         bands: new Set(data.bands.map(b => b.id)),
         venues: new Set(data.venues.map(v => v.id)),
         shows: new Set(data.shows.filter(s => s.status !== 'cancelled').map(s => s.id)),
+        contacts: new Set(data.contacts.map(c => c.id)),
       },
     };
   }, [data]);
@@ -143,54 +160,56 @@ function AssistantContent() {
 
   const setState = (key: string, s: ActionState) => setActionState(prev => ({ ...prev, [key]: s }));
 
+  /** Runs one approved write through the normal workspace calls; returns what to tell the agent. */
+  const perform = async (w: Exclude<AssistantWrite, { op: 'composeEmail' }>): Promise<string> => {
+    switch (w.op) {
+      case 'createShow':
+        await createShow(booker.id, w.input);
+        return w.input.status === 'hold' ? 'Hold added.' : w.input.status === 'pending' ? 'Offer added.' : 'Show added.';
+      case 'updateShow':
+        await updateShow(w.id, w.input);
+        return w.input.status === 'cancelled' ? 'Show cancelled.' : 'Show updated.';
+      case 'setFollowup':
+        await setShowFollowup(w.id, w.date);
+        return 'Follow-up date set.';
+      case 'createBand':
+        await createRosterBand(booker.id, w.input);
+        return 'Band added — set their commission rate on the Bands page.';
+      case 'updateBand':
+        await updateRosterBand(w.id, w.input);
+        return 'Band updated.';
+      case 'createVenue':
+        await createVenue(booker.id, w.input);
+        return 'Venue added to your book.';
+      case 'updateVenue':
+        await updateVenue(w.id, w.input);
+        return 'Venue updated.';
+      case 'createContact':
+        await createContact(booker.id, w.input);
+        return 'Contact added.';
+      case 'updateContact':
+        await updateContact(w.id, w.input);
+        return 'Contact updated.';
+    }
+  };
+
   const approve = async (key: string, a: AssistantAction) => {
+    if (!data) return;
     setState(key, { status: 'busy' });
     try {
-      if (a.type === 'add_hold') {
-        const parsed = ShowSchema.safeParse({
-          roster_id: a.roster_id,
-          venue_id: a.venue_id ?? '',
-          venue_name: a.venue_id ? '' : (a.venue_name ?? ''),
-          venue_city: a.venue_id ? '' : (a.venue_city ?? ''),
-          show_date: a.show_date,
-          status: 'hold',
-          deal_notes: '',
-          internal_notes: `Added from the assistant: ${a.reason}`.slice(0, 5000),
-        });
-        if (!parsed.success) throw new Error('That hold is missing something. Add it from the Shows page instead.');
-        await createShow(booker.id, parsed.data);
-        setState(key, { status: 'done', message: 'Hold added.' });
-      } else if (a.type === 'set_followup') {
-        await setShowFollowup(a.show_id, a.followup_on);
-        setState(key, { status: 'done', message: 'Follow-up date set.' });
-      } else {
-        setComposing({ key, action: a });
+      const built = buildWrite(a, data);
+      if (!built.ok) throw new Error(built.message);
+      if (built.write.op === 'composeEmail') {
+        if (a.type === 'draft_email') setComposing({ key, action: a });
         setState(key, { status: 'idle' });
         return;
       }
+      const message = await perform(built.write);
+      setState(key, { status: 'done', message });
       await reload();
     } catch (err) {
       setState(key, { status: 'error', message: err instanceof Error ? err.message : 'That did not work.' });
     }
-  };
-
-  const describe = (a: AssistantAction): { title: string; detail: string } => {
-    if (!lookups) return { title: '', detail: '' };
-    const band = (id?: string | null) => (id ? (lookups.bandsById.get(id)?.band_name ?? 'band') : '');
-    if (a.type === 'add_hold') {
-      const v = a.venue_id ? lookups.venuesById.get(a.venue_id) : undefined;
-      const where = v ? `${v.name}${v.city ? `, ${v.city}` : ''}` : [a.venue_name, a.venue_city].filter(Boolean).join(', ');
-      return { title: `Add a hold: ${band(a.roster_id)} at ${where}`, detail: formatShowDate(a.show_date, year) };
-    }
-    if (a.type === 'set_followup') {
-      const s = lookups.showsById.get(a.show_id);
-      return {
-        title: `Set a follow-up for ${s ? `${band(s.roster_id)} at ${venueLabel(s, lookups.venuesById)}` : 'this show'}`,
-        detail: `Follow up ${formatShowDate(a.followup_on, year)}${s ? ` · show ${formatShowDate(s.show_date, year)}` : ''}`,
-      };
-    }
-    const v = a.venue_id ? lookups.venuesById.get(a.venue_id) : undefined;
-    return { title: `Draft email${v ? ` to ${v.name}` : ''}: “${a.subject}”`, detail: a.body };
   };
 
   const recipientsFor = (venueId?: string | null): Recipient[] => {
@@ -223,7 +242,7 @@ function AssistantContent() {
         {entries.length === 0 && (
           <div>
             <p className="text-sm" style={{ color: 'var(--text)', marginTop: 0, lineHeight: 1.6 }}>
-              I can see your bands, shows from the last two months through the next six, your venue book, open email follow-ups and commission. I can suggest holds, follow-up dates and emails, and nothing changes until you click <strong>Approve</strong>.
+              I can see your bands, shows from the last two months through the next six, your venue book and contacts, recent emails, follow-ups and commission, and I can search the web. I can line up holds, offers and confirmed shows, update or cancel shows, add or fix bands, venues and contacts, set follow-ups and draft emails — nothing changes until you click <strong>Approve</strong>. Money (payments, rates) and deleting stay with you.
             </p>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {STARTER_QUESTIONS.map(q => (
@@ -255,13 +274,13 @@ function AssistantContent() {
                 <span style={SR_ONLY}>{e.role === 'user' ? 'You: ' : 'Assistant: '}</span>
                 {e.content}
               </div>
-              {e.actions && e.actions.length > 0 && lookups && (
+              {e.actions && e.actions.length > 0 && lookups && data && (
                 <div style={{ display: 'grid', gap: '0.5rem', width: 'min(720px, 100%)' }}>
                   {e.actions.map((a, i) => {
                     const key = `${e.id}-${i}`;
                     const st = actionState[key] ?? { status: 'idle' };
                     if (st.status === 'dismissed') return null;
-                    const d = describe(a);
+                    const d = describeAction(a, data, year);
                     return (
                       <div key={key} style={{ border: '1px dashed var(--accent)', borderRadius: 'var(--radius-sm)', padding: '0.7rem 0.85rem', background: 'var(--surface)' }}>
                         <div className="eyebrow" style={{ color: 'var(--accent)', fontSize: '0.75rem' }}>
@@ -278,8 +297,8 @@ function AssistantContent() {
                           {st.status === 'done' ? (
                             <span role="status" className="text-sm" style={{ color: 'var(--green)' }}>
                               ✓ {st.message}{' '}
-                              {a.type !== 'draft_email' && (
-                                <Link href={a.type === 'add_hold' ? `/booker/bands/${a.roster_id}` : '/booker/shows'} className="text-sm">
+                              {d.href && (
+                                <Link href={d.href} className="text-sm">
                                   View
                                 </Link>
                               )}
@@ -287,7 +306,7 @@ function AssistantContent() {
                           ) : (
                             <>
                               <button type="button" className="btn btn-primary btn-sm" onClick={() => void approve(key, a)} disabled={st.status === 'busy'} aria-busy={st.status === 'busy'}>
-                                {st.status === 'busy' ? 'Working…' : a.type === 'draft_email' ? 'Review & send' : 'Approve'}
+                                {st.status === 'busy' ? 'Working…' : d.approveLabel}
                               </button>
                               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setState(key, { status: 'dismissed' })} disabled={st.status === 'busy'}>
                                 Dismiss
@@ -344,7 +363,7 @@ function AssistantContent() {
         </button>
       </form>
       <p className="text-xs text-muted" style={{ marginTop: '0.4rem' }}>
-        Enter to send, Shift+Enter for a new line. The assistant only sees your own workspace and can make mistakes, so check dates before you confirm anything.
+        Enter to send, Shift+Enter for a new line. The assistant sees only your own workspace (plus the web when it searches) and can make mistakes, so check each suggestion before you approve it.
       </p>
 
       {composing && data && (

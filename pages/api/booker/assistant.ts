@@ -4,6 +4,10 @@
 // nothing is written here. The page re-checks each proposal against the
 // agent's own rows and runs it only on an Approve click.
 //
+// The assistant may search the web (an Anthropic server tool: Anthropic runs
+// the searches, nothing is fetched from our servers) and then answers through
+// the "respond" tool. Cited web pages are appended to the reply as sources.
+//
 //   200 { reply, actions }
 //   400 invalid conversation · 401/403 not an agent
 //   429 assistant limit reached (or provider busy)
@@ -21,7 +25,8 @@ import { getSetting } from '../../../lib/platformSettings';
 import { requireBooker } from '../../../lib/server/requireBooker';
 import { claimAi } from '../../../lib/server/bookerAi';
 import { ASSISTANT_LIMITS, ASSISTANT_TOOL, assistantSystemPrompt, loadSnapshot, snapshotText } from '../../../lib/server/bookerAssistant';
-import { AssistantReply, validActions } from '../../../lib/booker/assistantActions';
+import { AGENT_WEB_SEARCH_TOOL, MAX_PAUSE_CONTINUATIONS, appendSources, extractFinalAnswer, isWebSearchUnavailableError } from '../../../lib/server/agentWebSearch';
+import { AssistantReply, normalizeProposals, validActions } from '../../../lib/booker/assistantActions';
 import { todayIso } from '../../../lib/booker/dates';
 
 export const ASSISTANT_MODEL = 'claude-sonnet-4-6';
@@ -63,32 +68,60 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   });
 
   const client = new Anthropic({ apiKey });
-  let toolInput: unknown;
+  const system = assistantSystemPrompt(snapshotText(snapshot));
+  const turn: Anthropic.MessageParam[] = [...messages];
+  let webSearch = true;
+  let content: Anthropic.ContentBlock[] = [];
   try {
-    const message = await client.messages.create({
-      model: ASSISTANT_MODEL,
-      max_tokens: 2048,
-      system: assistantSystemPrompt(snapshotText(snapshot)),
-      tools: [ASSISTANT_TOOL],
-      tool_choice: { type: 'tool', name: ASSISTANT_TOOL.name },
-      messages,
-    });
-    toolInput = message.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')?.input;
+    for (let attempt = 0; attempt <= MAX_PAUSE_CONTINUATIONS; attempt++) {
+      let message: Anthropic.Message;
+      try {
+        message = await client.messages.create({
+          model: ASSISTANT_MODEL,
+          max_tokens: 4096,
+          system,
+          tools: webSearch ? [AGENT_WEB_SEARCH_TOOL, ASSISTANT_TOOL] : [ASSISTANT_TOOL],
+          // With web search the model must be free to search first; it is told to finish with "respond".
+          tool_choice: webSearch ? { type: 'auto' } : { type: 'tool', name: ASSISTANT_TOOL.name },
+          messages: turn,
+        });
+      } catch (err) {
+        if (webSearch && isWebSearchUnavailableError(err)) {
+          console.warn('[booker/assistant] web search unavailable for this Anthropic org; answering without it', { bookerId });
+          webSearch = false;
+          attempt--;
+          continue;
+        }
+        throw err;
+      }
+      content = [...content, ...message.content];
+      if (message.stop_reason === 'pause_turn' && attempt < MAX_PAUSE_CONTINUATIONS) {
+        turn.push({ role: 'assistant', content: message.content });
+        continue;
+      }
+      break;
+    }
   } catch (err) {
     if (err instanceof Anthropic.RateLimitError) throw new AppError(429, 'The assistant is busy right now. Try again in a moment.');
     console.error('[booker/assistant] model call failed', { name: err instanceof Error ? err.name : 'unknown' });
     throw new AppError(502, 'The assistant is unavailable right now. Try again in a minute.');
   }
 
-  const out = AssistantReply.safeParse(toolInput);
+  // The answer normally arrives through the "respond" tool. If the model
+  // answered in plain text instead (it can after a search), use that text.
+  const { text: finalText, sources } = extractFinalAnswer(content);
+  const toolInput = content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === ASSISTANT_TOOL.name)?.input;
+  const out = AssistantReply.safeParse(toolInput ?? (finalText.trim() ? { reply: finalText.trim(), actions: [] } : undefined));
   if (!out.success) throw new AppError(502, 'The assistant gave an empty answer. Try asking again.');
+  const reply = appendSources(out.data.reply, sources);
 
   const known = {
     bands: new Set(snapshot.bands.map(b => b.id)),
     venues: new Set(snapshot.venues.map(v => v.id)),
     shows: new Set(snapshot.shows.filter(s => s.status !== 'cancelled').map(s => s.id)),
+    contacts: new Set(snapshot.contacts.map(c => c.id)),
   };
-  res.status(200).json({ reply: out.data.reply, actions: validActions(out.data.actions, known, today) });
+  res.status(200).json({ reply, actions: validActions(normalizeProposals(out.data.actions), known, today) });
 }
 
 export default withHandler(handler);

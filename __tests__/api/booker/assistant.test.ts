@@ -34,6 +34,7 @@ function setup({ booker = { id: BOOKER } as Row | null, aiCount = 0 } = {}) {
     booker_venues: [],
     booker_messages: [],
     booker_commission_payments: [],
+    booker_contacts: [],
   };
   const client = {
     auth: { getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'u-1' } }, error: null }) },
@@ -133,21 +134,72 @@ describe('POST /api/booker/assistant', () => {
     expect(body.reply).toBe('Two holds need a follow-up.');
     expect(body.actions).toHaveLength(1);
     expect(body.actions[0]).toMatchObject({ roster_id: BAND });
-    for (const t of ['booker_roster', 'booker_shows', 'booker_venues', 'booker_messages', 'booker_commission_payments']) {
+    for (const t of ['booker_roster', 'booker_shows', 'booker_venues', 'booker_messages', 'booker_commission_payments', 'booker_contacts']) {
       expect(reads.filter(r => r.table === t).every(r => r.filters.booker_id === BOOKER)).toBe(true);
     }
     expect(writes).toEqual([{ table: 'booker_ai_events', op: 'insert' }]);
     const req = mockCreate.mock.calls[0][0];
-    expect(req.tool_choice).toEqual({ type: 'tool', name: 'respond' });
+    // Free to search the web first, then answer through "respond".
+    expect(req.tool_choice).toEqual({ type: 'auto' });
+    expect(req.tools.map((t: { name: string }) => t.name)).toEqual(['web_search', 'respond']);
     expect(req.system).toContain('The Jackwagons');
     expect(req.system).not.toContain(FOREIGN);
   });
 
-  it('reports unusable model output as a 502', async () => {
+  it('accepts a plain-text answer (e.g. after a search) with no proposals', async () => {
     setup();
-    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: 'hello' }] });
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: 'Saxon Pub books Tuesdays.' }] });
+    const { run, status, json } = call(ask);
+    await run();
+    expect(status).toHaveBeenCalledWith(200);
+    expect(json.mock.calls[0][0]).toEqual({ reply: 'Saxon Pub books Tuesdays.', actions: [] });
+  });
+
+  it('reports an empty model answer as a 502', async () => {
+    setup();
+    mockCreate.mockResolvedValue({ content: [] });
     const { run, status } = call(ask);
     await run();
     expect(status).toHaveBeenCalledWith(502);
+  });
+
+  it('appends the web pages a searched answer cited', async () => {
+    setup();
+    mockCreate.mockResolvedValue({
+      stop_reason: 'tool_use',
+      content: [
+        { type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'Saxon Pub booking' } },
+        { type: 'web_search_tool_result', tool_use_id: 's1', content: [] },
+        { type: 'text', text: 'Found it.', citations: [{ type: 'web_search_result_location', url: 'https://saxonpub.com/booking', title: 'Saxon Pub — Booking' }] },
+        { type: 'tool_use', name: 'respond', input: { reply: 'Saxon Pub takes submissions by email.', actions: [] } },
+      ],
+    });
+    const { run, json } = call(ask);
+    await run();
+    expect(json.mock.calls[0][0].reply).toBe('Saxon Pub takes submissions by email.\n\nSources:\n• Saxon Pub — Booking — https://saxonpub.com/booking');
+  });
+
+  it('resumes a paused search turn and answers from where it ended', async () => {
+    setup();
+    mockCreate
+      .mockResolvedValueOnce({ stop_reason: 'pause_turn', content: [{ type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'x' } }] })
+      .mockResolvedValueOnce({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'respond', input: { reply: 'Done searching.', actions: [] } }] });
+    const { run, json } = call(ask);
+    await run();
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(mockCreate.mock.calls[1][0].messages.at(-1).role).toBe('assistant');
+    expect(json.mock.calls[0][0].reply).toBe('Done searching.');
+  });
+
+  it('answers without web search when the Anthropic org has it switched off', async () => {
+    setup();
+    const off = Object.assign(new Error('web_search is not enabled for this organization'), { status: 400 });
+    mockCreate.mockRejectedValueOnce(off);
+    const { run, status } = call(ask);
+    await run();
+    expect(status).toHaveBeenCalledWith(200);
+    const retry = mockCreate.mock.calls[1][0];
+    expect(retry.tools.map((t: { name: string }) => t.name)).toEqual(['respond']);
+    expect(retry.tool_choice).toEqual({ type: 'tool', name: 'respond' });
   });
 });
