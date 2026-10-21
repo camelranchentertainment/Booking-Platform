@@ -869,13 +869,12 @@ export default function MediaLibraryPage() {
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem' }}>
 
         {/* ── Media Library ──────────────────────────────────────────────── */}
-        <div id="section-media" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        {/* Page header — the shared Tours-style header (.page-header in globals.css) */}
+        <div id="section-media" className="page-header">
           <div>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', color: 'var(--text-primary)', margin: 0, lineHeight: 1 }}>
-              MEDIA LIBRARY
-            </h1>
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-              {items.length} file{items.length !== 1 ? 's' : ''}
+            <h1 className="page-title">Media Library</h1>
+            <div className="page-sub">
+              {items.length} file{items.length !== 1 ? 's' : ''}{photoCount > 0 ? ` · ${photoCount} photo${photoCount !== 1 ? 's' : ''}` : ''}
             </div>
           </div>
           <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>
