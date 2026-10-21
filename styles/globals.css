@@ -801,45 +801,93 @@ tr:hover td { background: rgba(232,130,58,0.06); color: var(--text-primary); }
   margin-bottom: 1.75rem;
 }
 
-/* ── Page header ────────────────────────────────────────────── */
+/* ── Page header ────────────────────────────────────────────
+   The classic `.page-header` (title + subtitle + actions) now renders as a
+   compact version of the Tours hero (components/tours/TourHighwayHero.tsx):
+   desert dusk sky with mesas, big Bebas title, tracked uppercase subtitle.
+   Pages that use components/layout/PageHero get the full illustrated scene;
+   every other page gets this. The scene is always a dark dusk, so the copy
+   keeps light ink in both themes. */
 .page-header {
+  --page-header-ink: #f4f7fb;
+  --page-header-ink-muted: #d8dee9;
+  position: relative;
+  isolation: isolate;
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
+  gap: 1rem 1.5rem;
+  min-height: 200px;
   margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border);
-  position: relative;
+  padding: 2.5rem 2rem 1.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background-color: #1a1430;
+  background-image:
+    linear-gradient(90deg, rgba(22,36,63,0.92) 0%, rgba(22,36,63,0.5) 40%, rgba(22,36,63,0) 75%),
+    linear-gradient(180deg, rgba(22,36,63,0) 72%, rgba(22,36,63,0.75) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 220' preserveAspectRatio='xMaxYMax slice'%3E%3Ccircle cx='1180' cy='150' r='56' fill='%23F7C46A' opacity='.18'/%3E%3Ccircle cx='1180' cy='150' r='38' fill='%23F7C46A'/%3E%3Cpath d='M0 160h140l20-24h170l22 26h228l30-44h110l26 36h174l30-24h220l26 28h124l22-18h118v80H0z' fill='%237A3B45'/%3E%3Cpath d='M0 184h220l20-24h28l8-18h24l10 18h50l20 24h400l20-16h160l18 16h202l16-34h18l8-18h40l8 18h30l18 34h122v36H0z' fill='%234A2638'/%3E%3Crect y='200' width='1440' height='20' fill='%232A1C2E'/%3E%3Cg fill='%231A1222'%3E%3Cpath d='M1352 206v-50a7 7 0 0 1 14 0v50z'/%3E%3Cpath d='M1366 182h10v-12a5 5 0 0 1 10 0v14a7 7 0 0 1-7 7h-13z'/%3E%3Cpath d='M1352 176h-10a7 7 0 0 1-7-7v-12a5 5 0 0 1 10 0v10h7z'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(180deg, #1B2547 0%, #6B3A4E 50%, #C8573A 82%, #F09A4E 100%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%, 100% 100%, auto 100%, 100% 100%;
+  background-position: 0 0, 0 0, right bottom, 0 0;
 }
-
-.page-header::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  width: 60px;
-  height: 2px;
-  background: var(--accent);
-}
+.page-header > div:first-child { min-width: 0; }
 
 .page-title {
+  margin: 0;
   font-family: var(--font-display);
-  font-size: 2.6rem;
-  font-weight: 900;
-  letter-spacing: -0.02em;
+  font-weight: 400;
+  font-size: clamp(2.75rem, 6vw, 4.5rem);
+  line-height: 0.9;
+  letter-spacing: 0.01em;
   text-transform: uppercase;
-  color: var(--text-primary);
+  color: var(--page-header-ink, var(--text));
+  overflow-wrap: anywhere;
 }
 
 .page-sub {
+  margin-top: 0.55rem;
   font-family: var(--font-body);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.3em;
-  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
-  margin-top: 0.3rem;
+  color: var(--page-header-ink-muted, var(--text-muted));
 }
+
+/* The original flat header, kept for pages deliberately left as they were
+   (the Tours detail page). */
+.page-header--classic {
+  --page-header-ink: var(--text);
+  --page-header-ink-muted: var(--text-muted);
+  min-height: 0;
+  padding: 0 0 1rem;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  overflow: visible;
+  background: none;
+}
+.page-header--classic::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; left: 0;
+  width: 60px; height: 2px;
+  background: var(--accent);
+}
+.page-header--classic .page-title { font-size: 2.6rem; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1; }
+.page-header--classic .page-sub { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.3em; margin-top: 0.3rem; }
+
+/* Ghost/secondary buttons sit on the dark scene, not on --bg. */
+.page-header:not(.page-header--classic) .btn-ghost,
+.page-header:not(.page-header--classic) .btn-secondary { color: var(--page-header-ink); border-color: rgba(244,247,251,0.35); }
+.page-header:not(.page-header--classic) .btn-ghost:hover,
+.page-header:not(.page-header--classic) .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+.page-header:not(.page-header--classic) a:not(.btn) { color: var(--page-header-ink-muted); }
+.page-header:not(.page-header--classic) a:not(.btn):hover { color: var(--accent); }
 
 /* ── Calendar layout ───────────────────────────────────────── */
 .calendar-layout {
@@ -880,12 +928,15 @@ tr:hover td { background: rgba(232,130,58,0.06); color: var(--text-primary); }
   }
 
   /* Typography scale-down */
-  .page-title { font-size: 1.8rem; }
   .page-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.75rem;
+    min-height: 150px;
+    padding: 1.75rem 1.25rem 1.25rem;
   }
+  .page-header--classic { min-height: 0; padding: 0 0 1rem; }
+  .page-header--classic .page-title { font-size: 1.8rem; }
   .page-header > div:last-child {
     width: 100%;
     display: flex;
@@ -974,7 +1025,6 @@ tr:hover td { background: rgba(232,130,58,0.06); color: var(--text-primary); }
 @media (max-width: 480px) {
   .grid-4 { grid-template-columns: 1fr; }
   .main-content { padding: 0.75rem; padding-top: 3.5rem; }
-  .page-title { font-size: 1.5rem; }
   .kanban-board { grid-template-columns: 1fr; }
   .kanban-col { min-height: 100px; }
   .card { padding: 1rem; }
@@ -1077,8 +1127,6 @@ tr:hover td { background: rgba(232,130,58,0.06); color: var(--text-primary); }
 [data-theme="light"] .sidebar-label { color: var(--accent); }
 [data-theme="light"] .stat-label    { color: var(--text-muted); }
 [data-theme="light"] .stat-value    { color: var(--accent); }
-[data-theme="light"] .page-title    { color: var(--text-primary); }
-[data-theme="light"] .page-sub      { color: var(--text-muted); }
 
 [data-theme="light"] .skeleton {
   background: linear-gradient(90deg, #e8d8c4 25%, rgba(138,94,10,0.06) 50%, #e8d8c4 75%);
