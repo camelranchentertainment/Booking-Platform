@@ -57,9 +57,6 @@ export const BLOCKING_USER_REFERENCES: readonly UserReference[] = [
   { table: 'ai_staged_actions', column: 'executed_by' },
 ] as const;
 
-/** Subscription states that mean Stripe may still bill this person. */
-const BILLABLE_STATUSES = new Set(['active', 'trialing', 'past_due']);
-
 const MESSAGES: Record<DeletionBlockCode, string> = {
   SUPERADMIN: 'Superadmin accounts cannot be deleted through this endpoint.',
   BAND_ADMIN_HANDOFF_REQUIRED:
@@ -95,7 +92,7 @@ export async function findDeletionBlocker(
 ): Promise<DeletionBlock | null> {
   const { data: profile, error: profileErr } = await service
     .from('profiles')
-    .select('role, subscription_status, stripe_subscription_id')
+    .select('role, stripe_subscription_id')
     .eq('id', userId)
     .maybeSingle();
   if (profileErr) throw new Error(`profile lookup failed: ${profileErr.message}`);
@@ -112,10 +109,12 @@ export async function findDeletionBlocker(
   if (actsErr) throw new Error(`act ownership lookup failed: ${actsErr.message}`);
   if ((ownedActs ?? 0) > 0) return block('BAND_ADMIN_HANDOFF_REQUIRED');
 
-  const status = typeof profile?.subscription_status === 'string' ? profile.subscription_status : null;
-  if (profile?.stripe_subscription_id || (status && BILLABLE_STATUSES.has(status))) {
-    return block('SUBSCRIPTION_ACTIVE');
-  }
+  // Only a stored Stripe subscription id means Stripe can still bill this
+  // person: the webhook sets it on checkout and clears it on cancellation.
+  // subscription_status is NOT a billing signal — registration sets every new
+  // account to 'trialing' (a free trial, no Stripe), and comped accounts are
+  // 'active' with no subscription — so gating on it blocked every member.
+  if (profile?.stripe_subscription_id) return block('SUBSCRIPTION_ACTIVE');
 
   const counts = await Promise.all(
     BLOCKING_USER_REFERENCES.map(async ({ table, column }) => {
