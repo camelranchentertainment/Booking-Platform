@@ -1,6 +1,7 @@
 // pages/booker/signup.tsx
 // Public sign-up for Booking Agents who don't have a Camel Ranch account yet.
-// People who already have an account sign in and open /booker instead.
+// Existing agents sign in at /booker/login. Band accounts can't become agent
+// accounts: each login belongs to one side of the platform.
 
 import { useState, type FormEvent } from 'react';
 import Head from 'next/head';
@@ -128,11 +129,12 @@ export default function BookerSignup() {
               {busy ? 'Creating your workspace…' : 'Create my workspace'}
             </button>
             <p className="text-sm text-muted" style={{ textAlign: 'center', margin: 0 }}>
-              Already have a Camel Ranch account?{' '}
-              <Link href="/login?next=/booker" className="text-accent">
-                Sign in
-              </Link>{' '}
-              and you can add a Booking Agent workspace to it.
+              Already have an agent account?{' '}
+              <Link href="/booker/login" className="text-accent">
+                Agent sign in
+              </Link>
+              <br />
+              <span className="text-xs">Agent accounts are separate from band accounts. Use an email that isn't on a band login.</span>
             </p>
           </form>
         )}

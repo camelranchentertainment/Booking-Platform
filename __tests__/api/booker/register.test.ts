@@ -93,7 +93,8 @@ describe('POST /api/booker/register', () => {
     const { r, status, json } = res();
     await handler(req('POST', VALID), r);
     expect(status).toHaveBeenCalledWith(400);
-    expect(json.mock.calls[0][0].error).toMatch(/already exists/);
+    expect(json.mock.calls[0][0].error).toMatch(/already has a Camel Ranch account/);
+    expect(json.mock.calls[0][0].error).toMatch(/separate from band accounts/);
   });
 
   it('refuses an unknown signup code before creating the account', async () => {

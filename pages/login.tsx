@@ -1,8 +1,8 @@
-﻿import { useState } from 'react';
-import { useRouter } from 'next/router';
+import { useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import BrandLogo from '../components/BrandLogo';
+import { bandSideHome, fetchHasAgentWorkspace, isAgentShape } from '../lib/accountSide';
 
 const BG    = '#091725';
 const GOLD  = '#E07820';
@@ -10,29 +10,14 @@ const GOLD2 = '#F08830';
 const MUTED = 'rgba(224,120,32,0.55)';
 
 
+// Band-side accounts only. Booking Agents sign up and sign in on their own
+// pages (/booker/signup, /booker/login) so the two sides never mix.
 const TIERS = [
-  { role: 'band_admin',    label: 'Band Admin',    icon: '♪', color: '#a78bfa', desc: '$18/mo · 14-day trial', href: '/register?role=band_admin' },
-  { role: 'member',        label: 'Band Member',   icon: '◉', color: '#34d399', desc: 'Free via invite',       href: '/register?role=member' },
-  { role: 'booking_agent', label: 'Booking Agent', icon: '◈', color: '#33c9b0', desc: 'Book several bands',    href: '/booker/signup' },
+  { role: 'band_admin', label: 'Band Admin',  icon: '♪', color: '#a78bfa', desc: '$18/mo · 14-day trial', href: '/register?role=band_admin' },
+  { role: 'member',     label: 'Band Member', icon: '◉', color: '#34d399', desc: 'Free via invite',       href: '/register?role=member' },
 ];
 
-/** Only same-site paths inside the agent workspace are honoured as ?next= targets. */
-function isBookerPath(path: string): boolean {
-  return /^\/booker(\/[A-Za-z0-9/_-]*)?(\?[^\s]*)?$/.test(path) && !path.startsWith('//');
-}
-
-/** True when the user has a Booking Agent workspace. Failures fall back to the normal landing. */
-async function hasBookerProfile(userId: string): Promise<boolean> {
-  try {
-    const { data } = await supabase.from('booker_profiles').select('id').eq('user_id', userId).is('deleted_at', null).maybeSingle();
-    return Boolean(data);
-  } catch {
-    return false;
-  }
-}
-
 export default function Login() {
-  const router = useRouter();
   const [email, setEmail]         = useState('');
   const [password, setPassword]   = useState('');
   const [error, setError]         = useState('');
@@ -59,7 +44,10 @@ export default function Login() {
     if (!session?.user) { setError('Login failed. Please try again.'); setLoading(false); return; }
 
     let role = 'band_admin';
-    let hasAct = true;
+    let actId: string | null = null;
+    // If the profile can't be read, the login is treated as band-side (the band
+    // pages re-check on load), never as an agent.
+    let profileLoaded = false;
     try {
       const profilePromise = supabase
         .from('profiles')
@@ -74,24 +62,22 @@ export default function Login() {
       const result = await Promise.race([profilePromise, timeoutPromise]);
       if (result && 'data' in result && result.data?.role) {
         role = result.data.role;
-        hasAct = Boolean(result.data.act_id);
+        actId = result.data.act_id ?? null;
+        profileLoaded = true;
       }
     } catch {
       // use default role
     }
 
-    // Booking Agent workspace: a deep link into /booker wins; an account with no band
-    // but an agent profile (an agent-only account) lands on /booker.
-    const next = typeof router.query.next === 'string' ? router.query.next : '';
-    if (isBookerPath(next)) { window.location.href = next; return; }
-    if (role !== 'superadmin' && role !== 'member' && !hasAct && (await hasBookerProfile(session.user.id))) {
+    // Each login belongs to one side. A ?next= value is never honoured here, so a
+    // band login can't be sent into the agent workspace. An agent account that
+    // used this page still goes to its own workspace, never to band pages.
+    if (profileLoaded && isAgentShape(role, actId) && (await fetchHasAgentWorkspace(session.user.id))) {
       window.location.href = '/booker';
       return;
     }
 
-    if (role === 'superadmin') window.location.href = '/admin';
-    else if (role === 'member') window.location.href = '/member/calendar';
-    else window.location.href = '/band';
+    window.location.href = bandSideHome(role);
   };
 
   const handleForgot = async (e: React.FormEvent) => {
@@ -296,6 +282,23 @@ export default function Login() {
             </Link>
           ))}
         </div>
+      </div>
+
+      {/* Booking Agents have their own, separate sign-in and sign-up */}
+      <div style={{
+        width: '100%', maxWidth: 400, marginTop: '1.25rem', padding: '0.85rem 1rem',
+        border: '1px solid rgba(51,201,176,0.3)', background: 'rgba(14,6,3,0.75)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.45rem', textAlign: 'center',
+      }}>
+        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#33c9b0' }}>
+          ◈ Booking Agent?
+        </span>
+        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'rgba(154,122,92,0.9)' }}>
+          Agent accounts use their own pages.{' '}
+          <Link href="/booker/login" style={{ color: '#33c9b0' }}>Agent sign in</Link>
+          {' · '}
+          <Link href="/booker/signup" style={{ color: '#33c9b0' }}>Agent sign up</Link>
+        </span>
       </div>
 
       {/* Divider line at bottom */}

@@ -84,9 +84,8 @@ export async function getMyBookerProfile(userId: string): Promise<BookerProfile 
   return (data as BookerProfile | null) ?? null;
 }
 
-export function createBookerProfile(userId: string, input: BookerProfileInput): Promise<BookerProfile> {
-  return run('set up your agent workspace', supabase.from('booker_profiles').insert({ ...input, user_id: userId }).select('*').single());
-}
+// Agent workspaces are created only by the agent sign-up (/api/booker/register,
+// service role). The browser never inserts a booker_profiles row.
 
 export function updateBookerProfile(id: string, input: BookerProfileInput): Promise<BookerProfile> {
   return run('save your agent profile', supabase.from('booker_profiles').update(input).eq('id', id).select('*').single());

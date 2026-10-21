@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabase';
+import { fetchHasAgentWorkspace, isAgentShape } from '../../lib/accountSide';
 import { UserProfile } from '../../lib/types';
 import { useAuth } from '../../contexts/AuthContext';
 import Sidebar from './Sidebar';
@@ -406,6 +407,19 @@ export default function AppShell({ children, requireRole = null, backdrop = 'des
       else router.replace('/member/calendar');
     }
   }, [authLoading, user, profile, requireRole, router.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Each login belongs to one side (lib/accountSide.ts). An agent account that
+  // reaches a band page is sent to its own workspace. Only band-less non-member
+  // profiles are checked, so band accounts never pay for this lookup.
+  useEffect(() => {
+    if (authLoading || !user || !profile) return;
+    if (!isAgentShape(profile.role, profile.act_id)) return;
+    let cancelled = false;
+    void fetchHasAgentWorkspace(user.id).then(isAgent => {
+      if (!cancelled && isAgent) router.replace('/booker');
+    });
+    return () => { cancelled = true; };
+  }, [authLoading, user, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load act name once — non-blocking, does not gate rendering
   useEffect(() => {

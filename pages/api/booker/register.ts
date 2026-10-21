@@ -74,7 +74,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const taken = /already|registered|exists/i.test(authErr?.message ?? '');
     return res.status(400).json({
       error: taken
-        ? 'An account with this email already exists. Sign in, then open the Booking Agent workspace to set it up.'
+        ? 'This email already has a Camel Ranch account. Agent accounts are separate from band accounts, so use a different email — or, if this is already your agent account, sign in on the agent sign-in page.'
         : 'Could not create the account. Check the details and try again.',
     });
   }

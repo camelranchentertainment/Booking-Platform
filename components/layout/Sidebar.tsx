@@ -62,7 +62,6 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
   const [inboxCount, setInboxCount] = useState(0);
   // Shown only to people who have a Booking Agent workspace (and to the superadmin),
   // so bands without an agent role never see it.
-  const [hasAgentWorkspace, setHasAgentWorkspace] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('theme') as 'dark' | 'light' | null;
@@ -96,19 +95,6 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
   }, [profile?.id]);
 
   useEffect(() => { loadNotifs(); }, [loadNotifs]);
-
-  useEffect(() => {
-    if (!profile?.id) return;
-    let cancelled = false;
-    supabase
-      .from('booker_profiles')
-      .select('id')
-      .eq('user_id', profile.id)
-      .is('deleted_at', null)
-      .maybeSingle()
-      .then(({ data }) => { if (!cancelled) setHasAgentWorkspace(Boolean(data)); });
-    return () => { cancelled = true; };
-  }, [profile?.id]);
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';
@@ -217,12 +203,6 @@ export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
       </div>
 
       <div style={{ padding: '0.5rem 0', borderTop: '1px solid var(--border)', marginTop: 'auto' }}>
-        {(hasAgentWorkspace || isSuperAdmin) && (
-          <Link href="/booker" className="sidebar-link" onClick={onClose}>
-            <span style={{ width: '16px', textAlign: 'center' }}>&#x21C4;</span>
-            Agent Workspace
-          </Link>
-        )}
         <button
           className="sidebar-link"
           onClick={toggleTheme}
