@@ -94,7 +94,7 @@ export default function GmailConnection() {
 
   return (
     <section id="gmail" aria-labelledby="mail-h" className="card" style={{ scrollMarginTop: '1rem' }}>
-      <h2 id="mail-h" className="eyebrow" style={{ color: 'var(--accent)', fontSize: '1.05rem', margin: '0 0 0.9rem' }}>
+      <h2 id="mail-h" className="agent-card-title">
         Gmail — required to send email
       </h2>
       <div aria-live="polite">

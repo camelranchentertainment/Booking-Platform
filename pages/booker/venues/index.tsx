@@ -1,149 +1,224 @@
 // pages/booker/venues/index.tsx
-// Venues & Buyers: the agent's venue book. Venues, festivals, fairs, promoters
-// and private-event buyers, each with its contacts on one profile.
+// Venues & Buyers: the agent's venue book, in the Tours page style —
+// illustrated hero, four trackers, "Find new venues", type tabs and a grid of
+// venue cards. Venues, festivals, fairs, promoters and private-event buyers,
+// each with its contacts on one profile.
 //
 // Two searches, deliberately separate and both always visible:
-//   • "Find new venues" (top) searches Google by city and adds to the book.
+//   • "Find new venues" searches Google by city and adds to the book.
 //   • "Search your book" filters what is already saved, including contacts'
 //     names and emails, so there is no separate Contacts page.
+// Counting lives in lib/booker/summary.ts (unit-tested).
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import BookerShell from '../../../components/booker/BookerShell';
+import VenueCard from '../../../components/booker/VenueCard';
 import VenueSearchPanel from '../../../components/booker/VenueSearchPanel';
 import VenueTownCheck from '../../../components/VenueTownCheck';
 import { VenueForm } from '../../../components/booker/forms';
-import { EmptyState, ErrorBanner, PageHeader, SkeletonRows } from '../../../components/booker/ui';
+import PageHero from '../../../components/layout/PageHero';
+import MainStreetScene from '../../../components/venues/MainStreetScene';
 import { listContacts, listShows, listVenues } from '../../../lib/booker/data';
+import { todayIso } from '../../../lib/booker/dates';
+import { plural, searchVenues, venueBookSummary, venueCards, venueKindCounts } from '../../../lib/booker/summary';
 import { useLoad } from '../../../lib/booker/useLoad';
 import { VENUE_KINDS, VENUE_KIND_LABEL, type VenueKind } from '../../../lib/booker/types';
 
+/** Cards drawn at first; "Show more" adds this many again. Keeps big books quick. */
+const PAGE_SIZE = 60;
+
 function VenuesContent() {
+  const today = todayIso();
+  const year = Number(today.slice(0, 4));
   const { data, loading, error, reload } = useLoad(async () => {
     const [venues, contacts, shows] = await Promise.all([listVenues(), listContacts(), listShows()]);
     return { venues, contacts, shows };
   });
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState('');
-  const [kindFilter, setKindFilter] = useState<VenueKind | ''>('');
+  const [kind, setKind] = useState<VenueKind | 'all'>('all');
+  const [limit, setLimit] = useState(PAGE_SIZE);
 
-  const rows = useMemo(() => {
-    if (!data) return [];
-    const q = search.trim().toLowerCase();
-    return data.venues
-      .filter(v => !kindFilter || v.kind === kindFilter)
-      .map(v => ({
-        venue: v,
-        contacts: data.contacts.filter(c => c.venue_id === v.id),
-        shows: data.shows.filter(s => s.venue_id === v.id && s.status !== 'cancelled').length,
-      }))
-      .filter(({ venue, contacts }) => {
-        if (!q) return true;
-        const hay = [venue.name, venue.city, venue.state, venue.email, ...contacts.flatMap(c => [c.name, c.email, c.title])].filter(Boolean).join(' ').toLowerCase();
-        return hay.includes(q);
-      });
-  }, [data, search, kindFilter]);
+  const view = useMemo(() => {
+    if (!data) return null;
+    const cards = venueCards(data.venues, data.contacts, data.shows, today);
+    return { cards, summary: venueBookSummary(cards), kinds: venueKindCounts(cards) };
+  }, [data, today]);
 
-  const matchedContact = (contacts: { name: string; email: string | null }[]) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return null;
-    return contacts.find(c => c.name.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q)) ?? null;
+  const shown = useMemo(() => {
+    if (!view) return [];
+    return searchVenues(kind === 'all' ? view.cards : view.cards.filter(c => c.venue.kind === kind), search);
+  }, [view, kind, search]);
+
+  const kindTabs = view ? VENUE_KINDS.filter(k => (view.kinds[k] ?? 0) > 0) : [];
+  const heroSummary = view && view.summary.venues > 0
+    ? `${plural(view.summary.venues, 'place')} in your book across ${plural(view.summary.states, 'state')} — ${view.summary.withEmail} with a booking email.`
+    : undefined;
+  const changeFilter = (fn: () => void) => {
+    fn();
+    setLimit(PAGE_SIZE);
   };
 
   return (
     <>
-      <PageHeader
+      <PageHero
         title="Venues & Buyers"
-        sub={data ? `${data.venues.length} in your book` : undefined}
+        subtitle="Your venue book"
+        summary={heroSummary}
+        scene={<MainStreetScene />}
         actions={
-          <>
-            <VenueTownCheck endpoint="/api/booker/venues/towns" onApplied={() => void reload()} />
-            <button type="button" className="btn btn-secondary" onClick={() => setAdding(true)}>
+          <div className="agent-hero-actions">
+            <button type="button" className="btn btn-primary tours-new-btn" onClick={() => setAdding(true)}>
               + Add manually
             </button>
-          </>
+            <VenueTownCheck endpoint="/api/booker/venues/towns" onApplied={() => void reload()} />
+          </div>
         }
       />
 
-      <div id="find" className="card mb-3" style={{ scrollMarginTop: '1rem' }}>
-        <VenueSearchPanel heading="Find new venues" onAdded={() => void reload()} />
-      </div>
-      {error && <ErrorBanner message={error} onRetry={reload} />}
-      {loading && !data && <SkeletonRows />}
+      <div className="tours-body">
+        {error && (
+          <div className="card tours-empty" role="alert">
+            <div className="tours-empty-title">Your venue book didn’t load</div>
+            <p>{error}</p>
+            <button type="button" className="btn btn-primary" onClick={() => void reload()}>
+              Try again
+            </button>
+          </div>
+        )}
 
-      {data && data.venues.length === 0 && (
-        <EmptyState
-          title="Your venue book is empty"
-          body="Search a city above to find live-music venues, or add a venue, festival, fair or promoter yourself. Each one keeps its own contacts, and you decide which contacts your bands can see."
-          action={
-            <button type="button" className="btn btn-secondary" onClick={() => setAdding(true)}>
+        {loading && !data && !error && (
+          <div className="tours-metrics" aria-busy="true">
+            <span className="sr-only" role="status">
+              Loading your venue book…
+            </span>
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} className="tour-metric tour-skeleton" />
+            ))}
+          </div>
+        )}
+
+        {view && view.summary.venues > 0 && (
+          <section className="tours-metrics" aria-label="Venue book at a glance">
+            <div className="tour-metric">
+              <span className="tour-metric-label">In your book</span>
+              <div className="tour-metric-value">
+                <strong>{view.summary.venues.toLocaleString()}</strong>
+                <span>across {plural(view.summary.states, 'state')}</span>
+              </div>
+              <span className="tour-metric-note">Venues, festivals, fairs, promoters &amp; private events</span>
+            </div>
+            <div className="tour-metric">
+              <span className="tour-metric-label">Booking emails</span>
+              <div className="tour-metric-value">
+                <strong className={view.summary.emailPct < 50 ? 'tour-metric-hot' : undefined}>{view.summary.withEmail.toLocaleString()}</strong>
+                <span>
+                  of {view.summary.venues.toLocaleString()} · {view.summary.emailPct}%
+                </span>
+              </div>
+              <div className="tour-meter" role="progressbar" aria-label="Venues with a booking email" aria-valuemin={0} aria-valuemax={100} aria-valuenow={view.summary.emailPct}>
+                <div className="tour-meter-bar" style={{ width: `${view.summary.emailPct}%` }} />
+              </div>
+            </div>
+            <div className="tour-metric">
+              <span className="tour-metric-label">Contacts</span>
+              <div className="tour-metric-value">
+                <strong>{view.summary.contacts.toLocaleString()}</strong>
+                <span>{view.summary.contacts === 1 ? 'person' : 'people'}</span>
+              </div>
+              <span className="tour-metric-note">At your venues · {view.summary.sharedContacts > 0 ? `${view.summary.sharedContacts} shown to your bands` : 'none shown to your bands'}</span>
+            </div>
+            <div className="tour-metric">
+              <span className="tour-metric-label">Booked at</span>
+              <div className="tour-metric-value">
+                <strong>{view.summary.bookedAt}</strong>
+                <span>{view.summary.bookedAt === 1 ? 'venue' : 'venues'} with shows</span>
+              </div>
+              <span className="tour-metric-note">{view.summary.upcomingAt > 0 ? `${plural(view.summary.upcomingAt, 'venue')} with something coming up` : 'Nothing coming up yet'}</span>
+            </div>
+          </section>
+        )}
+
+        <div id="find" className="card" style={{ scrollMarginTop: '1rem' }}>
+          <VenueSearchPanel heading="Find new venues" onAdded={() => void reload()} />
+        </div>
+
+        {view && view.summary.venues === 0 && (
+          <div className="card tours-empty">
+            <div className="tours-empty-title">Your venue book is empty</div>
+            <p>Search a city above to find live-music venues, or add a venue, festival, fair or promoter yourself. Each one keeps its own contacts, and you decide which contacts your bands can see.</p>
+            <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
               + Add manually
             </button>
-          }
-        />
-      )}
+          </div>
+        )}
 
-      {data && data.venues.length > 0 && (
-        <>
-          <div className="mb-3" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'end' }}>
-            <div style={{ flex: '1 1 260px', maxWidth: 420 }}>
-              <label className="field-label" htmlFor="v-search" style={{ display: 'block', marginBottom: 4 }}>
+        {view && view.summary.venues > 0 && (
+          <section className="agent-section" aria-labelledby="book-h">
+            <div className="agent-section-head">
+              <h2 id="book-h" className="agent-section-title">
+                Your book
+              </h2>
+              <span className="agent-section-note">Sorted by name</span>
+            </div>
+            {kindTabs.length > 1 && (
+              <div className="tours-toolbar">
+                <div className="tours-tabs" role="group" aria-label="Show by type">
+                  <button type="button" className={`tours-tab${kind === 'all' ? ' tours-tab--on' : ''}`} aria-pressed={kind === 'all'} onClick={() => changeFilter(() => setKind('all'))}>
+                    All · {view.summary.venues}
+                  </button>
+                  {kindTabs.map(k => (
+                    <button key={k} type="button" className={`tours-tab${kind === k ? ' tours-tab--on' : ''}`} aria-pressed={kind === k} onClick={() => changeFilter(() => setKind(k))}>
+                      {VENUE_KIND_LABEL[k]} · {view.kinds[k]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div role="search" className="agent-filters" aria-label="Search your book">
+              <label className="sr-only" htmlFor="v-search">
                 Search your book
               </label>
-              <input id="v-search" className="input" type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Venue, city, or a contact’s name or email" />
+              <input
+                id="v-search"
+                className="input"
+                type="search"
+                value={search}
+                onChange={e => changeFilter(() => setSearch(e.target.value))}
+                placeholder="Search venue, city, or a contact’s name or email"
+                style={{ minWidth: 'min(100%, 22rem)' }}
+              />
+              {search.trim() && (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => changeFilter(() => setSearch(''))}>
+                  Clear
+                </button>
+              )}
             </div>
-            <div>
-              <label className="field-label" htmlFor="v-kind" style={{ display: 'block', marginBottom: 4 }}>
-                Type
-              </label>
-              <select id="v-kind" className="select" value={kindFilter} onChange={e => setKindFilter(e.target.value as VenueKind | '')}>
-                <option value="">All types</option>
-                {VENUE_KINDS.map(k => (
-                  <option key={k} value={k}>
-                    {VENUE_KIND_LABEL[k]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="card table-wrap" style={{ padding: 0 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Name</th>
-                  <th scope="col">Type</th>
-                  <th scope="col">Location</th>
-                  <th scope="col">Contacts</th>
-                  <th scope="col">Shows</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(({ venue, contacts, shows }) => {
-                  const hit = matchedContact(contacts);
-                  return (
-                    <tr key={venue.id}>
-                      <td>
-                        <Link href={`/booker/venues/${venue.id}`} style={{ color: 'var(--text)', fontWeight: 800 }}>
-                          {venue.name}
-                        </Link>
-                        {hit && <div className="text-xs text-muted">Contact: {hit.name}</div>}
-                      </td>
-                      <td>{VENUE_KIND_LABEL[venue.kind] ?? 'Venue'}</td>
-                      <td>{[venue.city, venue.state].filter(Boolean).join(', ') || '—'}</td>
-                      <td>
-                        {contacts.length === 0 ? <span className="text-muted">None yet</span> : contacts.length}
-                        {contacts.some(c => c.share_with_bands) && <span className="text-xs text-muted"> · {contacts.filter(c => c.share_with_bands).length} shown to bands</span>}
-                      </td>
-                      <td>{shows}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {rows.length === 0 && <div className="table-empty">Nothing matches “{search}”.</div>}
-          </div>
-        </>
-      )}
+
+            {shown.length === 0 ? (
+              <div className="card tours-empty">
+                <div className="tours-empty-title">Nothing matches</div>
+                <p>No venue or contact in your book matches “{search.trim()}”. Try Find new venues above.</p>
+              </div>
+            ) : (
+              <>
+                <div className="tours-grid" aria-label={`${plural(shown.length, 'venue')} shown`}>
+                  {shown.slice(0, limit).map(c => (
+                    <VenueCard key={c.venue.id} card={c} currentYear={year} search={search} />
+                  ))}
+                </div>
+                {shown.length > limit && (
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <button type="button" className="btn btn-secondary" onClick={() => setLimit(l => l + PAGE_SIZE)}>
+                      Show more · {shown.length - limit} left
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+        )}
+      </div>
 
       {adding && (
         <VenueForm

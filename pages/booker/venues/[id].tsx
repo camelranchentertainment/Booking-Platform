@@ -1,7 +1,8 @@
 // pages/booker/venues/[id].tsx
-// One venue (or festival, fair, promoter, private-event buyer): details, its
-// contacts with a "Show to my bands" checkbox each, website scan, and the shows
-// the agent's bands have played or booked there, and the emails sent about it.
+// One venue (or festival, fair, promoter, private-event buyer), in the Tours
+// page style: illustrated hero, four trackers, then details, its contacts with
+// a "Show to my bands" checkbox each, website scan, the emails sent about it
+// and the shows the agent's bands have played or booked there.
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -11,9 +12,12 @@ import ShowRow from '../../../components/booker/ShowRow';
 import ComposeEmail, { type Recipient } from '../../../components/booker/ComposeEmail';
 import MessageHistory from '../../../components/booker/MessageHistory';
 import { ContactForm, ShowForm, VenueForm } from '../../../components/booker/forms';
-import { EmptyState, ErrorBanner, PageHeader, SkeletonRows } from '../../../components/booker/ui';
+import { EmptyState, ErrorBanner, SkeletonRows } from '../../../components/booker/ui';
+import PageHero from '../../../components/layout/PageHero';
+import MainStreetScene from '../../../components/venues/MainStreetScene';
 import { archiveContact, archiveVenue, listContacts, listMessages, listRoster, listShows, listVenues, scanVenueWebsite, setContactShared } from '../../../lib/booker/data';
-import { todayIso } from '../../../lib/booker/dates';
+import { formatShowDate, todayIso } from '../../../lib/booker/dates';
+import { plural, venueCards } from '../../../lib/booker/summary';
 import { byId, findConflicts } from '../../../lib/booker/workspace';
 import { useLoad } from '../../../lib/booker/useLoad';
 import { VENUE_KIND_LABEL, type BookerContact, type BookerShow } from '../../../lib/booker/types';
@@ -49,7 +53,16 @@ function VenueContent({ venueId }: { venueId: string }) {
       ...contacts.filter(c => c.email).map(c => ({ email: c.email!, name: c.name, contactId: c.id, label: c.title ? `${c.name} — ${c.title}` : c.name })),
       ...(venue.email && !contacts.some(c => c.email?.toLowerCase() === venue.email!.toLowerCase()) ? [{ email: venue.email, name: null, label: `${venue.name} booking inbox` }] : []),
     ];
+    const card = venueCards([venue], data.contacts, data.shows, today)[0];
+    const live = shows.filter(s => s.status !== 'cancelled' && !s.deleted_at);
+    const sent = data.messages.filter(m => m.status === 'sent');
+    const lastSent = sent.map(m => (m.sent_at ?? m.created_at).slice(0, 10)).sort().pop() ?? null;
     return {
+      card,
+      bandsHere: new Set(live.map(s => s.roster_id)).size,
+      played: live.filter(s => s.status === 'played').length,
+      emailsSent: sent.length,
+      lastSent,
       contacts,
       recipients,
       upcoming: shows.filter(s => s.show_date >= today),
@@ -138,23 +151,66 @@ function VenueContent({ venueId }: { venueId: string }) {
           ← Venues &amp; Buyers
         </Link>
       </div>
-      <PageHeader
+      <PageHero
         title={venue.name}
-        sub={[VENUE_KIND_LABEL[venue.kind], [venue.city, venue.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}
+        subtitle={[VENUE_KIND_LABEL[venue.kind], [venue.city, venue.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}
+        summary={
+          view.card.lastPlayed
+            ? `Last played ${formatShowDate(view.card.lastPlayed, year)} · ${plural(view.card.upcoming, 'show')} coming up.`
+            : view.card.upcoming > 0
+              ? `${plural(view.card.upcoming, 'show')} coming up here.`
+              : 'None of your bands have played here yet.'
+        }
+        scene={<MainStreetScene />}
         actions={
-          <>
-            <button type="button" className="btn btn-secondary" onClick={() => setEditingVenue(true)}>
-              Edit details
-            </button>
-            <button type="button" className="btn btn-secondary" onClick={() => setComposing(0)}>
-              ✉ Email
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => setEditingShow('new')} disabled={data.bands.length === 0}>
+          <div className="agent-hero-actions">
+            <button type="button" className="btn btn-primary tours-new-btn" onClick={() => setEditingShow('new')} disabled={data.bands.length === 0}>
               + Book a show here
             </button>
-          </>
+            <button type="button" className="btn btn-secondary tours-new-btn" onClick={() => setComposing(0)}>
+              ✉ Email
+            </button>
+            <button type="button" className="btn btn-secondary tours-new-btn" onClick={() => setEditingVenue(true)}>
+              Edit details
+            </button>
+          </div>
         }
       />
+
+      <section className="tours-metrics mb-6" aria-label={`${venue.name} at a glance`}>
+        <div className="tour-metric">
+          <span className="tour-metric-label">Shows here</span>
+          <div className="tour-metric-value">
+            <strong>{view.card.shows}</strong>
+            <span>{view.played} played · {view.card.upcoming} coming up</span>
+          </div>
+          <span className="tour-metric-note">{plural(view.bandsHere, 'band')} of yours booked here</span>
+        </div>
+        <div className="tour-metric">
+          <span className="tour-metric-label">Contacts</span>
+          <div className="tour-metric-value">
+            <strong>{view.contacts.length}</strong>
+            <span>{view.contacts.length === 1 ? 'person' : 'people'}</span>
+          </div>
+          <span className="tour-metric-note">{view.card.sharedContacts > 0 ? `${view.card.sharedContacts} shown to your bands` : 'All private to you'}</span>
+        </div>
+        <div className="tour-metric">
+          <span className="tour-metric-label">Booking email</span>
+          <div className="tour-metric-value">
+            <strong className={view.card.hasEmail ? undefined : 'tour-metric-hot'}>{view.recipients.length}</strong>
+            <span>{view.recipients.length === 1 ? 'address' : 'addresses'} to reach</span>
+          </div>
+          <span className="tour-metric-note">{view.card.hasEmail ? 'Ready to email from here' : venue.website ? 'None yet — scan the website below' : 'None yet — add one in Edit details'}</span>
+        </div>
+        <div className="tour-metric">
+          <span className="tour-metric-label">Emails sent</span>
+          <div className="tour-metric-value">
+            <strong>{view.emailsSent}</strong>
+            <span>from your workspace</span>
+          </div>
+          <span className="tour-metric-note">{view.lastSent ? `Last on ${formatShowDate(view.lastSent, year)}` : 'Nothing sent yet'}</span>
+        </div>
+      </section>
       {actionError && <ErrorBanner message={actionError} />}
       <div aria-live="polite">
         {sentNotice && (
@@ -167,7 +223,7 @@ function VenueContent({ venueId }: { venueId: string }) {
       <div style={{ display: 'grid', gap: '1.25rem', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', alignItems: 'start' }} className="mb-6">
         {/* Details */}
         <section aria-labelledby="details-h" className="card">
-          <h2 id="details-h" className="eyebrow" style={{ color: 'var(--accent)', fontSize: '1.05rem', margin: '0 0 0.75rem' }}>
+          <h2 id="details-h" className="agent-card-title">
             Details
           </h2>
           <dl style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.45rem 1rem', margin: 0, fontSize: '0.9rem' }}>
@@ -196,7 +252,7 @@ function VenueContent({ venueId }: { venueId: string }) {
         {/* Contacts */}
         <section aria-labelledby="contacts-h" className="card">
           <div className="flex items-center justify-between mb-3" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
-            <h2 id="contacts-h" className="eyebrow" style={{ color: 'var(--accent)', fontSize: '1.05rem', margin: 0 }}>
+            <h2 id="contacts-h" className="agent-card-title">
               Contacts
             </h2>
             <span style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
@@ -298,7 +354,7 @@ function VenueContent({ venueId }: { venueId: string }) {
 
       <section aria-labelledby="vmail-h" className="card mb-6">
         <div className="flex items-center justify-between mb-3" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
-          <h2 id="vmail-h" className="eyebrow" style={{ color: 'var(--accent)', fontSize: '1.05rem', margin: 0 }}>
+          <h2 id="vmail-h" className="agent-card-title">
             Emails
           </h2>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => setComposing(0)}>
@@ -309,9 +365,12 @@ function VenueContent({ venueId }: { venueId: string }) {
       </section>
 
       <section aria-labelledby="vshows-h" className="mb-6">
-        <h2 id="vshows-h" className="display" style={{ fontSize: '1.6rem', margin: '0 0 0.75rem' }}>
-          Shows here
-        </h2>
+        <div className="agent-section-head" style={{ marginBottom: '0.75rem' }}>
+          <h2 id="vshows-h" className="agent-section-title">
+            Shows here
+          </h2>
+          <span className="agent-section-note">Upcoming first, then most recent</span>
+        </div>
         {view.upcoming.length === 0 && view.past.length === 0 ? (
           <p className="text-sm text-muted">None of your bands have a show here yet.</p>
         ) : (
@@ -324,7 +383,7 @@ function VenueContent({ venueId }: { venueId: string }) {
       </section>
 
       <section aria-labelledby="vremove-h" className="card" style={{ borderColor: 'rgba(240,104,95,0.35)' }}>
-        <h2 id="vremove-h" className="eyebrow" style={{ color: 'var(--red)', fontSize: '1rem', margin: '0 0 0.4rem' }}>
+        <h2 id="vremove-h" className="agent-card-title agent-card-title--danger">
           Remove from your book
         </h2>
         <p className="text-sm text-muted" style={{ marginTop: 0 }}>

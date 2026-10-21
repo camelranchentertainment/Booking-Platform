@@ -11,7 +11,7 @@
 
 import { commissionProjected } from './commission';
 import { addDays, weekendRange } from './dates';
-import type { BookerShow, RosterBand } from './types';
+import type { BookerContact, BookerShow, BookerVenue, RosterBand, VenueKind } from './types';
 
 /** Upcoming = dated today or later; Past = before today. */
 export type ShowTab = 'upcoming' | 'past' | 'all';
@@ -188,4 +188,107 @@ export function showsSummary(shows: readonly BookerShow[], today: string): Shows
 /** "1 band", "3 shows" — count with the right noun. */
 export function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
+}
+
+/** Consecutive shows on the same date, kept in the order given (rows must already be sorted). */
+export function groupInOrder<T extends Pick<BookerShow, 'show_date'>>(shows: readonly T[]): Array<{ date: string; shows: T[] }> {
+  const groups: Array<{ date: string; shows: T[] }> = [];
+  for (const s of shows) {
+    const last = groups[groups.length - 1];
+    if (last && last.date === s.show_date) last.shows.push(s);
+    else groups.push({ date: s.show_date, shows: [s] });
+  }
+  return groups;
+}
+
+// ── Venues ──────────────────────────────────────────────────────────────────
+
+/** One venue card on the Venues page. */
+export interface VenueCardData {
+  venue: BookerVenue;
+  contacts: BookerContact[];
+  /** Contacts the agent shows to their bands */
+  sharedContacts: number;
+  /** Non-cancelled shows at this venue, any date */
+  shows: number;
+  /** Confirmed or in-play shows dated today or later */
+  upcoming: number;
+  /** The most recent played or past confirmed show date, if any */
+  lastPlayed: string | null;
+  /** A booking email on the venue or on any of its contacts */
+  hasEmail: boolean;
+}
+
+/** Card data for every venue in the book, in the order given (the book is sorted by name). */
+export function venueCards(venues: readonly BookerVenue[], contacts: readonly BookerContact[], shows: readonly BookerShow[], today: string): VenueCardData[] {
+  const live = shows.filter(isLive);
+  return venues
+    .filter(v => !v.deleted_at)
+    .map(venue => {
+      const mine = contacts.filter(c => c.venue_id === venue.id && !c.deleted_at);
+      const here = live.filter(s => s.venue_id === venue.id);
+      const past = here.filter(s => s.show_date < today && (s.status === 'played' || s.status === 'confirmed')).map(s => s.show_date).sort();
+      return {
+        venue,
+        contacts: mine,
+        sharedContacts: mine.filter(c => c.share_with_bands).length,
+        shows: here.length,
+        upcoming: here.filter(s => s.show_date >= today).length,
+        lastPlayed: past.length ? past[past.length - 1] : null,
+        hasEmail: Boolean(venue.email) || mine.some(c => Boolean(c.email)),
+      };
+    });
+}
+
+/** Venue-book metrics for the Venues page trackers. */
+export interface VenueBookSummary {
+  venues: number;
+  states: number;
+  withEmail: number;
+  /** Whole-number percent of venues with a booking email */
+  emailPct: number;
+  contacts: number;
+  sharedContacts: number;
+  /** Venues with at least one non-cancelled show */
+  bookedAt: number;
+  /** Venues with an upcoming show */
+  upcomingAt: number;
+}
+
+export function venueBookSummary(cards: readonly VenueCardData[]): VenueBookSummary {
+  const states = new Set(cards.map(c => (c.venue.state ?? '').trim().toUpperCase()).filter(Boolean));
+  const withEmail = cards.filter(c => c.hasEmail).length;
+  return {
+    venues: cards.length,
+    states: states.size,
+    withEmail,
+    emailPct: cards.length ? Math.round((withEmail / cards.length) * 100) : 0,
+    contacts: cards.reduce((n, c) => n + c.contacts.length, 0),
+    sharedContacts: cards.reduce((n, c) => n + c.sharedContacts, 0),
+    bookedAt: cards.filter(c => c.shows > 0).length,
+    upcomingAt: cards.filter(c => c.upcoming > 0).length,
+  };
+}
+
+/** How many venues of each kind are in the book (kinds with none are left out). */
+export function venueKindCounts(cards: readonly VenueCardData[]): Partial<Record<VenueKind, number>> {
+  const out: Partial<Record<VenueKind, number>> = {};
+  for (const c of cards) out[c.venue.kind] = (out[c.venue.kind] ?? 0) + 1;
+  return out;
+}
+
+/**
+ * Venues matching a search across the venue's name, city, state and email and
+ * its contacts' names, titles and emails. Case-insensitive; blank matches all.
+ */
+export function searchVenues(cards: readonly VenueCardData[], query: string): VenueCardData[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [...cards];
+  return cards.filter(({ venue, contacts }) =>
+    [venue.name, venue.city, venue.state, venue.email, ...contacts.flatMap(c => [c.name, c.email, c.title])]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(q),
+  );
 }

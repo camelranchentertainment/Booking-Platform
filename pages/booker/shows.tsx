@@ -12,23 +12,12 @@ import { ShowForm } from '../../components/booker/forms';
 import PageHero from '../../components/layout/PageHero';
 import { listRoster, listShows, listVenues } from '../../lib/booker/data';
 import { formatShowDate, todayIso } from '../../lib/booker/dates';
-import { plural, showTabCounts, showsForTab, showsSummary, type ShowTab } from '../../lib/booker/summary';
+import { groupInOrder, plural, showTabCounts, showsForTab, showsSummary, type ShowTab } from '../../lib/booker/summary';
 import { byId, findConflicts, venueLabel } from '../../lib/booker/workspace';
 import { useLoad } from '../../lib/booker/useLoad';
 import { SHOW_STATUSES, SHOW_STATUS_LABEL, type BookerShow, type ShowStatus } from '../../lib/booker/types';
 
 const TAB_LABELS: Readonly<Record<ShowTab, string>> = { upcoming: 'Upcoming', past: 'Past', all: 'All' };
-
-/** Consecutive shows on the same date, kept in the order given. */
-function groupInOrder(shows: readonly BookerShow[]): Array<{ date: string; shows: BookerShow[] }> {
-  const groups: Array<{ date: string; shows: BookerShow[] }> = [];
-  for (const s of shows) {
-    const last = groups[groups.length - 1];
-    if (last && last.date === s.show_date) last.shows.push(s);
-    else groups.push({ date: s.show_date, shows: [s] });
-  }
-  return groups;
-}
 
 function ShowsContent() {
   const today = todayIso();

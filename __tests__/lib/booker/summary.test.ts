@@ -10,8 +10,13 @@ import {
   showTabCounts,
   showsForTab,
   showsSummary,
+  groupInOrder,
+  searchVenues,
+  venueBookSummary,
+  venueCards,
+  venueKindCounts,
 } from '../../../lib/booker/summary';
-import type { BookerShow, RosterBand } from '../../../lib/booker/types';
+import type { BookerContact, BookerShow, BookerVenue, RosterBand } from '../../../lib/booker/types';
 
 const ts = { created_at: '', updated_at: '', deleted_at: null };
 
@@ -199,5 +204,54 @@ describe('plural', () => {
     expect(plural(1, 'band')).toBe('1 band');
     expect(plural(3, 'band')).toBe('3 bands');
     expect(plural(2, 'hold is', 'holds are')).toBe('2 holds are');
+  });
+});
+
+describe('groupInOrder', () => {
+  it('groups consecutive same-date shows and keeps the given order', () => {
+    const g = groupInOrder([{ show_date: '2026-11-02' }, { show_date: '2026-11-02' }, { show_date: '2026-11-01' }]);
+    expect(g.map(x => [x.date, x.shows.length])).toEqual([['2026-11-02', 2], ['2026-11-01', 1]]);
+  });
+});
+
+describe('venue book', () => {
+  const venue = (over: Partial<BookerVenue> = {}): BookerVenue => ({
+    id: 'v1', booker_id: 'k', name: 'Gruene Hall', address: null, city: 'New Braunfels', state: 'TX', postal_code: null, capacity: null,
+    website: null, notes: null, kind: 'venue', place_id: null, email: null, phone: null, last_scanned_at: null, ...ts, ...over,
+  });
+  const contact = (over: Partial<BookerContact> = {}): BookerContact => ({
+    id: 'c1', booker_id: 'k', venue_id: 'v1', name: 'Sarah Lee', title: 'Talent buyer', email: null, phone: null, notes: null,
+    share_with_bands: false, source: 'manual', ...ts, ...over,
+  });
+  const venues = [venue(), venue({ id: 'v2', name: 'Saxon Pub', city: 'Austin', state: 'tx', email: 'book@saxon.com' }), venue({ id: 'v3', name: 'Okie Fest', state: 'OK', kind: 'festival' }), venue({ id: 'v4', deleted_at: '2026-01-01' })];
+  const contacts = [contact({ email: 'sarah@gruene.com', share_with_bands: true }), contact({ id: 'c2', name: 'Mike Ray' }), contact({ id: 'c3', venue_id: 'v3', deleted_at: '2026-01-01' })];
+  const shows = [
+    show({ venue_id: 'v1', show_date: '2026-09-01', status: 'played' }),
+    show({ venue_id: 'v1', show_date: '2026-11-01', status: 'hold' }),
+    show({ venue_id: 'v2', show_date: '2026-11-05', status: 'cancelled' }),
+  ];
+  const cards = venueCards(venues, contacts, shows, TODAY);
+
+  it('builds a card per live venue with contacts, shows and email coverage', () => {
+    expect(cards.map(c => c.venue.id)).toEqual(['v1', 'v2', 'v3']);
+    expect(cards[0]).toMatchObject({ sharedContacts: 1, shows: 2, upcoming: 1, lastPlayed: '2026-09-01', hasEmail: true });
+    expect(cards[0].contacts).toHaveLength(2);
+    expect(cards[1]).toMatchObject({ shows: 0, hasEmail: true });
+    expect(cards[2]).toMatchObject({ contacts: [], hasEmail: false });
+  });
+
+  it('summarises the book', () => {
+    expect(venueBookSummary(cards)).toEqual({ venues: 3, states: 2, withEmail: 2, emailPct: 67, contacts: 2, sharedContacts: 1, bookedAt: 1, upcomingAt: 1 });
+    expect(venueBookSummary([])).toMatchObject({ venues: 0, emailPct: 0 });
+  });
+
+  it('counts kinds present', () => {
+    expect(venueKindCounts(cards)).toEqual({ venue: 2, festival: 1 });
+  });
+
+  it('searches venues and their contacts', () => {
+    expect(searchVenues(cards, 'mike').map(c => c.venue.id)).toEqual(['v1']);
+    expect(searchVenues(cards, 'AUSTIN').map(c => c.venue.id)).toEqual(['v2']);
+    expect(searchVenues(cards, '  ')).toHaveLength(3);
   });
 });

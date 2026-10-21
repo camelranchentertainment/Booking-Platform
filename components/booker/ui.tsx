@@ -148,20 +148,6 @@ export function SkeletonRows({ rows = 4 }: { rows?: number }) {
   );
 }
 
-export function PageHeader({ title, sub, actions }: { title: string; sub?: string; actions?: ReactNode }) {
-  return (
-    <div className="page-header">
-      <div>
-        <h1 className="page-title" style={{ margin: 0 }}>
-          {title}
-        </h1>
-        {sub && <div className="page-sub">{sub}</div>}
-      </div>
-      {actions && <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>{actions}</div>}
-    </div>
-  );
-}
-
 /** A colored dot identifying a band across lists and the agenda. */
 export function BandDot({ color, label }: { color: string | null; label?: string }) {
   return (
