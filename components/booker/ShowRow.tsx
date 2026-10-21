@@ -1,8 +1,10 @@
 // components/booker/ShowRow.tsx
-// One show as a clickable row: date, band, venue, time, status, fee.
+// One show as a clickable row: date, band, venue, time, status, fee. Holds show
+// their position ("1st hold") and, when a deadline is close, a chip saying so.
 
 import { SHOW_STATUS_BADGE, SHOW_STATUS_LABEL, type BookerShow, type BookerVenue, type RosterBand } from '../../lib/booker/types';
-import { formatShowDate, formatTime } from '../../lib/booker/dates';
+import { formatShowDate, formatTime, todayIso } from '../../lib/booker/dates';
+import { holdChipText, holdLabel, holdStatus, holdStatusText, isOpenHold } from '../../lib/booker/holds';
 import { formatMoney, toAmount } from '../../lib/booker/commission';
 import { venueLabel } from '../../lib/booker/workspace';
 import { BandDot } from './ui';
@@ -22,7 +24,10 @@ interface Props {
 export default function ShowRow({ show, band, venuesById, onOpen, hideDate, hideBand, currentYear }: Props) {
   const time = formatTime(show.set_time);
   const fee = toAmount(show.fee);
-  const label = `${hideBand ? '' : `${band?.band_name ?? 'Unknown band'}, `}${venueLabel(show, venuesById)}, ${formatShowDate(show.show_date, currentYear)}, ${SHOW_STATUS_LABEL[show.status]}`;
+  const rank = isOpenHold(show) ? holdLabel(show.hold_rank) : null;
+  const deadline = holdStatus(show, todayIso());
+  const statusText = rank && show.status === 'hold' ? rank : SHOW_STATUS_LABEL[show.status];
+  const label = `${hideBand ? '' : `${band?.band_name ?? 'Unknown band'}, `}${venueLabel(show, venuesById)}, ${formatShowDate(show.show_date, currentYear)}, ${statusText}${deadline ? `, ${holdStatusText(deadline, currentYear)}` : ''}`;
   return (
     <button
       type="button"
@@ -58,9 +63,15 @@ export default function ShowRow({ show, band, venuesById, onOpen, hideDate, hide
           {time ? ` · ${time}` : ''}
         </span>
       </span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'flex-end' }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
         {fee !== null && <span style={{ fontWeight: 800, fontSize: '0.85rem', color: 'var(--text-muted)' }}>{formatMoney(fee)}</span>}
-        <span className={`badge ${SHOW_STATUS_BADGE[show.status]}`}>{SHOW_STATUS_LABEL[show.status]}</span>
+        {deadline && (
+          <span className={`badge ${deadline.urgency === 'soon' ? 'badge-negotiation' : 'badge-hold'}`} style={{ whiteSpace: 'nowrap' }}>
+            {holdChipText(deadline, currentYear)}
+          </span>
+        )}
+        {rank && show.status === 'pending' && <span className="badge badge-hold">{rank}</span>}
+        <span className={`badge ${SHOW_STATUS_BADGE[show.status]}`}>{statusText}</span>
       </span>
     </button>
   );

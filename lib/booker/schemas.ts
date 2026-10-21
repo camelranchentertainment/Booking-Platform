@@ -150,6 +150,10 @@ export const ShowSchema = z
     deal_notes: optionalText('Deal notes', 5000),
     internal_notes: optionalText('Internal notes', 5000),
     followup_on: optionalIsoDate('Follow-up date'),
+    hold_rank: optionalNumber('Hold position', 1, 9, { integer: true }),
+    hold_expires_on: optionalIsoDate('Hold expires'),
+    answer_by: optionalIsoDate('Answer by'),
+    challenge_note: optionalText('Challenge note', 300),
   })
   .superRefine((v, ctx) => {
     if (!v.venue_id && !v.venue_name) {
@@ -157,7 +161,12 @@ export const ShowSchema = z
     }
   })
   // A saved venue wins; the free-text fields are only for venues not in the book.
-  .transform(v => (v.venue_id ? { ...v, venue_name: null, venue_city: null } : v));
+  .transform(v => (v.venue_id ? { ...v, venue_name: null, venue_city: null } : v))
+  // Hold fields only mean something on a hold or pending offer: confirming,
+  // playing or cancelling a show clears them so a stale deadline never alerts.
+  .transform(v =>
+    v.status === 'hold' || v.status === 'pending' ? v : { ...v, hold_rank: null, hold_expires_on: null, answer_by: null, challenge_note: null },
+  );
 export type ShowInput = z.infer<typeof ShowSchema>;
 
 // ── Commission payment ──────────────────────────────────────────────────────

@@ -5,6 +5,7 @@
 import type { BookerMessage, BookerShow, BookerVenue, RosterBand } from './types';
 import { commissionDue } from './commission';
 import { formatShowDate } from './dates';
+import { findHoldClashes, holdLabel, holdStatus, holdStatusText, holdsByUrgency } from './holds';
 
 export function byId<T extends { id: string }>(rows: readonly T[]): Map<string, T> {
   return new Map(rows.map(r => [r.id, r]));
@@ -35,7 +36,7 @@ export function findConflicts(shows: readonly BookerShow[], rosterId: string, da
   return shows.filter(s => s.roster_id === rosterId && s.show_date === date && s.status !== 'cancelled' && s.id !== excludeId && !s.deleted_at);
 }
 
-export type AttentionKind = 'email_followup' | 'followup_due' | 'stale_hold' | 'needs_settling' | 'band_without_rate';
+export type AttentionKind = 'email_followup' | 'hold_deadline' | 'hold_clash' | 'followup_due' | 'stale_hold' | 'needs_settling' | 'band_without_rate';
 
 export interface AttentionItem {
   kind: AttentionKind;
@@ -52,10 +53,13 @@ export interface AttentionItem {
 
 /**
  * What the agent should look at today, most urgent first:
- *   1. follow-ups due today or overdue (on holds/pending)
- *   2. holds/pending whose date has passed without being confirmed or cancelled
- *   3. confirmed shows in the past that still need marking played
- *   4. active bands with no commission rate set
+ *   1. hold deadlines: a venue challenge to answer, or a hold about to lapse
+ *      (most pressing first; see lib/booker/holds.ts)
+ *   2. two of the agent's own bands at the same venue on the same date
+ *   3. follow-ups due today or overdue (on holds/pending)
+ *   4. holds/pending whose date has passed without being confirmed or cancelled
+ *   5. confirmed shows in the past that still need marking played
+ *   6. active bands with no commission rate set
  */
 export function attentionItems(
   shows: readonly BookerShow[],
@@ -67,6 +71,30 @@ export function attentionItems(
   const name = (s: BookerShow) => bandsById.get(s.roster_id)?.band_name ?? 'Unknown band';
   const items: AttentionItem[] = [];
   const open = shows.filter(s => !s.deleted_at);
+  const year = Number(today.slice(0, 4));
+
+  for (const s of holdsByUrgency(open, today)) {
+    const st = holdStatus(s, today);
+    if (!st) break; // sorted: everything after this has no pressing deadline
+    const rank = holdLabel(s.hold_rank);
+    items.push({
+      kind: 'hold_deadline',
+      key: `d-${s.id}`,
+      showId: s.id,
+      message: `${holdStatusText(st, year)}: ${name(s)}${rank ? ` (${rank})` : ''} at ${venueLabel(s, venuesById)}, ${formatShowDate(s.show_date, year)}`,
+    });
+  }
+  const byShow = byId(open);
+  for (const c of findHoldClashes(open, today)) {
+    const involved = c.showIds.map(id => byShow.get(id)).filter((x): x is BookerShow => Boolean(x));
+    const who = involved.map(x => `${name(x)}${x.hold_rank ? ` (${holdLabel(x.hold_rank)})` : x.status === 'confirmed' ? ' (confirmed)' : ''}`).join(' and ');
+    items.push({
+      kind: 'hold_clash',
+      key: `c-${c.date}-${c.showIds.join('-')}`,
+      showId: c.showIds[0],
+      message: `${c.sameRank ? 'Same hold position: ' : ''}${who} are both at ${venueLabel(involved[0], venuesById)} on ${formatShowDate(c.date, year)}`,
+    });
+  }
 
   for (const s of open) {
     if ((s.status === 'hold' || s.status === 'pending') && s.followup_on && s.followup_on <= today) {

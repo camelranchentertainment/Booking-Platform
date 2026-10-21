@@ -27,8 +27,17 @@ function BandContent({ bandId }: { bandId: string }) {
   const today = todayIso();
   const year = Number(today.slice(0, 4));
   const { data, loading, error, reload } = useLoad(async () => {
-    const [bands, venues, shows, payments, messages] = await Promise.all([listRoster(), listVenues(), listShows({ rosterId: bandId }), listPayments(), listMessages({ rosterId: bandId })]);
-    return { bands, venues, shows, payments, messages };
+    const [bands, venues, shows, payments, messages, upcomingAll] = await Promise.all([
+      listRoster(),
+      listVenues(),
+      listShows({ rosterId: bandId }),
+      listPayments(),
+      listMessages({ rosterId: bandId }),
+      // Every band's upcoming shows, so the show form can warn when another of
+      // the agent's bands is already at the same venue that night.
+      listShows({ from: today }),
+    ]);
+    return { bands, venues, shows, payments, messages, upcomingAll };
   }, bandId);
   const [editingShow, setEditingShow] = useState<BookerShow | 'new' | null>(null);
   const [editingBand, setEditingBand] = useState(false);
@@ -280,6 +289,7 @@ function BandContent({ bandId }: { bandId: string }) {
           venues={data.venues}
           defaultBandId={band.id}
           conflictsFor={(id, date, excludeId) => findConflicts(data.shows, id, date, excludeId)}
+          otherShows={data.upcomingAll}
           onClose={() => setEditingShow(null)}
           onSaved={onSaved}
           onArchived={onSaved}

@@ -58,7 +58,7 @@ const show = (over: Partial<BookerShow> = {}): BookerShow => ({
   commission_pct_override: null,
   deal_notes: null,
   internal_notes: null,
-  followup_on: null,
+  followup_on: null, hold_rank: null, hold_expires_on: null, answer_by: null, challenge_note: null,
   ...ts,
   ...over,
 });
