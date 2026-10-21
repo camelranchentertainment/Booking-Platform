@@ -383,7 +383,7 @@ const overdue = (poolData as any[]).filter((tv: any) =>
 
   return (
     <AppShell requireRole="band_admin">
-      <div className="page-header">
+      <div className="page-header page-header--classic">
         <div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.2rem' }}>
             {tour.act?.act_name}
