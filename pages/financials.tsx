@@ -437,35 +437,33 @@ export default function Financials() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.5rem' }}>
+      {/* Summary trackers — the Tours metric style. Figures come from the
+          calculations above unchanged (Earned / Potential rules in CLAUDE.md). */}
+      <section className="tours-metrics" aria-label={`${year} money at a glance`} style={{ marginBottom: '1.5rem' }}>
         {summaryCards.map(c => (
-          <div key={c.label} className="card" style={{ padding: '1rem 1.25rem', borderTop: `3px solid ${c.color}` }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.65rem', color: c.color, lineHeight: 1 }}>{c.value}</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.35rem' }}>{c.label}</div>
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.66rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{c.sub}</div>
+          <div key={c.label} className="tour-metric" style={{ borderTop: `3px solid ${c.color}` }}>
+            <span className="tour-metric-label">{c.label}</span>
+            <div className="tour-metric-value"><strong style={{ color: c.color }}>{c.value}</strong></div>
+            <span className="tour-metric-note">{c.sub}</span>
           </div>
         ))}
-      </div>
+      </section>
 
-      {/* View tabs */}
-      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: '1.25rem', overflowX: 'auto' }}>
-        {(Object.keys(TAB_LABELS) as View[]).map(v => (
-          <button
-            key={v}
-            onClick={() => setView(v)}
-            style={{
-              padding: '0.55rem 1.1rem',
-              fontFamily: 'var(--font-mono)', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase',
-              background: 'transparent', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-              color: view === v ? 'var(--accent)' : 'var(--text-muted)',
-              borderBottom: view === v ? '2px solid var(--accent)' : '2px solid transparent',
-              marginBottom: '-1px',
-            }}
-          >
-            {TAB_LABELS[v]}
-          </button>
-        ))}
+      {/* View tabs — the Tours toggle */}
+      <div className="tours-toolbar" style={{ marginBottom: '1.25rem' }}>
+        <div className="tours-tabs" role="group" aria-label="Financial views">
+          {(Object.keys(TAB_LABELS) as View[]).map(v => (
+            <button
+              key={v}
+              type="button"
+              className={`tours-tab${view === v ? ' tours-tab--on' : ''}`}
+              aria-pressed={view === v}
+              onClick={() => setView(v)}
+            >
+              {TAB_LABELS[v]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Legacy views (Monthly / By Act / By Venue / All Bookings) ── */}
