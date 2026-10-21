@@ -18,6 +18,8 @@ import { groupInOrder, plural, showTabCounts, showsForTab, showsSummary, type Sh
 import { byId, findConflicts, venueLabel } from '../../lib/booker/workspace';
 import { holdCounts, holdsByUrgency } from '../../lib/booker/holds';
 import { useLoad } from '../../lib/booker/useLoad';
+import { handoffChip, latestProposalByShow } from '../../lib/booker/handoff';
+import { listBandProposals } from '../../lib/booker/handoffData';
 import { SHOW_STATUSES, SHOW_STATUS_LABEL, type BookerShow, type ShowStatus } from '../../lib/booker/types';
 
 /** Time tabs plus Holds, which lists open holds and offers by urgency. */
@@ -29,8 +31,14 @@ function ShowsContent() {
   const today = todayIso();
   const year = Number(today.slice(0, 4));
   const { data, loading, error, reload } = useLoad(async () => {
-    const [bands, venues, shows] = await Promise.all([listRoster(), listVenues(), listShows()]);
-    return { bands, venues, shows };
+    const [bands, venues, shows, proposals] = await Promise.all([
+      listRoster(),
+      listVenues(),
+      listShows(),
+      // Hand-off chips are extra: if they can't load, the list still shows.
+      listBandProposals().catch(() => []),
+    ]);
+    return { bands, venues, shows, handoffByShow: latestProposalByShow(proposals) };
   });
   const [tab, setTab] = useState<Tab>('upcoming');
   const [bandFilter, setBandFilter] = useState('');
@@ -234,7 +242,7 @@ function ShowsContent() {
             tab === 'holds' ? (
               <section className="agent-day" aria-label={`Holds and offers, most urgent first, ${plural(view.filtered.length, 'show')}`}>
                 {view.filtered.map(s => (
-                  <ShowRow key={s.id} show={s} band={view.bandsById.get(s.roster_id)} venuesById={view.venuesById} onOpen={setEditing} currentYear={year} />
+                  <ShowRow key={s.id} show={s} band={view.bandsById.get(s.roster_id)} venuesById={view.venuesById} onOpen={setEditing} currentYear={year} handoff={handoffChip(data.handoffByShow.get(s.id))} />
                 ))}
               </section>
             ) : (
@@ -243,7 +251,7 @@ function ShowsContent() {
                 <div key={g.date} className="agent-day">
                   <h2 className={`agent-day-label${g.date === today ? ' agent-day-label--today' : ''}`}>{g.date === today ? `Today · ${formatShowDate(g.date, year)}` : formatShowDate(g.date, year)}</h2>
                   {g.shows.map(s => (
-                    <ShowRow key={s.id} show={s} band={view.bandsById.get(s.roster_id)} venuesById={view.venuesById} onOpen={setEditing} hideDate currentYear={year} />
+                    <ShowRow key={s.id} show={s} band={view.bandsById.get(s.roster_id)} venuesById={view.venuesById} onOpen={setEditing} hideDate currentYear={year} handoff={handoffChip(data.handoffByShow.get(s.id))} />
                   ))}
                 </div>
               ))}

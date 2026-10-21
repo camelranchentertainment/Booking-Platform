@@ -1,6 +1,7 @@
 // components/booker/ShowRow.tsx
 // One show as a clickable row: date, band, venue, time, status, fee. Holds show
 // their position ("1st hold") and, when a deadline is close, a chip saying so.
+// Shows sent to a linked band carry their hand-off state ("Waiting on band").
 
 import { SHOW_STATUS_BADGE, SHOW_STATUS_LABEL, type BookerShow, type BookerVenue, type RosterBand } from '../../lib/booker/types';
 import { formatShowDate, formatTime, todayIso } from '../../lib/booker/dates';
@@ -19,15 +20,17 @@ interface Props {
   /** Hide the band (on a single band's page) */
   hideBand?: boolean;
   currentYear: number;
+  /** Hand-off state with a linked band, e.g. "Waiting on band" */
+  handoff?: { text: string; badge: string } | null;
 }
 
-export default function ShowRow({ show, band, venuesById, onOpen, hideDate, hideBand, currentYear }: Props) {
+export default function ShowRow({ show, band, venuesById, onOpen, hideDate, hideBand, currentYear, handoff }: Props) {
   const time = formatTime(show.set_time);
   const fee = toAmount(show.fee);
   const rank = isOpenHold(show) ? holdLabel(show.hold_rank) : null;
   const deadline = holdStatus(show, todayIso());
   const statusText = rank && show.status === 'hold' ? rank : SHOW_STATUS_LABEL[show.status];
-  const label = `${hideBand ? '' : `${band?.band_name ?? 'Unknown band'}, `}${venueLabel(show, venuesById)}, ${formatShowDate(show.show_date, currentYear)}, ${statusText}${deadline ? `, ${holdStatusText(deadline, currentYear)}` : ''}`;
+  const label = `${hideBand ? '' : `${band?.band_name ?? 'Unknown band'}, `}${venueLabel(show, venuesById)}, ${formatShowDate(show.show_date, currentYear)}, ${statusText}${deadline ? `, ${holdStatusText(deadline, currentYear)}` : ''}${handoff ? `, ${handoff.text}` : ''}`;
   return (
     <button
       type="button"
@@ -71,6 +74,11 @@ export default function ShowRow({ show, band, venuesById, onOpen, hideDate, hide
           </span>
         )}
         {rank && show.status === 'pending' && <span className="badge badge-hold">{rank}</span>}
+        {handoff && (
+          <span className={`badge ${handoff.badge}`} style={{ whiteSpace: 'nowrap' }}>
+            {handoff.text}
+          </span>
+        )}
         <span className={`badge ${SHOW_STATUS_BADGE[show.status]}`}>{statusText}</span>
       </span>
     </button>

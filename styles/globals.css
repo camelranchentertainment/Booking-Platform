@@ -1531,6 +1531,23 @@ tr:hover td { background: rgba(232,130,58,0.06); color: var(--text-primary); }
 }
 .flex > .agent-card-title, .agent-section-head > .agent-card-title { margin: 0; }
 .agent-card-title--danger { color: var(--red); font-size: 1.25rem; }
+/* Agent ↔ band hand-off lists (band account panel, band requests card) */
+.agent-handoff-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.5rem 0.75rem; flex-wrap: wrap;
+  padding: 0.55rem 0.8rem; min-height: 44px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem; color: var(--text);
+}
+.agent-handoff-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.agent-handoff-label {
+  margin: 0 0 0.5rem; padding: 0;
+  font-family: var(--font-body);
+  font-size: 0.72rem; font-weight: 800;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--text-muted);
+}
 .agent-days { display: flex; flex-direction: column; gap: 1.1rem; }
 .agent-day { display: flex; flex-direction: column; gap: 0.5rem; }
 .agent-day-label {
