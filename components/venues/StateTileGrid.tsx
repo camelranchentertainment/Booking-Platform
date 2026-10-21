@@ -28,7 +28,8 @@ interface Props {
  * The grid measures its own width and asks `balancedTileGrid` for a row and
  * column count, so 14 states sit as 7 + 7 and 4 as 2 + 2 at any screen size.
  * Each tile is a real button (keyboard and screen-reader friendly) that
- * reports whether its venue list is open.
+ * reports whether its venue list is open. Styles live in styles/globals.css
+ * (`.state-tile*`, Venues section).
  */
 export default function StateTileGrid({ tiles, selected, onSelect, panelId }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -54,28 +55,6 @@ export default function StateTileGrid({ tiles, selected, onSelect, panelId }: Pr
       className="state-tile-grid"
       style={{ gridTemplateColumns: `repeat(${Math.max(cols, 1)}, minmax(0, ${TILE_MAX_WIDTH}px))`, gap: STATE_TILE_GAP }}
     >
-      <style>{`
-        .state-tile-grid { display:grid; justify-content:start; margin-bottom:0.75rem; }
-        .state-tile {
-          display:flex; flex-direction:column; align-items:flex-start; gap:0.15rem;
-          position:relative; min-height:84px; padding:0.7rem 0.8rem; text-align:left;
-          background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius, 8px);
-          color:var(--text-primary); font:inherit; cursor:pointer;
-          transition:border-color 0.15s, transform 0.15s, background 0.15s;
-        }
-        .state-tile:hover { border-color:var(--accent); transform:translateY(-1px); }
-        .state-tile:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-        .state-tile[aria-expanded="true"] { border-color:var(--accent); background:var(--accent-glow); }
-        .state-tile-code { font-family:var(--font-display); font-size:1.6rem; line-height:1; letter-spacing:0.06em; color:var(--accent); }
-        .state-tile-count { font-family:var(--font-mono); font-size:0.74rem; color:var(--text-muted); }
-        .state-tile-email { font-family:var(--font-mono); font-size:0.7rem; color:#34d399; }
-        .state-tile-chev  { position:absolute; top:0.65rem; right:0.7rem; font-family:var(--font-mono); font-size:0.9rem; color:var(--text-muted); transition:transform 0.15s; }
-        .state-tile[aria-expanded="true"] .state-tile-chev { transform:rotate(90deg); color:var(--accent); }
-        @media (prefers-reduced-motion: reduce) {
-          .state-tile, .state-tile-chev { transition:none; }
-          .state-tile:hover { transform:none; }
-        }
-      `}</style>
       {tiles.map(({ state, venueCount, emailCount }) => {
         const open = state === selected;
         return (
@@ -92,9 +71,13 @@ export default function StateTileGrid({ tiles, selected, onSelect, panelId }: Pr
             <span className="state-tile-count" aria-hidden="true">
               {venueCount} venue{venueCount !== 1 ? 's' : ''}
             </span>
-            {emailCount > 0 && (
-              <span className="state-tile-email" aria-hidden="true">✉ {emailCount} with email</span>
-            )}
+            {/* Booking-email coverage for the state; the numbers are in the aria-label. */}
+            <span className="state-tile-meter" aria-hidden="true">
+              <span className="state-tile-meter-bar" style={{ width: `${venueCount ? Math.round((emailCount / venueCount) * 100) : 0}%` }} />
+            </span>
+            <span className="state-tile-email" aria-hidden="true">
+              {emailCount > 0 ? `${emailCount} with email` : 'No emails yet'}
+            </span>
             <span className="state-tile-chev" aria-hidden="true">›</span>
           </button>
         );
