@@ -4,7 +4,10 @@ import { supabase } from '../../lib/supabase';
 import { getActId } from '../../lib/bookingQueries';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
-import { formatShowDate } from '../../lib/formatDate';
+import { formatShowDate, localToday, parseLocalDate } from '../../lib/formatDate';
+import PageHero from '../../components/layout/PageHero';
+import StageScene from '../../components/dashboard/StageScene';
+import styles from '../../styles/dashboard.module.css';
 import { FEATURES } from '../../lib/featureFlags';
 import { STATUS_COLORS } from '../../lib/statusSync';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
@@ -71,6 +74,17 @@ const QUICK_CHIPS: { label: string; href?: string; prompt?: string }[] = [
 ];
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
+
+/** Booked statuses that belong in "Upcoming shows" (contract onward, not yet played). */
+const UPCOMING_STATUSES = ['contract', 'confirmed', 'advancing'];
+
+/** Whole days from today (local) to a YYYY-MM-DD show date. */
+function daysUntil(showDate: string, today: string): number {
+  const a = parseLocalDate(today);
+  const b = parseLocalDate(showDate);
+  return Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86_400_000);
+}
+
 type DashTile = { label: string; sub: string; href: string; accent: string; icon: string };
 
 /** Bottom-of-dashboard shortcut tiles. Socials only appears while that feature is switched on. */
@@ -88,6 +102,9 @@ export default function BandDashboard() {
   const [targetsCount, setTargetsCount]   = useState(0);
   const [toursCount, setToursCount]     = useState(0);
   const [upcomingShows, setUpcomingShows] = useState<any[]>([]);
+  const [bookedAhead, setBookedAhead]   = useState(0);
+  // The browser's local day (set on load), so tonight's show still counts as upcoming after 7 PM Central.
+  const [today, setToday]               = useState('');
   const [tours, setTours]               = useState<TourTile[]>([]);
   const [targets, setTargets]           = useState<TargetTile[]>([]);
   const [loading, setLoading]           = useState(true);
@@ -120,7 +137,6 @@ export default function BandDashboard() {
 
   const threadRef   = useRef<HTMLDivElement>(null);
   const agentInputRef = useRef<HTMLTextAreaElement>(null);
-  const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => { load(); }, []);
 
@@ -253,8 +269,9 @@ export default function BandDashboard() {
         const tourIdsRes = await supabase.from('tours').select('id').eq('act_id', actId).neq('status', 'cancelled');
         const tourIds = (tourIdsRes.data ?? []).map((t: { id: string }) => t.id);
 
-        const today = new Date().toISOString().slice(0, 10);
-        const [tvTargetRes, toursCountRes, toursRes, upcomingRes, targetsRes] = await Promise.all([
+        const today = localToday();
+        setToday(today);
+        const [tvTargetRes, toursCountRes, toursRes, upcomingRes, targetsRes, aheadRes] = await Promise.all([
           tourIds.length
             ? supabase.from('tour_venues').select('id', { count: 'exact', head: true }).in('tour_id', tourIds).eq('status', 'target')
             : Promise.resolve({ count: 0 }),
@@ -265,11 +282,11 @@ export default function BandDashboard() {
             .in('status', ['planning', 'active'])
             .order('start_date', { ascending: true, nullsFirst: false })
             .limit(4),
-          // Upcoming row shows confirmed-only shows — pitch/hold/target don't belong here
+          // Upcoming row shows booked shows only (contract, confirmed, advancing) — pitch/hold/target don't belong here
           supabase.from('bookings')
             .select('id, status, show_date, venue:venues(id, name, city, state)')
             .eq('act_id', actId)
-            .eq('status', 'confirmed')
+            .in('status', UPCOMING_STATUSES)
             .not('show_date', 'is', null)
             .gte('show_date', today)
             .order('show_date')
@@ -281,12 +298,15 @@ export default function BandDashboard() {
                 .eq('status', 'target')
                 .limit(16)
             : Promise.resolve({ data: [] }),
+          supabase.from('bookings').select('id', { count: 'exact', head: true })
+            .eq('act_id', actId).in('status', UPCOMING_STATUSES).gte('show_date', today),
         ]);
 
         setTargetsCount(tvTargetRes.count ?? 0);
         setToursCount(toursCountRes.count ?? 0);
         setTours(toursRes.data ?? []);
         setUpcomingShows(upcomingRes.data ?? []);
+        setBookedAhead(aheadRes.count ?? 0);
         const targetRows: Array<{ id: string; venue: VenueSnippet | VenueSnippet[] | null }> = targetsRes.data ?? [];
         setTargets(targetRows.map(normaliseTarget));
       }
@@ -538,7 +558,7 @@ export default function BandDashboard() {
     const res = await fetch('/api/notes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ content: noteContent, note_date: today, visibility: 'admin_only' }),
+      body: JSON.stringify({ content: noteContent, note_date: localToday(), visibility: 'admin_only' }),
     });
     if (!res.ok) { setAgentError('Failed to save note — please try again.'); return; }
     setNoteSaved(true);
@@ -548,6 +568,16 @@ export default function BandDashboard() {
     ? userProfile.display_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
     : userProfile?.email?.[0]?.toUpperCase() || '?';
 
+  const nextShow = upcomingShows[0] ?? null;
+  const nextShowDays = nextShow && today ? daysUntil(nextShow.show_date, today) : null;
+  const heroLine = loading ? undefined : [
+    nextShow && nextShowDays !== null
+      ? `Next up: ${nextShow.venue?.name || 'a show'} ${nextShowDays === 0 ? 'tonight' : nextShowDays === 1 ? 'tomorrow' : `in ${nextShowDays} days`}`
+      : 'No shows booked yet',
+    `${toursCount} active tour${toursCount === 1 ? '' : 's'}`,
+    `${targetsCount} target${targetsCount === 1 ? '' : 's'} to pitch`,
+  ].join(' · ') + '.';
+
   const tagline = myAct ? [
     myAct.genre,
     myAct.home_city && myAct.home_state ? `${myAct.home_city}, ${myAct.home_state}` : myAct.home_city || null,
@@ -556,13 +586,6 @@ export default function BandDashboard() {
   return (
     <AppShell requireRole="band_admin">
       <style>{`
-        .dash-act-header    { display:flex; align-items:center; justify-content:space-between; min-height:70px; padding:0.75rem 1rem; background:var(--bg-panel); border:1px solid var(--border); margin-bottom:1.25rem; }
-        .dash-act-name      { font-family:var(--font-display); font-size:28px; font-weight:900; color:var(--text-primary); line-height:1; letter-spacing:0.03em; }
-        .dash-crb-badge     { display:none; }
-        .dash-upcoming-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:0.5rem; }
-        .dash-tours-grid    { display:grid; grid-template-columns:repeat(2,1fr); gap:0.5rem; }
-        .dash-targets-grid  { display:grid; grid-template-columns:repeat(2,1fr); gap:0.5rem; }
-        .dash-tiles-grid    { display:grid; grid-template-columns:repeat(2,1fr); gap:0.75rem; }
         .dash-appr-grid     { display:grid; grid-template-columns:1fr; gap:0.25rem; max-height:160px; overflow-y:auto; }
         .dash-draft-grid    { display:grid; grid-template-columns:1fr; gap:0.5rem; align-items:start; }
         .dash-msg-ai        { max-width:90%; }
@@ -571,7 +594,7 @@ export default function BandDashboard() {
         /* AI Booking Agent card — mobile-first. Below 768px the card is a single
            column: the 220px mascot column is hidden and a small avatar moves into
            the chat header, so the composer gets the full card width. */
-        .dash-agent             { display:flex; flex-direction:column; background:var(--bg-panel); border:1px solid var(--border); margin-bottom:1.25rem; height:min(640px, 80vh); height:min(640px, 80dvh); }
+        .dash-agent             { display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; margin:1.5rem 0; height:min(640px, 80vh); height:min(640px, 80dvh); }
         .dash-agent-mascot      { display:none; }
         .dash-agent-chat        { flex:1 1 auto; display:flex; flex-direction:column; min-width:0; min-height:0; }
         .dash-agent-hdr-avatar  { width:32px; height:32px; border-radius:50%; border:2px solid var(--accent); object-fit:cover; flex-shrink:0; }
@@ -596,45 +619,29 @@ export default function BandDashboard() {
         }
 
         @media(min-width:640px){
-          .dash-act-header    { height:80px; padding:0 1.25rem; }
-          .dash-act-name      { font-size:32px; }
-          .dash-crb-badge     { display:flex; }
-          .dash-upcoming-grid { grid-template-columns:repeat(4,1fr); }
-          .dash-tours-grid    { grid-template-columns:repeat(4,1fr); }
-          .dash-targets-grid  { grid-template-columns:repeat(4,1fr); }
-          .dash-tiles-grid    { grid-template-columns:repeat(var(--tile-cols, 4),1fr); }
           .dash-appr-grid     { grid-template-columns:repeat(2,1fr); gap:0.25rem 1.5rem; }
           .dash-draft-grid    { grid-template-columns:1fr 2fr; }
           .dash-msg-ai        { max-width:75%; }
           .dash-msg-user      { max-width:60%; }
         }
-        @media(min-width:900px){
-          .dash-upcoming-grid { grid-template-columns:repeat(8,1fr); }
-          .dash-tours-grid    { grid-template-columns:repeat(8,1fr); }
-          .dash-targets-grid  { grid-template-columns:repeat(8,1fr); }
-        }
       `}</style>
 
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      {/* ── Header: the band's name over an illustrated stage, in the Tours style ── */}
       {myAct && (
-        <div className="dash-act-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', minWidth: 0 }}>
-            {myAct.profile_photo_url
-              ? <img src={myAct.profile_photo_url} alt="" style={{ height: 52, width: 52, objectFit: 'cover', border: '2px solid var(--accent)', flexShrink: 0 }} />
-              : <div style={{ height: 52, width: 52, background: 'rgba(224,120,32,0.12)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--accent)' }}>{myAct.act_name?.[0] || '?'}</span>
-                </div>
-            }
-            <div style={{ minWidth: 0 }}>
-              <div className="dash-act-name">{myAct.act_name}</div>
-              {tagline && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 3, textTransform: 'uppercase', letterSpacing: '0.1em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tagline}</div>}
+        <PageHero
+          title={myAct.act_name || 'Dashboard'}
+          subtitle={tagline || 'Band dashboard'}
+          summary={heroLine}
+          scene={<StageScene />}
+          actions={
+            <div className={styles.heroBadge}>
+              {myAct.profile_photo_url
+                ? <img src={myAct.profile_photo_url} alt={`${myAct.act_name} photo`} className={styles.heroPhoto} />
+                : <span className={styles.heroInitial} aria-hidden="true">{myAct.act_name?.[0] || '?'}</span>}
+              <span className={styles.heroUser} title="Signed in">{userInitials}</span>
             </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexShrink: 0 }}>
-            <div className="dash-crb-badge" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--accent)', border: '1px solid rgba(224,120,32,0.4)', padding: '0.2rem 0.6rem', alignItems: 'center' }}>CAMEL RANCH BOOKING</div>
-            <div style={{ width: 34, height: 34, background: 'rgba(224,120,32,0.15)', border: '1px solid rgba(224,120,32,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: '1rem', color: 'var(--accent)', flexShrink: 0 }}>{userInitials}</div>
-          </div>
-        </div>
+          }
+        />
       )}
 
       {/* ── No act state ─────────────────────────────────────────────────────── */}
@@ -717,153 +724,134 @@ export default function BandDashboard() {
 
       {myAct && (
         <>
+          {/* ── At a glance (Tours-style trackers) ──────────────────────────── */}
+          <section className="tours-metrics" aria-label="Band at a glance">
+            <Link href={nextShow ? '/today' : '/calendar'} className={`tour-metric ${styles.metricLink}`}>
+              <span className="tour-metric-label">Next show</span>
+              {loading ? <span className={styles.metricSkeleton} /> : nextShow && nextShowDays !== null ? (
+                <>
+                  <span className="tour-metric-value">
+                    {nextShowDays === 0
+                      ? <><strong className="tour-metric-hot">Tonight</strong><span>{nextShow.venue?.name || 'Venue TBD'}</span></>
+                      : <><strong>{nextShowDays}</strong><span>{nextShowDays === 1 ? 'day' : 'days'} · {nextShow.venue?.name || 'Venue TBD'}</span></>}
+                  </span>
+                  <span className="tour-metric-note">{formatShowDate(nextShow.show_date, { weekday: 'short', month: 'short', day: 'numeric' })}{nextShow.venue?.city ? ` · ${[nextShow.venue.city, nextShow.venue.state].filter(Boolean).join(', ')}` : ''}</span>
+                </>
+              ) : <span className="tour-metric-value"><span>Nothing booked yet</span></span>}
+            </Link>
+            <Link href="/calendar" className={`tour-metric ${styles.metricLink}`}>
+              <span className="tour-metric-label">Booked ahead</span>
+              <span className="tour-metric-value"><strong>{loading ? '–' : bookedAhead}</strong><span>{bookedAhead === 1 ? 'show' : 'shows'} on the calendar</span></span>
+            </Link>
+            <Link href="/tours" className={`tour-metric ${styles.metricLink}`}>
+              <span className="tour-metric-label">Active tours</span>
+              <span className="tour-metric-value"><strong>{loading ? '–' : toursCount}</strong><span>planning or on the road</span></span>
+            </Link>
+            <Link href="/email?tab=outreach&status=target" className={`tour-metric ${styles.metricLink}`}>
+              <span className="tour-metric-label">Targets</span>
+              <span className="tour-metric-value"><strong className={targetsCount > 0 ? 'tour-metric-hot' : undefined}>{loading ? '–' : targetsCount}</strong><span>venues to pitch</span></span>
+            </Link>
+          </section>
+
           {/* ── Upcoming Shows ──────────────────────────────────────────────── */}
-          <div style={{ marginBottom: '1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>UPCOMING SHOWS</span>
-              <Link href="/band/calendar" style={{ fontSize: 12, color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 700 }}>View all →</Link>
-            </div>
-            {loading ? (
-              <div style={{ height: 108, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }} />
-            ) : upcomingShows.length === 0 ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1.5rem', background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
-                <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>No upcoming shows</span>
-                <Link href="/tours"
-                  style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, padding: '0.3rem 0.75rem', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', background: 'rgba(255,255,255,0.08)', textDecoration: 'none', transition: 'all 0.15s' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.background = 'rgba(224,120,32,0.15)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}>
-                  + Add a show
-                </Link>
+          <section className={styles.section} aria-labelledby="dash-upcoming">
+            <header className={styles.sectionHead}>
+              <h2 className={styles.sectionTitle} id="dash-upcoming">Upcoming shows</h2>
+              <Link href="/calendar" className={styles.viewAll}>View calendar →</Link>
+            </header>
+            {loading ? <div className={`tour-skeleton ${styles.skeletonRow}`} /> : upcomingShows.length === 0 ? (
+              <div className={styles.empty}>
+                <span>No booked shows ahead yet.</span>
+                <Link href="/calendar" className="btn btn-secondary btn-sm">+ Add a show</Link>
               </div>
             ) : (
-              <div className="dash-upcoming-grid">
+              <ul className={styles.showRail}>
                 {upcomingShows.map((show: any) => {
                   const color = STATUS_COLORS[show.status] || '#6b7280';
+                  const d = parseLocalDate(show.show_date);
                   return (
-                    <div key={show.id} style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ height: 4, background: color, flexShrink: 0 }} />
-                      <div style={{ padding: '0.45rem 0.6rem', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.25rem', overflow: 'hidden' }}>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {formatShowDate(show.show_date, { month: 'short', day: 'numeric' })}
-                          </span>
-                          <span style={{ padding: '0.1rem 0.3rem', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', background: `${color}29`, color, border: `1px solid ${color}4d`, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                            {BOOKING_STATUS_LABELS[show.status as keyof typeof BOOKING_STATUS_LABELS] || show.status}
-                          </span>
-                        </div>
-                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {show.venue?.name || 'TBD'}
+                    <li key={show.id}>
+                      <Link href={`/bookings/${show.id}`} className={styles.showCard} style={{ borderTopColor: color }}>
+                        <span className={styles.showDate}>
+                          <strong>{d.getDate()}</strong>
+                          <span>{formatShowDate(show.show_date, { month: 'short' })} · {formatShowDate(show.show_date, { weekday: 'short' })}</span>
                         </span>
-                        {(show.venue?.city || show.venue?.state) && (
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {[show.venue.city, show.venue.state].filter(Boolean).join(', ')}
+                        <span className={styles.showName}>{show.venue?.name || 'Venue TBD'}</span>
+                        <span className={styles.showWhere}>{[show.venue?.city, show.venue?.state].filter(Boolean).join(', ') || BOOKING_STATUS_LABELS[show.status as keyof typeof BOOKING_STATUS_LABELS]}</span>
+                        <span className={styles.showStatus} style={{ color }}>{BOOKING_STATUS_LABELS[show.status as keyof typeof BOOKING_STATUS_LABELS] || show.status}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <div className={styles.twoUp}>
+            {/* ── Tours ─────────────────────────────────────────────────────── */}
+            <section className={styles.section} aria-labelledby="dash-tours">
+              <header className={styles.sectionHead}>
+                <h2 className={styles.sectionTitle} id="dash-tours">Tours</h2>
+                <Link href="/tours" className={styles.viewAll}>All tours →</Link>
+              </header>
+              {loading ? <div className={`tour-skeleton ${styles.skeletonRow}`} /> : tours.length === 0 ? (
+                <div className={styles.empty}>
+                  <span>No active tours.</span>
+                  <Link href="/tours" className="btn btn-secondary btn-sm">+ Plan a tour</Link>
+                </div>
+              ) : (
+                <ul className={styles.tourList}>
+                  {tours.map(tour => {
+                    const active = tour.bookings.filter(b => b.status !== 'cancelled');
+                    const booked = active.filter(b => UPCOMING_STATUSES.includes(b.status) || b.status === 'completed');
+                    const pct = active.length ? Math.round((booked.length / active.length) * 100) : 0;
+                    const range = ([tour.start_date, tour.end_date] as const)
+                      .filter((x): x is string => x !== null)
+                      .map(x => formatShowDate(x, { month: 'short', day: 'numeric' }))
+                      .join(' – ');
+                    return (
+                      <li key={tour.id}>
+                        <Link href={`/tours/${tour.id}`} className={styles.tourRow}>
+                          <span className={styles.tourMain}>
+                            <strong>{tour.name}</strong>
+                            <span>{range || 'Dates TBD'}</span>
                           </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                          <span className={styles.tourFill}>
+                            <span>{active.length === 0 ? 'No shows yet' : `${booked.length} of ${active.length} booked`}</span>
+                            <span className="tour-meter" aria-hidden="true"><span className="tour-meter-bar" style={{ width: `${pct}%`, display: 'block' }} /></span>
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
 
-          {/* ── Tours ───────────────────────────────────────────────────────── */}
-          <div style={{ marginBottom: '1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>TOURS</span>
-              <Link href="/tours" style={{ fontSize: 12, color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 700 }}>View all →</Link>
-            </div>
-            {loading ? (
-              <div style={{ height: 108, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }} />
-            ) : tours.length === 0 ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1.5rem', background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
-                <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>No active tours</span>
-                <Link href="/tours"
-                  style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, padding: '0.3rem 0.75rem', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', background: 'rgba(255,255,255,0.08)', textDecoration: 'none', transition: 'all 0.15s' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.background = 'rgba(224,120,32,0.15)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}>
-                  + Plan a tour
-                </Link>
-              </div>
-            ) : (
-              <div className="dash-tours-grid">
-                {tours.map((tour) => {
-                  const activeShows = tour.bookings.filter(b => b.status !== 'cancelled');
-                  const confirmedShows = activeShows.filter(b => b.status === 'confirmed');
-                  const edgeColor =
-                    activeShows.length === 0 ? '#6b7280' :
-                    confirmedShows.length === activeShows.length ? '#34d399' :
-                    confirmedShows.length > 0 ? '#f59e0b' : '#ef4444';
-                  const statusLine = activeShows.length === 0
-                    ? 'No shows yet'
-                    : `${confirmedShows.length} of ${activeShows.length} confirmed`;
-                  const dateParts = ([tour.start_date, tour.end_date] as const)
-                    .filter((d): d is string => d !== null)
-                    .map(d => formatShowDate(d, { month: 'short', day: 'numeric', year: 'numeric' }));
-                  const dateRange = dateParts.join(' – ');
-                  return (
-                    <Link key={tour.id} href={`/tours/${tour.id}`}
-                      style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', background: 'var(--bg-panel)', border: '1px solid var(--border)', overflow: 'hidden', transition: 'border-color 0.15s' }}
-                      onFocus={e => { e.currentTarget.style.outline = '2px solid var(--accent)'; e.currentTarget.style.outlineOffset = '2px'; }}
-                      onBlur={e => { e.currentTarget.style.outline = ''; e.currentTarget.style.outlineOffset = ''; }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = edgeColor; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}>
-                      <div style={{ height: 4, background: edgeColor, flexShrink: 0 }} />
-                      <div style={{ padding: '0.45rem 0.6rem', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.name}</span>
-                        {dateRange && (
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dateRange}</span>
-                        )}
-                        <span style={{ fontSize: 11, color: edgeColor, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{statusLine}</span>
-                        {tour.description && (
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.description}</span>
-                        )}
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* ── Targets ─────────────────────────────────────────────────────── */}
-          <div style={{ marginBottom: '1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>TARGETS</span>
-              <Link href="/email?tab=outreach&status=target" style={{ fontSize: 12, color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 700 }}>View all →</Link>
-            </div>
-            {loading ? (
-              <div style={{ height: 60, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }} />
-            ) : targets.length === 0 ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1.5rem', background: 'var(--bg-panel)', border: '1px solid var(--border)' }}>
-                <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>No targets yet — start pitching venues.</span>
-                <Link href="/email?tab=outreach&status=target"
-                  style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, padding: '0.3rem 0.75rem', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', background: 'rgba(255,255,255,0.08)', textDecoration: 'none', transition: 'all 0.15s', whiteSpace: 'nowrap' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLElement).style.background = 'rgba(224,120,32,0.15)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}>
-                  + Add target
-                </Link>
-              </div>
-            ) : (
-              <div className="dash-targets-grid">
-                {targets.map((t) => (
-                  <Link key={t.id} href={t.venue?.id ? `/venues/${t.venue.id}` : '/email?tab=outreach&status=target'}
-                    style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', background: 'var(--bg-panel)', border: '1px solid var(--border)', overflow: 'hidden', transition: 'border-color 0.15s' }}
-                    onFocus={e => { e.currentTarget.style.outline = '2px solid var(--accent)'; e.currentTarget.style.outlineOffset = '2px'; }}
-                    onBlur={e => { e.currentTarget.style.outline = ''; e.currentTarget.style.outlineOffset = ''; }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#6B8FB5'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}>
-                    <div style={{ height: 4, background: '#6B8FB5', flexShrink: 0 }} />
-                    <div style={{ padding: '0.45rem 0.6rem' }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.venue?.name ?? '—'}</div>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {[t.venue?.city, t.venue?.state].filter((s): s is string => s != null).join(', ') || '—'}
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
+            {/* ── Targets ───────────────────────────────────────────────────── */}
+            <section className={styles.section} aria-labelledby="dash-targets">
+              <header className={styles.sectionHead}>
+                <h2 className={styles.sectionTitle} id="dash-targets">Targets</h2>
+                <Link href="/email?tab=outreach&status=target" className={styles.viewAll}>Outreach →</Link>
+              </header>
+              {loading ? <div className={`tour-skeleton ${styles.skeletonRow}`} /> : targets.length === 0 ? (
+                <div className={styles.empty}>
+                  <span>No targets yet — add venues to a tour to start pitching.</span>
+                  <Link href="/venues" className="btn btn-secondary btn-sm">Find venues</Link>
+                </div>
+              ) : (
+                <ul className={styles.targetCloud}>
+                  {targets.map(t => (
+                    <li key={t.id}>
+                      <Link href={t.venue?.id ? `/venues/${t.venue.id}` : '/email?tab=outreach&status=target'} className={styles.targetChip}>
+                        <strong>{t.venue?.name ?? 'Venue'}</strong>
+                        <span>{[t.venue?.city, t.venue?.state].filter((x): x is string => x != null).join(', ')}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           </div>
 
           {/* ── AI Booking Agent — single column on mobile, two columns ≥768px (see .dash-agent CSS) ── */}
@@ -1258,19 +1246,17 @@ export default function BandDashboard() {
             </div>{/* end right column */}
           </div>{/* end agent panel */}
 
-          {/* ── Bottom tiles ─────────────────────────────────────────────────── */}
-          {/* --tile-cols keeps the desktop row full when a tile is switched off */}
-          <div className="dash-tiles-grid" style={{ '--tile-cols': dashTiles.length } as React.CSSProperties}>
+          {/* ── Shortcuts ────────────────────────────────────────────────── */}
+          <nav className={styles.tiles} aria-label="Shortcuts">
             {dashTiles.map(tile => (
-              <Link key={tile.label} href={tile.href} style={{ display: 'block', height: 180, padding: '1rem 1.25rem', textDecoration: 'none', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderTop: `3px solid ${tile.accent}`, position: 'relative', overflow: 'hidden', transition: 'border-color 0.15s' }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = tile.accent)}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
-                <div style={{ position: 'absolute', top: '0.75rem', right: '0.9rem', fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: tile.accent, opacity: 0.2 }}>{tile.icon}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: tile.accent }}>{tile.label}</div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: '0.3rem' }}>{tile.sub}</div>
+              <Link key={tile.label} href={tile.href} className={styles.tile} style={{ '--tile-accent': tile.accent } as React.CSSProperties}>
+                <span className={styles.tileIcon} aria-hidden="true">{tile.icon}</span>
+                <span className={styles.tileLabel}>{tile.label}</span>
+                <span className={styles.tileSub}>{tile.sub}</span>
+                <span className={styles.tileGo} aria-hidden="true">Open →</span>
               </Link>
             ))}
-          </div>
+          </nav>
         </>
       )}
     </AppShell>

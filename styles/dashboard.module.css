@@ -1,0 +1,162 @@
+/* styles/dashboard.module.css — band Dashboard (pages/band/index.tsx).
+   Tours vocabulary: Bebas section titles and dates, tracked uppercase
+   labels, --surface panels with --radius-sm, accent for what needs action.
+   The AI agent panel keeps its own `.dash-agent*` rules in the page. */
+
+/* Hero badge: band photo/initial plus the signed-in user's initials */
+.heroBadge { display: flex; align-items: center; gap: 0.6rem; }
+.heroPhoto, .heroInitial {
+  width: 64px; height: 64px;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+.heroInitial {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(22, 36, 63, 0.7);
+  font-family: var(--font-display); font-size: 2rem; color: var(--accent);
+}
+.heroUser {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 247, 251, 0.4);
+  color: #f4f7fb;
+  font-size: 0.75rem; font-weight: 800; letter-spacing: 0.06em;
+}
+
+/* Trackers are shortcuts */
+.metricLink { color: inherit; text-decoration: none; transition: border-color 0.15s ease, transform 0.15s ease; }
+.metricLink:hover { border-color: var(--accent); text-decoration: none; transform: translateY(-1px); }
+.metricLink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.metricSkeleton { display: block; height: 3rem; border-radius: var(--radius-sm); background: var(--surface-2); }
+
+/* Sections */
+.section { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; margin-top: 1.5rem; }
+.sectionHead { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.sectionTitle {
+  margin: 0;
+  font-family: var(--font-display); font-weight: 400;
+  font-size: 2rem; line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+.viewAll {
+  font-size: 0.75rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.viewAll:hover { text-decoration: underline; }
+.empty {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem;
+  padding: 1.1rem 1.25rem;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+.skeletonRow { min-height: 8rem; border-radius: var(--radius-sm); }
+.twoUp { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 0 1.5rem; }
+
+/* Upcoming shows: a rail of date cards */
+.showRail {
+  list-style: none; margin: 0; padding: 0 0 0.25rem;
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(11.5rem, 1fr);
+  gap: 0.75rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+}
+.showRail li { scroll-snap-align: start; }
+.showCard {
+  display: flex; flex-direction: column; gap: 0.25rem;
+  height: 100%;
+  padding: 0.85rem 1rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.showCard:hover { border-color: var(--accent); text-decoration: none; transform: translateY(-1px); }
+.showCard:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.showDate { display: flex; align-items: baseline; gap: 0.5rem; }
+.showDate strong { font-family: var(--font-display); font-weight: 400; font-size: 2.4rem; line-height: 0.9; }
+.showDate span { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+.showName { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.showWhere { font-size: 0.82rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.showStatus { margin-top: auto; padding-top: 0.35rem; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+
+/* Tours list */
+.tourList { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.tourList li + li { border-top: 1px solid var(--border); }
+.tourRow {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(9rem, 12rem); align-items: center; gap: 1rem;
+  padding: 0.8rem 1.1rem;
+  color: var(--text);
+  text-decoration: none;
+}
+.tourRow:hover { background: var(--surface-2); text-decoration: none; }
+.tourRow:hover strong { color: var(--accent); }
+.tourRow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tourMain { display: flex; flex-direction: column; min-width: 0; }
+.tourMain strong { font-family: var(--font-display); font-weight: 400; font-size: 1.5rem; line-height: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tourMain span { font-size: 0.82rem; font-weight: 600; color: var(--text-muted); }
+.tourFill { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.78rem; font-weight: 700; color: var(--text-muted); }
+
+/* Targets */
+.targetCloud { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.targetChip {
+  display: flex; flex-direction: column;
+  min-height: 44px; max-width: 16rem;
+  padding: 0.45rem 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--blue);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+}
+.targetChip:hover { border-color: var(--accent); text-decoration: none; }
+.targetChip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.targetChip strong { font-size: 0.86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.targetChip span { font-size: 0.74rem; color: var(--text-muted); }
+
+/* Shortcut tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1rem; margin-top: 0.25rem; }
+.tile {
+  position: relative;
+  display: flex; flex-direction: column; gap: 0.3rem;
+  min-height: 8.5rem;
+  padding: 1.1rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--tile-accent, var(--accent));
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+  overflow: hidden;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.tile:hover { border-color: var(--tile-accent, var(--accent)); text-decoration: none; transform: translateY(-1px); }
+.tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tileIcon { position: absolute; right: 1rem; top: 0.5rem; font-family: var(--font-display); font-size: 3.5rem; line-height: 1; color: var(--tile-accent, var(--accent)); opacity: 0.18; }
+.tileLabel { font-family: var(--font-display); font-weight: 400; font-size: 1.9rem; line-height: 1; letter-spacing: 0.02em; }
+.tileSub { font-size: 0.85rem; color: var(--text-muted); }
+.tileGo { margin-top: auto; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tile-accent, var(--accent)); }
+
+@media (max-width: 960px) {
+  .twoUp { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .heroPhoto, .heroInitial { width: 48px; height: 48px; }
+  .tourRow { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+  .sectionTitle { font-size: 1.7rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .metricLink, .showCard, .tile { transition: none; }
+  .metricLink:hover, .showCard:hover, .tile:hover { transform: none; }
+}
