@@ -50,7 +50,12 @@
 
   /* Fonts */
   --font-display: 'Bebas Neue', 'Arial Narrow', sans-serif;
-  --font-mono:    'Courier New', monospace;
+  /* Data/number type. Was Courier New; now the body face so every page reads
+     like Tours. Numbers line up via tabular figures on .mono/.text-mono and
+     wherever `font-variant-numeric: tabular-nums` is set. Code that truly
+     needs fixed width uses --font-code. */
+  --font-mono:    'Manrope', -apple-system, sans-serif;
+  --font-code:    ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --font-body:    'Manrope', -apple-system, sans-serif;
 
   /* Layout */
@@ -88,7 +93,7 @@ a:hover { color: #f2a066; text-decoration: none; }
 
 /* ── Typography ────────────────────────────────────────────── */
 .display { font-family: var(--font-display); letter-spacing: 0.04em; }
-.mono    { font-family: var(--font-mono); }
+.mono    { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
@@ -748,7 +753,7 @@ tr:hover td { background: rgba(232,130,58,0.06); color: var(--text-primary); }
 
 .text-sm   { font-size: 0.85rem; }
 .text-xs   { font-size: 0.75rem; }
-.text-mono { font-family: var(--font-mono); }
+.text-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .text-accent    { color: var(--accent); }
 .text-muted     { color: var(--text-muted); }
 .text-secondary { color: var(--text-secondary); }
@@ -1929,7 +1934,7 @@ a.venues-muted:hover { color: var(--text); }
 .venues-linked a { color: var(--accent); }
 .venues-modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
 .venues-modal-actions--split { justify-content: space-between; }
-.venues-import-text { font-family: var(--font-mono); font-size: 0.8rem; resize: vertical; }
+.venues-import-text { font-family: var(--font-code); font-size: 0.8rem; resize: vertical; }
 .venues-import-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; max-height: 340px; overflow-y: auto; }
 .venues-import-row {
   display: flex; align-items: flex-start; gap: 0.75rem;
