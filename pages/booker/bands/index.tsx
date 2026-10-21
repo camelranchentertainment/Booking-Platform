@@ -109,7 +109,7 @@ function BandsContent() {
               </span>
             </div>
             <div className="tour-metric">
-              <span className="tour-metric-label">Booked ahead</span>
+              <span className="tour-metric-label">Upcoming Shows</span>
               <div className="tour-metric-value">
                 <strong>{view.summary.booked}</strong>
                 <span>confirmed shows</span>

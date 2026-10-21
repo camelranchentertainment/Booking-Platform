@@ -80,7 +80,7 @@ function ShowsContent() {
 
   const hasBands = Boolean(data && data.bands.length > 0);
   const heroSummary = view && hasBands
-    ? `${plural(view.summary.booked, 'show')} booked ahead · ${plural(view.summary.inPlay, 'hold')} in play${view.summary.toSettle > 0 ? ` · ${view.summary.toSettle} to settle` : ''}.`
+    ? `${plural(view.summary.booked, 'upcoming show')} · ${plural(view.summary.inPlay, 'hold')} in play${view.summary.toSettle > 0 ? ` · ${view.summary.toSettle} to settle` : ''}.`
     : undefined;
 
   return (
@@ -134,7 +134,7 @@ function ShowsContent() {
         <div className="tours-body">
           <section className="tours-metrics" aria-label="Shows at a glance">
             <div className="tour-metric">
-              <span className="tour-metric-label">Booked ahead</span>
+              <span className="tour-metric-label">Upcoming Shows</span>
               <div className="tour-metric-value">
                 <strong>{view.summary.booked}</strong>
                 <span>confirmed</span>
