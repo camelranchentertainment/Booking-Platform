@@ -1,0 +1,155 @@
+/* styles/email.module.css — Email page (pages/email/index.tsx).
+   Tours vocabulary: tracked uppercase labels, --surface panels with
+   --radius-sm, Bebas section titles, accent for what needs action.
+   Tones (ok / due / late / done / new) map lib/domain/emailPipeline urgency
+   onto design tokens. */
+
+.stack { display: flex; flex-direction: column; gap: 1rem; }
+.toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem; }
+.muted { font-size: 0.82rem; color: var(--text-muted); }
+.nowrap { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.skeletonList { min-height: 24rem; border-radius: var(--radius-sm); }
+.dateLabel { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); }
+
+/* Metric trackers double as shortcuts into the right tab. */
+.metricBtn { font: inherit; text-align: left; color: inherit; cursor: pointer; transition: border-color 0.15s ease, transform 0.15s ease; }
+.metricBtn:hover { border-color: var(--accent); transform: translateY(-1px); }
+.metricBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.newBadge {
+  margin-left: 0.45rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #161616;
+  font-size: 0.6rem; font-weight: 800; letter-spacing: 0.1em;
+}
+
+/* Tones */
+.tone_ok { --tone: var(--green); }
+.tone_due { --tone: #f5c842; }
+.tone_late { --tone: var(--red); }
+.tone_done { --tone: var(--text-muted); }
+.tone_new { --tone: var(--blue); }
+.days { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tone_late.days { color: var(--red); }
+.dot { width: 8px; height: 8px; border-radius: 999px; background: var(--tone, var(--text-muted)); flex: none; }
+
+/* Stage pills (tour_venues.status) */
+.stage {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.66rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.stage_target { border-color: var(--blue); color: var(--blue); }
+.stage_follow_up { border-color: #f5c842; color: #f5c842; }
+.stage_confirmed { border-color: var(--green); color: var(--green); }
+.stage_declined { border-color: var(--red); color: var(--red); }
+.inlineBadge { margin-left: 0.5rem; }
+
+/* Message list (inbox, sent, drafts, archive) */
+.msgList { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.msg { border-bottom: 1px solid var(--border); }
+.msg:last-child { border-bottom: 0; }
+.msgOpen { background: var(--surface-2); }
+.msgRow { display: flex; align-items: center; gap: 0.5rem; padding-right: 0.75rem; }
+.msgMain {
+  flex: 1; min-width: 0;
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  padding: 0.85rem 0 0.85rem 1rem;
+  border: 0; background: none;
+  font: inherit; text-align: left; color: var(--text);
+  cursor: pointer;
+}
+.msgMain:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.msgMain:hover .msgSubject { color: var(--accent); }
+.unreadDot { width: 8px; height: 8px; margin-top: 0.45rem; border-radius: 999px; flex: none; }
+.msgUnread .unreadDot { background: var(--accent); }
+.msgText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.msgFrom { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.6rem; font-size: 0.92rem; }
+.msgFrom strong { font-weight: 600; }
+.msgUnread .msgFrom strong { font-weight: 800; }
+.msgSubject { font-size: 0.88rem; color: var(--text-muted); }
+.msgUnread .msgSubject { color: var(--text); font-weight: 700; }
+.msgPreview { font-size: 0.8rem; color: var(--text-muted); opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msgDate { flex: none; padding-left: 0.5rem; font-size: 0.78rem; font-weight: 700; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.msgActions { display: flex; gap: 0.25rem; flex: none; }
+.msgBody { padding: 0 1.25rem 1.1rem 2.75rem; }
+.msgMeta { margin: 0 0 0.6rem; font-size: 0.78rem; color: var(--text-muted); }
+.msgText2 { max-height: 22rem; overflow-y: auto; font-size: 0.92rem; line-height: 1.7; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Pipeline table extras */
+.sortBtn {
+  padding: 0; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: inherit; font-weight: inherit; letter-spacing: inherit; text-transform: inherit;
+  color: inherit;
+}
+.sortBtn:hover { color: var(--text); }
+.sortBtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.check { width: 18px; height: 18px; accent-color: var(--accent); }
+.rowActions { display: flex; gap: 0.25rem; justify-content: flex-end; flex-wrap: wrap; }
+.detailRow td { background: var(--surface-2); }
+.detailRow td { font-size: 0.85rem; }
+.detailRow td > * + * { margin-left: 1.25rem; }
+.bulkBar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-glow);
+  font-size: 0.88rem;
+}
+.bulkBar .select { width: auto; min-height: 40px; }
+
+/* Board (kanban) */
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(14rem, 1fr); gap: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; }
+.column {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  min-height: 12rem;
+  padding: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.columnOver { border-color: var(--accent); background: var(--accent-glow); }
+.columnHead { display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+.columnHead > span:last-child { font-family: var(--font-display); font-size: 1.4rem; line-height: 1; color: var(--text); }
+.card {
+  display: flex; flex-direction: column; gap: 0.2rem;
+  padding: 0.65rem 0.7rem;
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  color: var(--text);
+  cursor: grab;
+}
+.cardDragging { opacity: 0.4; }
+.cardWarn { border-color: var(--red); }
+.cardFoot { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.35rem; }
+.moveSelect {
+  flex: 1; min-width: 0;
+  min-height: 32px;
+  padding: 0 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit; font-size: 0.75rem;
+}
+.dropHint { margin: auto 0; text-align: center; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); opacity: 0.6; }
+
+@media (max-width: 640px) {
+  .msgRow { flex-wrap: wrap; padding: 0 0.75rem 0.6rem 0; }
+  .msgActions { margin-left: 2.25rem; }
+  .msgBody { padding-left: 1rem; }
+  .detailRow td > * + * { margin-left: 0; display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .metricBtn { transition: none; }
+  .metricBtn:hover { transform: none; }
+}

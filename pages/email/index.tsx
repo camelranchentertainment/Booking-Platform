@@ -1,1231 +1,899 @@
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
+// pages/email/index.tsx
+//
+// Email — the band's inbox, outreach pipeline, sent mail, drafts and archive.
+//
+// Layout (Phase 3 redesign, Oct 2026 — matches the Tours page):
+//   1. Illustrated mailbox hero with "+ New email".
+//   2. Four trackers: unread replies, follow-ups overdue, threads needing a
+//      send, confirmed targets. The Gmail sync bar sits under them.
+//   3. Tabs (Tours toggle style): Inbox · Pipeline · Outreach · Sent · Drafts · Archive.
+//
+// Stage rules, "what's next" for a thread, sorting and searching live in
+// lib/domain/emailPipeline.ts (unit-tested). Styles: styles/email.module.css.
+// Data access is unchanged from the previous version of this page.
+
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppShell from '../../components/layout/AppShell';
+import PageHero from '../../components/layout/PageHero';
+import MailboxScene from '../../components/email/MailboxScene';
 import InboxSyncBar from '../../components/email/InboxSyncBar';
+import EmailComposer from '../../components/email/EmailComposer';
+import VenueDrawer from '../../components/VenueDrawer';
+import { useModalKeys } from '../../components/venues/useModalKeys';
 import { INBOX_SYNCED_EVENT, type InboxSyncedEventDetail } from '../../lib/inboxSync';
 import { supabase } from '../../lib/supabase';
 import { getActId } from '../../lib/bookingQueries';
-import { parseLocalDate, formatShowDate } from '../../lib/formatDate';
-import EmailComposer from '../../components/email/EmailComposer';
-import VenueDrawer from '../../components/VenueDrawer';
+import { formatShowDate } from '../../lib/formatDate';
+import {
+  PIPELINE_STAGES, BOOKING_STAGE_LABELS, stageLabel, daysSince, contactTone, nextAction, isActiveThread,
+  sortTargets, isOverdueFollowUp, filterArchive, plainText, summarizeEmail, lastTouch,
+  type SortField, type Tone,
+} from '../../lib/domain/emailPipeline';
+import styles from '../../styles/email.module.css';
 
-// ─── Types & Constants ────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-type TabView = 'inbox' | 'pipeline' | 'outreach' | 'outbox' | 'archive' | 'drafts';
+type TabView = 'inbox' | 'pipeline' | 'outreach' | 'outbox' | 'drafts' | 'archive';
 
-const PIPELINE_STAGES = [
-  { key: 'target',    label: 'Target',    color: '#6B8FB5' },
-  { key: 'follow_up', label: 'Follow Up', color: '#E85252' },
-  { key: 'confirmed', label: 'Confirm',   color: '#34d399' },
-  { key: 'declined',  label: 'Declined',  color: '#f87171' },
-  { key: 'thank_you', label: 'Thank You', color: '#6b7280' },
-] as const;
+interface VenueRef { id: string; name: string | null; city: string | null; state: string | null; email: string | null; phone?: string | null }
 
-type StageKey = typeof PIPELINE_STAGES[number]['key'];
-
-const STAGE_COLOR: Record<string, string> = Object.fromEntries(
-  PIPELINE_STAGES.map(s => [s.key, s.color])
-);
-
-const BK_STAGE_LABELS: Record<string, string> = {
-  target: 'Cold Pitch', follow_up_1: 'Follow Up 1', follow_up_2: 'Follow Up 2',
-  confirmation: 'Confirmation', decline: 'Decline', advance: 'Advance', thank_you: 'Thank You', cold: 'Cold',
-};
-const BK_STAGE_COLORS: Record<string, string> = {
-  target: '#60a5fa', follow_up_1: '#fbbf24', follow_up_2: '#f97316',
-  confirmation: '#34d399', decline: '#94a3b8', advance: '#f97316', thank_you: '#a78bfa', cold: '#475569',
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function daysSince(d: string | null): number {
-  if (!d) return 999;
-  return Math.floor((Date.now() - parseLocalDate(d).getTime()) / 86_400_000);
-}
-function dayCellColor(n: number): string {
-  if (n <= 7)  return '#34d399';
-  if (n <= 14) return '#fbbf24';
-  return '#f87171';
-}
-function fmtDate(d: string | null): string {
-  if (!d) return '—';
-  return formatShowDate(d, { month: 'short', day: 'numeric' });
-}
-function fmtDateFull(d: string | null): string {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+interface TourTarget {
+  id: string; status: string; tour_id: string;
+  last_contacted_at: string | null; pitched_at: string | null; updated_at: string | null; notes: string | null;
+  venue: VenueRef | null;
+  tour: { id: string; name: string | null; act_id: string } | null;
 }
 
-function getActionInfo(b: any) {
-  const stage = b.email_stage;
-  const since = daysSince(b.last_contact_date);
-  const until = b.show_date ? Math.floor((parseLocalDate(b.show_date).getTime() - Date.now()) / 86_400_000) : 999;
-  if (!stage) {
-    if (['completed', 'cancelled'].includes(b.status)) return { label: 'Archived', color: '#6b7280', next: null };
-    return { label: 'Send cold pitch', color: '#60a5fa', next: 'target' };
-  }
-  if (stage === 'target') {
-    if (since < 7)  return { label: `Awaiting reply (${since}d)`, color: '#34d399', next: 'follow_up_1' };
-    if (since < 11) return { label: 'Follow up due', color: '#fbbf24', next: 'follow_up_1' };
-    return { label: `Overdue (${since}d)`, color: '#f87171', next: 'follow_up_1' };
-  }
-  if (stage === 'follow_up_1') {
-    if (since < 7)  return { label: `Awaiting reply (${since}d)`, color: '#34d399', next: 'follow_up_2' };
-    if (since < 11) return { label: 'Follow up 2 due', color: '#fbbf24', next: 'follow_up_2' };
-    return { label: `Overdue (${since}d)`, color: '#f87171', next: 'follow_up_2' };
-  }
-  if (stage === 'follow_up_2') {
-    if (since < 14) return { label: `Awaiting reply (${since}d)`, color: '#34d399', next: null };
-    return { label: 'No response — mark cold?', color: '#f87171', next: null };
-  }
-  if (stage === 'confirmation') {
-    if (until > 14) return { label: `Advance in ${until - 14}d`, color: '#34d399', next: 'advance' };
-    if (until >= 0) return { label: 'Send advance now', color: until < 7 ? '#f87171' : '#fbbf24', next: 'advance' };
-    return { label: 'Show passed', color: '#6b7280', next: 'thank_you' };
-  }
-  if (stage === 'advance') {
-    if (until > 0) return { label: `Show in ${until}d`, color: '#34d399', next: null };
-    if (since < 7) return { label: 'Show just ended', color: '#fbbf24', next: 'thank_you' };
-    return { label: 'Send thank you', color: '#f87171', next: 'thank_you' };
-  }
-  if (stage === 'thank_you') return { label: 'Complete', color: '#6b7280', next: null };
-  if (stage === 'decline')   return { label: 'Declined', color: '#6b7280', next: null };
-  if (stage === 'cold')      return { label: 'Cold', color: '#6b7280', next: null };
-  return { label: stage, color: '#6b7280', next: null };
+interface ThreadRow {
+  id: string; status: string; show_date: string | null; email_stage: string | null; last_contact_date: string | null;
+  act: { id: string; act_name: string } | null;
+  venue: VenueRef | null;
+  contact: { id: string; first_name: string | null; last_name: string | null; email: string | null } | null;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+interface MailItem {
+  id: string; subject: string | null; body: string | null; sent_at: string | null;
+  from_address?: string | null; recipient?: string | null; status?: string | null; direction?: string | null;
+  venue_id: string | null; venue: { name: string | null } | null;
+}
 
-export default function EmailPage() {
-  const router = useRouter();
+interface DraftItem {
+  id: string; subject: string | null; body: string | null; category: string | null; recipient: string | null;
+  updated_at: string | null; attachments: unknown; venue_id: string | null; venue: { name: string | null } | null;
+}
 
-  // Navigation
-  const [view, setView] = useState<TabView>('inbox');
+const TABS: ReadonlyArray<{ id: TabView; label: string }> = [
+  { id: 'inbox', label: 'Inbox' },
+  { id: 'pipeline', label: 'Pipeline' },
+  { id: 'outreach', label: 'Outreach' },
+  { id: 'outbox', label: 'Sent' },
+  { id: 'drafts', label: 'Drafts' },
+  { id: 'archive', label: 'Archive' },
+];
 
-  // Core data
-  const [actId, setActId]                 = useState<string | null>(null);
-  const [loading, setLoading]             = useState(true);
-  const [allTourVenues, setAllTourVenues] = useState<any[]>([]);
-  const [bookings, setBookings]           = useState<any[]>([]);
-  const [inboxEmails, setInboxEmails]     = useState<any[]>([]);
-  const [outboxEmails, setOutboxEmails]   = useState<any[]>([]);
-  const [archivedEmails, setArchivedEmails] = useState<any[]>([]);
-  const [draftEmails, setDraftEmails]         = useState<any[]>([]);
-  const [composerDraft, setComposerDraft]     = useState<any>(null);
-  const [deletingDraftId, setDeletingDraftId] = useState<string | null>(null);
+const UNREAD_WINDOW_MS = 48 * 3_600_000;
+const SENT_TONE: Readonly<Record<string, Tone>> = { sent: 'due', delivered: 'ok', bounced: 'late', failed: 'late' };
 
-  // Pipeline
-  const [pipelineFilter, setPipelineFilter]   = useState<string>('all');
-  const [pipelineView, setPipelineView]       = useState<'list' | 'kanban'>('list');
-  const [expandedRows, setExpandedRows]       = useState<Set<string>>(new Set());
-  const [selectedRows, setSelectedRows]       = useState<Set<string>>(new Set());
-  const [bulkStage, setBulkStage]             = useState('');
-  const [sortField, setSortField]             = useState<string>('lastContact');
-  const [sortDir, setSortDir]                 = useState<'asc' | 'desc'>('desc');
-  const [draggedId, setDraggedId]             = useState<string | null>(null);
-  const [dragOverStage, setDragOverStage]     = useState<string | null>(null);
+const shortDate = (d: string | null | undefined): string => (d ? formatShowDate(d, { month: 'short', day: 'numeric' }) : '—');
+const longDate = (d: string | null | undefined): string =>
+  d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
+const town = (v: VenueRef | null | undefined): string => [v?.city, v?.state].filter(Boolean).join(', ');
+const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
 
-  // Inbox
-  const [readIds, setReadIds]                 = useState<Set<string>>(new Set());
-  const [expandedEmail, setExpandedEmail]     = useState<string | null>(null);
+/** Reads a JSON array of ids from localStorage; empty when unavailable. */
+function readStoredIds(key: string): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(key);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
 
-  // Outbox
-  const [expandedOutbox, setExpandedOutbox]   = useState<string | null>(null);
+// ── Data ──────────────────────────────────────────────────────────────────────
 
-  // Archive
-  const [archiveSearch, setArchiveSearch]     = useState('');
-  const [archiveStart, setArchiveStart]       = useState('');
-  const [archiveEnd, setArchiveEnd]           = useState('');
-  const [expandedArchive, setExpandedArchive] = useState<string | null>(null);
+const INBOX_FIELDS = 'id, from_address, subject, body, sent_at, venue_id, venue:venues(name)';
 
-  // Outreach
-  const [outreachFilter, setOutreachFilter]   = useState('all');
-  const [archivePrompt, setArchivePrompt]     = useState<{ tv: any; emailId?: string } | null>(null);
-  const [markingReplied, setMarkingReplied]   = useState<string | null>(null);
-  const [markingCold, setMarkingCold]         = useState<string | null>(null);
+interface EmailData {
+  actId: string | null; userId: string;
+  targets: TourTarget[]; threads: ThreadRow[]; inbox: MailItem[]; outbox: MailItem[]; drafts: DraftItem[];
+}
 
-  // Composers / drawers
-  const [composerTourVenue, setComposerTourVenue] = useState<any>(null);
-  const [composerBooking, setComposerBooking]     = useState<any>(null);
-  const [composerNew, setComposerNew] = useState(false);
-  const [composerCategory, setComposerCategory]   = useState('target');
-  const [drawerVenueId, setDrawerVenueId]         = useState<string | null>(null);
-
-  // ─── Init ──────────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    const stored = localStorage.getItem('crb_pipeline_view') as 'list' | 'kanban' | null;
-    if (stored) setPipelineView(stored);
-    const reads = localStorage.getItem('crb_read_emails');
-    if (reads) { try { setReadIds(new Set(JSON.parse(reads))); } catch {} }
-  }, []);
-
-  useEffect(() => {
-    const { tab, status } = router.query;
-    if (tab === 'outreach') setView('outreach');
-    if (tab === 'pipeline') setView('pipeline');
-    if (status && typeof status === 'string') setOutreachFilter(status);
-  }, [router.query]);
-
-  useEffect(() => { loadAll(); }, []);
-
-  const loadAll = async () => {
-    setLoading(true);
-    try {
+/**
+ * Loads everything the Email page shows. RLS scopes every query to the
+ * caller's band; act_id / sent_by filters keep them explicit. Returns null on
+ * failure (logged) so the page can offer "Try again".
+ */
+async function loadEmail(): Promise<EmailData | null> {
+  try {
     const { data: { session } } = await supabase.auth.getSession();
-
-    const user = session?.user ?? null;
-    if (!user) return;
-
-    const aid = await getActId(supabase, user.id);
-    setActId(aid);
-
-    const toursQ = aid
-      ? supabase.from('tours').select('id').eq('act_id', aid).neq('status', 'cancelled')
-      : Promise.resolve({ data: [] as any[] });
-
-    const bookingsQ = aid
-      ? supabase.from('bookings').select(`
+    const user = session?.user;
+    if (!user) return null;
+    const actId = await getActId(supabase, user.id);
+    const none = Promise.resolve({ data: [] as unknown[], error: null });
+    const [toursRes, threadsRes, inboxRes, outboxRes, draftsRes] = await Promise.all([
+      actId ? supabase.from('tours').select('id').eq('act_id', actId).neq('status', 'cancelled') : none,
+      actId ? supabase.from('bookings').select(`
           id, status, show_date, email_stage, last_contact_date,
           act:acts(id, act_name),
           venue:venues(id, name, city, state, email),
           contact:contacts(id, first_name, last_name, email)
-        `).eq('act_id', aid).neq('status', 'cancelled').order('show_date', { ascending: true })
-      : Promise.resolve({ data: [] as any[] });
-
-    const inboxQ = aid
-      ? supabase.from('email_log')
-          .select('id, from_address, subject, body, sent_at, venue_id, venue:venues(name)')
-          .eq('direction', 'received')
-          .eq('act_id', aid)
-          .neq('archived', true)
-          .order('sent_at', { ascending: false })
-          .limit(100)
-      : Promise.resolve({ data: [] as any[] });
-
-    const outboxQ = supabase.from('email_log')
-      .select('id, recipient, subject, body, status, sent_at, template_id, venue_id, venue:venues(name)')
-      .eq('sent_by', user.id)
-      .neq('direction', 'received')
-      .neq('archived', true)
-      // Saved drafts are direction 'sent' too; keep them out of the Outbox (null = legacy rows).
-      .or('is_draft.is.null,is_draft.eq.false')
-      .order('sent_at', { ascending: false })
-      .limit(200);
-
-    const draftsQ = aid
-      ? supabase.from('email_log')
-          .select('id, subject, body, category, recipient, updated_at, attachments, venue_id, venue:venues(name)')
-          .eq('act_id', aid)
-          .eq('is_draft', true)
-          .order('updated_at', { ascending: false })
-          .limit(100)
-      : Promise.resolve({ data: [] as any[] });
-
-    const [toursRes, bookingsRes, inboxRes, outboxRes, draftsRes] = await Promise.all([
-      toursQ, bookingsQ, inboxQ, outboxQ, draftsQ,
+        `).eq('act_id', actId).neq('status', 'cancelled').order('show_date', { ascending: true }) : none,
+      actId ? supabase.from('email_log').select(INBOX_FIELDS)
+        .eq('direction', 'received').eq('act_id', actId).neq('archived', true)
+        .order('sent_at', { ascending: false }).limit(100) : none,
+      supabase.from('email_log')
+        .select('id, recipient, subject, body, status, sent_at, template_id, venue_id, venue:venues(name)')
+        .eq('sent_by', user.id).neq('direction', 'received').neq('archived', true)
+        // Saved drafts are direction 'sent' too; keep them out of Sent (null = legacy rows).
+        .or('is_draft.is.null,is_draft.eq.false')
+        .order('sent_at', { ascending: false }).limit(200),
+      actId ? supabase.from('email_log')
+        .select('id, subject, body, category, recipient, updated_at, attachments, venue_id, venue:venues(name)')
+        .eq('act_id', actId).eq('is_draft', true).order('updated_at', { ascending: false }).limit(100) : none,
     ]);
+    const firstError = [toursRes, threadsRes, inboxRes, outboxRes, draftsRes].find(r => r.error)?.error;
+    if (firstError) { console.error('[email] load failed', firstError); return null; }
 
-    const tourIds = (toursRes.data || []).map((t: any) => t.id);
-    const tvRes = tourIds.length > 0
-      ? await supabase.from('tour_venues').select(`
+    const tourIds = ((toursRes.data ?? []) as { id: string }[]).map(t => t.id);
+    let targets: TourTarget[] = [];
+    if (tourIds.length > 0) {
+      const tv = await supabase.from('tour_venues').select(`
           id, status, tour_id, last_contacted_at, pitched_at, updated_at, notes,
-          venue:venues(id, name, city, state, email, phone)
-          ,tour:tours(id, name, act_id)
-        `).in('tour_id', tourIds).order('updated_at', { ascending: false })
-      : { data: [] as any[] };
-
-    setAllTourVenues(tvRes.data || []);
-    setBookings(bookingsRes.data || []);
-    setInboxEmails(inboxRes.data || []);
-    setOutboxEmails(outboxRes.data || []);
-    setDraftEmails(draftsRes.data || []);
-    } catch (err) {
-      console.error('email loadAll:', err);
-    } finally {
-      setLoading(false);
+          venue:venues(id, name, city, state, email, phone),
+          tour:tours(id, name, act_id)
+        `).in('tour_id', tourIds).order('updated_at', { ascending: false });
+      if (tv.error) { console.error('[email] targets failed', tv.error); return null; }
+      targets = (tv.data ?? []) as unknown as TourTarget[];
     }
-  };
+    // PostgREST rows from the selects above; the casts name their shapes for this page.
+    return {
+      actId, userId: user.id, targets,
+      threads: (threadsRes.data ?? []) as unknown as ThreadRow[],
+      inbox: (inboxRes.data ?? []) as unknown as MailItem[],
+      outbox: (outboxRes.data ?? []) as unknown as MailItem[],
+      drafts: (draftsRes.data ?? []) as unknown as DraftItem[],
+    };
+  } catch (err) {
+    console.error('[email] load threw', err);
+    return null;
+  }
+}
 
-  const loadArchived = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
-    if (!user) return;
-    const { data } = await supabase.from('email_log')
-      .select('id, from_address, recipient, subject, body, sent_at, archived_at, direction, venue_id, venue:venues(name)')
-      .eq('sent_by', user.id)
-      .eq('archived', true)
-      .order('archived_at', { ascending: false })
-      .limit(200);
-    setArchivedEmails(data || []);
-  };
+// ── Pieces ────────────────────────────────────────────────────────────────────
 
-  // ─── Actions ───────────────────────────────────────────────────────────────
-  // Pull the inbox list again (DB only — Gmail fetching happens in lib/inboxSync).
-  const reloadInbox = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user ?? null;
-      if (!user) return;
-      const aid = await getActId(supabase, user.id);
-      if (!aid) return;
-      const { data, error } = await supabase.from('email_log')
-        .select('id, from_address, subject, body, sent_at, venue_id, venue:venues(name)')
-        .eq('direction', 'received')
-        .eq('act_id', aid)
-        .neq('archived', true)
-        .order('sent_at', { ascending: false })
-        .limit(100);
-      if (error) throw error;
-      setInboxEmails(data || []);
-    } catch (err) {
-      console.error('email reloadInbox:', err);
-    }
-  };
+const toneClass = (t: Tone): string => styles[`tone_${t}`] ?? '';
 
-  // When an automatic or manual Gmail check imports new mail, refresh the list in place.
+function StagePill({ stage }: { stage: string }) {
+  return <span className={`${styles.stage} ${styles[`stage_${stage}`] ?? ''}`}>{stageLabel(stage)}</span>;
+}
+
+function DaysCell({ iso }: { iso: string | null }) {
+  const d = daysSince(iso);
+  if (d === null) return <span className={styles.muted}>—</span>;
+  return <span className={`${styles.days} ${toneClass(contactTone(d))}`}><span className={styles.dot} aria-hidden="true" />{d}d</span>;
+}
+
+/** One expandable message row (inbox, sent, archive). */
+function MessageRow({ title, address, subject, body, when, unread, open, onToggle, tag, actions, meta }: {
+  title: string; address?: string | null; subject: string | null; body: string; when: string | null;
+  unread?: boolean; open: boolean; onToggle: () => void; tag?: React.ReactNode; actions: React.ReactNode; meta: React.ReactNode;
+}) {
+  return (
+    <li className={`${styles.msg}${unread ? ` ${styles.msgUnread}` : ''}${open ? ` ${styles.msgOpen}` : ''}`}>
+      <div className={styles.msgRow}>
+        <button type="button" className={styles.msgMain} aria-expanded={open} onClick={onToggle}>
+          <span className={styles.unreadDot} aria-hidden="true" />
+          <span className={styles.msgText}>
+            <span className={styles.msgFrom}>
+              {unread && <span className="sr-only">Unread: </span>}
+              <strong>{title}</strong>
+              {tag}
+              {address && address !== title && <span className={styles.muted}>{address}</span>}
+            </span>
+            <span className={styles.msgSubject}>{subject || '(no subject)'}</span>
+            {!open && body && <span className={styles.msgPreview}>{body.slice(0, 140)}</span>}
+          </span>
+          <span className={styles.msgDate}>{shortDate(when)}</span>
+        </button>
+        <div className={styles.msgActions}>{actions}</div>
+      </div>
+      {open && (
+        <div className={styles.msgBody}>
+          <p className={styles.msgMeta}>{meta}</p>
+          <div className={styles.msgText2}>{body || '(no body)'}</div>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function Empty({ title, children }: { title: string; children?: React.ReactNode }) {
+  return (
+    <div className="card tours-empty">
+      <div className="tours-empty-title">{title}</div>
+      {children && <p>{children}</p>}
+    </div>
+  );
+}
+
+function StageFilter({ value, counts, onChange, label }: {
+  value: string; counts: Record<string, number>; onChange: (v: string) => void; label: string;
+}) {
+  return (
+    <div className="tours-tabs" role="group" aria-label={label}>
+      {[{ key: 'all', label: 'All' }, ...PIPELINE_STAGES].map(s => (
+        <button key={s.key} type="button" className={`tours-tab${value === s.key ? ' tours-tab--on' : ''}`}
+          aria-pressed={value === s.key} onClick={() => onChange(s.key)}>
+          {s.label} · {counts[s.key] ?? 0}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** "Archive this target" — keep it on the tour as declined, or remove it from the tour. */
+function ArchiveTargetDialog({ target, onKeep, onRemove, onClose }: {
+  target: TourTarget; onKeep: () => void; onRemove: () => void; onClose: () => void;
+}) {
+  const ref = useModalKeys<HTMLDivElement>(onClose);
+  const name = target.venue?.name || 'this venue';
+  return (
+    <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div ref={ref} className="modal venues-modal venues-modal--narrow" role="dialog" aria-modal="true" aria-labelledby="archive-target-title">
+        <div className="modal-header">
+          <h3 className="modal-title" id="archive-target-title">Archive {name}</h3>
+          <button type="button" className="btn btn-ghost btn-sm" aria-label="Close" onClick={onClose}>✕</button>
+        </div>
+        <p className="venues-copy">
+          Keep <strong>{name}</strong> on {target.tour?.name || 'the tour'} marked as declined, or remove it from the tour entirely?
+        </p>
+        <div className="venues-modal-actions">
+          <button type="button" className="btn btn-secondary" onClick={onKeep}>Keep as declined</button>
+          <button type="button" className="btn btn-danger" onClick={onRemove}>Remove from tour</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default function EmailPage() {
+  const [view, setView] = useState<TabView>('inbox');
+  const [data, setData] = useState<EmailData | null>(null);
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [actionError, setActionError] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const [archived, setArchived] = useState<MailItem[] | null>(null);
+  const [archiveQ, setArchiveQ] = useState({ search: '', start: '', end: '' });
+  const [openMsg, setOpenMsg] = useState<string | null>(null);
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [now, setNow] = useState(0);
+
+  const [pipelineFilter, setPipelineFilter] = useState('all');
+  const [pipelineView, setPipelineView] = useState<'list' | 'board'>('list');
+  const [sort, setSort] = useState<{ field: SortField; dir: 'asc' | 'desc' }>({ field: 'lastContact', dir: 'desc' });
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkStage, setBulkStage] = useState('');
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const [outreachFilter, setOutreachFilter] = useState('all');
+  const [archiveTarget, setArchiveTarget] = useState<TourTarget | null>(null);
+
+  const [composeNew, setComposeNew] = useState(false);
+  const [composeTarget, setComposeTarget] = useState<TourTarget | null>(null);
+  const [composeThread, setComposeThread] = useState<{ thread: ThreadRow; category: string } | null>(null);
+  const [composeDraft, setComposeDraft] = useState<DraftItem | null>(null);
+  const [drawerVenueId, setDrawerVenueId] = useState<string | null>(null);
+  const deepLinked = useRef(false);
+
   useEffect(() => {
-    const onSynced = (e: Event) => {
+    let cancelled = false;
+    void loadEmail().then(d => {
+      if (cancelled) return;
+      if (!d) { setLoadState('error'); return; }
+      // Browser-only state is read here, after the data arrives, so the
+      // server render and the first browser render always match.
+      setNow(Date.now());
+      setReadIds(readStoredIds('crb_read_emails'));
+      try {
+        if (window.localStorage.getItem('crb_pipeline_view') === 'kanban') setPipelineView('board');
+      } catch { /* storage unavailable: keep the default */ }
+      // Deep links (/email?tab=outreach&status=follow_up) apply on first load only,
+      // so a reload after sending doesn't yank the user to another tab.
+      if (!deepLinked.current) {
+        deepLinked.current = true;
+        const q = new URLSearchParams(window.location.search);
+        const tab = q.get('tab');
+        if (tab === 'outreach' || tab === 'pipeline') setView(tab);
+        const status = q.get('status');
+        if (status) setOutreachFilter(status);
+      }
+      setData(d);
+      setLoadState('ready');
+    });
+    return () => { cancelled = true; };
+  }, [reloadKey]);
+
+  const reload = useCallback((): void => { setReloadKey(k => k + 1); }, []);
+  const patch = (fn: (d: EmailData) => EmailData): void => setData(d => (d ? fn(d) : d));
+
+  // When Gmail sync imports new mail, refresh just the inbox.
+  useEffect(() => {
+    const onSynced = (e: Event): void => {
       const detail = (e as CustomEvent<InboxSyncedEventDetail>).detail;
-      if (detail && detail.imported > 0) void reloadInbox();
+      if (!detail || detail.imported <= 0 || !data?.actId) return;
+      void supabase.from('email_log').select(INBOX_FIELDS)
+        .eq('direction', 'received').eq('act_id', data.actId).neq('archived', true)
+        .order('sent_at', { ascending: false }).limit(100)
+        .then(({ data: rows, error }) => {
+          if (error) { console.error('[email] inbox refresh failed', error); return; }
+          patch(d => ({ ...d, inbox: (rows ?? []) as unknown as MailItem[] }));
+        });
     };
     window.addEventListener(INBOX_SYNCED_EVENT, onSynced);
     return () => window.removeEventListener(INBOX_SYNCED_EVENT, onSynced);
-  }, []);
+  }, [data?.actId]);
 
-  const archiveEmail = async (id: string) => {
-    await supabase.from('email_log').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id);
-    setInboxEmails(prev => prev.filter(e => e.id !== id));
-    setOutboxEmails(prev => prev.filter(e => e.id !== id));
+  /** Runs one write; on failure logs it and shows a plain-English banner. */
+  const run = async (id: string, what: string, op: () => PromiseLike<{ error: unknown }>, onOk: () => void): Promise<void> => {
+    setBusyId(id);
+    setActionError('');
+    try {
+      const { error } = await op();
+      if (error) { console.error(`[email] ${what} failed`, error); setActionError(`Couldn’t ${what}. Try again.`); return; }
+      onOk();
+    } finally {
+      setBusyId(null);
+    }
   };
 
-  const unarchiveEmail = async (id: string) => {
-    await supabase.from('email_log').update({ archived: false, archived_at: null }).eq('id', id);
-    setArchivedEmails(prev => prev.filter(e => e.id !== id));
+  const loadArchived = async (): Promise<void> => {
+    if (!data) return;
+    const { data: rows, error } = await supabase.from('email_log')
+      .select('id, from_address, recipient, subject, body, sent_at, archived_at, direction, venue_id, venue:venues(name)')
+      .eq('sent_by', data.userId).eq('archived', true).order('archived_at', { ascending: false }).limit(200);
+    if (error) { console.error('[email] archive load failed', error); setActionError('The archive didn’t load. Try again.'); setArchived([]); return; }
+    setArchived((rows ?? []) as unknown as MailItem[]);
   };
 
-  const deleteDraft = async (id: string) => {
-    setDeletingDraftId(id);
-    await supabase.from('email_log').delete().eq('id', id).eq('is_draft', true);
-    setDraftEmails(prev => prev.filter(d => d.id !== id));
-    setDeletingDraftId(null);
-  };
+  const archiveMail = (id: string): Promise<void> => run(id, 'archive that email',
+    () => supabase.from('email_log').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id),
+    () => { patch(d => ({ ...d, inbox: d.inbox.filter(e => e.id !== id), outbox: d.outbox.filter(e => e.id !== id) })); setArchived(null); });
 
-  const markRead = (id: string) => {
+  const restoreMail = (id: string): Promise<void> => run(id, 'restore that email',
+    () => supabase.from('email_log').update({ archived: false, archived_at: null }).eq('id', id),
+    () => { setArchived(a => a?.filter(e => e.id !== id) ?? null); reload(); });
+
+  const deleteDraft = (id: string): Promise<void> => run(id, 'delete that draft',
+    () => supabase.from('email_log').delete().eq('id', id).eq('is_draft', true),
+    () => patch(d => ({ ...d, drafts: d.drafts.filter(x => x.id !== id) })));
+
+  const setTargetStatus = (ids: string[], status: string): Promise<void> => run(ids.join(','), 'move those venues',
+    async () => {
+      const results = await Promise.all(ids.map(id =>
+        supabase.from('tour_venues').update({ status, updated_at: new Date().toISOString() }).eq('id', id)));
+      return { error: results.find(r => r.error)?.error ?? null };
+    },
+    () => { patch(d => ({ ...d, targets: d.targets.map(t => (ids.includes(t.id) ? { ...t, status } : t)) })); setSelected(new Set()); setBulkStage(''); });
+
+  const removeTarget = (id: string): Promise<void> => run(id, 'remove that venue from the tour',
+    () => supabase.from('tour_venues').delete().eq('id', id),
+    () => patch(d => ({ ...d, targets: d.targets.filter(t => t.id !== id) })));
+
+  const markCold = (id: string): Promise<void> => run(id, 'mark that thread cold',
+    () => supabase.from('bookings').update({ email_stage: 'cold' }).eq('id', id),
+    () => patch(d => ({ ...d, threads: d.threads.map(b => (b.id === id ? { ...b, email_stage: 'cold' } : b)) })));
+
+  const markRead = (id: string): void => {
     setReadIds(prev => {
-      const next = new Set(prev);
-      next.add(id);
-      localStorage.setItem('crb_read_emails', JSON.stringify([...next]));
+      const next = new Set(prev).add(id);
+      try { window.localStorage.setItem('crb_read_emails', JSON.stringify([...next])); } catch { /* read state is a convenience */ }
       return next;
     });
   };
+  const isUnread = (e: MailItem): boolean =>
+    !readIds.has(e.id) && !!e.sent_at && now > 0 && now - new Date(e.sent_at).getTime() < UNREAD_WINDOW_MS;
 
-  const isUnread = (email: any): boolean => {
-    if (readIds.has(email.id)) return false;
-    return Date.now() - new Date(email.sent_at).getTime() < 48 * 3_600_000;
-  };
-
-  const togglePipelineView = (v: 'list' | 'kanban') => {
+  const choosePipelineView = (v: 'list' | 'board'): void => {
     setPipelineView(v);
-    localStorage.setItem('crb_pipeline_view', v);
+    try { window.localStorage.setItem('crb_pipeline_view', v === 'board' ? 'kanban' : 'list'); } catch { /* convenience only */ }
   };
+  const toggleIn = (set: Set<string>, id: string): Set<string> => { const n = new Set(set); if (n.has(id)) n.delete(id); else n.add(id); return n; };
+  const sortBy = (field: SortField): void =>
+    setSort(s => (s.field === field ? { field, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { field, dir: 'asc' }));
 
-  const toggleSort = (field: string) => {
-    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortField(field); setSortDir('asc'); }
-  };
-
-  const toggleRow = (id: string) => {
-    setExpandedRows(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedRows(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const bulkArchive = async () => {
-    const ids = [...selectedRows];
-    await Promise.all(ids.map(id =>
-      supabase.from('tour_venues').update({ status: 'declined' }).eq('id', id)
-    ));
-    setAllTourVenues(prev => prev.filter(tv => !selectedRows.has(tv.id)));
-    setSelectedRows(new Set());
-  };
-
-  const bulkMove = async () => {
-    if (!bulkStage) return;
-    const ids = [...selectedRows];
-    await Promise.all(ids.map(id =>
-      supabase.from('tour_venues').update({ status: bulkStage, updated_at: new Date().toISOString() }).eq('id', id)
-    ));
-    setAllTourVenues(prev => prev.map(tv =>
-      selectedRows.has(tv.id) ? { ...tv, status: bulkStage } : tv
-    ));
-    setSelectedRows(new Set());
-    setBulkStage('');
-  };
-
-  const handleDrop = async (targetStage: string) => {
-    if (!draggedId || !targetStage) return;
-    const tv = allTourVenues.find(t => t.id === draggedId);
-    if (!tv || tv.status === targetStage) { setDraggedId(null); setDragOverStage(null); return; }
-    await supabase.from('tour_venues').update({ status: targetStage, updated_at: new Date().toISOString() }).eq('id', draggedId);
-    setAllTourVenues(prev => prev.map(t => t.id === draggedId ? { ...t, status: targetStage } : t));
-    setDraggedId(null);
-    setDragOverStage(null);
-  };
-
-  const markReplied = async (tvId: string) => {
-    setMarkingReplied(tvId);
-    await supabase.from('tour_venues').update({ status: 'follow_up', updated_at: new Date().toISOString() }).eq('id', tvId);
-    setAllTourVenues(tvs => tvs.map(tv => tv.id === tvId ? { ...tv, status: 'follow_up' } : tv));
-    setMarkingReplied(null);
-  };
-
-  const markCold = async (bookingId: string) => {
-    setMarkingCold(bookingId);
-    await supabase.from('bookings').update({ email_stage: 'cold' }).eq('id', bookingId);
-    setBookings(bs => bs.map(b => b.id === bookingId ? { ...b, email_stage: 'cold' } : b));
-    setMarkingCold(null);
-  };
-
-  const archiveTourVenue = async (tvId: string, removeFromTour: boolean) => {
-    if (removeFromTour) {
-      await supabase.from('tour_venues').delete().eq('id', tvId);
-      setAllTourVenues(prev => prev.filter(t => t.id !== tvId));
-    } else {
-      await supabase.from('tour_venues').update({ status: 'declined' }).eq('id', tvId);
-      setAllTourVenues(prev => prev.map(t => t.id === tvId ? { ...t, status: 'declined' } : t));
-    }
-    setArchivePrompt(null);
-  };
-
-  // ─── Derived data ──────────────────────────────────────────────────────────
-
-  const pipelineCounts: Record<string, number> = { all: allTourVenues.length };
-  for (const s of PIPELINE_STAGES) {
-    pipelineCounts[s.key] = allTourVenues.filter(tv => tv.status === s.key).length;
-  }
-
-  const filteredPipeline = pipelineFilter === 'all'
-    ? allTourVenues
-    : allTourVenues.filter(tv => tv.status === pipelineFilter);
-
-  const sortedPipeline = [...filteredPipeline].sort((a, b) => {
-    let aVal: any, bVal: any;
-    if (sortField === 'venue')       { aVal = a.venue?.name || ''; bVal = b.venue?.name || ''; }
-    else if (sortField === 'tour')   { aVal = a.tour?.name || ''; bVal = b.tour?.name || ''; }
-    else if (sortField === 'status') { aVal = a.status || ''; bVal = b.status || ''; }
-    else if (sortField === 'lastContact') {
-      aVal = a.last_contacted_at || a.updated_at || '';
-      bVal = b.last_contacted_at || b.updated_at || '';
-    } else {
-      aVal = daysSince(a.last_contacted_at || a.updated_at);
-      bVal = daysSince(b.last_contacted_at || b.updated_at);
-    }
-    if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
-    if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
-    return 0;
-  });
-
-  const outreachFiltered = outreachFilter === 'all'
-    ? allTourVenues
-    : allTourVenues.filter(tv => tv.status === outreachFilter);
-
-  const outreachCounts: Record<string, number> = { all: allTourVenues.length };
-  for (const s of PIPELINE_STAGES) outreachCounts[s.key] = allTourVenues.filter(tv => tv.status === s.key).length;
-
-  const activeBookings = bookings.filter(b =>
-    !['cold', 'decline', 'thank_you', 'cancelled', 'completed'].includes(b.email_stage) || !b.email_stage
+  // ── Derived ──
+  const targets = useMemo(() => data?.targets ?? [], [data]);
+  const threads = useMemo(() => (data?.threads ?? []).filter(isActiveThread), [data]);
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: targets.length };
+    for (const s of PIPELINE_STAGES) c[s.key] = targets.filter(t => t.status === s.key).length;
+    return c;
+  }, [targets]);
+  const summary = useMemo(() => summarizeEmail(targets, data?.threads ?? [], now), [targets, data, now]);
+  const unread = (data?.inbox ?? []).filter(isUnread).length;
+  const pipelineRows = useMemo(
+    () => sortTargets(pipelineFilter === 'all' ? targets : targets.filter(t => t.status === pipelineFilter), sort.field, sort.dir),
+    [targets, pipelineFilter, sort],
   );
+  const outreachRows = outreachFilter === 'all' ? targets : targets.filter(t => t.status === outreachFilter);
+  const archiveRows = useMemo(() => filterArchive(archived ?? [], archiveQ), [archived, archiveQ]);
 
-  const filteredArchive = archivedEmails.filter(e => {
-    const search = archiveSearch.toLowerCase();
-    const vName  = (e.venue as any)?.name?.toLowerCase() || '';
-    const subj   = (e.subject || '').toLowerCase();
-    if (search && !vName.includes(search) && !subj.includes(search)) return false;
-    if (archiveStart && e.sent_at && e.sent_at < archiveStart) return false;
-    if (archiveEnd   && e.sent_at && e.sent_at > archiveEnd + 'T23:59:59') return false;
-    return true;
-  });
+  const tabCount = (t: TabView): number | null => {
+    if (!data) return null;
+    if (t === 'inbox') return unread || data.inbox.length;
+    if (t === 'pipeline') return targets.length;
+    if (t === 'outreach') return summary.overdue + summary.threadsDue;
+    if (t === 'outbox') return data.outbox.length;
+    if (t === 'drafts') return data.drafts.length;
+    return null;
+  };
 
-  // ─── Style helpers ─────────────────────────────────────────────────────────
+  const openTab = (t: TabView): void => {
+    setView(t);
+    setOpenMsg(null);
+    if (t === 'archive' && archived === null) void loadArchived();
+  };
 
-  const pill = (active: boolean, color: string) => ({
-    display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-    padding: '0.25rem 0.65rem', borderRadius: 999, cursor: 'pointer',
-    fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.08em',
-    border: `1px solid ${active ? color : 'rgba(255,255,255,0.12)'}`,
-    background: active ? `${color}26` : 'transparent',
-    color: active ? color : 'var(--text-muted)',
-  } as React.CSSProperties);
+  const heroSummary = data
+    ? unread > 0
+      ? `${plural(unread, 'new reply', 'new replies')} from venues · ${plural(summary.overdue, 'follow-up')} overdue.`
+      : summary.overdue + summary.threadsDue > 0
+        ? `Inbox is clear · ${plural(summary.overdue + summary.threadsDue, 'email')} to send.`
+        : 'Inbox is clear and every thread is up to date.'
+    : undefined;
 
-  const badge = (cnt: number, color: string, active: boolean) => ({
-    background: active ? color : 'rgba(255,255,255,0.12)',
-    color: active ? '#000' : 'var(--text-muted)',
-    borderRadius: 999, fontSize: '0.6rem', fontWeight: 700,
-    minWidth: 16, height: 16, display: 'inline-flex', alignItems: 'center',
-    justifyContent: 'center', padding: '0 4px',
-  } as React.CSSProperties);
-
-  const sortHdr = (field: string, label: string) => (
-    <th style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }} onClick={() => toggleSort(field)}>
-      {label}{sortField === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+  const sortHead = (field: SortField, label: string) => (
+    <th scope="col" aria-sort={sort.field === field ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" className={styles.sortBtn} onClick={() => sortBy(field)}>
+        {label}{sort.field === field ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+      </button>
     </th>
   );
 
-  // ─── Render ────────────────────────────────────────────────────────────────
-
-  const inboxCount   = inboxEmails.length;
-  const unreadCount  = inboxEmails.filter(isUnread).length;
+  const targetActions = (t: TourTarget) => (
+    <div className={styles.rowActions}>
+      <button type="button" className="btn btn-ghost btn-sm venues-accent" onClick={() => setComposeTarget(t)}
+        aria-label={`Email ${t.venue?.name || 'this venue'}`}>✉ Email</button>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setArchiveTarget(t)} disabled={busyId === t.id}
+        aria-label={`Archive ${t.venue?.name || 'this venue'}`}>Archive</button>
+    </div>
+  );
 
   return (
     <AppShell requireRole="band_admin">
-      <div className="page-header">
-  <div>
-    <h1 className="page-title">Email &amp; Pipeline</h1>
-    <div className="page-sub">
-      {allTourVenues.length} venues in pipeline · {inboxCount} inbox
-    </div>
-  </div>
+      <PageHero
+        title="Email"
+        subtitle="Inbox, outreach & follow-ups"
+        summary={heroSummary}
+        scene={<MailboxScene />}
+        actions={<button type="button" className="btn btn-primary tours-new-btn" onClick={() => setComposeNew(true)} disabled={!data?.actId}>+ New email</button>}
+      />
 
-  <button
-    className="btn btn-primary"
-    onClick={() => setComposerNew(true)}
-  >
-    + New Email
-  </button>
-</div>
-
-      <InboxSyncBar />
-
-      {/* ── Tab Bar ── */}
-      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
-        {([
-          { id: 'inbox',    label: 'Inbox',    badge: unreadCount },
-          { id: 'pipeline', label: 'Pipeline', badge: allTourVenues.length },
-          { id: 'outreach', label: 'Outreach', badge: 0 },
-          { id: 'outbox',   label: 'Outbox',   badge: outboxEmails.length },
-          { id: 'drafts',   label: 'Drafts',   badge: draftEmails.length },
-          { id: 'archive',  label: 'Archive',  badge: 0 },
-        ] as { id: TabView; label: string; badge: number }[]).map(t => (
-          <button
-            key={t.id}
-            onClick={() => {
-              setView(t.id);
-              if (t.id === 'archive' && archivedEmails.length === 0) loadArchived();
-            }}
-            style={{
-              padding: '0.55rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem',
-              fontFamily: 'var(--font-mono)', fontSize: '0.8rem', letterSpacing: '0.1em', textTransform: 'uppercase',
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              color: view === t.id ? 'var(--accent)' : 'var(--text-muted)',
-              borderBottom: view === t.id ? '2px solid var(--accent)' : '2px solid transparent',
-              marginBottom: '-1px',
-            }}
-          >
-            {t.label}
-            {t.badge > 0 && (
-              <span style={{ background: t.id === 'inbox' && unreadCount > 0 ? '#E8602A' : 'rgba(255,255,255,0.15)', color: t.id === 'inbox' && unreadCount > 0 ? '#fff' : 'var(--text-muted)', borderRadius: 999, fontSize: '0.6rem', fontWeight: 700, minWidth: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
-                {t.id === 'inbox' ? unreadCount || t.badge : t.badge}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* ══ INBOX TAB ══ */}
-      {view === 'inbox' && (
-        <div>
-          <div
-  style={{
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: '1rem',
-    marginBottom: '1rem',
-    flexWrap: 'wrap',
-  }}
->
-  <div
-    style={{
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.75rem',
-      color: 'var(--text-muted)',
-      letterSpacing: '0.08em',
-      textTransform: 'uppercase',
-    }}
-  >
-    {inboxCount} message{inboxCount !== 1 ? 's' : ''} · {unreadCount} unread
-  </div>
-
-</div>
-          {inboxEmails.length === 0 && !loading ? (
-            <div className="card" style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.88rem', lineHeight: 1.7 }}>
-              No incoming messages yet. When venues reply to your outreach, they appear here.
-            </div>
-          ) : (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              {inboxEmails.map(e => {
-                const unread  = isUnread(e);
-                const open    = expandedEmail === e.id;
-                const rawBody = (e.body || '').replace(/<[^>]*>/g, '').trim();
-                return (
-                  <div key={e.id}>
-                    <div
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', cursor: 'pointer', background: open ? 'rgba(255,255,255,0.03)' : 'transparent' }}
-                      onClick={() => {
-                        setExpandedEmail(open ? null : e.id);
-                        if (unread) markRead(e.id);
-                      }}
-                    >
-                      {unread && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#E8602A', flexShrink: 0 }} />}
-                      {!unread && <span style={{ width: 7, height: 7, flexShrink: 0 }} />}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
-                          <span style={{ fontWeight: unread ? 700 : 500, color: 'var(--text-primary)', fontSize: '0.88rem' }}>
-                            {(e.venue as any)?.name || e.from_address || '—'}
-                          </span>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{e.from_address}</span>
-                        </div>
-                        <div style={{ fontSize: '0.85rem', color: unread ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: unread ? 600 : 400, marginTop: '0.1rem' }}>{e.subject || '(no subject)'}</div>
-                        {!open && rawBody && (
-                          <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '0.1rem' }}>{rawBody.slice(0, 120)}</div>
-                        )}
-                      </div>
-                      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDate(e.sent_at)}</span>
-                        <button
-                          style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', padding: '0.15rem 0.5rem', borderRadius: 3, border: '1px solid rgba(255,255,255,0.12)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}
-                          onClick={ev => { ev.stopPropagation(); archiveEmail(e.id); }}
-                        >
-                          Archive
-                        </button>
-                      </div>
-                    </div>
-                    {open && (
-                      <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', background: 'rgba(0,0,0,0.2)' }}>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                          From: {e.from_address} · {fmtDateFull(e.sent_at)}
-                          {(e.venue as any)?.name && (
-                            <> · <button style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#60a5fa', fontSize: '0.7rem', fontFamily: 'var(--font-mono)' }} onClick={() => setDrawerVenueId(e.venue_id)}>{(e.venue as any).name} →</button></>
-                          )}
-                        </div>
-                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', lineHeight: 1.75, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 320, overflowY: 'auto' }}>
-                          {rawBody || '(no body)'}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+      {loadState === 'loading' && (
+        <div className="tours-body" aria-busy="true">
+          <span className="sr-only" role="status">Loading email…</span>
+          <div className="tours-metrics">{[0, 1, 2, 3].map(i => <div key={i} className="tour-metric tour-skeleton" />)}</div>
+          <div className={`tour-skeleton ${styles.skeletonList}`} />
         </div>
       )}
 
-      {/* ══ PIPELINE TAB ══ */}
-      {view === 'pipeline' && (
-        <div>
-          {/* Pills + View Toggle */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-              {/* All pill */}
-              <button style={pill(pipelineFilter === 'all', '#E8602A')} onClick={() => setPipelineFilter('all')}>
-                All
-                <span style={badge(pipelineCounts.all, '#E8602A', pipelineFilter === 'all')}>{pipelineCounts.all}</span>
-              </button>
-              {PIPELINE_STAGES.map(s => (
-                <button key={s.key} style={pill(pipelineFilter === s.key, s.color)} onClick={() => setPipelineFilter(s.key)}>
-                  {s.label}
-                  <span style={badge(pipelineCounts[s.key], s.color, pipelineFilter === s.key)}>{pipelineCounts[s.key]}</span>
-                </button>
-              ))}
-            </div>
-            {/* List / Kanban toggle */}
-            <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', borderRadius: 6, padding: 2, gap: 2, flexShrink: 0 }}>
-              {(['list', 'kanban'] as const).map(v => (
-                <button key={v} onClick={() => togglePipelineView(v)} style={{
-                  padding: '0.3rem 0.75rem', borderRadius: 4, border: 'none', cursor: 'pointer',
-                  background: pipelineView === v ? 'rgba(255,255,255,0.12)' : 'transparent',
-                  color: pipelineView === v ? 'var(--text-primary)' : 'var(--text-muted)',
-                  fontFamily: 'var(--font-mono)', fontSize: '0.8rem',
-                }}>
-                  {v === 'list' ? '≡ List' : '⊞ Kanban'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Bulk action bar */}
-          {selectedRows.size > 0 && (
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', padding: '0.6rem 1rem', background: 'rgba(232,96,42,0.1)', border: '1px solid rgba(232,96,42,0.3)', borderRadius: 6, marginBottom: '0.75rem' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#E8602A' }}>{selectedRows.size} selected</span>
-              <button className="btn btn-secondary" style={{ fontSize: '0.76rem', padding: '0.25rem 0.65rem' }} onClick={bulkArchive}>Archive Selected</button>
-              <select className="select" style={{ fontSize: '0.76rem', padding: '0.25rem 0.5rem', height: 'auto' }} value={bulkStage} onChange={e => setBulkStage(e.target.value)}>
-                <option value="">Move to Stage…</option>
-                {PIPELINE_STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-              </select>
-              {bulkStage && <button className="btn btn-primary" style={{ fontSize: '0.76rem', padding: '0.25rem 0.65rem' }} onClick={bulkMove}>Move</button>}
-              <button style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.8rem' }} onClick={() => setSelectedRows(new Set())}>✕ Clear</button>
-            </div>
-          )}
-
-          {/* LIST VIEW */}
-          {pipelineView === 'list' && (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th style={{ width: 32 }}></th>
-                      {sortHdr('venue',       'Venue')}
-                      {sortHdr('tour',        'Tour')}
-                      {sortHdr('status',      'Status')}
-                      {sortHdr('lastContact', 'Last Contact')}
-                      {sortHdr('daysSince',   'Days Since')}
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedPipeline.length === 0 && (
-                      <tr><td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>
-                        {allTourVenues.length === 0 ? 'No venues in pipeline. Add venues to a tour to start tracking.' : 'No venues match this filter.'}
-                      </td></tr>
-                    )}
-                    {sortedPipeline.map(tv => {
-                      const venue     = tv.venue as any;
-                      const lastC     = tv.last_contacted_at || tv.pitched_at || tv.updated_at;
-                      const days      = lastC ? daysSince(lastC) : null;
-                      const dotColor  = days !== null ? dayCellColor(days) : 'var(--text-muted)';
-                      const stColor   = STAGE_COLOR[tv.status] || 'var(--text-muted)';
-                      const isOpen    = expandedRows.has(tv.id);
-                      return (
-                        <>
-                          <tr key={tv.id} style={{ cursor: 'pointer', background: isOpen ? 'rgba(255,255,255,0.03)' : 'transparent' }}>
-                            <td onClick={e => e.stopPropagation()}>
-                              <input type="checkbox" checked={selectedRows.has(tv.id)} onChange={() => toggleSelect(tv.id)} style={{ accentColor: '#E8602A' }} />
-                            </td>
-                            <td onClick={() => toggleRow(tv.id)}>
-                              <div style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{venue?.name || '—'}</div>
-                              <div style={{ color: 'var(--text-muted)', fontSize: '0.76rem' }}>{venue?.city ? `${venue.city}, ${venue.state}` : ''}</div>
-                            </td>
-                            <td onClick={() => toggleRow(tv.id)} style={{ color: 'var(--text-secondary)', fontSize: '0.84rem' }}>{tv.tour?.name || '—'}</td>
-                            <td onClick={() => toggleRow(tv.id)}>
-                              <span style={{ background: `${stColor}22`, color: stColor, fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0.15rem 0.5rem', borderRadius: 4 }}>
-                                {PIPELINE_STAGES.find(s => s.key === tv.status)?.label || tv.status}
-                              </span>
-                            </td>
-                            <td onClick={() => toggleRow(tv.id)} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDate(lastC)}</td>
-                            <td onClick={() => toggleRow(tv.id)}>
-                              {days !== null ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
-                                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: days >= 15 ? '#f87171' : 'var(--text-muted)' }}>{days}d</span>
-                                </div>
-                              ) : '—'}
-                            </td>
-                            <td>
-                              <div style={{ display: 'flex', gap: '0.3rem' }}>
-                                <button
-                                  style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', padding: '0.2rem 0.5rem', border: '1px solid rgba(96,165,250,0.4)', borderRadius: 3, background: 'transparent', color: '#60a5fa', cursor: 'pointer' }}
-                                  onClick={() => { setComposerTourVenue(tv); setComposerCategory('target'); }}
-                                >✉ Email</button>
-                                <button
-                                  style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', padding: '0.2rem 0.5rem', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 3, background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}
-                                  onClick={() => setArchivePrompt({ tv })}
-                                >Archive</button>
-                              </div>
-                            </td>
-                          </tr>
-                          {isOpen && (
-                            <tr key={`${tv.id}-exp`}>
-                              <td colSpan={7} style={{ padding: '0.75rem 1.25rem', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--border)' }}>
-                                <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                                  {venue?.email && <span>✉ <a href={`mailto:${venue.email}`} style={{ color: '#60a5fa' }}>{venue.email}</a></span>}
-                                  {venue?.phone && <span>📞 {venue.phone}</span>}
-                                  {tv.notes && <span style={{ color: 'var(--text-secondary)' }}>📝 {tv.notes}</span>}
-                                  {!venue?.email && !venue?.phone && !tv.notes && <span>No additional info.</span>}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* KANBAN VIEW */}
-          {pipelineView === 'kanban' && (
-            <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
-              {PIPELINE_STAGES.map(stage => {
-                const colVenues = allTourVenues.filter(tv => tv.status === stage.key);
-                const isOver    = dragOverStage === stage.key;
-                return (
-                  <div
-                    key={stage.key}
-                    style={{ minWidth: 200, flex: '0 0 200px', background: isOver ? `${stage.color}12` : 'rgba(255,255,255,0.03)', border: `1px solid ${isOver ? stage.color : 'rgba(255,255,255,0.08)'}`, borderRadius: 8, display: 'flex', flexDirection: 'column' }}
-                    onDragOver={e => { e.preventDefault(); setDragOverStage(stage.key); }}
-                    onDragLeave={() => setDragOverStage(null)}
-                    onDrop={() => handleDrop(stage.key)}
-                  >
-                    <div style={{ padding: '0.6rem 0.75rem', borderBottom: `2px solid ${stage.color}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: stage.color }}>{stage.label}</span>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: stage.color, background: `${stage.color}22`, borderRadius: 999, padding: '0 6px', minWidth: 18, textAlign: 'center' }}>{colVenues.length}</span>
-                    </div>
-                    <div style={{ padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem', flex: 1, minHeight: 60 }}>
-                      {colVenues.map(tv => {
-                        const venue = tv.venue as any;
-                        const days  = daysSince(tv.last_contacted_at || tv.updated_at);
-                        const warn  = days >= 15;
-                        return (
-                          <div
-                            key={tv.id}
-                            draggable
-                            onDragStart={() => setDraggedId(tv.id)}
-                            onDragEnd={() => { setDraggedId(null); setDragOverStage(null); }}
-                            style={{ background: 'rgba(255,255,255,0.05)', border: warn ? '1px solid rgba(248,113,113,0.5)' : '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '0.6rem 0.65rem', cursor: 'grab', opacity: draggedId === tv.id ? 0.4 : 1 }}
-                          >
-                            <div style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.84rem', marginBottom: '0.15rem' }}>{venue?.name || '—'}</div>
-                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: 'var(--text-muted)' }}>{venue?.city ? `${venue.city}, ${venue.state}` : ''}</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                {warn && <span style={{ color: '#f87171', fontSize: '0.64rem' }}>⚠</span>}
-                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', color: warn ? '#f87171' : 'var(--text-muted)' }}>{days < 999 ? `${days}d` : '—'}</span>
-                              </div>
-                              <button
-                                style={{ fontFamily: 'var(--font-mono)', fontSize: '0.64rem', padding: '0.1rem 0.4rem', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 3, background: 'transparent', color: '#60a5fa', cursor: 'pointer' }}
-                                onClick={e => { e.stopPropagation(); setComposerTourVenue(tv); setComposerCategory('target'); }}
-                              >✉</button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {colVenues.length === 0 && (
-                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', padding: '0.75rem 0', opacity: 0.5 }}>Drop here</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+      {loadState === 'error' && (
+        <div className="card tours-empty" role="alert">
+          <div className="tours-empty-title">Email didn’t load</div>
+          <p>Something went wrong reaching the database. Nothing was lost — try again.</p>
+          <button type="button" className="btn btn-primary" onClick={() => { setLoadState('loading'); reload(); }}>Try again</button>
         </div>
       )}
 
-      {/* ══ OUTREACH TAB ══ */}
-      {view === 'outreach' && (
-        <>
-          {/* Status filter pills */}
-          <div style={{ display: 'flex', gap: '0.35rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-            <button style={pill(outreachFilter === 'all', '#E8602A')} onClick={() => setOutreachFilter('all')}>
-              All <span style={badge(outreachCounts.all, '#E8602A', outreachFilter === 'all')}>{outreachCounts.all}</span>
+      {loadState === 'ready' && data && (
+        <div className="tours-body">
+          <section className="tours-metrics" aria-label="Email at a glance">
+            <button type="button" className={`tour-metric ${styles.metricBtn}`} onClick={() => openTab('inbox')}>
+              <span className="tour-metric-label">New replies</span>
+              <span className="tour-metric-value"><strong className={unread > 0 ? 'tour-metric-hot' : undefined}>{unread}</strong><span>unread · {data.inbox.length} in inbox</span></span>
             </button>
-            {PIPELINE_STAGES.map(s => (
-              <button key={s.key} style={pill(outreachFilter === s.key, s.color)} onClick={() => setOutreachFilter(s.key)}>
-                {s.label} <span style={badge(outreachCounts[s.key], s.color, outreachFilter === s.key)}>{outreachCounts[s.key]}</span>
-              </button>
-            ))}
+            <button type="button" className={`tour-metric ${styles.metricBtn}`} onClick={() => { setOutreachFilter('follow_up'); openTab('outreach'); }}>
+              <span className="tour-metric-label">Follow-ups overdue</span>
+              <span className="tour-metric-value"><strong className={summary.overdue > 0 ? 'tour-metric-hot' : undefined}>{summary.overdue}</strong><span>quiet a week or more</span></span>
+            </button>
+            <button type="button" className={`tour-metric ${styles.metricBtn}`} onClick={() => { setOutreachFilter('all'); openTab('outreach'); }}>
+              <span className="tour-metric-label">Booking emails due</span>
+              <span className="tour-metric-value"><strong>{summary.threadsDue}</strong><span>pitch, advance or thank-you</span></span>
+            </button>
+            <button type="button" className={`tour-metric ${styles.metricBtn}`} onClick={() => { setPipelineFilter('confirmed'); openTab('pipeline'); }}>
+              <span className="tour-metric-label">Confirmed</span>
+              <span className="tour-metric-value"><strong>{summary.confirmed}</strong><span>of {plural(summary.targets, 'target')}</span></span>
+            </button>
+          </section>
+
+          <InboxSyncBar />
+
+          {actionError && (
+            <div className="venues-banner" role="alert">
+              <span>{actionError}</span>
+              <button type="button" className="btn btn-ghost btn-sm" aria-label="Dismiss" onClick={() => setActionError('')}>✕</button>
+            </div>
+          )}
+
+          <div className="tours-toolbar">
+            <div className="tours-tabs" role="tablist" aria-label="Email sections">
+              {TABS.map(t => {
+                const n = tabCount(t.id);
+                return (
+                  <button key={t.id} type="button" role="tab" id={`tab-${t.id}`} aria-selected={view === t.id} aria-controls={`panel-${t.id}`}
+                    className={`tours-tab${view === t.id ? ' tours-tab--on' : ''}`} onClick={() => openTab(t.id)}>
+                    {t.label}{n ? ` · ${n}` : ''}
+                    {t.id === 'inbox' && unread > 0 && <span className={styles.newBadge}>new</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Outreach venue table */}
-          <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: '1.5rem' }}>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Venue</th><th>Tour</th><th>Status</th><th>Last Contact</th><th>Days Since</th><th style={{ width: 200 }}></th></tr>
-                </thead>
-                <tbody>
-                  {outreachFiltered.length === 0 && (
-                    <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>
-                      {allTourVenues.length === 0 ? 'No venues in outreach yet — add venues to a tour pool to start tracking.' : 'No venues at this stage.'}
-                    </td></tr>
-                  )}
-                  {outreachFiltered.map(tv => {
-                    const venue    = tv.venue as any;
-                    const lastC    = tv.last_contacted_at || tv.pitched_at || tv.updated_at;
-                    const days     = lastC ? daysSince(lastC) : null;
-                    const overdue = tv.status === 'follow_up' && days !== null && days >= 7;
-                    const dotColor = days !== null ? (overdue ? '#f87171' : days > 3 ? '#fbbf24' : '#34d399') : '#6b7280';
-                    const stColor  = STAGE_COLOR[tv.status] || 'var(--text-muted)';
+          <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`}>
+            {view === 'inbox' && (data.inbox.length === 0
+              ? <Empty title="No replies yet">When venues answer your outreach, their emails land here.</Empty>
+              : (
+                <ul className={styles.msgList}>
+                  {data.inbox.map(e => {
+                    const body = plainText(e.body);
+                    const isNew = isUnread(e);
                     return (
-                      <tr key={tv.id}>
-                        <td>
-                          <div style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{venue?.name || '—'}</div>
-                          <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{venue?.city ? `${venue.city}, ${venue.state}` : ''}</div>
-                        </td>
-                        <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{tv.tour?.name || '—'}</td>
-                        <td>
-                          <span style={{ background: `${stColor}22`, color: stColor, fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0.15rem 0.45rem', borderRadius: 3 }}>
-                            {PIPELINE_STAGES.find(s => s.key === tv.status)?.label || tv.status || '—'}
-                          </span>
-                        </td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDate(lastC)}</td>
-                        <td>
-                          {days !== null && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                              <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
-                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: overdue ? '#f87171' : 'var(--text-muted)' }}>{days}d</span>
-                              {overdue && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.64rem', color: '#f87171', border: '1px solid rgba(248,113,113,0.4)', borderRadius: 3, padding: '0.1rem 0.4rem' }}>Follow up</span>}
-                            </div>
-                          )}
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                            {['target', 'follow_up', 'confirmed', 'thank_you'].includes(tv.status) && (
-                              <button style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', padding: '0.2rem 0.5rem', border: '1px solid rgba(96,165,250,0.4)', borderRadius: 3, background: 'transparent', color: '#60a5fa', cursor: 'pointer' }}
-                                onClick={() => { setComposerTourVenue(tv); setComposerCategory('target'); }}>✉ Email</button>
-                            )}
-                            <button style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', padding: '0.2rem 0.5rem', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 3, background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}
-                              onClick={() => setArchivePrompt({ tv })}>Archive</button>
-                          </div>
-                        </td>
-                      </tr>
+                      <MessageRow
+                        key={e.id}
+                        title={e.venue?.name || e.from_address || 'Unknown sender'}
+                        address={e.from_address}
+                        subject={e.subject}
+                        body={body}
+                        when={e.sent_at}
+                        unread={isNew}
+                        open={openMsg === e.id}
+                        onToggle={() => { setOpenMsg(o => (o === e.id ? null : e.id)); if (isNew) markRead(e.id); }}
+                        actions={<button type="button" className="btn btn-ghost btn-sm" disabled={busyId === e.id} onClick={() => void archiveMail(e.id)}>Archive</button>}
+                        meta={<>From {e.from_address} · {longDate(e.sent_at)}{e.venue?.name && e.venue_id && <> · <button type="button" className="venues-link-btn" onClick={() => setDrawerVenueId(e.venue_id)}>Open {e.venue.name} →</button></>}</>}
+                      />
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </ul>
+              ))}
 
-          {/* Booking email pipeline */}
-          {activeBookings.length > 0 && (
-            <>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
-                Booking Pipeline — {activeBookings.length} active
-              </div>
-              <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr><th>Venue</th><th>Act</th><th>Stage</th><th>Last Contact</th><th>Next Action</th><th style={{ width: 130 }}></th></tr>
-                    </thead>
-                    <tbody>
-                      {activeBookings.map(b => {
-                        const { label, color, next } = getActionInfo(b);
-                        return (
-                          <tr key={b.id}>
-                            <td>
-                              <div style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{b.venue?.name || '—'}</div>
-                              <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{b.venue?.city ? `${b.venue.city}, ${b.venue.state}` : ''}</div>
-                            </td>
-                            <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{b.act?.act_name || '—'}</td>
-                            <td>
-                              {b.email_stage ? (
-                                <span style={{ background: `${BK_STAGE_COLORS[b.email_stage] || '#64748b'}18`, color: BK_STAGE_COLORS[b.email_stage] || '#64748b', fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '0.15rem 0.45rem', borderRadius: 3 }}>
-                                  {BK_STAGE_LABELS[b.email_stage] || b.email_stage}
-                                </span>
-                              ) : <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>none</span>}
-                            </td>
-                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDate(b.last_contact_date)}</td>
-                            <td>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                                <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>{label}</span>
-                              </div>
-                            </td>
-                            <td>
-                              <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
-                                {next && (
-                                  <button style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', padding: '0.2rem 0.5rem', border: `1px solid ${BK_STAGE_COLORS[next] || 'var(--accent)'}44`, borderRadius: 3, background: 'transparent', color: BK_STAGE_COLORS[next] || 'var(--accent)', cursor: 'pointer' }}
-                                    onClick={() => { setComposerBooking(b); setComposerCategory(next); }}>
-                                    ✉ {BK_STAGE_LABELS[next]}
-                                  </button>
-                                )}
-                                {b.email_stage === 'follow_up_2' && getActionInfo(b).color === '#f87171' && (
-                                  <button style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', padding: '0.2rem 0.5rem', border: '1px solid rgba(148,163,184,0.3)', borderRadius: 3, background: 'transparent', color: '#94a3b8', cursor: 'pointer' }}
-                                    disabled={markingCold === b.id}
-                                    onClick={() => markCold(b.id)}>
-                                    {markingCold === b.id ? '…' : 'Mark Cold'}
-                                  </button>
-                                )}
-                              </div>
-                            </td>
+            {view === 'pipeline' && (
+              <div className={styles.stack}>
+                <div className={styles.toolbar}>
+                  <StageFilter value={pipelineFilter} counts={counts} onChange={setPipelineFilter} label="Filter by stage" />
+                  <div className="tours-tabs" role="group" aria-label="Pipeline layout">
+                    {(['list', 'board'] as const).map(v => (
+                      <button key={v} type="button" className={`tours-tab${pipelineView === v ? ' tours-tab--on' : ''}`} aria-pressed={pipelineView === v} onClick={() => choosePipelineView(v)}>
+                        {v === 'list' ? 'List' : 'Board'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {selected.size > 0 && (
+                  <div className={styles.bulkBar} role="region" aria-label="Bulk actions">
+                    <strong>{selected.size} selected</strong>
+                    <label className="sr-only" htmlFor="bulk-stage">Move to stage</label>
+                    <select id="bulk-stage" className="select" value={bulkStage} onChange={e => setBulkStage(e.target.value)}>
+                      <option value="">Move to stage…</option>
+                      {PIPELINE_STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                    </select>
+                    <button type="button" className="btn btn-primary btn-sm" disabled={!bulkStage} onClick={() => void setTargetStatus([...selected], bulkStage)}>Move</button>
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => void setTargetStatus([...selected], 'declined')}>Mark declined</button>
+                    <button type="button" className="venues-link-btn" onClick={() => setSelected(new Set())}>Clear</button>
+                  </div>
+                )}
+
+                {pipelineView === 'list' ? (pipelineRows.length === 0
+                  ? <Empty title={targets.length === 0 ? 'No venues in the pipeline' : 'Nothing at this stage'}>{targets.length === 0 ? 'Add target venues to a tour to start tracking outreach.' : undefined}</Empty>
+                  : (
+                    <div className="venues-table-wrap">
+                      <table className="venues-table">
+                        <caption className="sr-only">Outreach pipeline</caption>
+                        <thead>
+                          <tr>
+                            <th scope="col"><span className="sr-only">Select</span></th>
+                            {sortHead('venue', 'Venue')}
+                            {sortHead('tour', 'Tour')}
+                            {sortHead('status', 'Stage')}
+                            {sortHead('lastContact', 'Last contact')}
+                            <th scope="col">Since</th>
+                            <th scope="col"><span className="sr-only">Actions</span></th>
                           </tr>
+                        </thead>
+                        <tbody>
+                          {pipelineRows.map(t => {
+                            const open = expanded.has(t.id);
+                            return (
+                              <Fragment key={t.id}>
+                                <tr>
+                                  <td><input type="checkbox" className={styles.check} checked={selected.has(t.id)} onChange={() => setSelected(s => toggleIn(s, t.id))} aria-label={`Select ${t.venue?.name || 'venue'}`} /></td>
+                                  <td>
+                                    <button type="button" className="venues-row-name" aria-expanded={open} onClick={() => setExpanded(s => toggleIn(s, t.id))}>{t.venue?.name || 'Venue'}</button>
+                                    <div className={styles.muted}>{town(t.venue)}</div>
+                                  </td>
+                                  <td>{t.tour?.name || '—'}</td>
+                                  <td><StagePill stage={t.status} /></td>
+                                  <td className={styles.nowrap}>{shortDate(lastTouch(t))}</td>
+                                  <td><DaysCell iso={lastTouch(t)} /></td>
+                                  <td>{targetActions(t)}</td>
+                                </tr>
+                                {open && (
+                                  <tr className={styles.detailRow}>
+                                    <td colSpan={7}>
+                                      {t.venue?.email && <a href={`mailto:${t.venue.email}`} className="venues-email">✉ {t.venue.email}</a>}
+                                      {t.venue?.phone && <a href={`tel:${t.venue.phone}`} className="venues-muted">{t.venue.phone}</a>}
+                                      {t.notes && <span>{t.notes}</span>}
+                                      {!t.venue?.email && !t.venue?.phone && !t.notes && <span className={styles.muted}>No contact details yet.</span>}
+                                      {t.venue?.id && <button type="button" className="venues-link-btn" onClick={() => setDrawerVenueId(t.venue!.id)}>Open venue →</button>}
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )) : (
+                  <div className={styles.board}>
+                    {PIPELINE_STAGES.map(stage => {
+                      const col = targets.filter(t => t.status === stage.key);
+                      return (
+                        <section key={stage.key}
+                          className={`${styles.column}${dragOver === stage.key ? ` ${styles.columnOver}` : ''}`}
+                          aria-label={`${stage.label}: ${col.length}`}
+                          onDragOver={e => { e.preventDefault(); setDragOver(stage.key); }}
+                          onDragLeave={() => setDragOver(null)}
+                          onDrop={() => { const id = dragId; setDragId(null); setDragOver(null); const t = targets.find(x => x.id === id); if (t && t.status !== stage.key) void setTargetStatus([t.id], stage.key); }}
+                        >
+                          <header className={styles.columnHead}><StagePill stage={stage.key} /><span>{col.length}</span></header>
+                          {col.map(t => {
+                            const d = daysSince(lastTouch(t));
+                            return (
+                              <article key={t.id} className={`${styles.card}${dragId === t.id ? ` ${styles.cardDragging}` : ''}${d !== null && d >= 15 ? ` ${styles.cardWarn}` : ''}`}
+                                draggable onDragStart={() => setDragId(t.id)} onDragEnd={() => { setDragId(null); setDragOver(null); }}>
+                                <strong>{t.venue?.name || 'Venue'}</strong>
+                                <span className={styles.muted}>{town(t.venue)}</span>
+                                <div className={styles.cardFoot}>
+                                  <DaysCell iso={lastTouch(t)} />
+                                  {/* Keyboard alternative to dragging */}
+                                  <label className="sr-only" htmlFor={`move-${t.id}`}>Move {t.venue?.name || 'venue'} to</label>
+                                  <select id={`move-${t.id}`} className={styles.moveSelect} value={t.status} onChange={e => void setTargetStatus([t.id], e.target.value)}>
+                                    {PIPELINE_STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                                  </select>
+                                  <button type="button" className="btn btn-ghost btn-sm venues-accent" onClick={() => setComposeTarget(t)} aria-label={`Email ${t.venue?.name || 'venue'}`}>✉</button>
+                                </div>
+                              </article>
+                            );
+                          })}
+                          {col.length === 0 && <p className={styles.dropHint}>Drop here</p>}
+                        </section>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {view === 'outreach' && (
+              <div className={styles.stack}>
+                <StageFilter value={outreachFilter} counts={counts} onChange={setOutreachFilter} label="Filter outreach by stage" />
+                {outreachRows.length === 0
+                  ? <Empty title={targets.length === 0 ? 'No outreach yet' : 'Nothing at this stage'}>{targets.length === 0 ? 'Add venues to a tour’s target pool to start tracking.' : undefined}</Empty>
+                  : (
+                    <div className="venues-table-wrap">
+                      <table className="venues-table">
+                        <caption className="sr-only">Tour outreach</caption>
+                        <thead><tr><th scope="col">Venue</th><th scope="col">Tour</th><th scope="col">Stage</th><th scope="col">Last contact</th><th scope="col">Since</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
+                        <tbody>
+                          {outreachRows.map(t => (
+                            <tr key={t.id}>
+                              <td><strong>{t.venue?.name || 'Venue'}</strong><div className={styles.muted}>{town(t.venue)}</div></td>
+                              <td>{t.tour?.name || '—'}</td>
+                              <td><StagePill stage={t.status} /></td>
+                              <td className={styles.nowrap}>{shortDate(lastTouch(t))}</td>
+                              <td>
+                                <DaysCell iso={lastTouch(t)} />
+                                {isOverdueFollowUp(t) && <span className={`tour-badge tour-badge--urgent ${styles.inlineBadge}`}>Follow up</span>}
+                              </td>
+                              <td>{targetActions(t)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                {threads.length > 0 && (
+                  <section className={styles.stack} aria-labelledby="threads-title">
+                    <h2 className="venues-section-title" id="threads-title">Booking emails · {threads.length} active</h2>
+                    <div className="venues-table-wrap">
+                      <table className="venues-table">
+                        <caption className="sr-only">Booking email threads</caption>
+                        <thead><tr><th scope="col">Venue</th><th scope="col">Show</th><th scope="col">Stage</th><th scope="col">Last contact</th><th scope="col">Next step</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
+                        <tbody>
+                          {threads.map(b => {
+                            const a = nextAction(b, now);
+                            return (
+                              <tr key={b.id}>
+                                <td><strong>{b.venue?.name || 'Venue'}</strong><div className={styles.muted}>{town(b.venue)}</div></td>
+                                <td className={styles.nowrap}>{shortDate(b.show_date)}</td>
+                                <td>{b.email_stage ? <span className={styles.stage}>{BOOKING_STAGE_LABELS[b.email_stage] ?? b.email_stage}</span> : <span className={styles.muted}>Not started</span>}</td>
+                                <td className={styles.nowrap}>{shortDate(b.last_contact_date)}</td>
+                                <td><span className={`${styles.days} ${toneClass(a.tone)}`}><span className={styles.dot} aria-hidden="true" />{a.label}</span></td>
+                                <td>
+                                  <div className={styles.rowActions}>
+                                    {a.next && (
+                                      <button type="button" className="btn btn-ghost btn-sm venues-accent" onClick={() => setComposeThread({ thread: b, category: a.next! })}>
+                                        ✉ {BOOKING_STAGE_LABELS[a.next] ?? a.next}
+                                      </button>
+                                    )}
+                                    {b.email_stage === 'follow_up_2' && a.tone === 'late' && (
+                                      <button type="button" className="btn btn-ghost btn-sm" disabled={busyId === b.id} onClick={() => void markCold(b.id)}>Mark cold</button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                )}
+              </div>
+            )}
+
+            {view === 'outbox' && (data.outbox.length === 0
+              ? <Empty title="Nothing sent yet">Emails you send from Camel Ranch show up here with their delivery status.</Empty>
+              : (
+                <ul className={styles.msgList}>
+                  {data.outbox.map(e => (
+                    <MessageRow
+                      key={e.id}
+                      title={e.venue?.name || e.recipient || 'Recipient'}
+                      address={e.recipient}
+                      subject={e.subject}
+                      body={plainText(e.body)}
+                      when={e.sent_at}
+                      open={openMsg === e.id}
+                      onToggle={() => setOpenMsg(o => (o === e.id ? null : e.id))}
+                      tag={e.status ? <span className={`${styles.days} ${toneClass(SENT_TONE[e.status] ?? 'done')}`}><span className={styles.dot} aria-hidden="true" />{e.status}</span> : undefined}
+                      actions={<button type="button" className="btn btn-ghost btn-sm" disabled={busyId === e.id} onClick={() => void archiveMail(e.id)}>Archive</button>}
+                      meta={<>To {e.recipient} · {longDate(e.sent_at)}</>}
+                    />
+                  ))}
+                </ul>
+              ))}
+
+            {view === 'drafts' && (data.drafts.length === 0
+              ? <Empty title="No drafts">Use “Save draft” in the composer and it waits here.</Empty>
+              : (
+                <ul className={styles.msgList}>
+                  {data.drafts.map(d => (
+                    <li key={d.id} className={styles.msg}>
+                      <div className={styles.msgRow}>
+                        <button type="button" className={styles.msgMain} onClick={() => setComposeDraft(d)} aria-label={`Edit draft to ${d.venue?.name || d.recipient || 'recipient'}`}>
+                          <span className={styles.unreadDot} aria-hidden="true" />
+                          <span className={styles.msgText}>
+                            <span className={styles.msgFrom}>
+                              <strong>{d.venue?.name || d.recipient || 'No recipient yet'}</strong>
+                              {d.category && <span className={styles.stage}>{BOOKING_STAGE_LABELS[d.category] ?? d.category}</span>}
+                            </span>
+                            <span className={styles.msgSubject}>{d.subject || '(no subject)'}</span>
+                          </span>
+                          <span className={styles.msgDate}>{shortDate(d.updated_at)}</span>
+                        </button>
+                        <div className={styles.msgActions}>
+                          <button type="button" className="btn btn-ghost btn-sm venues-accent" onClick={() => setComposeDraft(d)}>Edit</button>
+                          <button type="button" className="btn btn-ghost btn-sm venues-danger" disabled={busyId === d.id} onClick={() => void deleteDraft(d.id)}>Delete</button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ))}
+
+            {view === 'archive' && (
+              <div className={styles.stack}>
+                <div className="venues-filters" role="search">
+                  <label className="sr-only" htmlFor="archive-search">Search archive</label>
+                  <input id="archive-search" type="search" className="input venues-search" placeholder="Search venue or subject…"
+                    value={archiveQ.search} onChange={e => setArchiveQ(q => ({ ...q, search: e.target.value }))} />
+                  <label className={styles.dateLabel} htmlFor="archive-from">From</label>
+                  <input id="archive-from" type="date" className="input" value={archiveQ.start} onChange={e => setArchiveQ(q => ({ ...q, start: e.target.value }))} />
+                  <label className={styles.dateLabel} htmlFor="archive-to">To</label>
+                  <input id="archive-to" type="date" className="input" value={archiveQ.end} onChange={e => setArchiveQ(q => ({ ...q, end: e.target.value }))} />
+                  {(archiveQ.search || archiveQ.start || archiveQ.end) && (
+                    <button type="button" className="venues-link-btn" onClick={() => setArchiveQ({ search: '', start: '', end: '' })}>Clear</button>
+                  )}
+                  <span className="tours-sort-note" role="status">{archived === null ? 'Loading…' : plural(archiveRows.length, 'email')}</span>
+                </div>
+                {archived !== null && (archiveRows.length === 0
+                  ? <Empty title={archived.length === 0 ? 'Archive is empty' : 'No matches'} />
+                  : (
+                    <ul className={styles.msgList}>
+                      {archiveRows.map(e => {
+                        const incoming = e.direction === 'received';
+                        return (
+                          <MessageRow
+                            key={e.id}
+                            title={e.venue?.name || (incoming ? e.from_address : e.recipient) || 'Unknown'}
+                            address={incoming ? e.from_address : e.recipient}
+                            subject={e.subject}
+                            body={plainText(e.body)}
+                            when={e.sent_at}
+                            open={openMsg === e.id}
+                            onToggle={() => setOpenMsg(o => (o === e.id ? null : e.id))}
+                            tag={<span className="tour-badge tour-badge--outline">{incoming ? 'Received' : 'Sent'}</span>}
+                            actions={<button type="button" className="btn btn-ghost btn-sm" disabled={busyId === e.id} onClick={() => void restoreMail(e.id)}>Restore</button>}
+                            meta={<>{incoming ? `From ${e.from_address}` : `To ${e.recipient}`} · {longDate(e.sent_at)}</>}
+                          />
                         );
                       })}
-                    </tbody>
-                  </table>
-                </div>
+                    </ul>
+                  ))}
               </div>
-            </>
-          )}
-        </>
-      )}
-
-      {/* ══ OUTBOX TAB ══ */}
-      {view === 'outbox' && (
-        <div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            {outboxEmails.length} sent email{outboxEmails.length !== 1 ? 's' : ''}
-          </div>
-          {outboxEmails.length === 0 && !loading ? (
-            <div className="card" style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.88rem' }}>
-              No sent emails yet.
-            </div>
-          ) : (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              {outboxEmails.map(e => {
-                const open = expandedOutbox === e.id;
-                const statusColor = ({ sent: '#fbbf24', delivered: '#34d399', bounced: '#f87171', failed: '#f87171' } as any)[e.status] || 'var(--text-muted)';
-                return (
-                  <div key={e.id}>
-                    <div
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.7rem 1rem', borderBottom: '1px solid var(--border)', cursor: 'pointer', background: open ? 'rgba(255,255,255,0.03)' : 'transparent' }}
-                      onClick={() => setExpandedOutbox(open ? null : e.id)}
-                    >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
-                          <span style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.88rem' }}>
-                            {(e.venue as any)?.name || e.recipient || '—'}
-                          </span>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{e.recipient}</span>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: statusColor }}>{e.status}</span>
-                        </div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.1rem' }}>{e.subject || '(no subject)'}</div>
-                      </div>
-                      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDate(e.sent_at)}</span>
-                        <button
-                          style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', padding: '0.15rem 0.5rem', borderRadius: 3, border: '1px solid rgba(255,255,255,0.12)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}
-                          onClick={ev => { ev.stopPropagation(); archiveEmail(e.id); }}
-                        >Archive</button>
-                      </div>
-                    </div>
-                    {open && (
-                      <div style={{ padding: '0.9rem 1.25rem', borderBottom: '1px solid var(--border)', background: 'rgba(0,0,0,0.2)' }}>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
-                          To: {e.recipient} · {fmtDateFull(e.sent_at)}
-                        </div>
-                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', lineHeight: 1.75, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 300, overflowY: 'auto' }}>
-                          {e.body || '(Email body not stored for this message)'}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ══ DRAFTS TAB ══ */}
-      {view === 'drafts' && (
-        <div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            {draftEmails.length} draft{draftEmails.length !== 1 ? 's' : ''}
-          </div>
-          {draftEmails.length === 0 && !loading ? (
-            <div className="card" style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.88rem' }}>
-              No drafts saved. Use "Save Draft" in the composer to save emails here.
-            </div>
-          ) : (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              {draftEmails.map(d => (
-                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.88rem' }}>
-                        {(d.venue as any)?.name || d.recipient || '—'}
-                      </span>
-                      {d.category && (
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3, padding: '0 4px' }}>
-                          {BK_STAGE_LABELS[d.category] || d.category}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.1rem' }}>{d.subject || '(no subject)'}</div>
-                  </div>
-                  <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      {fmtDate(d.updated_at)}
-                    </span>
-                    <div style={{ display: 'flex', gap: '0.3rem' }}>
-                      <button
-                        style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', padding: '0.15rem 0.5rem', borderRadius: 3, border: '1px solid rgba(96,165,250,0.4)', background: 'transparent', color: '#60a5fa', cursor: 'pointer' }}
-                        onClick={() => setComposerDraft(d)}
-                      >Edit</button>
-                      <button
-                        style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', padding: '0.15rem 0.5rem', borderRadius: 3, border: '1px solid rgba(255,255,255,0.12)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}
-                        disabled={deletingDraftId === d.id}
-                        onClick={() => deleteDraft(d.id)}
-                      >{deletingDraftId === d.id ? '…' : 'Delete'}</button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ══ ARCHIVE TAB ══ */}
-      {view === 'archive' && (
-        <div>
-          {/* Search bar */}
-          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
-            <input
-              className="input" placeholder="Search venue, subject…" style={{ flex: 1, minWidth: 180, maxWidth: 320 }}
-              value={archiveSearch} onChange={e => setArchiveSearch(e.target.value)}
-            />
-            <input type="date" className="input" style={{ width: 145 }} value={archiveStart} onChange={e => setArchiveStart(e.target.value)} />
-            <input type="date" className="input" style={{ width: 145 }} value={archiveEnd} onChange={e => setArchiveEnd(e.target.value)} />
-            {(archiveSearch || archiveStart || archiveEnd) && (
-              <button className="btn btn-secondary" style={{ fontSize: '0.78rem' }} onClick={() => { setArchiveSearch(''); setArchiveStart(''); setArchiveEnd(''); }}>Clear</button>
             )}
           </div>
-
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            {filteredArchive.length} archived email{filteredArchive.length !== 1 ? 's' : ''}
-          </div>
-
-          {filteredArchive.length === 0 ? (
-            <div className="card" style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.88rem' }}>
-              {archivedEmails.length === 0 ? 'No archived emails yet.' : 'No results match your search.'}
-            </div>
-          ) : (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              {filteredArchive.map(e => {
-                const open    = expandedArchive === e.id;
-                const rawBody = (e.body || '').replace(/<[^>]*>/g, '').trim();
-                const isIn    = e.direction === 'received';
-                return (
-                  <div key={e.id}>
-                    <div
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.7rem 1rem', borderBottom: '1px solid var(--border)', cursor: 'pointer', background: open ? 'rgba(255,255,255,0.03)' : 'transparent' }}
-                      onClick={() => setExpandedArchive(open ? null : e.id)}
-                    >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'baseline', flexWrap: 'wrap' }}>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.08em', color: isIn ? '#60a5fa' : 'var(--text-muted)', textTransform: 'uppercase', border: `1px solid ${isIn ? 'rgba(96,165,250,0.3)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 3, padding: '0 4px' }}>{isIn ? 'IN' : 'OUT'}</span>
-                          <span style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.88rem' }}>
-                            {(e.venue as any)?.name || (isIn ? e.from_address : e.recipient) || '—'}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.1rem' }}>{e.subject || '(no subject)'}</div>
-                      </div>
-                      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fmtDate(e.sent_at)}</span>
-                        <button
-                          style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', padding: '0.15rem 0.5rem', borderRadius: 3, border: '1px solid rgba(255,255,255,0.12)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}
-                          onClick={ev => { ev.stopPropagation(); unarchiveEmail(e.id); }}
-                        >Restore</button>
-                      </div>
-                    </div>
-                    {open && (
-                      <div style={{ padding: '0.9rem 1.25rem', borderBottom: '1px solid var(--border)', background: 'rgba(0,0,0,0.2)' }}>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
-                          {isIn ? `From: ${e.from_address}` : `To: ${e.recipient}`} · {fmtDateFull(e.sent_at)}
-                        </div>
-                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', lineHeight: 1.75, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 300, overflowY: 'auto' }}>
-                          {rawBody || '(no body)'}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       )}
 
-      {/* ══ Archive Outreach Prompt ══ */}
-      {archivePrompt && (
-        <div className="modal-backdrop" onClick={() => setArchivePrompt(null)}>
-          <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="modal-title" style={{ fontSize: '1rem' }}>
-                Archive {(archivePrompt.tv.venue as any)?.name || 'this venue'}
-              </h3>
-              <button className="btn btn-ghost btn-sm" onClick={() => setArchivePrompt(null)}>✕</button>
-            </div>
-            <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', lineHeight: 1.6 }}>
-              Keep <strong>{(archivePrompt.tv.venue as any)?.name || 'this venue'}</strong> in the tour or remove it from the tour entirely?
-            </p>
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => archiveTourVenue(archivePrompt.tv.id, false)}>Keep in Tour</button>
-              <button className="btn btn-danger" onClick={() => archiveTourVenue(archivePrompt.tv.id, true)}>Remove from Tour</button>
-            </div>
-          </div>
-        </div>
+      {archiveTarget && (
+        <ArchiveTargetDialog
+          target={archiveTarget}
+          onClose={() => setArchiveTarget(null)}
+          onKeep={() => { const id = archiveTarget.id; setArchiveTarget(null); void setTargetStatus([id], 'declined'); }}
+          onRemove={() => { const id = archiveTarget.id; setArchiveTarget(null); void removeTarget(id); }}
+        />
       )}
 
-      {/* ══ Composers ══ */}
-      {composerNew && actId && (
-  <EmailComposer
-    actId={actId}
-    defaultCategory="target"
-    onClose={() => {
-      setComposerNew(false);
-      loadAll();
-    }}
-  />
-)}
-
-      {composerTourVenue && (
+      {composeNew && data?.actId && (
+        <EmailComposer actId={data.actId} defaultCategory="target" onClose={() => { setComposeNew(false); reload(); }} />
+      )}
+      {composeTarget && (
         <EmailComposer
-          tourVenueId={composerTourVenue.id}
-          actId={(composerTourVenue.tour as any)?.act_id || ''}
-          venueId={(composerTourVenue.venue as any)?.id}
-          contactEmail={(composerTourVenue.venue as any)?.email || ''}
-          defaultCategory={composerCategory}
-          onClose={() => { setComposerTourVenue(null); loadAll(); }}
+          tourVenueId={composeTarget.id}
+          actId={composeTarget.tour?.act_id || data?.actId || ''}
+          venueId={composeTarget.venue?.id}
+          contactEmail={composeTarget.venue?.email || ''}
+          defaultCategory="target"
+          onClose={() => { setComposeTarget(null); reload(); }}
         />
       )}
-
-      {composerBooking && (
+      {composeThread && (
         <EmailComposer
-          bookingId={composerBooking.id}
-          actId={composerBooking.act?.id}
-          venueId={composerBooking.venue?.id}
-          contactId={composerBooking.contact?.id}
-          contactEmail={composerBooking.contact?.email || composerBooking.venue?.email || ''}
-          defaultCategory={composerCategory}
-          onClose={() => {
-            setComposerBooking(null);
-            supabase.from('bookings').select('id, email_stage, last_contact_date')
-              .eq('id', composerBooking.id).single()
-              .then(({ data }) => { if (data) setBookings(bs => bs.map(b => b.id === data.id ? { ...b, ...data } : b)); });
-          }}
+          bookingId={composeThread.thread.id}
+          actId={composeThread.thread.act?.id || data?.actId || ''}
+          venueId={composeThread.thread.venue?.id}
+          contactId={composeThread.thread.contact?.id}
+          contactEmail={composeThread.thread.contact?.email || composeThread.thread.venue?.email || ''}
+          defaultCategory={composeThread.category}
+          onClose={() => { setComposeThread(null); reload(); }}
         />
       )}
-
-      {composerDraft && (
+      {composeDraft && (
         <EmailComposer
-          actId={composerDraft.act_id || actId || ''}
-          venueId={composerDraft.venue_id || undefined}
-          contactEmail={composerDraft.recipient || undefined}
-          defaultCategory={composerDraft.category || 'target'}
-          initialSubject={composerDraft.subject || undefined}
-          initialBody={composerDraft.body || undefined}
-          initialAttachments={Array.isArray(composerDraft.attachments) ? composerDraft.attachments : undefined}
-          draftId={composerDraft.id}
-          onClose={() => { setComposerDraft(null); loadAll(); }}
+          actId={data?.actId || ''}
+          venueId={composeDraft.venue_id || undefined}
+          contactEmail={composeDraft.recipient || undefined}
+          defaultCategory={composeDraft.category || 'target'}
+          initialSubject={composeDraft.subject || undefined}
+          initialBody={composeDraft.body || undefined}
+          initialAttachments={Array.isArray(composeDraft.attachments) ? composeDraft.attachments : undefined}
+          draftId={composeDraft.id}
+          onClose={() => { setComposeDraft(null); reload(); }}
         />
       )}
-
-      {/* ══ Venue Drawer ══ */}
-      {drawerVenueId && (
-        <VenueDrawer
-          venueId={drawerVenueId}
-          isOpen={true}
-          onClose={() => setDrawerVenueId(null)}
-        />
-      )}
+      {drawerVenueId && <VenueDrawer venueId={drawerVenueId} isOpen={true} onClose={() => setDrawerVenueId(null)} />}
     </AppShell>
   );
 }
