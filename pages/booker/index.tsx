@@ -1,22 +1,35 @@
 // pages/booker/index.tsx
-// Booking Agent home: this weekend across every act, what needs attention,
-// one tile per band, and the combined agenda for the coming weeks.
+// Booking Agent home ("Booking Desk"), in the Tours page style:
+//   1. Illustrated hero with the agency name, a next-show line and actions.
+//   2. Four metric trackers: roster, this weekend, holds in play, next 60 days.
+//   3. Needs attention (follow-ups, stale holds, unsettled shows, missing rates).
+//   4. This weekend across every act, with a copyable lineup post.
+//   5. One card per active band, then the combined agenda for the coming weeks.
+//
+// All counting lives in lib/booker/summary.ts and lib/booker/workspace.ts
+// (unit-tested); this file only loads rows, holds UI state and renders.
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import BookerShell from '../../components/booker/BookerShell';
+import BookerShell, { useBooker } from '../../components/booker/BookerShell';
+import BandCard from '../../components/booker/BandCard';
+import RouteMapScene from '../../components/booker/RouteMapScene';
 import ShowRow from '../../components/booker/ShowRow';
 import WorkspaceRequirements from '../../components/booker/WorkspaceRequirements';
 import { RosterBandForm, ShowForm } from '../../components/booker/forms';
-import { BandDot, EmptyState, ErrorBanner, PageHeader, SkeletonRows } from '../../components/booker/ui';
+import PageHero from '../../components/layout/PageHero';
+import { formatMoney } from '../../lib/booker/commission';
 import { listMessages, listRoster, listShows, listVenues, setFollowupDone } from '../../lib/booker/data';
 import { addDays, formatShowDate, formatTime, todayIso, weekendRange } from '../../lib/booker/dates';
-import { attentionItems, bandTiles, byId, emailFollowups, findConflicts, groupByDate, venueLabel } from '../../lib/booker/workspace';
+import { tierForBandCount } from '../../lib/booker/pricing';
+import { bandCards, deskSummary, plural } from '../../lib/booker/summary';
+import { attentionItems, byId, emailFollowups, findConflicts, groupByDate, venueLabel } from '../../lib/booker/workspace';
 import { useLoad } from '../../lib/booker/useLoad';
 import type { BookerShow, BookerVenue, RosterBand } from '../../lib/booker/types';
 
 const LOOKBACK_DAYS = 90;
 const AGENDA_DAYS = 60;
+const ATTENTION_LIMIT = 12;
 
 function lineupText(groups: Array<{ date: string; shows: BookerShow[] }>, bandsById: Map<string, RosterBand>, venuesById: Map<string, BookerVenue>, year: number): string {
   const lines = ['This weekend:'];
@@ -30,7 +43,29 @@ function lineupText(groups: Array<{ date: string; shows: BookerShow[] }>, bandsB
   return lines.join('\n');
 }
 
+/** Placeholder layout while the desk loads (skeletons in the Tours shapes). */
+function DeskSkeleton() {
+  return (
+    <div className="tours-body" aria-busy="true">
+      <span className="sr-only" role="status">
+        Loading your desk…
+      </span>
+      <div className="tours-metrics">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="tour-metric tour-skeleton" />
+        ))}
+      </div>
+      <div className="tours-grid">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="tour-card tour-skeleton tour-skeleton--card" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function HomeContent() {
+  const { booker } = useBooker();
   const today = todayIso();
   const year = Number(today.slice(0, 4));
   const { data, loading, error, reload } = useLoad(
@@ -67,7 +102,8 @@ function HomeContent() {
       agenda,
       // Email follow-ups first: they are the agent's own promises to get back to someone.
       attention: [...emailFollowups(data.followups, venuesById, today), ...attentionItems(data.shows, data.bands, venuesById, today)],
-      tiles: bandTiles(data.bands, data.shows, today),
+      cards: bandCards(data.bands, data.shows, today).filter(c => c.band.status === 'active'),
+      summary: deskSummary(data.bands, data.shows, today, AGENDA_DAYS),
     };
   }, [data, today]);
 
@@ -100,102 +136,136 @@ function HomeContent() {
     void reload();
   };
 
+  const hasBands = Boolean(data && data.bands.length > 0);
+  const next = view?.summary.nextShow ?? null;
+  const heroSummary = view
+    ? next
+      ? `Next up: ${view.bandsById.get(next.roster_id)?.band_name ?? 'a band'} at ${venueLabel(next, view.venuesById)}, ${formatShowDate(next.show_date, year)}.`
+      : hasBands
+        ? 'Nothing confirmed yet — add a show or work your holds.'
+        : 'Add the bands you book to get started.'
+    : undefined;
+  const tier = tierForBandCount(view?.summary.activeBands ?? 0);
+  const hasConfirmedWeekend = Boolean(view?.weekendGroups.some(g => g.shows.some(s => s.status === 'confirmed')));
+
   return (
     <>
-      <PageHeader
-        title="Home"
-        sub={formatShowDate(today, year)}
+      <PageHero
+        title="Booking Desk"
+        subtitle={booker.agency_name}
+        summary={heroSummary}
+        scene={<RouteMapScene />}
         actions={
-          <>
-            <button type="button" className="btn btn-secondary" onClick={() => setAddingBand(true)}>
-              + Add band
-            </button>
-            <Link href="/booker/venues#find" className="btn btn-secondary">
-              ⌕ Find venues
-            </Link>
-            <button type="button" className="btn btn-primary" onClick={() => setEditing('new')} disabled={!data || data.bands.length === 0}>
+          <div className="agent-hero-actions">
+            <button type="button" className="btn btn-primary tours-new-btn" onClick={() => setEditing('new')} disabled={!hasBands}>
               + Add show
             </button>
-          </>
+            <button type="button" className="btn btn-secondary tours-new-btn" onClick={() => setAddingBand(true)}>
+              + Add band
+            </button>
+            <Link href="/booker/venues#find" className="btn btn-secondary tours-new-btn">
+              ⌕ Find venues
+            </Link>
+          </div>
         }
       />
 
       <WorkspaceRequirements />
 
-      {error && <ErrorBanner message={error} onRetry={reload} />}
-      {loading && !data && <SkeletonRows rows={6} />}
+      {error && (
+        <div className="card tours-empty" role="alert">
+          <div className="tours-empty-title">Your desk didn’t load</div>
+          <p>{error}</p>
+          <button type="button" className="btn btn-primary" onClick={() => void reload()}>
+            Try again
+          </button>
+        </div>
+      )}
+      {loading && !data && !error && <DeskSkeleton />}
 
-      {data && view && data.bands.length === 0 && (
-        <EmptyState
-          title="Add your first band"
-          body="Start with the acts you book. They don't need their own Camel Ranch account — you can add any band and start tracking their shows right away."
-          action={
-            <button type="button" className="btn btn-primary" onClick={() => setAddingBand(true)}>
-              + Add a band
-            </button>
-          }
-        />
+      {data && view && !hasBands && (
+        <div className="card tours-empty">
+          <div className="tours-empty-title">Add your first band</div>
+          <p>Start with the acts you book. They don’t need their own Camel Ranch account — add any band and start tracking their shows right away.</p>
+          <button type="button" className="btn btn-primary" onClick={() => setAddingBand(true)}>
+            + Add a band
+          </button>
+        </div>
       )}
 
-      {data && view && data.bands.length > 0 && (
-        <div style={{ display: 'grid', gap: '1.75rem' }}>
-          {/* This weekend */}
-          <section aria-labelledby="weekend-h">
-            <div className="flex items-center justify-between mb-3" style={{ gap: '1rem', flexWrap: 'wrap' }}>
-              <h2 id="weekend-h" className="display" style={{ fontSize: '1.6rem', margin: 0 }}>
-                This weekend <span className="text-sm text-muted" style={{ fontFamily: 'var(--font-body)' }}>{formatShowDate(view.weekend.start, year)} – {formatShowDate(view.weekend.end, year)}</span>
-              </h2>
-              {view.weekendGroups.some(g => g.shows.some(s => s.status === 'confirmed')) && (
-                <button type="button" className="btn btn-secondary btn-sm" onClick={copyLineup}>
-                  {copied === 'copied' ? 'Copied ✓' : copied === 'failed' ? 'Copy failed' : 'Copy lineup post'}
-                </button>
-              )}
-              <span aria-live="polite" className="text-xs text-muted" style={{ position: 'absolute', left: -9999 }}>
-                {copied === 'copied' ? 'Lineup copied to clipboard' : ''}
+      {data && view && hasBands && (
+        <div className="tours-body">
+          <section className="tours-metrics" aria-label="Desk at a glance">
+            <div className="tour-metric">
+              <span className="tour-metric-label">Roster</span>
+              <div className="tour-metric-value">
+                <strong>{view.summary.activeBands}</strong>
+                <span>{view.summary.activeBands === 1 ? 'active band' : 'active bands'}</span>
+              </div>
+              <span className="tour-metric-note">
+                {tier.label} plan{tier.monthlyUsd !== null ? ` · $${tier.monthlyUsd}/mo` : ' · custom pricing'}
               </span>
             </div>
-            {view.weekendGroups.length === 0 ? (
-              <p className="text-sm text-muted">Nothing on the books for this weekend yet.</p>
-            ) : (
-              <div style={{ display: 'grid', gap: '1rem' }}>
-                {view.weekendGroups.map(g => (
-                  <div key={g.date}>
-                    <h3 className="eyebrow" style={{ color: 'var(--accent)', fontSize: '1rem', margin: '0 0 0.4rem' }}>
-                      {formatShowDate(g.date, year)}
-                    </h3>
-                    <div style={{ display: 'grid', gap: '0.5rem' }}>
-                      {g.shows.map(s => (
-                        <ShowRow key={s.id} show={s} band={view.bandsById.get(s.roster_id)} venuesById={view.venuesById} onOpen={openShow} hideDate currentYear={year} />
-                      ))}
-                    </div>
-                  </div>
-                ))}
+            <div className="tour-metric">
+              <span className="tour-metric-label">This weekend</span>
+              <div className="tour-metric-value">
+                <strong>{view.summary.weekendConfirmed}</strong>
+                <span>
+                  {view.summary.weekendConfirmed === 1 ? 'show' : 'shows'} · {plural(view.summary.weekendBands, 'band')}
+                </span>
               </div>
-            )}
+              <span className="tour-metric-note">
+                {formatShowDate(view.weekend.start, year)} – {formatShowDate(view.weekend.end, year)}
+              </span>
+            </div>
+            <div className="tour-metric">
+              <span className="tour-metric-label">Holds in play</span>
+              <div className="tour-metric-value">
+                <strong className={view.summary.holdsFollowupDue > 0 ? 'tour-metric-hot' : undefined}>{view.summary.holds}</strong>
+                <span>holds &amp; offers</span>
+              </div>
+              <span className="tour-metric-note">
+                {view.summary.holdsFollowupDue > 0 ? `${plural(view.summary.holdsFollowupDue, 'follow-up')} due now` : 'No follow-ups due'}
+              </span>
+            </div>
+            <div className="tour-metric">
+              <span className="tour-metric-label">Next {AGENDA_DAYS} days</span>
+              <div className="tour-metric-value">
+                <strong>{view.summary.windowConfirmed}</strong>
+                <span>confirmed</span>
+              </div>
+              <span className="tour-metric-note">
+                {view.summary.windowCommission > 0 ? `${formatMoney(view.summary.windowCommission)} projected commission` : 'No commission projected yet'}
+              </span>
+            </div>
           </section>
 
-          {/* Needs attention */}
           {view.attention.length > 0 && (
-            <section aria-labelledby="attention-h" className="card card-warning">
-              <h2 id="attention-h" className="display" style={{ fontSize: '1.4rem', margin: '0 0 0.6rem' }}>
-                Needs attention <span className="text-sm text-muted">({view.attention.length})</span>
-              </h2>
+            <section aria-labelledby="attention-h" className="card agent-attention">
+              <div className="agent-section-head">
+                <h2 id="attention-h" className="agent-section-title">
+                  Needs attention
+                </h2>
+                <span className="agent-section-note">
+                  {view.attention.length > ATTENTION_LIMIT ? `Showing ${ATTENTION_LIMIT} of ${view.attention.length}` : plural(view.attention.length, 'item')}
+                </span>
+              </div>
               {doneError && (
-                <p role="alert" className="text-sm" style={{ color: 'var(--red)', marginTop: 0 }}>
+                <p role="alert" className="agent-attention-error">
                   {doneError}
                 </p>
               )}
-              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '0.35rem' }}>
-                {view.attention.slice(0, 12).map(item => {
+              <ul className="agent-attention-list">
+                {view.attention.slice(0, ATTENTION_LIMIT).map(item => {
                   const target = item.showId ? data.shows.find(s => s.id === item.showId) : undefined;
                   return (
-                    <li key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
-                      <span style={{ fontSize: '0.9rem', color: 'var(--text)' }}>
+                    <li key={item.key}>
+                      <span>
                         {item.kind === 'email_followup' && <span aria-hidden="true">✉ </span>}
                         {item.message}
                       </span>
                       {item.messageId ? (
-                        <span style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
+                        <span className="agent-attention-actions">
                           {item.href && (
                             <Link className="btn btn-ghost btn-sm" href={item.href}>
                               Open
@@ -221,56 +291,80 @@ function HomeContent() {
             </section>
           )}
 
-          {/* Band tiles */}
-          <section aria-labelledby="bands-h">
-            <h2 id="bands-h" className="display" style={{ fontSize: '1.6rem', margin: '0 0 0.75rem' }}>
-              Your bands
-            </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '0.9rem' }}>
-              {view.tiles.map(t => (
-                <Link key={t.band.id} href={`/booker/bands/${t.band.id}`} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', textDecoration: 'none', color: 'inherit', borderTop: `3px solid ${t.band.color ?? 'var(--accent)'}` }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, fontSize: '1.05rem', color: 'var(--text)' }}>
-                    <BandDot color={t.band.color} />
-                    {t.band.band_name}
-                  </span>
-                  <span className="text-sm text-muted">
-                    {t.nextShow ? (
-                      <>
-                        Next: {formatShowDate(t.nextShow.show_date, year)} · {venueLabel(t.nextShow, view.venuesById)}
-                      </>
-                    ) : (
-                      'Nothing booked yet'
-                    )}
-                  </span>
-                  <span style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <span className="badge badge-confirmed">{t.upcomingCount} booked</span>
-                    {t.holdCount > 0 && <span className="badge badge-hold">{t.holdCount} on hold</span>}
-                    {t.band.commission_pct !== null && <span className="badge badge-completed">{t.band.commission_pct}%</span>}
-                  </span>
-                </Link>
-              ))}
+          <section aria-labelledby="weekend-h" className="agent-section">
+            <div className="agent-section-head">
+              <div className="agent-section-titles">
+                <h2 id="weekend-h" className="agent-section-title">
+                  This weekend
+                </h2>
+                <span className="agent-section-note">
+                  {formatShowDate(view.weekend.start, year)} – {formatShowDate(view.weekend.end, year)}
+                </span>
+              </div>
+              {hasConfirmedWeekend && (
+                <button type="button" className="btn btn-secondary btn-sm" onClick={copyLineup}>
+                  {copied === 'copied' ? 'Copied ✓' : copied === 'failed' ? 'Copy failed' : 'Copy lineup post'}
+                </button>
+              )}
+              <span aria-live="polite" className="sr-only">
+                {copied === 'copied' ? 'Lineup copied to clipboard' : copied === 'failed' ? 'Could not copy the lineup' : ''}
+              </span>
             </div>
+            {view.weekendGroups.length === 0 ? (
+              <p className="agent-section-note">Nothing on the books for this weekend yet.</p>
+            ) : (
+              <div className="agent-days">
+                {view.weekendGroups.map(g => (
+                  <div key={g.date} className="agent-day">
+                    <h3 className={`agent-day-label${g.date === today ? ' agent-day-label--today' : ''}`}>{g.date === today ? `Today · ${formatShowDate(g.date, year)}` : formatShowDate(g.date, year)}</h3>
+                    {g.shows.map(s => (
+                      <ShowRow key={s.id} show={s} band={view.bandsById.get(s.roster_id)} venuesById={view.venuesById} onOpen={openShow} hideDate currentYear={year} />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
-          {/* Agenda */}
-          <section aria-labelledby="agenda-h">
-            <h2 id="agenda-h" className="display" style={{ fontSize: '1.6rem', margin: '0 0 0.75rem' }}>
-              Next {AGENDA_DAYS} days
-            </h2>
-            {view.agenda.length === 0 ? (
-              <p className="text-sm text-muted">Nothing booked after this weekend in the next {AGENDA_DAYS} days.</p>
+          <section aria-labelledby="bands-h" className="agent-section">
+            <div className="agent-section-head">
+              <h2 id="bands-h" className="agent-section-title">
+                Your bands
+              </h2>
+              <Link href="/booker/bands" className="tour-card-cta">
+                Whole roster →
+              </Link>
+            </div>
+            {view.cards.length === 0 ? (
+              <p className="agent-section-note">No active bands. Reactivate one from the roster, or add a new band.</p>
             ) : (
-              <div style={{ display: 'grid', gap: '1rem' }}>
+              <div className="tours-grid">
+                {view.cards.map(c => (
+                  <BandCard key={c.band.id} card={c} venuesById={view.venuesById} currentYear={year} />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section aria-labelledby="agenda-h" className="agent-section">
+            <div className="agent-section-head">
+              <h2 id="agenda-h" className="agent-section-title">
+                Next {AGENDA_DAYS} days
+              </h2>
+              <Link href="/booker/shows" className="tour-card-cta">
+                All shows →
+              </Link>
+            </div>
+            {view.agenda.length === 0 ? (
+              <p className="agent-section-note">Nothing booked after this weekend in the next {AGENDA_DAYS} days.</p>
+            ) : (
+              <div className="agent-days">
                 {view.agenda.map(g => (
-                  <div key={g.date}>
-                    <h3 className="eyebrow" style={{ color: 'var(--text-muted)', fontSize: '0.95rem', margin: '0 0 0.4rem' }}>
-                      {formatShowDate(g.date, year)}
-                    </h3>
-                    <div style={{ display: 'grid', gap: '0.5rem' }}>
-                      {g.shows.map(s => (
-                        <ShowRow key={s.id} show={s} band={view.bandsById.get(s.roster_id)} venuesById={view.venuesById} onOpen={openShow} hideDate currentYear={year} />
-                      ))}
-                    </div>
+                  <div key={g.date} className="agent-day">
+                    <h3 className="agent-day-label">{formatShowDate(g.date, year)}</h3>
+                    {g.shows.map(s => (
+                      <ShowRow key={s.id} show={s} band={view.bandsById.get(s.roster_id)} venuesById={view.venuesById} onOpen={openShow} hideDate currentYear={year} />
+                    ))}
                   </div>
                 ))}
               </div>

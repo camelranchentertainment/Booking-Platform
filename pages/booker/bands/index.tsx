@@ -1,115 +1,171 @@
 // pages/booker/bands/index.tsx
-// The agent's roster: every band they carry, with rate and upcoming work.
+// The agent's roster, in the Tours page style: illustrated hero, four metric
+// trackers, Active / Inactive / All tabs and a grid of band cards. Counting
+// lives in lib/booker/summary.ts (unit-tested).
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import BookerShell from '../../../components/booker/BookerShell';
+import BandCard from '../../../components/booker/BandCard';
+import RouteMapScene from '../../../components/booker/RouteMapScene';
 import { RosterBandForm } from '../../../components/booker/forms';
-import { BandDot, EmptyState, ErrorBanner, PageHeader, SkeletonRows } from '../../../components/booker/ui';
-import { listRoster, listShows } from '../../../lib/booker/data';
+import PageHero from '../../../components/layout/PageHero';
+import { listRoster, listShows, listVenues } from '../../../lib/booker/data';
 import { todayIso } from '../../../lib/booker/dates';
-import { tierForBandCount, bandsUntilNextTier } from '../../../lib/booker/pricing';
+import { bandsUntilNextTier, tierForBandCount } from '../../../lib/booker/pricing';
+import { bandCards, bandsForTab, plural, rosterSummary, rosterTabCounts, type RosterTab } from '../../../lib/booker/summary';
+import { byId } from '../../../lib/booker/workspace';
 import { useLoad } from '../../../lib/booker/useLoad';
+
+const TAB_LABELS: Readonly<Record<RosterTab, string>> = { active: 'Active', inactive: 'Inactive', all: 'All' };
 
 function BandsContent() {
   const today = todayIso();
+  const year = Number(today.slice(0, 4));
   const { data, loading, error, reload } = useLoad(async () => {
-    const [bands, shows] = await Promise.all([listRoster(), listShows({ from: today })]);
-    return { bands, shows };
+    const [bands, shows, venues] = await Promise.all([listRoster(), listShows({ from: today }), listVenues()]);
+    return { bands, shows, venues };
   }, today);
   const [adding, setAdding] = useState(false);
-  const [showInactive, setShowInactive] = useState(false);
+  const [tab, setTab] = useState<RosterTab>('active');
 
-  const rows = useMemo(() => {
-    if (!data) return [];
-    return data.bands
-      .filter(b => showInactive || b.status === 'active')
-      .map(b => {
-        const upcoming = data.shows.filter(s => s.roster_id === b.id && s.status !== 'cancelled');
-        return {
-          band: b,
-          booked: upcoming.filter(s => s.status === 'confirmed').length,
-          holds: upcoming.filter(s => s.status === 'hold' || s.status === 'pending').length,
-        };
-      });
-  }, [data, showInactive]);
+  const view = useMemo(() => {
+    if (!data) return null;
+    const cards = bandCards(data.bands, data.shows, today);
+    return { cards, venuesById: byId(data.venues), summary: rosterSummary(cards), counts: rosterTabCounts(cards) };
+  }, [data, today]);
 
-  const activeCount = data?.bands.filter(b => b.status === 'active').length ?? 0;
-  const tier = tierForBandCount(activeCount);
-  const untilNext = bandsUntilNextTier(activeCount);
+  const shown = view ? bandsForTab(view.cards, tab) : [];
+  const tier = tierForBandCount(view?.summary.activeBands ?? 0);
+  const untilNext = bandsUntilNextTier(view?.summary.activeBands ?? 0);
+  const heroSummary = view && view.cards.length > 0
+    ? `${plural(view.summary.activeBands, 'active band')} — ${plural(view.summary.booked, 'show')} booked and ${plural(view.summary.holds, 'hold')} out.`
+    : undefined;
 
   return (
     <>
-      <PageHeader
-        title="Bands"
-        sub={data ? `${activeCount} active` : undefined}
+      <PageHero
+        title="Roster"
+        subtitle="Every band you carry"
+        summary={heroSummary}
+        scene={<RouteMapScene />}
         actions={
-          <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+          <button type="button" className="btn btn-primary tours-new-btn" onClick={() => setAdding(true)}>
             + Add band
           </button>
         }
       />
-      {error && <ErrorBanner message={error} onRetry={reload} />}
-      {loading && !data && <SkeletonRows />}
 
-      {data && data.bands.length === 0 && (
-        <EmptyState
-          title="No bands yet"
-          body="Add the acts you book. Bands don't need their own account to be on your roster."
-          action={
-            <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
-              + Add a band
-            </button>
-          }
-        />
+      {error && (
+        <div className="card tours-empty" role="alert">
+          <div className="tours-empty-title">Your roster didn’t load</div>
+          <p>{error}</p>
+          <button type="button" className="btn btn-primary" onClick={() => void reload()}>
+            Try again
+          </button>
+        </div>
       )}
 
-      {data && data.bands.length > 0 && (
-        <>
-          <div className="flex items-center justify-between mb-3" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
-            <label className="text-sm text-muted" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-              <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />
-              Show inactive bands
-            </label>
-            <span className="text-xs text-muted">
-              {tier.label} plan{tier.monthlyUsd !== null ? ` · $${tier.monthlyUsd}/mo` : ' · custom pricing'}
-              {untilNext !== null && untilNext <= 3 ? ` · ${untilNext} more band${untilNext === 1 ? '' : 's'} moves you to the next tier` : ''}
-            </span>
+      {loading && !data && !error && (
+        <div className="tours-body" aria-busy="true">
+          <span className="sr-only" role="status">
+            Loading your roster…
+          </span>
+          <div className="tours-metrics">
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} className="tour-metric tour-skeleton" />
+            ))}
           </div>
-          <div className="card table-wrap" style={{ padding: 0 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Band</th>
-                  <th scope="col">Home</th>
-                  <th scope="col">Commission</th>
-                  <th scope="col">Booked</th>
-                  <th scope="col">Holds</th>
-                  <th scope="col">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(({ band, booked, holds }) => (
-                  <tr key={band.id}>
-                    <td>
-                      <Link href={`/booker/bands/${band.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text)', fontWeight: 800 }}>
-                        <BandDot color={band.color} />
-                        {band.band_name}
-                      </Link>
-                    </td>
-                    <td>{[band.home_city, band.home_state].filter(Boolean).join(', ') || '—'}</td>
-                    <td>{band.commission_pct === null ? <span style={{ color: '#fbbf24' }}>Not set</span> : `${band.commission_pct}%`}</td>
-                    <td>{booked}</td>
-                    <td>{holds}</td>
-                    <td>
-                      <span className={`badge ${band.status === 'active' ? 'badge-confirmed' : 'badge-completed'}`}>{band.status}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="tours-grid">
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} className="tour-card tour-skeleton tour-skeleton--card" />
+            ))}
           </div>
-        </>
+        </div>
+      )}
+
+      {view && view.cards.length === 0 && (
+        <div className="card tours-empty">
+          <div className="tours-empty-title">No bands yet</div>
+          <p>Add the acts you book. Bands don’t need their own Camel Ranch account to be on your roster.</p>
+          <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+            + Add a band
+          </button>
+        </div>
+      )}
+
+      {view && view.cards.length > 0 && (
+        <div className="tours-body">
+          <section className="tours-metrics" aria-label="Roster at a glance">
+            <div className="tour-metric">
+              <span className="tour-metric-label">Active bands</span>
+              <div className="tour-metric-value">
+                <strong>{view.summary.activeBands}</strong>
+                <span>
+                  {tier.label} plan{tier.monthlyUsd !== null ? ` · $${tier.monthlyUsd}/mo` : ''}
+                </span>
+              </div>
+              <span className="tour-metric-note">
+                {untilNext === null ? 'Custom pricing tier' : untilNext <= 3 ? `${plural(untilNext, 'more band')} moves you to the next tier` : 'Room to grow on this plan'}
+              </span>
+            </div>
+            <div className="tour-metric">
+              <span className="tour-metric-label">Booked ahead</span>
+              <div className="tour-metric-value">
+                <strong>{view.summary.booked}</strong>
+                <span>confirmed shows</span>
+              </div>
+              <span className="tour-metric-note">Across active bands, today on</span>
+            </div>
+            <div className="tour-metric">
+              <span className="tour-metric-label">Holds out</span>
+              <div className="tour-metric-value">
+                <strong>{view.summary.holds}</strong>
+                <span>holds &amp; offers</span>
+              </div>
+              <span className="tour-metric-note">
+                {view.summary.idleBands > 0 ? `${plural(view.summary.idleBands, 'band has', 'bands have')} nothing in play` : 'Every active band has work in play'}
+              </span>
+            </div>
+            <div className="tour-metric">
+              <span className="tour-metric-label">Commission rates</span>
+              <div className="tour-metric-value">
+                <strong className={view.summary.needsRate > 0 ? 'tour-metric-hot' : undefined}>{view.summary.activeBands - view.summary.needsRate}</strong>
+                <span>of {view.summary.activeBands} set</span>
+              </div>
+              <span className="tour-metric-note">
+                {view.summary.needsRate > 0 ? `${plural(view.summary.needsRate, 'band needs', 'bands need')} a rate to track commission` : 'Commission tracks for every band'}
+              </span>
+            </div>
+          </section>
+
+          <div className="tours-toolbar">
+            <div className="tours-tabs" role="group" aria-label="Show bands">
+              {(Object.keys(TAB_LABELS) as RosterTab[]).map(t => (
+                <button key={t} type="button" className={`tours-tab${tab === t ? ' tours-tab--on' : ''}`} aria-pressed={tab === t} onClick={() => setTab(t)}>
+                  {TAB_LABELS[t]} · {view.counts[t]}
+                </button>
+              ))}
+            </div>
+            <span className="tours-sort-note">Active first, then by name</span>
+          </div>
+
+          {shown.length === 0 ? (
+            <div className="card tours-empty">
+              <div className="tours-empty-title">{tab === 'inactive' ? 'No inactive bands' : 'No active bands'}</div>
+              {tab !== 'inactive' && (
+                <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+                  + Add a band
+                </button>
+              )}
+            </div>
+          ) : (
+            <section className="tours-grid" aria-label={`${TAB_LABELS[tab]} bands`}>
+              {shown.map(c => (
+                <BandCard key={c.band.id} card={c} venuesById={view.venuesById} currentYear={year} />
+              ))}
+            </section>
+          )}
+        </div>
       )}
 
       {adding && (
