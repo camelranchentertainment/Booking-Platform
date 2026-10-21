@@ -1,8 +1,10 @@
 // pages/booker/shows.tsx
 // Every show the agent has booked, in the Tours page style: illustrated hero,
-// four metric trackers, Upcoming / Past / All tabs, band / status / search
-// filters, and the shows grouped under date headings. Counting lives in
-// lib/booker/summary.ts (unit-tested).
+// four metric trackers, Upcoming / Holds / Past / All tabs, band / status /
+// search filters, and the shows grouped under date headings. The Holds tab
+// lists open holds and offers most-urgent first (challenge deadlines and
+// expiring holds on top). Counting lives in lib/booker/summary.ts and
+// lib/booker/holds.ts (unit-tested).
 
 import { useMemo, useState } from 'react';
 import BookerShell from '../../components/booker/BookerShell';
@@ -14,10 +16,14 @@ import { listRoster, listShows, listVenues } from '../../lib/booker/data';
 import { formatShowDate, todayIso } from '../../lib/booker/dates';
 import { groupInOrder, plural, showTabCounts, showsForTab, showsSummary, type ShowTab } from '../../lib/booker/summary';
 import { byId, findConflicts, venueLabel } from '../../lib/booker/workspace';
+import { holdCounts, holdsByUrgency } from '../../lib/booker/holds';
 import { useLoad } from '../../lib/booker/useLoad';
 import { SHOW_STATUSES, SHOW_STATUS_LABEL, type BookerShow, type ShowStatus } from '../../lib/booker/types';
 
-const TAB_LABELS: Readonly<Record<ShowTab, string>> = { upcoming: 'Upcoming', past: 'Past', all: 'All' };
+/** Time tabs plus Holds, which lists open holds and offers by urgency. */
+type Tab = ShowTab | 'holds';
+const TAB_LABELS: Readonly<Record<Tab, string>> = { upcoming: 'Upcoming', holds: 'Holds', past: 'Past', all: 'All' };
+const TAB_ORDER: readonly Tab[] = ['upcoming', 'holds', 'past', 'all'];
 
 function ShowsContent() {
   const today = todayIso();
@@ -26,7 +32,7 @@ function ShowsContent() {
     const [bands, venues, shows] = await Promise.all([listRoster(), listVenues(), listShows()]);
     return { bands, venues, shows };
   });
-  const [tab, setTab] = useState<ShowTab>('upcoming');
+  const [tab, setTab] = useState<Tab>('upcoming');
   const [bandFilter, setBandFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<ShowStatus | ''>('');
   const [search, setSearch] = useState('');
@@ -37,7 +43,8 @@ function ShowsContent() {
     const bandsById = byId(data.bands);
     const venuesById = byId(data.venues);
     const q = search.trim().toLowerCase();
-    const filtered = showsForTab(data.shows, tab, today).filter(s => {
+    const base = tab === 'holds' ? holdsByUrgency(data.shows, today) : showsForTab(data.shows, tab, today);
+    const filtered = base.filter(s => {
       if (bandFilter && s.roster_id !== bandFilter) return false;
       if (statusFilter && s.status !== statusFilter) return false;
       if (q) {
@@ -46,12 +53,15 @@ function ShowsContent() {
       }
       return true;
     });
+    const holds = holdCounts(data.shows, today);
+    const counts: Record<Tab, number> = { ...showTabCounts(data.shows, today), holds: holds.open };
     return {
       bandsById,
       venuesById,
       filtered,
       groups: groupInOrder(filtered),
-      counts: showTabCounts(data.shows, today),
+      holds,
+      counts,
       summary: showsSummary(data.shows, today),
     };
   }, [data, tab, bandFilter, statusFilter, search, today]);
@@ -133,10 +143,14 @@ function ShowsContent() {
             <div className="tour-metric">
               <span className="tour-metric-label">In play</span>
               <div className="tour-metric-value">
-                <strong>{view.summary.inPlay}</strong>
+                <strong className={view.holds.challenged + view.holds.expiring > 0 ? 'tour-metric-hot' : undefined}>{view.summary.inPlay}</strong>
                 <span>holds &amp; offers</span>
               </div>
-              <span className="tour-metric-note">Waiting on a venue’s answer</span>
+              <span className="tour-metric-note">
+                {view.holds.challenged + view.holds.expiring > 0
+                  ? [view.holds.challenged > 0 ? `${view.holds.challenged} challenged` : null, view.holds.expiring > 0 ? `${view.holds.expiring} expiring soon` : null].filter(Boolean).join(' · ')
+                  : 'Waiting on a venue’s answer'}
+              </span>
             </div>
             <div className="tour-metric">
               <span className="tour-metric-label">To settle</span>
@@ -158,13 +172,13 @@ function ShowsContent() {
 
           <div className="tours-toolbar">
             <div className="tours-tabs" role="group" aria-label="Show dates">
-              {(Object.keys(TAB_LABELS) as ShowTab[]).map(t => (
+              {TAB_ORDER.map(t => (
                 <button key={t} type="button" className={`tours-tab${tab === t ? ' tours-tab--on' : ''}`} aria-pressed={tab === t} onClick={() => setTab(t)}>
                   {TAB_LABELS[t]} · {view.counts[t]}
                 </button>
               ))}
             </div>
-            <span className="tours-sort-note">{tab === 'upcoming' ? 'Soonest first' : 'Most recent first'}</span>
+            <span className="tours-sort-note">{tab === 'upcoming' ? 'Soonest first' : tab === 'holds' ? 'Most urgent first' : 'Most recent first'}</span>
           </div>
 
           <div role="search" className="agent-filters" aria-label="Filter shows">
@@ -203,13 +217,13 @@ function ShowsContent() {
 
           {view.groups.length === 0 ? (
             <div className="card tours-empty">
-              <div className="tours-empty-title">{filtersOn ? 'No shows match' : tab === 'upcoming' ? 'Nothing upcoming' : 'No past shows yet'}</div>
+              <div className="tours-empty-title">{filtersOn ? 'No shows match' : tab === 'upcoming' ? 'Nothing upcoming' : tab === 'holds' ? 'No holds out' : 'No past shows yet'}</div>
               {filtersOn ? (
                 <button type="button" className="btn btn-secondary" onClick={clearFilters}>
                   Clear filters
                 </button>
               ) : (
-                tab === 'upcoming' && (
+                (tab === 'upcoming' || tab === 'holds') && (
                   <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>
                     + Add show
                   </button>
@@ -217,6 +231,13 @@ function ShowsContent() {
               )}
             </div>
           ) : (
+            tab === 'holds' ? (
+              <section className="agent-day" aria-label={`Holds and offers, most urgent first, ${plural(view.filtered.length, 'show')}`}>
+                {view.filtered.map(s => (
+                  <ShowRow key={s.id} show={s} band={view.bandsById.get(s.roster_id)} venuesById={view.venuesById} onOpen={setEditing} currentYear={year} />
+                ))}
+              </section>
+            ) : (
             <section className="agent-days" aria-label={`${TAB_LABELS[tab]} shows, ${plural(view.filtered.length, 'show')}`}>
               {view.groups.map(g => (
                 <div key={g.date} className="agent-day">
@@ -227,6 +248,7 @@ function ShowsContent() {
                 </div>
               ))}
             </section>
+            )
           )}
         </div>
       )}
@@ -238,6 +260,7 @@ function ShowsContent() {
           venues={data.venues}
           defaultBandId={bandFilter || undefined}
           conflictsFor={(id, date, excludeId) => findConflicts(data.shows, id, date, excludeId)}
+          otherShows={data.shows}
           onClose={() => setEditing(null)}
           onSaved={onSaved}
           onArchived={onSaved}

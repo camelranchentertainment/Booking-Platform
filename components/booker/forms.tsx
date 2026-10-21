@@ -45,6 +45,7 @@ import {
 import { toFormValues } from '../../lib/booker/useLoad';
 import { todayIso } from '../../lib/booker/dates';
 import { mergeVenues } from '../../lib/booker/venueSearch';
+import { holdLabel, venueClashes } from '../../lib/booker/holds';
 import VenueSearchPanel from './VenueSearchPanel';
 import { ErrorBanner, Field, FormActions, Modal } from './ui';
 import { useBooker } from './BookerShell';
@@ -324,7 +325,14 @@ const SHOW_KEYS = [
   'deal_notes',
   'internal_notes',
   'followup_on',
+  'hold_rank',
+  'hold_expires_on',
+  'answer_by',
+  'challenge_note',
 ] as const;
+
+/** Hold positions offered in the form. The database allows up to 9th. */
+const HOLD_RANKS = [1, 2, 3, 4, 5] as const;
 
 export function ShowForm({
   show,
@@ -334,6 +342,7 @@ export function ShowForm({
   defaultDate,
   defaultVenueId,
   conflictsFor,
+  otherShows,
   onClose,
   onSaved,
   onArchived,
@@ -347,6 +356,8 @@ export function ShowForm({
   defaultVenueId?: string;
   /** Returns other active shows for the same band on the same date, to warn about double-booking. */
   conflictsFor?: (bandId: string, date: string, excludeId?: string) => BookerShow[];
+  /** The agent's shows, to warn when another of their bands is at the same venue that date. */
+  otherShows?: readonly BookerShow[];
   onClose: () => void;
   onSaved: (s: BookerShow) => void;
   /** When set (editing only), offers "Remove show" with an inline confirm. */
@@ -368,6 +379,11 @@ export function ShowForm({
   const conflicts = conflictsFor && f.values.roster_id && f.values.show_date ? conflictsFor(f.values.roster_id, f.values.show_date, show?.id) : [];
   const usingSavedVenue = f.values.venue_id !== '';
   const isPlayed = f.values.status === 'played';
+  const isOpenHoldStatus = f.values.status === 'hold' || f.values.status === 'pending';
+  const clashes = otherShows
+    ? venueClashes(otherShows, { roster_id: f.values.roster_id, venue_id: f.values.venue_id || null, venue_name: f.values.venue_id ? null : f.values.venue_name, show_date: f.values.show_date }, show?.id)
+    : [];
+  const bandName = (id: string) => bands.find(b => b.id === id)?.band_name ?? 'Another of your bands';
 
   // Venues added from the inline search while this dialog is open. The parent's
   // list refreshes after save; until then they are merged in here so the new
@@ -424,6 +440,14 @@ export function ShowForm({
               <span style={{ color: '#fbbf24', fontWeight: 800, fontSize: '0.85rem' }}>
                 Heads up: this band already has {conflicts.length === 1 ? 'a show' : `${conflicts.length} shows`} on this date
                 {conflicts[0].venue_name ? ` (${conflicts[0].venue_name})` : ''}.
+              </span>
+            </div>
+          )}
+          {clashes.length > 0 && (
+            <div role="status" className="card" style={{ borderColor: 'rgba(251,191,36,0.5)', background: 'rgba(251,191,36,0.07)', padding: '0.75rem 1rem' }}>
+              <span style={{ color: '#fbbf24', fontWeight: 800, fontSize: '0.85rem' }}>
+                Heads up: {clashes.map(c => `${bandName(c.roster_id)} (${holdLabel(c.hold_rank) ?? SHOW_STATUS_LABEL[c.status].toLowerCase()})`).join(' and ')}{' '}
+                {clashes.length === 1 ? 'is' : 'are'} already at this venue on this date.
               </span>
             </div>
           )}
@@ -489,6 +513,39 @@ export function ShowForm({
             </Field>
           </div>
         </fieldset>
+
+        {isOpenHoldStatus && (
+          <fieldset style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+            <legend className="eyebrow" style={{ color: 'var(--accent)', marginBottom: '0.5rem' }}>
+              The hold
+            </legend>
+            <div className="grid-3">
+              <Field label="Hold position" hint="Where you sit in the venue’s line for this date" error={f.errors.hold_rank}>
+                {p => (
+                  <select {...p} className="select" value={f.values.hold_rank} onChange={f.set('hold_rank')}>
+                    <option value="">Not set</option>
+                    {HOLD_RANKS.map(r => (
+                      <option key={r} value={String(r)}>
+                        {holdLabel(r)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+              <Field label="Hold expires" hint="The date the venue holds it until" error={f.errors.hold_expires_on}>
+                {p => <input {...p} className="input" type="date" value={f.values.hold_expires_on} onChange={f.set('hold_expires_on')} />}
+              </Field>
+              <Field label="Challenged — answer by" hint="Another act wants the date: confirm or release by" error={f.errors.answer_by}>
+                {p => <input {...p} className="input" type="date" value={f.values.answer_by} onChange={f.set('answer_by')} />}
+              </Field>
+            </div>
+            {f.values.answer_by && (
+              <Field label="Challenge note" hint="Who challenged and anything they said" error={f.errors.challenge_note}>
+                {p => <input {...p} className="input" maxLength={300} value={f.values.challenge_note} onChange={f.set('challenge_note')} />}
+              </Field>
+            )}
+          </fieldset>
+        )}
 
         <fieldset style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
           <legend className="eyebrow" style={{ color: 'var(--accent)', marginBottom: '0.5rem' }}>

@@ -26,7 +26,8 @@ const venue: BookerVenue = {
 const show: BookerShow = {
   id: SHOW, booker_id: 'k', roster_id: BAND, venue_id: VENUE, venue_name: null, venue_city: null, show_date: '2026-10-24', load_in_time: '17:00:00',
   door_time: null, set_time: '21:00:00', set_length_min: 90, status: 'hold', deal_type: 'guarantee', fee: 700, actual_amount: 650,
-  commission_pct_override: 12, deal_notes: 'Plus meal', internal_notes: 'Ask about green room', followup_on: '2026-10-15', ...ts,
+  commission_pct_override: 12, deal_notes: 'Plus meal', internal_notes: 'Ask about green room', followup_on: '2026-10-15',
+  hold_rank: 1, hold_expires_on: '2026-10-20', answer_by: null, challenge_note: null, ...ts,
 };
 const contact: BookerContact = {
   id: CONTACT, booker_id: 'k', venue_id: VENUE, name: 'Sarah Lee', title: 'Talent buyer', email: 'sarah@gruenehall.com', phone: null, notes: null,
@@ -198,6 +199,18 @@ describe('buildWrite', () => {
     expect(bad).toMatchObject({ ok: false });
   });
 
+  it('records hold details on a hold, and clears them when the show is confirmed', () => {
+    const challenged = buildWrite({ type: 'update_show', show_id: SHOW, changes: { answer_by: '2026-10-16', challenge_note: 'Second act wants the date' }, reason: 'Venue called' }, rows);
+    expect(challenged).toMatchObject({ ok: true, write: { input: { status: 'hold', hold_rank: 1, hold_expires_on: '2026-10-20', answer_by: '2026-10-16', challenge_note: 'Second act wants the date' } } });
+    const confirmed = buildWrite({ type: 'update_show', show_id: SHOW, changes: { status: 'confirmed' }, reason: 'Venue said yes' }, rows);
+    expect(confirmed).toMatchObject({ ok: true, write: { input: { status: 'confirmed', hold_rank: null, hold_expires_on: null, answer_by: null, challenge_note: null } } });
+  });
+
+  it('adds a ranked hold with an expiry', () => {
+    const r = buildWrite({ type: 'add_show', roster_id: BAND, venue_id: VENUE, show_date: '2026-11-14', status: 'hold', hold_rank: 2, hold_expires_on: '2026-10-28', reason: 'Pencil in' }, rows);
+    expect(r).toMatchObject({ ok: true, write: { op: 'createShow', input: { status: 'hold', hold_rank: 2, hold_expires_on: '2026-10-28' } } });
+  });
+
   it('hands email drafts to the compose dialog instead of writing', () => {
     expect(buildWrite({ type: 'draft_email', subject: 's', body: 'b', reason: 'x' }, rows)).toEqual({ ok: true, write: { op: 'composeEmail' } });
   });
@@ -209,6 +222,14 @@ describe('describeAction', () => {
     expect(d.title).toBe('Update The Jackwagons at Gruene Hall — New Braunfels, Sat, Oct 24');
     expect(d.detail).toBe('Status → Confirmed · Fee → $800.00');
   });
+  it('describes hold positions and deadlines', () => {
+    expect(describeAction({ type: 'add_show', roster_id: BAND, venue_id: VENUE, show_date: '2026-11-14', status: 'hold', hold_rank: 2, hold_expires_on: '2026-10-28', reason: 'x' }, rows, 2026)).toMatchObject({
+      title: 'Add a 2nd hold: The Jackwagons at Gruene Hall — New Braunfels',
+      detail: 'Sat, Nov 14 · hold expires Wed, Oct 28',
+    });
+    expect(describeAction({ type: 'update_show', show_id: SHOW, changes: { hold_rank: 1, answer_by: '2026-10-16' }, reason: 'x' }, rows, 2026).detail).toBe('Position → 1st hold · Answer by → Fri, Oct 16');
+  });
+
   it('labels a cancellation clearly', () => {
     const d = describeAction({ type: 'update_show', show_id: SHOW, changes: { status: 'cancelled' }, reason: 'x' }, rows, 2026);
     expect(d.title.startsWith('Cancel ')).toBe(true);
@@ -226,7 +247,7 @@ describe('assistant prompt', () => {
     today,
     agency: 'Lone Star Booking',
     bands: [{ id: BAND, band_name: 'The Jackwagons', genre: 'rock', home_city: 'Austin', home_state: 'TX', commission_pct: 15, status: 'active', contact_name: 'Jake', contact_email: null, contact_phone: null, notes: 'Prefers\nSaturdays' }],
-    shows: [{ id: SHOW, roster_id: BAND, venue_id: VENUE, venue_name: null, venue_city: null, show_date: '2026-10-24', status: 'hold', fee: 700, actual_amount: null, commission_pct_override: null, followup_on: '2026-10-15', set_time: null, door_time: null, load_in_time: null, deal_type: null, deleted_at: null }],
+    shows: [{ id: SHOW, roster_id: BAND, venue_id: VENUE, venue_name: null, venue_city: null, show_date: '2026-10-24', status: 'hold', fee: 700, actual_amount: null, commission_pct_override: null, followup_on: '2026-10-15', set_time: null, door_time: null, load_in_time: null, deal_type: null, deleted_at: null, hold_rank: 1, hold_expires_on: '2026-10-30', answer_by: '2026-10-14', challenge_note: 'Another act wants it' }],
     venues: [{ id: VENUE, name: 'Gruene Hall', city: 'New Braunfels', state: 'TX', kind: 'venue', capacity: 800, email: 'booking@gruenehall.com', phone: null, website: null }],
     venuesTruncated: false,
     contacts: [{ id: CONTACT, venue_id: VENUE, name: 'Sarah Lee', title: 'Talent buyer', email: 'sarah@gruenehall.com', phone: null, share_with_bands: false }],
@@ -238,7 +259,7 @@ describe('assistant prompt', () => {
   it('lists the workspace with ids so proposals can point at real rows', () => {
     const t = snapshotText(snap);
     expect(t).toContain(`id=${BAND} | The Jackwagons | rock | home Austin, TX | commission 15% | active | band contact Jake | notes: Prefers Saturdays`);
-    expect(t).toContain(`id=${SHOW} | 2026-10-24 Sat, Oct 24 | The Jackwagons (band id=${BAND}) | Gruene Hall, New Braunfels (venue id=${VENUE}) | hold | fee $700.00 | follow up 2026-10-15`);
+    expect(t).toContain(`id=${SHOW} | 2026-10-24 Sat, Oct 24 | The Jackwagons (band id=${BAND}) | Gruene Hall, New Braunfels (venue id=${VENUE}) | hold | fee $700.00 | 1st hold | hold expires 2026-10-30 | CHALLENGED: answer by 2026-10-14 (Another act wants it) | follow up 2026-10-15`);
     expect(t).toContain(`id=${VENUE} | Gruene Hall | New Braunfels, TX | venue | cap 800 | booking@gruenehall.com`);
     expect(t).toContain(`id=${CONTACT} | Sarah Lee, Talent buyer | Gruene Hall (venue id=${VENUE}) | sarah@gruenehall.com`);
     expect(t).toContain('2026-10-08 | to Sarah Lee at Gruene Hall | for The Jackwagons | "Spring dates"');

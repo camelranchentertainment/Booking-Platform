@@ -114,6 +114,14 @@ export interface BookerShow extends Timestamps {
   internal_notes: string | null;
   /** ISO date, YYYY-MM-DD */
   followup_on: string | null;
+  /** Hold position at the venue: 1 = first hold, 2 = second… (holds and pending offers only) */
+  hold_rank: number | null;
+  /** ISO date the venue said the hold lasts until */
+  hold_expires_on: string | null;
+  /** ISO date: the venue challenged the hold — confirm or release by then */
+  answer_by: string | null;
+  /** Who challenged the hold and why, one line */
+  challenge_note: string | null;
 }
 
 export interface CommissionPayment extends Timestamps {

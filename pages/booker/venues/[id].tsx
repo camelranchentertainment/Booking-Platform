@@ -454,6 +454,7 @@ function VenueContent({ venueId }: { venueId: string }) {
           venues={data.venues}
           defaultVenueId={venue.id}
           conflictsFor={(id, date, excludeId) => findConflicts(data.shows, id, date, excludeId)}
+          otherShows={data.shows}
           onClose={() => setEditingShow(null)}
           onSaved={onShowSaved}
           onArchived={onShowSaved}

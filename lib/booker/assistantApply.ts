@@ -15,6 +15,7 @@ import { formatShowDate, formatTime } from './dates';
 import { ContactSchema, RosterBandSchema, ShowSchema, VenueSchema, fieldErrors, type ContactInput, type RosterBandInput, type ShowInput, type VenueInput } from './schemas';
 import { DEAL_TYPE_LABEL, SHOW_STATUS_LABEL, VENUE_KIND_LABEL, type BookerContact, type BookerShow, type BookerVenue, type RosterBand } from './types';
 import { toFormValues } from './useLoad';
+import { holdLabel } from './holds';
 import { venueLabel } from './workspace';
 import type { AssistantAction } from './assistantActions';
 
@@ -44,6 +45,7 @@ export type ApplyResult = { ok: true; write: AssistantWrite } | { ok: false; mes
 const SHOW_KEYS = [
   'roster_id', 'venue_id', 'venue_name', 'venue_city', 'show_date', 'load_in_time', 'door_time', 'set_time', 'set_length_min',
   'status', 'deal_type', 'fee', 'actual_amount', 'commission_pct_override', 'deal_notes', 'internal_notes', 'followup_on',
+  'hold_rank', 'hold_expires_on', 'answer_by', 'challenge_note',
 ] as const;
 const BAND_KEYS = ['band_name', 'genre', 'home_city', 'home_state', 'contact_name', 'contact_email', 'contact_phone', 'commission_pct', 'color', 'notes', 'status'] as const;
 const VENUE_KEYS = ['name', 'kind', 'email', 'phone', 'address', 'city', 'state', 'postal_code', 'capacity', 'website', 'notes'] as const;
@@ -76,7 +78,23 @@ export function buildWrite(a: AssistantAction, rows: WorkspaceRows): ApplyResult
     case 'add_hold':
     case 'add_show': {
       const status = a.type === 'add_show' ? a.status : 'hold';
-      const extra = a.type === 'add_show' ? asFormValues({ fee: a.fee, deal_type: a.deal_type, load_in_time: a.load_in_time, door_time: a.door_time, set_time: a.set_time, set_length_min: a.set_length_min, deal_notes: a.deal_notes, followup_on: a.followup_on }) : {};
+      const extra =
+        a.type === 'add_show'
+          ? asFormValues({
+              fee: a.fee,
+              deal_type: a.deal_type,
+              load_in_time: a.load_in_time,
+              door_time: a.door_time,
+              set_time: a.set_time,
+              set_length_min: a.set_length_min,
+              deal_notes: a.deal_notes,
+              followup_on: a.followup_on,
+              hold_rank: a.hold_rank,
+              hold_expires_on: a.hold_expires_on,
+              answer_by: a.answer_by,
+              challenge_note: a.challenge_note,
+            })
+          : {};
       const parsed = ShowSchema.safeParse({
         roster_id: a.roster_id,
         venue_id: a.venue_id ?? '',
@@ -160,6 +178,7 @@ const FIELD_LABELS: Record<string, string> = {
   band_name: 'Name', name: 'Name', genre: 'Genre', home_city: 'Home city', home_state: 'Home state', contact_name: 'Contact', contact_email: 'Contact email',
   contact_phone: 'Contact phone', notes: 'Notes', kind: 'Type', address: 'Address', city: 'City', state: 'State', postal_code: 'ZIP', capacity: 'Capacity',
   website: 'Website', email: 'Email', phone: 'Phone', title: 'Title',
+  hold_rank: 'Position', hold_expires_on: 'Hold expires', answer_by: 'Answer by', challenge_note: 'Challenge',
 };
 
 /** "Status → Confirmed · Fee → $800" for an update proposal. */
@@ -170,7 +189,8 @@ function changeList(changes: Record<string, unknown>, venuesById: ReadonlyMap<st
     let shown: string;
     if (v === null || v === '') shown = 'cleared';
     else if (k === 'status') shown = SHOW_STATUS_LABEL[v as keyof typeof SHOW_STATUS_LABEL] ?? `${String(v).charAt(0).toUpperCase()}${String(v).slice(1)}`;
-    else if (k === 'show_date' || k === 'followup_on') shown = formatShowDate(String(v), year);
+    else if (k === 'show_date' || k === 'followup_on' || k === 'hold_expires_on' || k === 'answer_by') shown = formatShowDate(String(v), year);
+    else if (k === 'hold_rank') shown = holdLabel(Number(v)) ?? String(v);
     else if (k === 'venue_id') shown = venuesById.get(String(v))?.name ?? 'a saved venue';
     else if (k === 'venue_name') shown = [v, changes.venue_city].filter(Boolean).join(', ');
     else if (k === 'fee') shown = formatMoney(Number(v));
@@ -192,8 +212,17 @@ export function describeAction(a: AssistantAction, rows: WorkspaceRows, year: nu
     case 'add_show': {
       const status = a.type === 'add_show' ? a.status : 'hold';
       const where = venueLabel({ venue_id: a.venue_id ?? null, venue_name: a.venue_name ?? null, venue_city: a.venue_city ?? null }, venuesById);
-      const noun = status === 'hold' ? 'a hold' : status === 'pending' ? 'a pending offer' : 'a confirmed show';
-      const extras = a.type === 'add_show' ? [a.fee != null ? formatMoney(a.fee) : null, a.set_time ? `set ${formatTime(a.set_time)}` : null].filter(Boolean) : [];
+      const rank = a.type === 'add_show' && status !== 'confirmed' ? holdLabel(a.hold_rank) : null;
+      const noun = status === 'hold' ? (rank ? `a ${rank}` : 'a hold') : status === 'pending' ? 'a pending offer' : 'a confirmed show';
+      const extras =
+        a.type === 'add_show'
+          ? [
+              a.fee != null ? formatMoney(a.fee) : null,
+              a.set_time ? `set ${formatTime(a.set_time)}` : null,
+              a.hold_expires_on && status !== 'confirmed' ? `hold expires ${formatShowDate(a.hold_expires_on, year)}` : null,
+              a.answer_by && status !== 'confirmed' ? `answer by ${formatShowDate(a.answer_by, year)}` : null,
+            ].filter(Boolean)
+          : [];
       return { title: `Add ${noun}: ${bandName(a.roster_id)} at ${where}`, detail: [formatShowDate(a.show_date, year), ...extras].join(' · '), href: `/booker/bands/${a.roster_id}`, approveLabel: 'Approve' };
     }
     case 'update_show': {

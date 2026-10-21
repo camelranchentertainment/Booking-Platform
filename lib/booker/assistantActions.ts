@@ -51,6 +51,10 @@ const ShowFields = {
   set_length_min: z.number().int().min(1).max(600).nullable().optional(),
   deal_notes: optText(5000),
   followup_on: isoDate.nullable().optional(),
+  hold_rank: z.number().int().min(1).max(9).nullable().optional(),
+  hold_expires_on: isoDate.nullable().optional(),
+  answer_by: isoDate.nullable().optional(),
+  challenge_note: optText(300),
 };
 
 /** Put a new date on the calendar for one band: a hold, a pending offer or a confirmed show. */

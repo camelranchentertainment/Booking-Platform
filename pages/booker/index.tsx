@@ -23,6 +23,7 @@ import { listMessages, listRoster, listShows, listVenues, setFollowupDone } from
 import { addDays, formatShowDate, formatTime, todayIso, weekendRange } from '../../lib/booker/dates';
 import { tierForBandCount } from '../../lib/booker/pricing';
 import { bandCards, deskSummary, plural } from '../../lib/booker/summary';
+import { holdCounts } from '../../lib/booker/holds';
 import { attentionItems, byId, emailFollowups, findConflicts, groupByDate, venueLabel } from '../../lib/booker/workspace';
 import { useLoad } from '../../lib/booker/useLoad';
 import type { BookerShow, BookerVenue, RosterBand } from '../../lib/booker/types';
@@ -104,6 +105,7 @@ function HomeContent() {
       attention: [...emailFollowups(data.followups, venuesById, today), ...attentionItems(data.shows, data.bands, venuesById, today)],
       cards: bandCards(data.bands, data.shows, today).filter(c => c.band.status === 'active'),
       summary: deskSummary(data.bands, data.shows, today, AGENDA_DAYS),
+      holds: holdCounts(data.shows, today),
     };
   }, [data, today]);
 
@@ -221,11 +223,17 @@ function HomeContent() {
             <div className="tour-metric">
               <span className="tour-metric-label">Holds in play</span>
               <div className="tour-metric-value">
-                <strong className={view.summary.holdsFollowupDue > 0 ? 'tour-metric-hot' : undefined}>{view.summary.holds}</strong>
+                <strong className={view.summary.holdsFollowupDue + view.holds.challenged + view.holds.expiring > 0 ? 'tour-metric-hot' : undefined}>{view.summary.holds}</strong>
                 <span>holds &amp; offers</span>
               </div>
               <span className="tour-metric-note">
-                {view.summary.holdsFollowupDue > 0 ? `${plural(view.summary.holdsFollowupDue, 'follow-up')} due now` : 'No follow-ups due'}
+                {[
+                  view.holds.challenged > 0 ? `${view.holds.challenged} challenged` : null,
+                  view.holds.expiring > 0 ? `${view.holds.expiring} expiring soon` : null,
+                  view.summary.holdsFollowupDue > 0 ? `${plural(view.summary.holdsFollowupDue, 'follow-up')} due` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || 'Nothing pressing'}
               </span>
             </div>
             <div className="tour-metric">
@@ -379,6 +387,7 @@ function HomeContent() {
           bands={data.bands}
           venues={data.venues}
           conflictsFor={(bandId, date, excludeId) => findConflicts(data.shows, bandId, date, excludeId)}
+          otherShows={data.shows}
           onClose={() => setEditing(null)}
           onSaved={onSaved}
           onArchived={onSaved}

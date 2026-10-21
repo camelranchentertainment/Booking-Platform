@@ -41,7 +41,7 @@ const show = (over: Partial<BookerShow> = {}): BookerShow => ({
   commission_pct_override: null,
   deal_notes: null,
   internal_notes: null,
-  followup_on: null,
+  followup_on: null, hold_rank: null, hold_expires_on: null, answer_by: null, challenge_note: null,
   ...ts,
   ...over,
 });
@@ -104,6 +104,26 @@ describe('attentionItems', () => {
       today,
     );
     expect(items).toEqual([]);
+  });
+
+  it('puts hold deadlines and clashes between the agent’s own bands first', () => {
+    const items = attentionItems(
+      [
+        show({ id: 'ch', status: 'hold', show_date: '2026-11-07', venue_id: 'v1', venue_name: null, hold_rank: 1, answer_by: '2026-10-21' }),
+        show({ id: 'ex', status: 'hold', show_date: '2026-11-08', venue_name: 'Saxon Pub', venue_city: 'Austin', hold_expires_on: '2026-10-19' }),
+        show({ id: 'x1', roster_id: 'b1', status: 'hold', show_date: '2026-11-14', venue_id: 'v1', venue_name: null, hold_rank: 1 }),
+        show({ id: 'x2', roster_id: 'b2', status: 'confirmed', show_date: '2026-11-14', venue_id: 'v1', venue_name: null }),
+        show({ id: 'p', status: 'confirmed', show_date: '2026-10-18' }),
+      ],
+      [band(), band({ id: 'b2', band_name: 'El Dolor' })],
+      venues,
+      today,
+    );
+    expect(items.map(i => i.kind)).toEqual(['hold_deadline', 'hold_deadline', 'hold_clash', 'needs_settling']);
+    // The lapsed hold (overdue) outranks the challenge due tomorrow.
+    expect(items[0]).toMatchObject({ showId: 'ex', message: 'Hold expired Mon, Oct 19: The Jackwagons at Saxon Pub — Austin, Sun, Nov 8' });
+    expect(items[1].message).toBe('Answer the challenge by Wed, Oct 21: The Jackwagons (1st hold) at Saloon — Coleman, Sat, Nov 7');
+    expect(items[2].message).toBe('The Jackwagons (1st hold) and El Dolor (confirmed) are both at Saloon — Coleman on Sat, Nov 14');
   });
 });
 
