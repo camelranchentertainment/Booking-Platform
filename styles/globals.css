@@ -2059,3 +2059,42 @@ a.venues-muted:hover { color: var(--text); }
   .state-tile:hover { transform: none; }
 }
 .venues-table .venues-row-actions { justify-content: flex-end; }
+
+/* ── Member pay statement (pages/member/pay.tsx) ─────────────── */
+.pay-print-only { display: none; }
+.pay-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+.pay-month-row th { color: var(--text-muted); letter-spacing: 0.2em; }
+.pay-subtotal-row td { color: var(--text-primary); border-top: 1px solid var(--border); }
+.pay-total .stat-value { font-size: 1.9rem; }
+
+/* Printing from the pay page prints only the statement, black on white. */
+@media print {
+  @page { margin: 0.6in; }
+  body.print-pay-statement { background: #fff !important; }
+  body.print-pay-statement * { visibility: hidden !important; }
+  body.print-pay-statement .pay-statement,
+  body.print-pay-statement .pay-statement * { visibility: visible !important; }
+  body.print-pay-statement .pay-statement {
+    position: absolute; top: 0; left: 0; width: 100%;
+    color: #000 !important; background: #fff !important; font-size: 10.5pt;
+  }
+  body.print-pay-statement .pay-no-print { display: none !important; }
+  body.print-pay-statement .pay-print-only { display: block !important; }
+  body.print-pay-statement .pay-statement .card {
+    background: #fff !important; border: 1px solid #999 !important; box-shadow: none !important;
+  }
+  body.print-pay-statement .pay-statement th,
+  body.print-pay-statement .pay-statement td,
+  body.print-pay-statement .pay-statement .stat-value,
+  body.print-pay-statement .pay-statement .stat-label,
+  body.print-pay-statement .pay-statement p,
+  body.print-pay-statement .pay-statement div {
+    color: #000 !important; background: transparent !important;
+  }
+  body.print-pay-statement .pay-statement th,
+  body.print-pay-statement .pay-statement td { border-color: #bbb !important; }
+  body.print-pay-statement .pay-statement tr { break-inside: avoid; }
+}
