@@ -1,1241 +1,474 @@
-import { useState, useEffect, useRef } from 'react';
+// pages/venues/index.tsx
+//
+// Venues — the band's rolodex of rooms and talent buyers.
+//
+// Layout (Phase 3 redesign, Oct 2026 — matches the Tours page):
+//   1. Illustrated main-street hero with "+ Add venue".
+//   2. Four metric trackers built around contact coverage: how many venues,
+//      how many have a booking email, how many can be scanned for one, and
+//      how many need a hand search. "Find emails" lives on its tracker.
+//   3. Discover: Google search for rooms in a town.
+//   4. Toolbar (By state / Table, search, filters, import tools) and the list.
+//
+// Counting and filtering live in lib/domain/venueStats.ts and the paste
+// parser in lib/domain/venueImport.ts (both unit-tested). The dialogs are in
+// components/venues/. This file loads rows, holds UI state and renders.
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppShell from '../../components/layout/AppShell';
-import { supabase } from '../../lib/supabase';
-import { Venue } from '../../lib/types';
-import { useLookup } from '../../lib/hooks/useLookup';
-import { getActId } from '../../lib/bookingQueries';
+import PageHero from '../../components/layout/PageHero';
+import MainStreetScene from '../../components/venues/MainStreetScene';
+import StateTileGrid from '../../components/venues/StateTileGrid';
+import DiscoverPanel from '../../components/venues/DiscoverPanel';
+import AddVenueModal from '../../components/venues/AddVenueModal';
+import BulkImportModal from '../../components/venues/BulkImportModal';
+import AddToTourModal from '../../components/venues/AddToTourModal';
+import DeleteVenueDialog from '../../components/venues/DeleteVenueDialog';
+import { getVenueSession, authHeader } from '../../components/venues/venueSession';
 import VenueDrawer from '../../components/VenueDrawer';
-import { mergeSavedVenue } from '../../lib/venueList';
 import ImportModal from '../../components/ImportModal';
 import VenueTownCheck from '../../components/VenueTownCheck';
-import { nearbyTag, searchSummary, townForSave } from '../../lib/placeLocality';
-import StateTileGrid from '../../components/venues/StateTileGrid';
+import { Venue } from '../../lib/types';
+import { useLookup } from '../../lib/hooks/useLookup';
+import { mergeSavedVenue } from '../../lib/venueList';
+import {
+  summarizeVenues, enrichable, filterVenues, groupByState, filterOptions,
+} from '../../lib/domain/venueStats';
 
-declare global {
-  interface Window { google: any; initGooglePlaces: () => void; }
+type LoadState = 'loading' | 'ready' | 'error';
+type View = 'state' | 'table';
+
+/** Per-venue email scan status. `found` carries the address that was found. */
+type EnrichStatus = { kind: 'scanning' } | { kind: 'found'; email: string } | { kind: 'notfound' } | { kind: 'error' };
+
+interface BulkRun { done: number; total: number; found: number; missed: number; running: boolean }
+
+const VIEW_LABELS: Readonly<Record<View, string>> = { state: 'By state', table: 'Table' };
+
+const plural = (n: number, one: string, many = `${one}s`): string => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+
+/** Loads the band's venues through the server route (it scopes to the caller's band). Never throws. */
+async function fetchVenues(): Promise<Venue[] | null> {
+  try {
+    const s = await getVenueSession();
+    if (!s) return null;
+    const res = await fetch('/api/venues/list', { headers: authHeader(s.token) });
+    if (!res.ok) { console.error('[venues] list failed', res.status); return null; }
+    return (await res.json()) as Venue[];
+  } catch (err) {
+    console.error('[venues] list threw', err);
+    return null;
+  }
 }
 
-type VenueForm = {
-  name: string; city: string; state: string; address: string;
-  phone: string; email: string; website: string; venue_type: string;
-  capacity: string; place_id: string; google_maps_url: string;
-  music_genres: string;
-};
+/** Scans one venue's website for a booking email. Never throws. */
+async function scanVenue(venue: Pick<Venue, 'id' | 'website'>, token: string): Promise<EnrichStatus> {
+  if (!venue.website) return { kind: 'notfound' };
+  try {
+    const res = await fetch('/api/venues/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader(token) },
+      body: JSON.stringify({ url: venue.website, venueId: venue.id }),
+    });
+    if (!res.ok) return { kind: 'error' };
+    const { extracted } = (await res.json()) as { extracted?: { booking_email?: string; general_email?: string } };
+    const email = extracted?.booking_email || extracted?.general_email;
+    return email ? { kind: 'found', email } : { kind: 'notfound' };
+  } catch {
+    return { kind: 'error' };
+  }
+}
 
-const BLANK: VenueForm = {
-  name: '', city: '', state: '', address: '', phone: '',
-  email: '', website: '', venue_type: '', capacity: '',
-  place_id: '', google_maps_url: '', music_genres: '',
-};
+/** Loads the Google Maps Places script once, for the Add-venue search. Resolves false when Maps isn't configured. */
+async function loadGoogleMaps(): Promise<boolean> {
+  if (window.google?.maps?.places) return true;
+  try {
+    const res = await fetch('/api/admin/public-config');
+    if (!res.ok) return false;
+    const { googleMapsApiKey } = (await res.json()) as { googleMapsApiKey?: string };
+    if (!googleMapsApiKey) return false;
+    return await new Promise<boolean>(resolve => {
+      window.initGooglePlaces = () => resolve(true);
+      const s = document.createElement('script');
+      s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(googleMapsApiKey)}&libraries=places&callback=initGooglePlaces`;
+      s.async = true;
+      s.defer = true;
+      s.onerror = () => resolve(false);
+      document.head.appendChild(s);
+    });
+  } catch {
+    return false;
+  }
+}
 
-type ProspectResult = {
-  place_id: string; name: string; address: string;
-  /** The venue's own town from its Google address (null if Google gave none) — not the searched town. */
-  city: string | null; state: string | null;
-  searched_city: string; searched_state: string; in_searched_city: boolean;
-  formatted_address: string; rating: number | null; user_ratings_total: number;
-  types: string[]; google_maps_url: string; already_added: boolean;
-};
+// ── Row pieces ────────────────────────────────────────────────────────────────
+
+/** What we know about a venue's booking email, including a scan in progress. */
+function EmailStatus({ venue, status }: { venue: Venue; status: EnrichStatus | undefined }) {
+  if (venue.email) return <span className="venues-email">✉ {venue.email}</span>;
+  if (status?.kind === 'scanning') return <span className="venues-muted" role="status">Scanning site…</span>;
+  if (status?.kind === 'found') return <span className="venues-email venues-email--new">✓ {status.email}</span>;
+  if (status?.kind === 'error') return <span className="venues-muted">Scan failed</span>;
+  if (status?.kind === 'notfound' || venue.last_enriched_at) return <span className="venues-muted">No email on site</span>;
+  if (!venue.website) return <span className="venues-muted">No website</span>;
+  return <span className="venues-muted">No email yet</span>;
+}
+
+interface RowActionsProps {
+  venue: Venue;
+  status: EnrichStatus | undefined;
+  onScan: (v: Venue) => void;
+  onTour: (v: Venue) => void;
+  onDelete: (v: Venue) => void;
+}
+
+function RowActions({ venue, status, onScan, onTour, onDelete }: RowActionsProps) {
+  return (
+    <div className="venues-row-actions">
+      {venue.website && !venue.email && status?.kind !== 'found' && (
+        <button type="button" className="btn btn-ghost btn-sm" disabled={status?.kind === 'scanning'}
+          onClick={() => onScan(venue)} aria-label={`Find a booking email for ${venue.name}`}>
+          {status?.kind === 'scanning' ? '…' : 'Find email'}
+        </button>
+      )}
+      <button type="button" className="btn btn-ghost btn-sm venues-accent" onClick={() => onTour(venue)}
+        aria-label={`Add ${venue.name} to a tour`}>
+        + Tour
+      </button>
+      <button type="button" className="btn btn-ghost btn-sm venues-danger" onClick={() => onDelete(venue)}
+        aria-label={`Delete ${venue.name}`}>
+        ✕
+      </button>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function VenuesPage() {
   const { values: venueTypes } = useLookup('venue_type');
-  const [venues, setVenues]         = useState<Venue[]>([]);
-  const [search, setSearch]         = useState('');
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [mapsReady, setMapsReady] = useState(false);
+
+  const [search, setSearch] = useState('');
   const [filterState, setFilterState] = useState('');
-  const [showNew, setShowNew]       = useState(false);
-  const [form, setForm]             = useState<VenueForm>(BLANK);
-  const [saving, setSaving]         = useState(false);
-  const [saveError, setSaveError]   = useState('');
-  const [mapsReady, setMapsReady]   = useState(false);
-
-  // AI file import
-  const [showAiImport, setShowAiImport] = useState(false);
-
-  // Bulk import
-  const [showImport, setShowImport]     = useState(false);
-  const [importText, setImportText]     = useState('');
-  const [importRows, setImportRows]     = useState<any[]>([]);
-  const [importParsed, setImportParsed] = useState(false);
-  const [importSaving, setImportSaving] = useState(false);
-  const [importDone, setImportDone]     = useState<{added:number;skipped:number;invalid:number} | null>(null);
-  const [importError, setImportError]   = useState('');
-  const autocompleteRef             = useRef<any>(null);
-  const inputRef                    = useRef<HTMLInputElement>(null);
-
-  // Prospecting state
-  const [prospectCity, setProspectCity]   = useState('');
-  const [prospectState, setProspectState] = useState('');
-  const [prospecting, setProspecting]     = useState(false);
-  const [prospects, setProspects]         = useState<ProspectResult[]>([]);
-  const [prospectErr, setProspectErr]     = useState('');
-  const [prospectStatus, setProspectStatus] = useState<Record<string, string>>({});
-  const [prospectEmails, setProspectEmails] = useState<Record<string, string>>({});
-
-  // Genre filter
   const [filterGenre, setFilterGenre] = useState('');
-
-  // View mode: table vs by-state drill-down
-  const [venueView, setVenueView] = useState<'table' | 'state'>('state');
-  // One state's venue list is open at a time, in a panel under the state tiles.
-  const [selectedState, setSelectedState] = useState<string | null>(null);
+  const [view, setView] = useState<View>('state');
+  const [openState, setOpenState] = useState<string | null>(null);
   const statePanelRef = useRef<HTMLDivElement>(null);
 
-  // Email enrichment
-  const [enrichStatus, setEnrichStatus] = useState<Record<string, string>>({});
-  const [bulkEnriching, setBulkEnriching] = useState(false);
-  const [bulkResult, setBulkResult] = useState<{found: number; hadEmail: number; notFound: number} | null>(null);
+  const [enrich, setEnrich] = useState<Record<string, EnrichStatus>>({});
+  const [bulk, setBulk] = useState<BulkRun | null>(null);
+  const stopBulk = useRef(false);
 
-  // Delete venue state
+  const [showAdd, setShowAdd] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showFileImport, setShowFileImport] = useState(false);
+  const [tourTarget, setTourTarget] = useState<Venue | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Venue | null>(null);
-  const [deleting, setDeleting]         = useState(false);
-
-  // Venue drawer
   const [drawerVenueId, setDrawerVenueId] = useState<string | null>(null);
 
-  // Add to tour state
-  const [tourTarget, setTourTarget]   = useState<Venue | null>(null);
-  const [tours, setTours]             = useState<any[]>([]);
-  const [toursLoaded, setToursLoaded] = useState(false);
-  const [addingTour, setAddingTour]   = useState<string | null>(null);
-  const [addTourDone, setAddTourDone] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchVenues().then(list => {
+      if (cancelled) return;
+      if (list === null) { setLoadState('error'); return; }
+      setVenues(list);
+      setLoadState('ready');
+    });
+    return () => { cancelled = true; };
+  }, [reloadKey]);
 
-  useEffect(() => { loadVenues(); loadGoogleMaps(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void loadGoogleMaps().then(ok => { if (!cancelled) setMapsReady(ok); });
+    return () => { cancelled = true; };
+  }, []);
+
+  /** Re-reads the list in place (no loading skeleton), after a save, scan or delete. */
+  const refresh = useCallback(async (): Promise<void> => {
+    const list = await fetchVenues();
+    if (list) setVenues(list);
+  }, []);
 
   // Bring a newly opened state's venue list into view under the tiles.
   useEffect(() => {
-    if (!selectedState) return;
+    if (!openState) return;
     const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     statePanelRef.current?.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
-  }, [selectedState]);
+  }, [openState]);
 
-  const loadGoogleMaps = async () => {
-    if (window.google?.maps?.places) { setMapsReady(true); return; }
-    try {
-      const res = await fetch('/api/admin/public-config');
-      if (!res.ok) return;
-      const { googleMapsApiKey } = await res.json();
-      if (!googleMapsApiKey) return;
-      window.initGooglePlaces = () => setMapsReady(true);
-      const s = document.createElement('script');
-      s.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places&callback=initGooglePlaces`;
-      s.async = true; s.defer = true;
-      document.head.appendChild(s);
-    } catch { /* Maps unavailable */ }
+  // Stop a bulk scan if the page goes away mid-run.
+  useEffect(() => () => { stopBulk.current = true; }, []);
+
+  const summary = useMemo(() => summarizeVenues(venues), [venues]);
+  const options = useMemo(() => filterOptions(venues), [venues]);
+  const filtered = useMemo(
+    () => filterVenues(venues, { search, state: filterState, genre: filterGenre }),
+    [venues, search, filterState, filterGenre],
+  );
+  const groups = useMemo(() => groupByState(filtered), [filtered]);
+  const toScan = useMemo(() => enrichable(venues), [venues]);
+  const shownState = openState && groups.some(g => g.state === openState) ? openState : null;
+  const filtersOn = !!(search.trim() || filterState || filterGenre);
+
+  const scanOne = async (v: Venue): Promise<void> => {
+    const s = await getVenueSession();
+    if (!s) return;
+    setEnrich(prev => ({ ...prev, [v.id]: { kind: 'scanning' } }));
+    const result = await scanVenue(v, s.token);
+    setEnrich(prev => ({ ...prev, [v.id]: result }));
+    void refresh();
   };
 
-  // Bind autocomplete once modal opens and Maps is ready; clear on close to prevent duplicate listeners
-  useEffect(() => {
-    if (!showNew) { autocompleteRef.current = null; return; }
-    if (!mapsReady || !inputRef.current || autocompleteRef.current) return;
-    autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
-      types: ['establishment'],
-      fields: ['name','formatted_address','address_components','geometry',
-               'formatted_phone_number','website','place_id','url'],
+  const scanAll = async (): Promise<void> => {
+    const list = toScan;
+    if (list.length === 0 || bulk?.running) return;
+    const s = await getVenueSession();
+    if (!s) return;
+    stopBulk.current = false;
+    const run: BulkRun = { done: 0, total: list.length, found: 0, missed: 0, running: true };
+    setBulk({ ...run });
+    // One at a time: the scraper fetches third-party sites, so be polite and predictable.
+    for (const v of list) {
+      if (stopBulk.current) break;
+      setEnrich(prev => ({ ...prev, [v.id]: { kind: 'scanning' } }));
+      const result = await scanVenue(v, s.token);
+      setEnrich(prev => ({ ...prev, [v.id]: result }));
+      run.done++;
+      if (result.kind === 'found') run.found++; else run.missed++;
+      setBulk({ ...run });
+    }
+    setEnrich(prev => {
+      // Anything left "scanning" by a stop goes back to idle.
+      const next = { ...prev };
+      for (const [id, st] of Object.entries(next)) if (st.kind === 'scanning') delete next[id];
+      return next;
     });
-    autocompleteRef.current.addListener('place_changed', () => {
-      const p = autocompleteRef.current.getPlace();
-      if (!p || !p.name) return;
-      const get = (type: string, short = false) => {
-        const c = p.address_components?.find((x: any) => x.types.includes(type));
-        return c ? (short ? c.short_name : c.long_name) : '';
-      };
-      setForm(f => ({
-        ...f,
-        name:            p.name || f.name,
-        address:         p.formatted_address || f.address,
-        city:            get('locality') || get('sublocality') || f.city,
-        state:           get('administrative_area_level_1', true) || f.state,
-        phone:           p.formatted_phone_number || f.phone,
-        website:         p.website || f.website,
-        place_id:        p.place_id || '',
-        google_maps_url: p.url || '',
-      }));
-    });
-  }, [showNew, mapsReady]);
-
-  const loadVenues = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    const res = await fetch('/api/venues/list', {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    if (res.ok) setVenues(await res.json());
+    setBulk({ ...run, running: false });
+    void refresh();
   };
 
-  const saveVenue = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaveError('');
-    if (!form.name.trim()) { setSaveError('Venue name is required'); return; }
-    if (!form.city.trim()) { setSaveError('City is required'); return; }
-    setSaving(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
-    const actId = user ? await import('../../lib/bookingQueries').then(m => m.getActId(supabase, user.id)) : null;
-    const genreArr = form.music_genres ? form.music_genres.split(',').map(g => g.trim()).filter(Boolean) : null;
-    await supabase.from('venues').insert({
-      act_id:         actId,
-      name:           form.name,
-      city:           form.city,
-      state:          form.state,
-      address:        form.address        || null,
-      phone:          form.phone          || null,
-      email:          form.email          || null,
-      website:        form.website        || null,
-      venue_type:     form.venue_type     || null,
-      capacity:       form.capacity ? Number(form.capacity) : null,
-      place_id:       form.place_id       || null,
-      google_maps_url: form.google_maps_url || null,
-      music_genres:   genreArr?.length ? genreArr : null,
-      created_by:     user!.id,
-    });
-    setForm(BLANK);
-    setShowNew(false);
-    await loadVenues();
-    setSaving(false);
-  };
+  const heroSummary = loadState === 'ready' && summary.total > 0
+    ? `${plural(summary.total, 'venue')} across ${plural(summary.states, 'state')} — ${summary.withEmail === summary.total ? 'every one has a booking email.' : `${(summary.total - summary.withEmail).toLocaleString()} still need a booking email.`}`
+    : undefined;
 
-  const parseImport = () => {
-    setImportError('');
-    setImportDone(null);
-    const lines = importText.trim().split('\n').filter(l => l.trim());
-    if (!lines.length) { setImportError('Paste your venue list first.'); return; }
-
-    // Detect markdown table (lines contain |) or CSV
-    const isTable = lines[0].includes('|');
-    const rows: any[] = [];
-
-    const clean = (s: string) => s?.trim().replace(/^["']|["']$/g, '').trim() || '';
-
-    if (isTable) {
-      // Strip header separator line (---|---)
-      const dataLines = lines.filter(l => !/^\s*\|?\s*[-:]+\s*\|/.test(l));
-      // First data line is headers
-      const headers = dataLines[0].split('|').map(h => clean(h).toLowerCase().replace(/[^a-z0-9]/g, '_'));
-      for (let i = 1; i < dataLines.length; i++) {
-        const cells = dataLines[i].split('|').map(clean);
-        const obj: any = {};
-        headers.forEach((h, idx) => { if (h) obj[h] = cells[idx] || ''; });
-        if (obj.venue_name || obj.name) rows.push(obj);
-      }
-    } else {
-      // CSV — first line is headers
-      const headers = lines[0].split(',').map(h => clean(h).toLowerCase().replace(/[^a-z0-9]/g, '_'));
-      for (let i = 1; i < lines.length; i++) {
-        const cells = lines[i].split(',').map(clean);
-        const obj: any = {};
-        headers.forEach((h, idx) => { if (h) obj[h] = cells[idx] || ''; });
-        if (obj.venue_name || obj.name) rows.push(obj);
-      }
-    }
-
-    if (!rows.length) { setImportError('Could not parse any venue rows. Make sure the first line is a header row.'); return; }
-
-    // Normalize field names to internal keys
-    const allNorm = rows.map(r => ({
-      name:         clean(r.venue_name || r.name || ''),
-      address:      clean(r.address || ''),
-      city:         clean(r.city || ''),
-      state:        clean(r.state || ''),
-      phone:        clean(r.phone || r.phone_number || ''),
-      email:        clean(r.booking_email || r.general___info_email || r.general_email || r.email || ''),
-      website:      clean(r.website || ''),
-      venue_type:   clean(r.type || r.venue_type || '').toLowerCase(),
-      capacity:     clean(r.capacity || ''),
-      contact_first: clean((r.contact_name || r.booking_contact_name || '').split(' ')[0] || ''),
-      contact_last:  clean((r.contact_name || r.booking_contact_name || '').split(' ').slice(1).join(' ') || ''),
-      contact_title: clean(r.contact_title || r.booking_contact_title || ''),
-      contact_email: clean(r.booking_email || r.contact_email || ''),
-      notes:         clean(r.notes || ''),
-      _selected:     true,
-    }));
-    const invalidCount = allNorm.filter(r => !r.name || !r.city).length;
-    const norm = allNorm.filter(r => r.name && r.city);
-
-    if (!norm.length) { setImportError(`Rows found but none had a Venue Name and City — ${invalidCount} row${invalidCount !== 1 ? 's' : ''} skipped. Check your column headers.`); return; }
-    if (invalidCount > 0) setImportError(`Note: ${invalidCount} row${invalidCount !== 1 ? 's' : ''} skipped (missing Venue Name or City).`);
-    setImportRows(norm);
-    setImportParsed(true);
-  };
-
-  const runImport = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
-    if (!user) return;
-    const actId = await import('../../lib/bookingQueries').then(m => m.getActId(supabase, user.id));
-    setImportSaving(true);
-    let added = 0; let skipped = 0;
-
-    for (const row of importRows.filter(r => r._selected)) {
-      // Check for existing venue (same name + city)
-      const { data: existing } = await supabase
-        .from('venues').select('id').eq('act_id', actId)
-        .ilike('name', row.name).ilike('city', row.city).maybeSingle();
-
-      if (existing) {
-        // Update with new info
-        await supabase.from('venues').update({
-          address:    row.address    || null,
-          phone:      row.phone      || null,
-          email:      row.email      || null,
-          website:    row.website    || null,
-          venue_type: row.venue_type || null,
-          capacity:   row.capacity   ? Number(row.capacity) : null,
-          notes:      row.notes      || null,
-        }).eq('id', existing.id);
-        skipped++;
-      } else {
-        const { data: newV } = await supabase.from('venues').insert({
-          act_id:     actId,
-          name:       row.name,
-          city:       row.city,
-          state:      row.state      || '',
-          address:    row.address    || null,
-          phone:      row.phone      || null,
-          email:      row.email      || null,
-          website:    row.website    || null,
-          venue_type: row.venue_type || null,
-          capacity:   row.capacity   ? Number(row.capacity) : null,
-          notes:      row.notes      || null,
-          source:     'import',
-          country:    'US',
-        }).select('id').single();
-
-        // Create contact if name provided
-        if (newV?.id && (row.contact_first || row.contact_email)) {
-          await supabase.from('contacts').insert({
-            act_id:     actId,
-            venue_id:   newV.id,
-            first_name: row.contact_first || '',
-            last_name:  row.contact_last  || '',
-            title:      row.contact_title || null,
-            email:      row.contact_email || null,
-            status:     'not_contacted',
-          });
-        }
-        added++;
-      }
-    }
-
-    await loadVenues();
-    setImportDone({ added, skipped, invalid: importRows.filter(r => !r._selected).length });
-    setImportSaving(false);
-  };
-
-  const deleteVenue = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    await supabase.from('venues').delete().eq('id', deleteTarget.id);
-    setDeleteTarget(null);
-    setDeleting(false);
-    await loadVenues();
-  };
-
-  const set = (k: keyof VenueForm) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-      setForm(f => ({ ...f, [k]: e.target.value }));
-
-  const openAddToTour = async (venue: Venue) => {
-    setTourTarget(venue);
-    setAddTourDone(null);
-    if (!toursLoaded) {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user ?? null;
-      const actId = await getActId(supabase, user!.id);
-      if (actId) {
-        const { data } = await supabase
-          .from('tours')
-          .select('id, name, act:acts(act_name), status')
-          .eq('act_id', actId)
-          .neq('status', 'cancelled')
-          .order('created_at', { ascending: false });
-        setTours(data || []);
-      }
-      setToursLoaded(true);
-    }
-  };
-
-  const addVenueToTour = async (tourId: string) => {
-    if (!tourTarget) return;
-    setAddingTour(tourId);
-    const { data: { session } } = await supabase.auth.getSession();
-    const res = await fetch('/api/tours/venues', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session!.access_token}` },
-      body: JSON.stringify({ tour_id: tourId, venue_id: tourTarget.id }),
-    });
-    if (res.ok) setAddTourDone(tourId);
-    setAddingTour(null);
-  };
-
-  const enrichVenueEmail = async (venue: Venue) => {
-    if (!venue.website) return;
-    setEnrichStatus(prev => ({ ...prev, [venue.id]: 'scraping' }));
-    const { data: { session } } = await supabase.auth.getSession();
-    try {
-      const res = await fetch('/api/venues/scrape', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session!.access_token}` },
-        body: JSON.stringify({ url: venue.website, venueId: venue.id }),
-      });
-      if (res.ok) {
-        const { extracted } = await res.json();
-        const email = extracted?.booking_email || extracted?.general_email || null;
-        setEnrichStatus(prev => ({ ...prev, [venue.id]: email ? `found:${email}` : 'notfound' }));
-        await loadVenues();
-      } else {
-        setEnrichStatus(prev => ({ ...prev, [venue.id]: 'error' }));
-      }
-    } catch {
-      setEnrichStatus(prev => ({ ...prev, [venue.id]: 'error' }));
-    }
-  };
-
-  const bulkFindEmails = async () => {
-    const noEmail = venues.filter(v => !v.email && v.website);
-    if (!noEmail.length) return;
-    setBulkEnriching(true);
-    setBulkResult(null);
-    const { data: { session } } = await supabase.auth.getSession();
-    let found = 0; let hadEmail = 0; let notFound = 0;
-    for (const v of noEmail) {
-      setEnrichStatus(prev => ({ ...prev, [v.id]: 'scraping' }));
-      try {
-        const res = await fetch('/api/venues/scrape', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session!.access_token}` },
-          body: JSON.stringify({ url: v.website, venueId: v.id }),
-        });
-        if (res.ok) {
-          const { extracted } = await res.json();
-          const email = extracted?.booking_email || extracted?.general_email || null;
-          if (email) { found++; setEnrichStatus(prev => ({ ...prev, [v.id]: `found:${email}` })); }
-          else { notFound++; setEnrichStatus(prev => ({ ...prev, [v.id]: 'notfound' })); }
-        } else {
-          notFound++;
-          setEnrichStatus(prev => ({ ...prev, [v.id]: 'error' }));
-        }
-      } catch {
-        notFound++;
-        setEnrichStatus(prev => ({ ...prev, [v.id]: 'error' }));
-      }
-    }
-    hadEmail = venues.filter(v => v.email).length;
-    await loadVenues();
-    setBulkResult({ found, hadEmail, notFound });
-    setBulkEnriching(false);
-  };
-
-  const searchProspects = async () => {
-    if (!prospectCity.trim() || !prospectState.trim()) return;
-    setProspecting(true);
-    setProspectErr('');
-    setProspects([]);
-    const timeout = setTimeout(() => {
-      setProspecting(false);
-      setProspectErr('Search failed - please try again');
-    }, 5000);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const res = await fetch(`/api/venues/prospect?city=${encodeURIComponent(prospectCity.trim())}&state=${encodeURIComponent(prospectState.trim())}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
-      if (!res.ok) { setProspectErr(json.error || 'Search failed - please try again'); }
-      else { setProspects(json); }
-    } catch (e) {
-      console.error(e);
-      setProspectErr('Search failed - please try again');
-    } finally {
-      clearTimeout(timeout);
-      setProspecting(false);
-    }
-  };
-
-  const addProspect = async (p: ProspectResult) => {
-    const setStatus = (s: string) =>
-      setProspectStatus(prev => ({ ...prev, [p.place_id]: s }));
-
-    setStatus('fetching');
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
-
-    // Step 1: Fetch Place Details for website + phone
-    let website: string | null = null;
-    let phone: string | null = null;
-    // Town/state/street from Google's structured address win over the search
-    // result's (parsed from text), and neither is ever the searched town.
-    let city: string | null = p.city;
-    let state: string | null = p.state;
-    let street: string | null = p.address || null;
-    try {
-      const dr = await fetch(`/api/venues/place-details?place_id=${encodeURIComponent(p.place_id)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (dr.ok) {
-        const d = await dr.json();
-        website = d.website;
-        phone = d.phone;
-        city = d.city ?? city;
-        state = d.state ?? state;
-        street = d.street ?? street;
-      }
-    } catch { /* continue with the search result's address */ }
-
-    setStatus('saving');
-
-    // Step 2: Insert venue with full details
-    const user = session?.user ?? null;
-    const actId = user ? await import('../../lib/bookingQueries').then(m => m.getActId(supabase, user.id)) : null;
-    // venues.city/state are required: fall back to the searched town only when
-    // Google gave none for the venue itself.
-    const town = townForSave({ city, state }, { city: p.searched_city, state: p.searched_state });
-    const { data: newVenue, error: insertError } = await supabase.from('venues').insert({
-      act_id:          actId,
-      name:            p.name,
-      city:            town.city,
-      state:           town.state,
-      address:         street,
-      place_id:        p.place_id,
-      google_maps_url: p.google_maps_url,
-      website:         website           || null,
-      phone:           phone             || null,
-      created_by:      user!.id,
-    }).select().single();
-
-    if (insertError || !newVenue) {
-      console.error('[venues] add prospect failed', { placeId: p.place_id, code: insertError?.code });
-      setProspectStatus(prev => { const next = { ...prev }; delete next[p.place_id]; return next; });
-      setProspectErr(`Couldn't save ${p.name}. Try again, or add it by hand.`);
-      return;
-    }
-
-    setProspects(prev => prev.map(r => r.place_id === p.place_id ? { ...r, already_added: true } : r));
-    await loadVenues();
-
-    // Step 3: Auto-scrape website for booking email + contacts
-    if (website && newVenue?.id) {
-      setStatus('scraping');
-      try {
-        const sr = await fetch('/api/venues/scrape', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ url: website, venueId: newVenue.id }),
-        });
-        if (sr.ok) {
-          const { extracted } = await sr.json();
-          const email = extracted?.booking_email || extracted?.general_email || null;
-          if (email) setProspectEmails(prev => ({ ...prev, [p.place_id]: email }));
-          await loadVenues();
-        }
-      } catch { /* scrape failed — not critical */ }
-    }
-
-    setStatus('done');
-  };
-
-  const states = [...new Set(venues.map(v => v.state).filter(Boolean))].sort();
-  const allGenres = [...new Set(venues.flatMap(v => v.music_genres || []).filter(Boolean))].sort();
-  const filtered = venues.filter(v => {
-    const q = search.toLowerCase();
-    const nameMatch = !q || v.name.toLowerCase().includes(q) || v.city?.toLowerCase().includes(q);
-    const stateMatch = !filterState || v.state === filterState;
-    const genreMatch = !filterGenre || (v.music_genres || []).includes(filterGenre);
-    return nameMatch && stateMatch && genreMatch;
-  });
+  const rowProps = { onScan: (v: Venue) => void scanOne(v), onTour: setTourTarget, onDelete: setDeleteTarget };
 
   return (
     <AppShell requireRole="band_admin">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Venues</h1>
-          <div className="page-sub">{venues.length} in database</div>
-        </div>
-        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* View toggle */}
-          <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-            {(['state', 'table'] as const).map(v => (
-              <button
-                key={v}
-                onClick={() => setVenueView(v)}
-                style={{
-                  fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700,
-                  letterSpacing: '0.08em', textTransform: 'uppercase',
-                  padding: '0.3rem 0.75rem', border: 'none', cursor: 'pointer',
-                  background: venueView === v ? 'var(--accent)' : 'transparent',
-                  color: venueView === v ? '#000' : 'var(--text-muted)',
-                  transition: 'background 0.15s',
-                }}
-              >{v === 'state' ? 'By State' : 'Table'}</button>
-            ))}
-          </div>
-          {venues.filter(v => !v.email && v.website).length > 0 && (
-            <button
-              className="btn btn-secondary"
-              onClick={bulkFindEmails}
-              disabled={bulkEnriching}
-              title={`Find emails for ${venues.filter(v => !v.email && v.website).length} venues with websites but no email`}
-            >
-              {bulkEnriching ? '✉ Finding…' : `✉ Find Emails (${venues.filter(v => !v.email && v.website).length})`}
-            </button>
-          )}
-          <VenueTownCheck endpoint="/api/venues/towns" onApplied={() => void loadVenues()} />
-          <button className="btn btn-secondary" onClick={() => setShowAiImport(true)}>⬆ Import File</button>
-          <button className="btn btn-secondary" onClick={() => { setShowImport(true); setImportParsed(false); setImportText(''); setImportRows([]); setImportDone(null); setImportError(''); }}>⬆ Bulk Import</button>
-          <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ Add Venue</button>
-        </div>
-      </div>
+      <PageHero
+        title="Venues"
+        subtitle="Rooms, talent buyers & contacts"
+        summary={heroSummary}
+        scene={<MainStreetScene />}
+        actions={<button type="button" className="btn btn-primary tours-new-btn" onClick={() => setShowAdd(true)}>+ Add venue</button>}
+      />
 
-      {/* Bulk email find result */}
-      {bulkResult && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '0.6rem 1rem', background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 'var(--radius-sm)', marginBottom: '1rem' }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#34d399' }}>✓ {bulkResult.found} new emails found</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#fbbf24' }}>◈ {bulkResult.hadEmail} already had email</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#94a3b8' }}>✕ {bulkResult.notFound} not found</span>
-          <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto', fontSize: '0.72rem' }} onClick={() => setBulkResult(null)}>✕</button>
+      {loadState === 'loading' && (
+        <div className="tours-body" aria-busy="true">
+          <span className="sr-only" role="status">Loading venues…</span>
+          <div className="tours-metrics">{[0, 1, 2, 3].map(i => <div key={i} className="tour-metric tour-skeleton" />)}</div>
+          <div className="venues-discover tour-skeleton venues-skeleton-strip" />
+          <div className="tours-grid">{[0, 1, 2, 3].map(i => <div key={i} className="tour-card tour-skeleton" />)}</div>
         </div>
       )}
 
-      {/* Discover Venues — city/state Google search, compact strip at top */}
-      <div className="card" style={{ marginBottom: '1.25rem', padding: '0.85rem 1.25rem' }}>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', letterSpacing: '0.06em', color: 'var(--accent)', flexShrink: 0 }}>DISCOVER</span>
-          <input
-            className="input"
-            style={{ flex: '1 1 160px', maxWidth: 200 }}
-            placeholder="City"
-            value={prospectCity}
-            onChange={e => setProspectCity(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && searchProspects()}
-          />
-          <input
-            className="input"
-            style={{ width: 80, flexShrink: 0 }}
-            placeholder="ST"
-            maxLength={2}
-            value={prospectState}
-            onChange={e => setProspectState(e.target.value.toUpperCase())}
-            onKeyDown={e => e.key === 'Enter' && searchProspects()}
-          />
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={searchProspects}
-            disabled={prospecting || !prospectCity.trim() || !prospectState.trim()}
-          >
-            {prospecting ? 'Searching…' : 'Search Google'}
-          </button>
-          {prospects.length > 0 && (
-            <button className="btn btn-ghost btn-sm" onClick={() => { setProspects([]); setProspectCity(''); setProspectState(''); }}>
-              Clear
-            </button>
-          )}
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)', flexShrink: 0 }}>
-            Find venues not yet in your database
-          </span>
+      {loadState === 'error' && (
+        <div className="card tours-empty" role="alert">
+          <div className="tours-empty-title">Venues didn’t load</div>
+          <p>Something went wrong reaching the database. Your venues are safe — try again.</p>
+          <button type="button" className="btn btn-primary" onClick={() => { setLoadState('loading'); setReloadKey(k => k + 1); }}>Try again</button>
         </div>
+      )}
 
-        {prospectErr && (
-          <div style={{ marginTop: '0.6rem', padding: '0.6rem 0.75rem', background: 'rgba(239,68,68,0.1)', borderRadius: 'var(--radius-sm)', color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>
-            {prospectErr}
-          </div>
-        )}
-
-        {prospects.length > 0 && (
-          <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
-              {searchSummary(prospects, prospects[0]?.searched_city ?? prospectCity.trim())} — {prospects.filter(p => p.already_added).length} already in your database
-            </div>
-            {prospects.map(p => {
-              const status = prospectStatus[p.place_id];
-              const email  = prospectEmails[p.place_id];
-              const busy   = !!(status && status !== 'done');
-              const statusLabel: Record<string, string> = {
-                fetching: 'Fetching details…',
-                saving:   'Saving…',
-                scraping: 'Scanning for email…',
-                done:     '✓ Done',
-              };
-              return (
-                <div key={p.place_id} style={{
-                  display: 'flex', alignItems: 'center', gap: '0.75rem',
-                  padding: '0.6rem 0.75rem', borderRadius: 'var(--radius-sm)',
-                  background: p.already_added ? 'rgba(52,211,153,0.06)' : 'var(--bg-overlay)',
-                  border: `1px solid ${p.already_added ? 'rgba(52,211,153,0.2)' : 'var(--border)'}`,
-                  cursor: p.already_added ? 'default' : 'pointer',
-                }}
-                  onClick={() => { if (p.already_added) { const v = venues.find(v => v.place_id === p.place_id); if (v) setDrawerVenueId(v.id); } }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      {p.name}
-                      {p.already_added && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#34d399', letterSpacing: '0.1em', textTransform: 'uppercase' }}>✓ In DB</span>}
-                      {p.rating && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#fbbf24' }}>★ {p.rating}</span>}
-                      {nearbyTag(p) && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '0 0.4rem' }}>{nearbyTag(p)}</span>}
-                    </div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {p.formatted_address}
-                    </div>
-                    {email && (
-                      <div style={{ color: 'var(--accent)', fontSize: '0.78rem', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
-                        ✉ {email}
-                      </div>
-                    )}
-                    {busy && (
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.76rem', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
-                        {statusLabel[status]}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                    <a href={p.google_maps_url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>Maps ↗</a>
-                    {!p.already_added && (
-                      <button className="btn btn-primary btn-sm" onClick={() => addProspect(p)} disabled={busy} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', minWidth: 52 }}>
-                        {busy ? '…' : '+ Add'}
-                      </button>
-                    )}
-                    {p.already_added && (
-                      <button className="btn btn-ghost btn-sm" onClick={() => { const v = venues.find(v => v.place_id === p.place_id); if (v) setDrawerVenueId(v.id); }} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>
-                        View →
-                      </button>
-                    )}
-                  </div>
+      {loadState === 'ready' && (
+        <div className="tours-body">
+          {summary.total > 0 && (
+            <section className="tours-metrics" aria-label="Venue contact coverage">
+              <div className="tour-metric">
+                <span className="tour-metric-label">Venues</span>
+                <div className="tour-metric-value"><strong>{summary.total.toLocaleString()}</strong><span>across {plural(summary.states, 'state')}</span></div>
+                <span className="tour-metric-note">{plural(options.genres.length, 'genre tag')} in use</span>
+              </div>
+              <div className="tour-metric">
+                <span className="tour-metric-label">Booking emails</span>
+                <div className="tour-metric-value"><strong>{summary.withEmail.toLocaleString()}</strong><span>of {summary.total.toLocaleString()} · {summary.emailPct}%</span></div>
+                <div className="tour-meter" role="progressbar" aria-label="Venues with a booking email"
+                  aria-valuemin={0} aria-valuemax={100} aria-valuenow={summary.emailPct}>
+                  <div className="tour-meter-bar" style={{ width: `${summary.emailPct}%` }} />
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-        <input className="input" style={{ maxWidth: 320 }} placeholder="Search name or city..." value={search} onChange={e => setSearch(e.target.value)} />
-        <select className="select" style={{ width: 160 }} value={filterState} onChange={e => setFilterState(e.target.value)}>
-          <option value="">All States</option>
-          {states.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        {allGenres.length > 0 && (
-          <select className="select" style={{ width: 180 }} value={filterGenre} onChange={e => setFilterGenre(e.target.value)}>
-            <option value="">All Genres</option>
-            {allGenres.map(g => <option key={g} value={g}>{g}</option>)}
-          </select>
-        )}
-      </div>
-
-      {/* ── STATE DRILL-DOWN VIEW ── */}
-      {venueView === 'state' && (() => {
-        const byState: Record<string, Venue[]> = {};
-        filtered.forEach(v => {
-          const s = v.state || '—';
-          byState[s] = byState[s] || [];
-          byState[s].push(v);
-        });
-        const sortedStates = Object.keys(byState).sort();
-
-        if (filtered.length === 0) return (
-          <div className="card" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
-            {venues.length === 0 ? 'No venues yet — add your first.' : 'No matches.'}
-          </div>
-        );
-
-        const tiles = sortedStates.map(state => ({
-          state,
-          venueCount: byState[state].length,
-          emailCount: byState[state].filter(v => v.email).length,
-        }));
-        // The open state can drop out of view when search/filters change.
-        const openState = selectedState && byState[selectedState] ? selectedState : null;
-
-        return (
-          <>
-            <StateTileGrid
-              tiles={tiles}
-              selected={openState}
-              onSelect={state => setSelectedState(prev => (prev === state ? null : state))}
-              panelId="state-venues-panel"
-            />
-            {openState && (() => {
-              const state = openState;
-              const stateVenues = byState[state];
-              const emailCount = stateVenues.filter(v => v.email).length;
-              return (
-                <div
-                  ref={statePanelRef}
-                  id="state-venues-panel"
-                  role="region"
-                  aria-label={`${state} venues`}
-                  className="card"
-                  style={{ padding: 0, overflow: 'hidden', borderColor: 'var(--accent)', scrollMarginTop: '1rem' }}
-                >
-                  {/* State header row — click to close */}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedState(null)}
-                    aria-expanded="true"
-                    aria-label={`Close ${state} venues`}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
-                      padding: '0.85rem 1.25rem', cursor: 'pointer', font: 'inherit', textAlign: 'left',
-                      color: 'inherit', border: 'none', borderBottom: '1px solid var(--border)',
-                      background: 'var(--bg-overlay)',
-                    }}
-                  >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', lineHeight: 1, letterSpacing: '0.06em', color: 'var(--accent)' }}>
-                        {state}
-                      </span>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                        {stateVenues.length} venue{stateVenues.length !== 1 ? 's' : ''}
-                      </span>
-                      {emailCount > 0 && (
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#34d399' }}>
-                          ✉ {emailCount} with email
-                        </span>
-                      )}
-                    </span>
-                    <span aria-hidden="true" style={{ fontFamily: 'var(--font-mono)', fontSize: '1rem', color: 'var(--text-muted)' }}>✕</span>
+              </div>
+              <div className="tour-metric">
+                <span className="tour-metric-label">Ready to scan</span>
+                <div className="tour-metric-value">
+                  <strong className={summary.canEnrich > 0 ? 'tour-metric-hot' : undefined}>{summary.canEnrich.toLocaleString()}</strong>
+                  <span>have a website, no email</span>
+                </div>
+                {bulk?.running ? (
+                  <div className="venues-bulk" role="status">
+                    <span>Scanning {bulk.done} of {bulk.total} · {bulk.found} found</span>
+                    <button type="button" className="venues-link-btn" onClick={() => { stopBulk.current = true; }}>Stop</button>
+                  </div>
+                ) : summary.canEnrich > 0 ? (
+                  <button type="button" className="btn btn-secondary btn-sm venues-metric-btn" onClick={() => void scanAll()}>
+                    Find {plural(summary.canEnrich, 'email')}
                   </button>
+                ) : (
+                  <span className="tour-metric-note">Nothing left to scan</span>
+                )}
+              </div>
+              <div className="tour-metric">
+                <span className="tour-metric-label">Hand search</span>
+                <div className="tour-metric-value"><strong>{summary.noLead.toLocaleString()}</strong><span>no email or website</span></div>
+                <span className="tour-metric-note">Try their Facebook or Instagram, then add it in the venue drawer.</span>
+              </div>
+            </section>
+          )}
 
-                  {/* Venue list — scrolls inside the panel so the tiles stay in view */}
-                  <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '55vh', overflowY: 'auto', overscrollBehavior: 'contain' }}>
-                      {stateVenues.map((v, idx) => (
-                        <div
-                          key={v.id}
-                          style={{
-                            display: 'grid', gridTemplateColumns: '1fr auto',
-                            gap: '0.75rem', alignItems: 'center',
-                            padding: '0.7rem 1.25rem',
-                            borderBottom: idx < stateVenues.length - 1 ? '1px solid var(--border)' : 'none',
-                            cursor: 'pointer',
-                            transition: 'background 0.1s',
-                          }}
-                          onClick={() => setDrawerVenueId(v.id)}
-                          onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-overlay)'}
-                          onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
-                        >
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                              <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{v.name}</span>
-                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)' }}>{v.city}</span>
-                              {v.venue_type && (
-                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-muted)', background: 'var(--bg-surface)', padding: '0.1rem 0.35rem', borderRadius: 2 }}>
-                                  {v.venue_type.replace(/_/g, ' ')}
-                                </span>
-                              )}
-                              {v.capacity && (
-                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                                  cap {v.capacity.toLocaleString()}
-                                </span>
-                              )}
-                            </div>
-                            <div style={{ marginTop: '0.2rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                              {v.email ? (
-                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--accent)' }}>✉ {v.email}</span>
-                              ) : enrichStatus[v.id]?.startsWith('found:') ? (
-                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#34d399' }}>✓ {enrichStatus[v.id].slice(6)}</span>
-                              ) : enrichStatus[v.id] === 'scraping' ? (
-                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>✉ Scanning…</span>
-                              ) : null}
-                              {v.phone && (
-                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)' }}>{v.phone}</span>
-                              )}
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', gap: '0.4rem' }} onClick={e => e.stopPropagation()}>
-                            {v.website && !v.email && (
-                              <button
-                                className="btn btn-ghost btn-sm"
-                                style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: '#60a5fa', whiteSpace: 'nowrap' }}
-                                disabled={enrichStatus[v.id] === 'scraping'}
-                                onClick={() => enrichVenueEmail(v)}
-                              >
-                                {enrichStatus[v.id] === 'scraping' ? '…' : '✉'}
-                              </button>
-                            )}
-                            <button
-                              className="btn btn-ghost btn-sm"
-                              style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent)', whiteSpace: 'nowrap' }}
-                              onClick={() => openAddToTour(v)}
-                            >+ Tour</button>
-                            <button
-                              className="btn btn-ghost btn-sm"
-                              style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#f87171', whiteSpace: 'nowrap' }}
-                              onClick={() => setDeleteTarget(v)}
-                            >✕</button>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              );
-            })()}
-          </>
-        );
-      })()}
+          {bulk && !bulk.running && (
+            <div className="venues-banner" role="status">
+              <span><strong>{bulk.found}</strong> new email{bulk.found === 1 ? '' : 's'} found · {bulk.missed} without one on their site{bulk.done < bulk.total ? ` · stopped after ${bulk.done} of ${bulk.total}` : ''}</span>
+              <button type="button" className="btn btn-ghost btn-sm" aria-label="Dismiss" onClick={() => setBulk(null)}>✕</button>
+            </div>
+          )}
 
-      {/* ── TABLE VIEW ── */}
-      {venueView === 'table' && (
-      <div className="card">
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Venue</th><th>Location</th><th>Type</th>
-                <th>Capacity</th><th>Email</th><th>Phone</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(v => (
-                <tr key={v.id}>
-                  <td style={{ color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }} onClick={() => setDrawerVenueId(v.id)}>{v.name}</td>
-                  <td style={{ cursor: 'pointer' }} onClick={() => setDrawerVenueId(v.id)}>{v.city}, {v.state}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => setDrawerVenueId(v.id)}>{v.venue_type || '—'}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => setDrawerVenueId(v.id)}>{v.capacity ? v.capacity.toLocaleString() : '—'}</td>
-                  <td style={{ cursor: 'pointer' }} onClick={() => setDrawerVenueId(v.id)}>
-                    {v.email ? (
-                      <span style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>{v.email}</span>
-                    ) : enrichStatus[v.id] === 'scraping' ? (
-                      <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>✉ Scanning…</span>
-                    ) : enrichStatus[v.id]?.startsWith('found:') ? (
-                      <span style={{ color: '#34d399', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>✓ {enrichStatus[v.id].slice(6)}</span>
-                    ) : enrichStatus[v.id] === 'notfound' || (v.last_enriched_at && !v.email) ? (
-                      <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
-                        ✕ Not found{v.last_enriched_at ? ` · ${new Date(v.last_enriched_at).toLocaleDateString()}` : ''}
-                      </span>
-                    ) : !v.website ? (
-                      <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>No website</span>
-                    ) : (
-                      <span style={{ color: 'var(--text-muted)' }}>—</span>
-                    )}
-                  </td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', cursor: 'pointer' }} onClick={() => setDrawerVenueId(v.id)}>{v.phone || '—'}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                      {v.website && !v.email && (
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#60a5fa', whiteSpace: 'nowrap' }}
-                          disabled={enrichStatus[v.id] === 'scraping'}
-                          onClick={e => { e.stopPropagation(); enrichVenueEmail(v); }}
-                        >
-                          {enrichStatus[v.id] === 'scraping' ? '✉ …' : '✉ Find Email'}
-                        </button>
-                      )}
-                      {!v.website && !v.email && (
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', padding: '0.2rem 0.4rem' }}>
-                          No website
-                        </span>
-                      )}
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', letterSpacing: '0.06em', color: 'var(--accent)', whiteSpace: 'nowrap' }}
-                        onClick={e => { e.stopPropagation(); openAddToTour(v); }}
-                      >
-                        + Tour
-                      </button>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: '#f87171', whiteSpace: 'nowrap' }}
-                        onClick={e => { e.stopPropagation(); setDeleteTarget(v); }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+          <DiscoverPanel venues={venues} onOpenVenue={setDrawerVenueId} onVenuesChanged={() => void refresh()} />
+
+          <div className="tours-toolbar venues-toolbar">
+            <div className="tours-tabs" role="group" aria-label="Show venues">
+              {(Object.keys(VIEW_LABELS) as View[]).map(k => (
+                <button key={k} type="button" className={`tours-tab${view === k ? ' tours-tab--on' : ''}`}
+                  aria-pressed={view === k} onClick={() => setView(k)}>
+                  {VIEW_LABELS[k]}
+                </button>
               ))}
-            </tbody>
-          </table>
-          {filtered.length === 0 && (
-            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>
-              {venues.length === 0 ? 'No venues yet — add your first.' : 'No matches.'}
+            </div>
+            <div className="venues-tools">
+              <VenueTownCheck endpoint="/api/venues/towns" onApplied={() => void refresh()} />
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowFileImport(true)}>Import file</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowBulkImport(true)}>Paste a list</button>
+            </div>
+          </div>
+
+          {venues.length > 0 && <div className="venues-filters" role="search">
+            <label className="sr-only" htmlFor="venue-search">Search venues</label>
+            <input id="venue-search" className="input venues-search" type="search" placeholder="Search name or city…"
+              value={search} onChange={e => setSearch(e.target.value)} />
+            <label className="sr-only" htmlFor="venue-filter-state">State</label>
+            <select id="venue-filter-state" className="select" value={filterState} onChange={e => setFilterState(e.target.value)}>
+              <option value="">All states</option>
+              {options.states.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            {options.genres.length > 0 && (
+              <>
+                <label className="sr-only" htmlFor="venue-filter-genre">Genre</label>
+                <select id="venue-filter-genre" className="select" value={filterGenre} onChange={e => setFilterGenre(e.target.value)}>
+                  <option value="">All genres</option>
+                  {options.genres.map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </>
+            )}
+            <span className="tours-sort-note" role="status">
+              {filtersOn ? `${plural(filtered.length, 'match', 'matches')}` : `${plural(venues.length, 'venue')}`}
+            </span>
+            {filtersOn && (
+              <button type="button" className="venues-link-btn" onClick={() => { setSearch(''); setFilterState(''); setFilterGenre(''); }}>Clear filters</button>
+            )}
+          </div>}
+
+          {venues.length === 0 ? (
+            <div className="card tours-empty">
+              <div className="tours-empty-title">No venues yet</div>
+              <p>Search a town under Discover, paste a list you already have, or add a room by hand.</p>
+              <button type="button" className="btn btn-primary" onClick={() => setShowAdd(true)}>Add your first venue</button>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="card tours-empty">
+              <div className="tours-empty-title">No matches</div>
+              <p>Nothing fits those filters.</p>
+              <button type="button" className="btn btn-secondary" onClick={() => { setSearch(''); setFilterState(''); setFilterGenre(''); }}>Clear filters</button>
+            </div>
+          ) : view === 'state' ? (
+            <div>
+              <StateTileGrid
+                tiles={groups.map(g => ({ state: g.state, venueCount: g.venues.length, emailCount: g.emailCount }))}
+                selected={shownState}
+                onSelect={st => setOpenState(prev => (prev === st ? null : st))}
+                panelId="state-venues-panel"
+              />
+              {shownState && (() => {
+                const group = groups.find(g => g.state === shownState)!;
+                return (
+                  <section ref={statePanelRef} id="state-venues-panel" className="venues-state-panel" aria-labelledby="state-panel-title">
+                    <header className="venues-state-head">
+                      <h2 className="venues-state-code" id="state-panel-title">{group.state}</h2>
+                      <span className="venues-muted">{plural(group.venues.length, 'venue')} · {group.emailCount} with email</span>
+                      <button type="button" className="btn btn-ghost btn-sm venues-state-close" onClick={() => setOpenState(null)}
+                        aria-label={`Close ${group.state} venues`}>✕</button>
+                    </header>
+                    <ul className="venues-list">
+                      {group.venues.map(v => (
+                        <li key={v.id} className="venues-row">
+                          <div className="venues-row-main">
+                            <button type="button" className="venues-row-name" onClick={() => setDrawerVenueId(v.id)}>{v.name}</button>
+                            <span className="venues-row-meta">
+                              {[v.city, v.venue_type?.replace(/_/g, ' '), v.capacity ? `cap ${v.capacity.toLocaleString()}` : null].filter(Boolean).join(' · ')}
+                            </span>
+                            <span className="venues-row-contact">
+                              <EmailStatus venue={v} status={enrich[v.id]} />
+                              {v.phone && <a className="venues-muted" href={`tel:${v.phone}`}>{v.phone}</a>}
+                            </span>
+                          </div>
+                          <RowActions venue={v} status={enrich[v.id]} {...rowProps} />
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                );
+              })()}
+              {!shownState && <p className="venues-hint venues-tile-hint">Pick a state to see its venues.</p>}
+            </div>
+          ) : (
+            <div className="venues-table-wrap">
+              <table className="venues-table">
+                <caption className="sr-only">Venues</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Venue</th><th scope="col">Location</th><th scope="col">Type</th>
+                    <th scope="col">Capacity</th><th scope="col">Booking email</th><th scope="col">Phone</th>
+                    <th scope="col"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(v => (
+                    <tr key={v.id}>
+                      <td><button type="button" className="venues-row-name" onClick={() => setDrawerVenueId(v.id)}>{v.name}</button></td>
+                      <td>{[v.city, v.state].filter(Boolean).join(', ')}</td>
+                      <td className="venues-cap">{v.venue_type?.replace(/_/g, ' ') || '—'}</td>
+                      <td>{v.capacity ? v.capacity.toLocaleString() : '—'}</td>
+                      <td><EmailStatus venue={v} status={enrich[v.id]} /></td>
+                      <td>{v.phone ? <a className="venues-muted" href={`tel:${v.phone}`}>{v.phone}</a> : '—'}</td>
+                      <td><RowActions venue={v} status={enrich[v.id]} {...rowProps} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
-      </div>
       )}
 
-
-      {/* Add Venue Modal */}
-      {showNew && (
-        <div className="modal-backdrop">
-          <div className="modal" style={{ maxWidth: 620 }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Add Venue</h3>
-              <button className="btn btn-ghost btn-sm" onClick={() => { setShowNew(false); setForm(BLANK); }}>✕</button>
-            </div>
-
-            {/* Google Places search bar */}
-            <div className="field" style={{ marginBottom: '1rem' }}>
-              <label className="field-label">
-                {mapsReady ? '🔍 Search Google Maps (auto-fill)' : 'Search (add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to enable)'}
-              </label>
-              <input
-                ref={inputRef}
-                className="input"
-                placeholder={mapsReady ? 'Type venue name or address…' : 'Google Maps not configured'}
-                disabled={!mapsReady}
-                style={{ borderColor: mapsReady ? 'rgba(0,229,255,0.4)' : undefined }}
-                autoFocus={mapsReady}
-              />
-              {mapsReady && (
-                <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                  Select a result to auto-fill the fields below
-                </div>
-              )}
-            </div>
-
-            <div style={{ height: '1px', background: 'var(--border)', margin: '0.5rem 0 1rem' }} />
-
-            <form onSubmit={saveVenue} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {saveError && (
-                <div style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 'var(--radius-sm)', padding: '0.6rem 0.9rem', color: '#f87171', fontSize: '0.84rem' }}>{saveError}</div>
-              )}
-              <div className="field">
-                <label className="field-label">Venue Name *</label>
-                <input className="input" value={form.name} onChange={set('name')} required autoFocus={!mapsReady} />
-              </div>
-              <div className="field">
-                <label className="field-label">Address</label>
-                <input className="input" value={form.address} onChange={set('address')} />
-              </div>
-              <div className="grid-2">
-                <div className="field">
-                  <label className="field-label">City *</label>
-                  <input className="input" value={form.city} onChange={set('city')} required />
-                </div>
-                <div className="field">
-                  <label className="field-label">State *</label>
-                  <input className="input" value={form.state} onChange={set('state')} placeholder="TX" required maxLength={2} />
-                </div>
-              </div>
-              <div className="grid-2">
-                <div className="field">
-                  <label className="field-label">Email</label>
-                  <input className="input" type="email" value={form.email} onChange={set('email')} />
-                </div>
-                <div className="field">
-                  <label className="field-label">Phone</label>
-                  <input className="input" type="tel" value={form.phone} onChange={set('phone')} />
-                </div>
-              </div>
-              <div className="grid-2">
-                <div className="field">
-                  <label className="field-label">Venue Type</label>
-                  <select className="select" value={form.venue_type} onChange={set('venue_type')}>
-                    <option value="">—</option>
-                    {venueTypes.length > 0
-                      ? venueTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)
-                      : ['bar','club','concert_hall','festival','restaurant','winery','outdoor','theater','other'].map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)
-                    }
-                  </select>
-                </div>
-                <div className="field">
-                  <label className="field-label">Capacity</label>
-                  <input className="input" type="number" value={form.capacity} onChange={set('capacity')} />
-                </div>
-              </div>
-              <div className="field">
-                <label className="field-label">Website</label>
-                <input className="input" value={form.website} onChange={set('website')} placeholder="https://..." />
-              </div>
-              <div className="field">
-                <label className="field-label">Music Genres</label>
-                <input className="input" value={form.music_genres} onChange={set('music_genres')} placeholder="e.g. Rock, Jazz, Folk, Electronic (comma-separated)" />
-              </div>
-              {form.google_maps_url && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent)', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                  ✓ Google Maps linked
-                  <a href={form.google_maps_url} target="_blank" style={{ color: 'var(--text-muted)' }}>view →</a>
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => { setShowNew(false); setForm(BLANK); }}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Add Venue'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {showAdd && (
+        <AddVenueModal mapsReady={mapsReady} venueTypes={venueTypes} onClose={() => setShowAdd(false)} onSaved={() => void refresh()} />
       )}
-
-      {/* Add to Tour Modal */}
-      {tourTarget && (
-        <div className="modal-backdrop">
-          <div className="modal" style={{ maxWidth: 460 }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Add to Tour</h3>
-              <button className="btn btn-ghost btn-sm" onClick={() => setTourTarget(null)}>✕</button>
-            </div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-              {tourTarget.name} · {tourTarget.city}, {tourTarget.state}
-            </div>
-            {!toursLoaded ? (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>Loading tours...</div>
-            ) : tours.length === 0 ? (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>
-                No active tours found.{' '}
-                <a href="/tours" style={{ color: 'var(--accent)' }}>Create a tour first →</a>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {tours.map((t: any) => (
-                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                    <div>
-                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{t.name}</div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
-                        {t.act?.act_name} · {t.status}
-                      </div>
-                    </div>
-                    {addTourDone === t.id ? (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: '#34d399' }}>✓ Added</span>
-                    ) : (
-                      <button
-                        className="btn btn-primary btn-sm"
-                        disabled={addingTour === t.id}
-                        onClick={() => addVenueToTour(t.id)}
-                        style={{ fontSize: '0.8rem' }}
-                      >
-                        {addingTour === t.id ? 'Adding…' : 'Add to Pool'}
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setTourTarget(null)}>Done</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Bulk Import Modal */}
-      {showImport && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
-          onClick={() => !importSaving && setShowImport(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 720, maxHeight: '90vh', overflowY: 'auto', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="card-title">BULK IMPORT VENUES</span>
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowImport(false)}>✕</button>
-            </div>
-
-            {!importParsed ? (
-              <>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                  Paste your venue list below. Accepted formats:
-                  <ul style={{ marginTop: '0.4rem', paddingLeft: '1.2rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                    <li>Markdown table from the AI research prompt (recommended)</li>
-                    <li>CSV with a header row</li>
-                  </ul>
-                  <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    Required columns: <code style={{ background: 'var(--bg-overlay)', padding: '0 4px', borderRadius: 2 }}>Venue Name</code> and <code style={{ background: 'var(--bg-overlay)', padding: '0 4px', borderRadius: 2 }}>City</code>.
-                    If a venue already exists it will be updated, not duplicated.
-                  </div>
-                </div>
-                <textarea
-                  className="textarea"
-                  rows={12}
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', resize: 'vertical' }}
-                  placeholder="Paste markdown table or CSV here..."
-                  value={importText}
-                  onChange={e => setImportText(e.target.value)}
-                />
-                {importError && <div style={{ color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.83rem' }}>{importError}</div>}
-                <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}
-                    onClick={() => {
-                      const csv = 'Venue Name,City,State,Address,Phone,Booking Email,Website,Venue Type,Capacity,Contact Name,Contact Title,Notes\n,,,,,,,bar,,,, ';
-                      const blob = new Blob([csv], { type: 'text/csv' });
-                      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-                      a.download = 'venue-import-template.csv'; a.click();
-                    }}
-                  >
-                    ↓ Download Template
-                  </button>
-                  <div style={{ display: 'flex', gap: '0.6rem' }}>
-                    <button className="btn btn-secondary" onClick={() => setShowImport(false)}>Cancel</button>
-                    <button className="btn btn-primary" onClick={parseImport} disabled={!importText.trim()}>Parse →</button>
-                  </div>
-                </div>
-              </>
-            ) : importDone ? (
-              <div style={{ textAlign: 'center', padding: '1.5rem' }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: 'var(--accent)', marginBottom: '0.5rem' }}>Done</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'center' }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#34d399' }}>
-                    ✓ {importDone.added} imported new
-                  </div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#fbbf24' }}>
-                    ↺ {importDone.skipped} updated (already existed)
-                  </div>
-                  {importDone.invalid > 0 && (
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#94a3b8' }}>
-                      ✕ {importDone.invalid} skipped (unchecked)
-                    </div>
-                  )}
-                </div>
-                <button className="btn btn-primary" style={{ marginTop: '1.25rem' }} onClick={() => setShowImport(false)}>Close</button>
-              </div>
-            ) : (
-              <>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
-                  {importRows.length} venue{importRows.length !== 1 ? 's' : ''} ready to import. Uncheck any you want to skip.
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: 340, overflowY: 'auto' }}>
-                  {importRows.map((row, i) => (
-                    <label key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.6rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={row._selected} onChange={e => setImportRows(rows => rows.map((r, idx) => idx === i ? { ...r, _selected: e.target.checked } : r))} style={{ marginTop: 3, flexShrink: 0 }} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{row.name}</div>
-                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
-                          {[row.city, row.state].filter(Boolean).join(', ')}
-                          {row.phone && ` · ${row.phone}`}
-                          {row.email && ` · ${row.email}`}
-                          {row.capacity && ` · cap ${row.capacity}`}
-                        </div>
-                        {row.contact_first && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--accent)', marginTop: '0.1rem' }}>Contact: {row.contact_first} {row.contact_last} {row.contact_title ? `(${row.contact_title})` : ''}</div>}
-                      </div>
-                    </label>
-                  ))}
-                </div>
-                {importError && <div style={{ color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.83rem' }}>{importError}</div>}
-                <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setImportParsed(false)}>← Back</button>
-                  <div style={{ display: 'flex', gap: '0.6rem' }}>
-                    <button className="btn btn-secondary" onClick={() => setShowImport(false)}>Cancel</button>
-                    <button className="btn btn-primary" onClick={runImport} disabled={importSaving || !importRows.some(r => r._selected)}>
-                      {importSaving ? 'Importing…' : `Import ${importRows.filter(r => r._selected).length} Venues`}
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Delete Venue Confirmation */}
+      {showBulkImport && <BulkImportModal onClose={() => setShowBulkImport(false)} onImported={() => void refresh()} />}
+      {tourTarget && <AddToTourModal venue={tourTarget} onClose={() => setTourTarget(null)} />}
       {deleteTarget && (
-        <div className="modal-backdrop">
-          <div className="modal" style={{ maxWidth: 400 }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Delete Venue?</h3>
-            </div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: '1.25rem' }}>
-              Delete <strong style={{ color: 'var(--text-primary)' }}>{deleteTarget.name}</strong>? This cannot be undone.
-            </p>
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</button>
-              <button className="btn btn-primary" style={{ background: '#ef4444', borderColor: '#ef4444' }} onClick={deleteVenue} disabled={deleting}>
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <DeleteVenueDialog venue={deleteTarget} onClose={() => setDeleteTarget(null)} onDeleted={() => void refresh()} />
       )}
-
-      {/* Venue Drawer — only mount when a venue is selected */}
       {drawerVenueId && (
         <VenueDrawer
           venueId={drawerVenueId}
@@ -1244,19 +477,13 @@ export default function VenuesPage() {
           onSaved={saved => {
             // Show the saved details at once, then re-sync with the server.
             setVenues(vs => mergeSavedVenue(vs, saved as Partial<Venue> & { id: string }));
-            void loadVenues();
+            void refresh();
           }}
         />
       )}
-
-      {showAiImport && (
-        <ImportModal
-          defaultType="venues"
-          onClose={() => setShowAiImport(false)}
-          onComplete={loadVenues}
-        />
+      {showFileImport && (
+        <ImportModal defaultType="venues" onClose={() => setShowFileImport(false)} onComplete={() => void refresh()} />
       )}
-
     </AppShell>
   );
 }
