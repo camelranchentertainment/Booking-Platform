@@ -238,19 +238,13 @@ export default function AnalyticsPage() {
     <AppShell requireRole="band_admin">
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '1.5rem 1rem 3rem', display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
 
-        {/* Page header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
+        {/* Page header — the shared Tours-style header (.page-header in globals.css) */}
+        <div className="page-header" style={{ marginBottom: 0 }}>
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', color: 'var(--text-primary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              Analytics
-            </div>
-            {actName && (
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                {actName}
-              </div>
-            )}
+            <h1 className="page-title">Analytics</h1>
+            <div className="page-sub">{actName ? `${actName} · ${year}` : `Pipeline & bookings · ${year}`}</div>
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          <label className="page-sub" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: 0 }}>
             Year
             <select
               className="select"
