@@ -215,7 +215,7 @@ begin
   loop
     perform public.booker_notify(v_user, null, 'Booking agent invite',
       coalesce(v_agency, 'A booking agent') || ' wants to link with your band as its booking agent.',
-      '/band/settings#booking-agent');
+      '/settings#booking-agent');
   end loop;
 
   return v_id;
