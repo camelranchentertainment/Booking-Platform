@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 import { formatShowDate, localToday, parseLocalDate } from '../../lib/formatDate';
 import PageHero from '../../components/layout/PageHero';
 import StageScene from '../../components/dashboard/StageScene';
+import AgentRequests from '../../components/band/AgentRequests';
 import styles from '../../styles/dashboard.module.css';
 import { FEATURES } from '../../lib/featureFlags';
 import { STATUS_COLORS } from '../../lib/statusSync';
@@ -752,6 +753,9 @@ export default function BandDashboard() {
               <span className="tour-metric-value"><strong className={targetsCount > 0 ? 'tour-metric-hot' : undefined}>{loading ? '–' : targetsCount}</strong><span>venues to pitch</span></span>
             </Link>
           </section>
+
+          {/* ── Requests from the band's Booking Agent (only when there are any) ── */}
+          <AgentRequests onAdded={() => void load()} />
 
           {/* ── Upcoming Shows ──────────────────────────────────────────────── */}
           <section className={styles.section} aria-labelledby="dash-upcoming">

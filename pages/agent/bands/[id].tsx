@@ -1,7 +1,8 @@
 // pages/agent/bands/[id].tsx
 // One band in the agent's roster, in the Tours page style: illustrated hero,
 // four trackers, Upcoming / Past tabs with shows grouped by date, then the
-// band contact, the emails sent about the band and the remove option.
+// band account (link, sharing, send shows, their calendar), the band contact,
+// the emails sent about the band and the remove option.
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -13,6 +14,7 @@ import MessageHistory from '../../../components/booker/MessageHistory';
 import { RosterBandForm, ShowForm } from '../../../components/booker/forms';
 import { EmptyState, ErrorBanner, SkeletonRows } from '../../../components/booker/ui';
 import RouteMapScene from '../../../components/booker/RouteMapScene';
+import BandAccountPanel from '../../../components/booker/BandAccountPanel';
 import PageHero from '../../../components/layout/PageHero';
 import { archiveRosterBand, listMessages, listPayments, listRoster, listShows, listVenues } from '../../../lib/booker/data';
 import { formatShowDate, todayIso } from '../../../lib/booker/dates';
@@ -20,14 +22,27 @@ import { bandCards, groupInOrder, showTabCounts, showsForTab } from '../../../li
 import { commissionTotals, formatMoney } from '../../../lib/booker/commission';
 import { byId, findConflicts, venueLabel } from '../../../lib/booker/workspace';
 import { useLoad } from '../../../lib/booker/useLoad';
+import { currentLink, handoffChip, latestProposalByShow, type BandLink, type BandProposal } from '../../../lib/booker/handoff';
+import { listBandLinks, listBandProposals } from '../../../lib/booker/handoffData';
 import type { BookerShow } from '../../../lib/booker/types';
+
+/** This band's links and the shows sent through them, or an error message for the panel. */
+async function loadHandoff(bandId: string): Promise<{ links: BandLink[]; proposals: BandProposal[]; handoffError: string | null }> {
+  try {
+    const links = (await listBandLinks()).filter(l => l.roster_id === bandId);
+    const proposals = await listBandProposals(links.map(l => l.id));
+    return { links, proposals, handoffError: null };
+  } catch (err) {
+    return { links: [], proposals: [], handoffError: err instanceof Error ? err.message : 'Could not load the band account.' };
+  }
+}
 
 function BandContent({ bandId }: { bandId: string }) {
   const router = useRouter();
   const today = todayIso();
   const year = Number(today.slice(0, 4));
   const { data, loading, error, reload } = useLoad(async () => {
-    const [bands, venues, shows, payments, messages, upcomingAll] = await Promise.all([
+    const [bands, venues, shows, payments, messages, upcomingAll, handoff] = await Promise.all([
       listRoster(),
       listVenues(),
       listShows({ rosterId: bandId }),
@@ -36,8 +51,11 @@ function BandContent({ bandId }: { bandId: string }) {
       // Every band's upcoming shows, so the show form can warn when another of
       // the agent's bands is already at the same venue that night.
       listShows({ from: today }),
+      // The hand-off is loaded on its own so a problem there never blanks
+      // the rest of the band page; the panel shows its own error instead.
+      loadHandoff(bandId),
     ]);
-    return { bands, venues, shows, payments, messages, upcomingAll };
+    return { bands, venues, shows, payments, messages, upcomingAll, ...handoff };
   }, bandId);
   const [editingShow, setEditingShow] = useState<BookerShow | 'new' | null>(null);
   const [editingBand, setEditingBand] = useState(false);
@@ -62,6 +80,8 @@ function BandContent({ bandId }: { bandId: string }) {
       counts: showTabCounts(data.shows, today),
       upcomingGroups: groupInOrder(showsForTab(data.shows, 'upcoming', today)),
       pastGroups: groupInOrder(showsForTab(data.shows, 'past', today).slice(0, 50)),
+      // Hand-off chips only for the current link's proposals.
+      handoffByShow: latestProposalByShow(data.proposals.filter(p => p.link_id === currentLink(data.links, band.id)?.id)),
     };
   }, [data, band, today, year]);
 
@@ -203,7 +223,7 @@ function BandContent({ bandId }: { bandId: string }) {
                 <div key={g.date} className="agent-day">
                   <h3 className={`agent-day-label${g.date === today ? ' agent-day-label--today' : ''}`}>{g.date === today ? `Today · ${formatShowDate(g.date, year)}` : formatShowDate(g.date, year)}</h3>
                   {g.shows.map(s => (
-                    <ShowRow key={s.id} show={s} band={band} venuesById={view.venuesById} onOpen={setEditingShow} hideBand hideDate currentYear={year} />
+                    <ShowRow key={s.id} show={s} band={band} venuesById={view.venuesById} onOpen={setEditingShow} hideBand hideDate currentYear={year} handoff={handoffChip(view.handoffByShow.get(s.id))} />
                   ))}
                 </div>
               ))}
@@ -211,6 +231,26 @@ function BandContent({ bandId }: { bandId: string }) {
           )}
         </section>
       </div>
+
+      {data.handoffError ? (
+        <section aria-labelledby="band-account-h" className="card mb-6" id="band-account">
+          <h2 id="band-account-h" className="agent-card-title">
+            Band account
+          </h2>
+          <ErrorBanner message={data.handoffError} onRetry={() => void reload()} />
+        </section>
+      ) : (
+        <BandAccountPanel
+          band={band}
+          shows={data.shows}
+          venuesById={view.venuesById}
+          links={data.links}
+          proposals={data.proposals}
+          today={today}
+          year={year}
+          onChanged={() => void reload()}
+        />
+      )}
 
       {(band.contact_name || band.contact_email || band.contact_phone || band.notes) && (
         <section aria-labelledby="contact-h" className="card mb-6">
