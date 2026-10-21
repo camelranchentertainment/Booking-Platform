@@ -4,6 +4,7 @@ import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { UserProfile } from '../lib/types';
 import PlatformSetup from '../components/settings/PlatformSetup';
+import BookingAgentSettings from '../components/band/BookingAgentSettings';
 
 const TIER_LABELS: Record<string, string> = {
   band_admin: 'Band Admin — $18 / month',
@@ -1141,6 +1142,9 @@ export default function Settings() {
             </div>
           </div>
         )}
+
+        {/* ── BOOKING AGENT ── */}
+        {(profile?.role === 'band_admin' || profile?.role === 'superadmin') && myAct && <BookingAgentSettings labelStyle={sectionLabelStyle} />}
 
         {/* ── NOTIFICATION PREFERENCES ── */}
         {profile && profile.role !== 'superadmin' && (
