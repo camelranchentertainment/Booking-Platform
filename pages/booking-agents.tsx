@@ -1,8 +1,8 @@
 // pages/booking-agents.tsx
 // Public landing page for independent booking agents. This is the page search
 // engines, the homepage nav, the pricing section, login and register all point
-// to; its call to action leads to /booker/signup (new agents) or sign-in with
-// ?next=/booker (people who already have a Camel Ranch account).
+// to; its call to action leads to /booker/signup (new agents) or the agent
+// sign-in at /booker/login. Agent accounts are separate from band accounts.
 //
 // Copy only claims what the Booking Agent workspace does today. Features still
 // on the roadmap (linking to band accounts, proposals, agent email) are not
@@ -37,7 +37,7 @@ const FEATURES: Array<{ title: string; body: string }> = [
 ];
 
 const STEPS: Array<{ title: string; body: string }> = [
-  { title: 'Create your workspace', body: 'Sign up with your agency name. Already use Camel Ranch for your own band? Sign in and add a Booking Agent workspace to the same login.' },
+  { title: 'Create your workspace', body: 'Sign up with your agency name. Agent accounts are separate from band accounts, so use an email not already on a band login.' },
   { title: 'Add the bands you carry', body: 'Any act, any genre. Your bands do not need their own Camel Ranch account to be on your roster.' },
   { title: 'Book, follow up, get paid', body: 'Put holds on the calendar, confirm the shows, mark them played, and track the commission that comes back.' },
 ];
@@ -158,7 +158,7 @@ export default function BookingAgentsPage() {
                   Pricing
                 </a>
               </div>
-              <Link className="ba-link" href="/login?next=/booker" style={{ color: MUTED, fontSize: '0.72rem', letterSpacing: '0.22em', textTransform: 'uppercase', textDecoration: 'none' }}>
+              <Link className="ba-link" href="/booker/login" style={{ color: MUTED, fontSize: '0.72rem', letterSpacing: '0.22em', textTransform: 'uppercase', textDecoration: 'none' }}>
                 Sign in
               </Link>
             </div>
@@ -184,7 +184,7 @@ export default function BookingAgentsPage() {
                 <Link href="/booker/signup" className="ba-cta ba-cta-primary" style={primaryBtn}>
                   Create agent workspace
                 </Link>
-                <Link href="/login?next=/booker" className="ba-cta ba-cta-secondary" style={secondaryBtn}>
+                <Link href="/booker/login" className="ba-cta ba-cta-secondary" style={secondaryBtn}>
                   I already have an account
                 </Link>
               </div>

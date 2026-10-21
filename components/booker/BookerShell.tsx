@@ -3,18 +3,19 @@
 // the band AppShell: its own navigation, no band data, no inbox sync, no band
 // subscription gate. It shares only the sign-in session and the visual system.
 //
-// Gate order: signed in → agent profile exists (otherwise show setup) → page.
+// Gate order: signed in (otherwise the agent sign-in) → agent profile exists
+// (otherwise this is a band-side login: point it home, never offer setup) → page.
 
-import { createContext, useCallback, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../contexts/AuthContext';
 import BrandLogo from '../BrandLogo';
-import { createBookerProfile, getMyBookerProfile } from '../../lib/booker/data';
-import { BookerProfileSchema, fieldErrors } from '../../lib/booker/schemas';
+import { getMyBookerProfile } from '../../lib/booker/data';
+import { bandSideHome } from '../../lib/accountSide';
 import type { BookerProfile } from '../../lib/booker/types';
-import { ErrorBanner, Field } from './ui';
+import { ErrorBanner } from './ui';
 
 interface BookerContextValue {
   booker: BookerProfile;
@@ -55,72 +56,35 @@ function CenteredMessage({ children }: { children: ReactNode }) {
   );
 }
 
-// ── First-run setup ─────────────────────────────────────────────────────────
-function SetupWorkspace({ userId, defaultName, defaultEmail, onCreated }: { userId: string; defaultName: string; defaultEmail: string; onCreated: () => Promise<void> }) {
-  const [form, setForm] = useState({ agency_name: '', contact_name: defaultName, contact_email: defaultEmail, contact_phone: '', default_commission_pct: '' });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [formError, setFormError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setFormError('');
-    const parsed = BookerProfileSchema.safeParse(form);
-    if (!parsed.success) {
-      setErrors(fieldErrors(parsed.error));
-      return;
-    }
-    setErrors({});
-    setBusy(true);
-    try {
-      await createBookerProfile(userId, parsed.data);
-      await onCreated();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Could not set up your workspace.');
-      setBusy(false);
-    }
-  };
-
+// ── Band-side login that reached the agent workspace ───────────────────────
+// Each login belongs to one side (lib/accountSide.ts). A band admin, member or
+// the superadmin who lands on /booker is never offered an agent workspace; they
+// are pointed back to their own side. Agent workspaces are created only by the
+// agent sign-up (/booker/signup → /api/booker/register).
+function NotAnAgentAccount({ home, onSignOut }: { home: string; onSignOut: () => Promise<void> }) {
   return (
-    <div className="auth-wrap" style={{ alignItems: 'flex-start', paddingTop: '3rem' }}>
+    <div className="auth-wrap">
       <Head>
-        <title>Set up your Booking Agent workspace · Camel Ranch Booking</title>
+        <title>Booking Agent workspace · Camel Ranch Booking</title>
       </Head>
-      <main className="auth-card" style={{ maxWidth: 520, width: '100%' }}>
+      <main className="auth-card" style={{ maxWidth: 480, width: '100%', textAlign: 'center' }}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
-          <BrandLogo variant="square" height={72} />
+          <BrandLogo variant="square" height={64} />
         </div>
-        <h1 className="display" style={{ fontSize: '2rem', textAlign: 'center', margin: '0 0 0.25rem', color: 'var(--text)' }}>
-          Booking Agent workspace
+        <h1 className="display" style={{ fontSize: '1.9rem', margin: '0 0 0.5rem', color: 'var(--text)' }}>
+          This is a band account
         </h1>
-        <p className="text-sm text-muted" style={{ textAlign: 'center', lineHeight: 1.6, marginBottom: '1.5rem' }}>
-          One place for every band you carry: their shows, your venues and contacts, and the commission you are owed. Your contacts and notes stay private to you.
+        <p className="text-sm text-muted" style={{ lineHeight: 1.6, marginBottom: '1.25rem' }}>
+          The Booking Agent workspace is for agent accounts only. Band accounts and agent accounts are kept separate, so this login stays on the band side.
         </p>
-        {formError && <ErrorBanner message={formError} />}
-        <form onSubmit={submit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
-          <Field label="Agency name" required error={errors.agency_name}>
-            {p => <input {...p} className="input" value={form.agency_name} onChange={set('agency_name')} autoComplete="organization" />}
-          </Field>
-          <Field label="Your name" error={errors.contact_name}>
-            {p => <input {...p} className="input" value={form.contact_name} onChange={set('contact_name')} autoComplete="name" />}
-          </Field>
-          <div className="grid-2">
-            <Field label="Email" error={errors.contact_email}>
-              {p => <input {...p} className="input" type="email" value={form.contact_email} onChange={set('contact_email')} autoComplete="email" />}
-            </Field>
-            <Field label="Phone" error={errors.contact_phone}>
-              {p => <input {...p} className="input" type="tel" value={form.contact_phone} onChange={set('contact_phone')} autoComplete="tel" />}
-            </Field>
-          </div>
-          <Field label="Default commission %" hint="Used for new bands. You can set a different rate per band." error={errors.default_commission_pct}>
-            {p => <input {...p} className="input" inputMode="decimal" value={form.default_commission_pct} onChange={set('default_commission_pct')} placeholder="e.g. 10" />}
-          </Field>
-          <button type="submit" className="btn btn-primary btn-lg" disabled={busy} aria-busy={busy}>
-            {busy ? 'Setting up…' : 'Open my workspace'}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          <a className="btn btn-primary" href={home}>
+            Go to my band workspace
+          </a>
+          <button type="button" className="btn btn-ghost" onClick={() => void onSignOut()}>
+            Sign out and use an agent account
           </button>
-        </form>
+        </div>
       </main>
     </div>
   );
@@ -137,7 +101,7 @@ export default function BookerShell({ children, title }: Props) {
   const router = useRouter();
   const { user, profile, loading: authLoading, signOut } = useAuth();
   const [booker, setBooker] = useState<BookerProfile | null>(null);
-  const [state, setState] = useState<'loading' | 'ready' | 'setup' | 'error'>('loading');
+  const [state, setState] = useState<'loading' | 'ready' | 'not-agent' | 'error'>('loading');
   const [loadError, setLoadError] = useState('');
   const [navOpen, setNavOpen] = useState(false);
 
@@ -146,7 +110,7 @@ export default function BookerShell({ children, title }: Props) {
     try {
       const b = await getMyBookerProfile(user.id);
       setBooker(b);
-      setState(b ? 'ready' : 'setup');
+      setState(b ? 'ready' : 'not-agent');
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Could not load your workspace.');
       setState('error');
@@ -156,7 +120,7 @@ export default function BookerShell({ children, title }: Props) {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      router.replace(`/login?next=${encodeURIComponent(router.asPath)}`);
+      router.replace(`/booker/login?next=${encodeURIComponent(router.asPath)}`);
       return;
     }
     void loadBooker();
@@ -164,7 +128,7 @@ export default function BookerShell({ children, title }: Props) {
 
   const handleSignOut = async () => {
     await signOut();
-    router.replace('/login');
+    router.replace('/booker/login');
   };
 
   if (authLoading || !user || state === 'loading') return <CenteredMessage>Loading…</CenteredMessage>;
@@ -183,11 +147,9 @@ export default function BookerShell({ children, title }: Props) {
     );
   }
 
-  if (state === 'setup' || !booker) {
-    return <SetupWorkspace userId={user.id} defaultName={profile?.display_name ?? ''} defaultEmail={user.email ?? ''} onCreated={loadBooker} />;
+  if (state === 'not-agent' || !booker) {
+    return <NotAnAgentAccount home={bandSideHome(profile?.role ?? null)} onSignOut={handleSignOut} />;
   }
-
-  const hasBandWorkspace = Boolean(profile?.act_id) || profile?.role === 'superadmin';
 
   return (
     <BookerContext.Provider value={{ booker, refreshBooker: loadBooker }}>
@@ -235,14 +197,6 @@ export default function BookerShell({ children, title }: Props) {
             })}
           </nav>
           <div className="sidebar-section" style={{ marginTop: 'auto' }}>
-            {hasBandWorkspace && (
-              <Link href={profile?.role === 'superadmin' ? '/admin' : '/band'} className="sidebar-link">
-                <span aria-hidden="true" style={{ width: 18, textAlign: 'center' }}>
-                  ⇄
-                </span>
-                {profile?.role === 'superadmin' ? 'Platform admin' : 'Band workspace'}
-              </Link>
-            )}
             <button type="button" className="sidebar-link" onClick={handleSignOut}>
               <span aria-hidden="true" style={{ width: 18, textAlign: 'center' }}>
                 ⏻
