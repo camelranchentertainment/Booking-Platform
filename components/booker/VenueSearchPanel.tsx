@@ -210,7 +210,7 @@ function ResultRow({ result: r, row, pickMode, onAdd, onUse }: { result: VenueSe
     );
   } else if (inBook && venueId) {
     action = (
-      <Link href={`/booker/venues/${venueId}`} className="btn btn-ghost btn-sm" style={{ whiteSpace: 'nowrap' }}>
+      <Link href={`/agent/venues/${venueId}`} className="btn btn-ghost btn-sm" style={{ whiteSpace: 'nowrap' }}>
         In your book →
       </Link>
     );

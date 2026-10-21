@@ -1,4 +1,4 @@
-// pages/booker/login.tsx
+// pages/agent/login.tsx
 // Sign-in for Booking Agent accounts only. Band admins, members and the
 // superadmin sign in at /login. Each login belongs to one side of the platform
 // (lib/accountSide.ts), so a band login used here is never offered an agent
@@ -125,7 +125,7 @@ export default function BookerLogin() {
             </a>
             <p className="text-xs text-muted" style={{ margin: 0, lineHeight: 1.6 }}>
               Want to work as a booking agent too? Create a separate agent account with a different email.{' '}
-              <Link href="/booker/signup" className="text-accent">
+              <Link href="/agent/signup" className="text-accent">
                 Agent sign up
               </Link>
             </p>
@@ -167,7 +167,7 @@ export default function BookerLogin() {
             </button>
             <p className="text-sm text-muted" style={{ textAlign: 'center', margin: 0 }}>
               New booking agent?{' '}
-              <Link href="/booker/signup" className="text-accent">
+              <Link href="/agent/signup" className="text-accent">
                 Create an agent account
               </Link>
             </p>

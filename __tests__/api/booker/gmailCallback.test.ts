@@ -61,7 +61,7 @@ describe('agent Gmail callback', () => {
     const { upserts, filters } = setup();
     const { run, redirect, setHeader } = call({ code: 'c', state: state() }, `${OAUTH_NONCE_COOKIE}=nonce-1`);
     await run();
-    expect(redirect).toHaveBeenCalledWith('/booker/settings?gmail=connected');
+    expect(redirect).toHaveBeenCalledWith('/agent/settings?gmail=connected');
     expect(upserts[0]).toMatchObject({ booker_id: BOOKER, gmail_address: 'agent@gmail.com', google_refresh_token: 'rt' });
     expect(filters.find(f => f.table === 'booker_profiles')).toMatchObject({ id: BOOKER, user_id: 'user-1' });
     expect(setHeader).toHaveBeenCalledWith('Set-Cookie', expect.stringContaining('Max-Age=0'));
@@ -71,7 +71,7 @@ describe('agent Gmail callback', () => {
     const { upserts } = setup();
     const { run, redirect } = call({ code: 'c', state: state() }, `${OAUTH_NONCE_COOKIE}=someone-else`);
     await run();
-    expect(redirect).toHaveBeenCalledWith('/booker/settings?gmail_error=session');
+    expect(redirect).toHaveBeenCalledWith('/agent/settings?gmail_error=session');
     expect(upserts).toHaveLength(0);
   });
 
@@ -80,7 +80,7 @@ describe('agent Gmail callback', () => {
     const forged = signOAuthState({ u: 'user-1', b: BOOKER, n: 'nonce-1', e: Date.now() + 60_000 }, 'wrong-secret');
     const { run, redirect } = call({ code: 'c', state: forged }, `${OAUTH_NONCE_COOKIE}=nonce-1`);
     await run();
-    expect(redirect).toHaveBeenCalledWith('/booker/settings?gmail_error=expired');
+    expect(redirect).toHaveBeenCalledWith('/agent/settings?gmail_error=expired');
     expect(upserts).toHaveLength(0);
   });
 
@@ -88,7 +88,7 @@ describe('agent Gmail callback', () => {
     const { upserts } = setup({ booker: null });
     const { run, redirect } = call({ code: 'c', state: state() }, `${OAUTH_NONCE_COOKIE}=nonce-1`);
     await run();
-    expect(redirect).toHaveBeenCalledWith('/booker/settings?gmail_error=forbidden');
+    expect(redirect).toHaveBeenCalledWith('/agent/settings?gmail_error=forbidden');
     expect(upserts).toHaveLength(0);
   });
 
@@ -96,7 +96,7 @@ describe('agent Gmail callback', () => {
     setup();
     const { run, redirect } = call({ error: 'access_denied', state: state() });
     await run();
-    expect(redirect).toHaveBeenCalledWith('/booker/settings?gmail_error=denied');
+    expect(redirect).toHaveBeenCalledWith('/agent/settings?gmail_error=denied');
   });
 
   it('leaves band-flow states to the existing band handler', async () => {

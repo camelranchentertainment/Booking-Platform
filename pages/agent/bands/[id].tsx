@@ -1,4 +1,4 @@
-// pages/booker/bands/[id].tsx
+// pages/agent/bands/[id].tsx
 // One band in the agent's roster, in the Tours page style: illustrated hero,
 // four trackers, Upcoming / Past tabs with shows grouped by date, then the
 // band contact, the emails sent about the band and the remove option.
@@ -71,7 +71,7 @@ function BandContent({ bandId }: { bandId: string }) {
     setRemoveError('');
     try {
       await archiveRosterBand(band.id);
-      await router.push('/booker/bands');
+      await router.push('/agent/bands');
     } catch (err) {
       setRemoveError(err instanceof Error ? err.message : 'Could not remove the band.');
       setRemoving(false);
@@ -86,7 +86,7 @@ function BandContent({ bandId }: { bandId: string }) {
         title="Band not found"
         body="It may have been removed from your roster."
         action={
-          <Link href="/booker/bands" className="btn btn-primary">
+          <Link href="/agent/bands" className="btn btn-primary">
             Back to bands
           </Link>
         }
@@ -103,7 +103,7 @@ function BandContent({ bandId }: { bandId: string }) {
   return (
     <>
       <div className="text-sm mb-2">
-        <Link href="/booker/bands" className="text-muted">
+        <Link href="/agent/bands" className="text-muted">
           ← All bands
         </Link>
       </div>

@@ -173,7 +173,7 @@ export function emailFollowups(messages: readonly BookerMessage[], venuesById: R
         kind: 'email_followup' as const,
         key: `e-${m.id}`,
         messageId: m.id,
-        href: m.venue_id ? `/booker/venues/${m.venue_id}` : m.roster_id ? `/booker/bands/${m.roster_id}` : undefined,
+        href: m.venue_id ? `/agent/venues/${m.venue_id}` : m.roster_id ? `/agent/bands/${m.roster_id}` : undefined,
         message: `Follow up with ${who}${venue ? ` (${venue})` : ''}: “${m.subject}”`,
       };
     });

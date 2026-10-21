@@ -416,7 +416,7 @@ export default function AppShell({ children, requireRole = null, backdrop = 'des
     if (!isAgentShape(profile.role, profile.act_id)) return;
     let cancelled = false;
     void fetchHasAgentWorkspace(user.id).then(isAgent => {
-      if (!cancelled && isAgent) router.replace('/booker');
+      if (!cancelled && isAgent) router.replace('/agent');
     });
     return () => { cancelled = true; };
   }, [authLoading, user, profile]); // eslint-disable-line react-hooks/exhaustive-deps

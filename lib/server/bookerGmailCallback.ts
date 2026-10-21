@@ -11,7 +11,7 @@ import { OAUTH_NONCE_COOKIE, clearNonceCookie, exchangeCode, getBookerGmail, ver
 
 const back = (res: NextApiResponse, query: string) => {
   res.setHeader('Set-Cookie', clearNonceCookie());
-  res.redirect(`/booker/settings?${query}`);
+  res.redirect(`/agent/settings?${query}`);
 };
 
 /** Reads one cookie value from the request. */

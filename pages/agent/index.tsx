@@ -1,4 +1,4 @@
-// pages/booker/index.tsx
+// pages/agent/index.tsx
 // Booking Agent home ("Booking Desk"), in the Tours page style:
 //   1. Illustrated hero with the agency name, a next-show line and actions.
 //   2. Four metric trackers: roster, this weekend, holds in play, next 60 days.
@@ -165,7 +165,7 @@ function HomeContent() {
             <button type="button" className="btn btn-secondary tours-new-btn" onClick={() => setAddingBand(true)}>
               + Add band
             </button>
-            <Link href="/booker/venues#find" className="btn btn-secondary tours-new-btn">
+            <Link href="/agent/venues#find" className="btn btn-secondary tours-new-btn">
               ⌕ Find venues
             </Link>
           </div>
@@ -288,7 +288,7 @@ function HomeContent() {
                           Open
                         </button>
                       ) : item.rosterId ? (
-                        <Link className="btn btn-ghost btn-sm" href={`/booker/bands/${item.rosterId}`}>
+                        <Link className="btn btn-ghost btn-sm" href={`/agent/bands/${item.rosterId}`}>
                           Open
                         </Link>
                       ) : null}
@@ -339,7 +339,7 @@ function HomeContent() {
               <h2 id="bands-h" className="agent-section-title">
                 Your bands
               </h2>
-              <Link href="/booker/bands" className="tour-card-cta">
+              <Link href="/agent/bands" className="tour-card-cta">
                 Whole roster →
               </Link>
             </div>
@@ -359,7 +359,7 @@ function HomeContent() {
               <h2 id="agenda-h" className="agent-section-title">
                 Next {AGENDA_DAYS} days
               </h2>
-              <Link href="/booker/shows" className="tour-card-cta">
+              <Link href="/agent/shows" className="tour-card-cta">
                 All shows →
               </Link>
             </div>

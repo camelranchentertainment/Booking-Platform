@@ -1,4 +1,4 @@
-// pages/booker/bands/index.tsx
+// pages/agent/bands/index.tsx
 // The agent's roster, in the Tours page style: illustrated hero, four metric
 // trackers, Active / Inactive / All tabs and a grid of band cards. Counting
 // lives in lib/booker/summary.ts (unit-tested).

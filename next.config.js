@@ -3,6 +3,14 @@ const { withSentryConfig } = require('@sentry/nextjs');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   generateEtags: false,
+  // The Booking Agent pages moved from /booker/* to /agent/* (Oct 2026). Old
+  // links, bookmarks and emails keep working through permanent redirects.
+  async redirects() {
+    return [
+      { source: '/booker', destination: '/agent', permanent: true },
+      { source: '/booker/:path*', destination: '/agent/:path*', permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

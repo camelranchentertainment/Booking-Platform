@@ -3,7 +3,7 @@ Allow: /
 Disallow: /api/
 Disallow: /admin
 Disallow: /band
-Disallow: /booker/
-Allow: /booker/signup
+Disallow: /agent/
+Allow: /agent/signup
 
 Sitemap: https://www.camelranchbooking.com/sitemap.xml

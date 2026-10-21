@@ -33,7 +33,7 @@ export default function VenueCard({ card, currentYear, search }: Props) {
   const hit = matchedContact(card, search);
 
   return (
-    <Link href={`/booker/venues/${venue.id}`} className="tour-card">
+    <Link href={`/agent/venues/${venue.id}`} className="tour-card">
       <div className="tour-card-head">
         <div className="tour-card-title-block">
           <h3 className="tour-card-name">{venue.name}</h3>

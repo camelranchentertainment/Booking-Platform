@@ -1,10 +1,10 @@
 // lib/accountSide.ts
 // Every login belongs to exactly one side of the platform:
 //   - the band side (superadmin, band admin, member), or
-//   - the Booking Agent workspace (/booker/*).
+//   - the Booking Agent workspace (/agent/*).
 // The two sides never meet. These helpers are the single place that decides
 // where a signed-in account belongs, so the band sign-in (/login), the agent
-// sign-in (/booker/login), the band AppShell and the agent BookerShell all
+// sign-in (/agent/login), the band AppShell and the agent BookerShell all
 // route the same way.
 //
 // UI routing only. The database (RLS on booker_profiles and the band tables)
@@ -25,8 +25,8 @@ export function bandSideHome(role: string | null | undefined): string {
  * protocol-relative URLs) falls back to the workspace home.
  */
 export function safeAgentNext(next: unknown): string {
-  if (typeof next !== 'string' || next.startsWith('//')) return '/booker';
-  return /^\/booker(\/[A-Za-z0-9/_-]*)?(\?[^\s]*)?$/.test(next) ? next : '/booker';
+  if (typeof next !== 'string' || next.startsWith('//')) return '/agent';
+  return /^\/agent(\/[A-Za-z0-9/_-]*)?(\?[^\s]*)?$/.test(next) ? next : '/agent';
 }
 
 /**

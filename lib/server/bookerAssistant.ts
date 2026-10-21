@@ -291,7 +291,7 @@ WHAT YOU CAN DO
   - add_band / update_band: add a band to the roster, or change a band's details or active/inactive status.
   - add_venue / update_venue: add a venue, festival, fair, promoter or private event to the book, or correct one — e.g. after finding its booking email on the web.
   - add_contact / update_contact: add or correct a person at a venue in the book.
-  - draft_email: a short email in a plain, working-booker voice (no "I hope this finds you well", no sales language), using only real facts. The agent reviews and sends it.
+  - draft_email: a short email in a plain, working booking-agent voice (no "I hope this finds you well", no sales language), using only real facts. The agent reviews and sends it.
 - When the agent asks for several things at once, propose them together (up to 10).
 
 WHAT YOU CANNOT DO — tell the agent to do these themselves, on the page named
