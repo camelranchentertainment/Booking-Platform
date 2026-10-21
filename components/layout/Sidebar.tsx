@@ -50,7 +50,8 @@ const memberNav = [
   { label: 'Dashboard', href: '/member',          icon: '◈' },
   { label: 'Today',     href: '/today',           icon: '◉' },
   { label: 'Calendar',  href: '/member/calendar', icon: '◷' },
-  { label: 'History',   href: '/history',         icon: '◎' },
+  // Members care about pay more than history; admins keep History.
+  { label: 'Pay',       href: '/member/pay',      icon: '$' },
 ];
 
 export default function Sidebar({ profile, onSignOut, open, onClose }: Props) {
