@@ -35,7 +35,7 @@ export default function BandCard({ card, venuesById, currentYear }: Props) {
   const style = band.color ? ({ '--band-color': band.color } as CSSProperties) : undefined;
 
   return (
-    <Link href={`/booker/bands/${band.id}`} className={`tour-card agent-band-card${band.status === 'inactive' ? ' tour-card--past' : ''}`} style={style}>
+    <Link href={`/agent/bands/${band.id}`} className={`tour-card agent-band-card${band.status === 'inactive' ? ' tour-card--past' : ''}`} style={style}>
       <div className="tour-card-head">
         <div className="tour-card-title-block">
           <h3 className="tour-card-name">{band.band_name}</h3>

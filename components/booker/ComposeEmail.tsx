@@ -232,7 +232,7 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
           <span className="text-sm" style={{ color: 'var(--text)', flex: '1 1 260px' }}>
             <strong>Connect your Gmail to send.</strong> Email from the workspace goes out from your own Gmail account. You can still write and draft here.
           </span>
-          <Link href="/booker/settings#gmail" className="btn btn-secondary btn-sm">
+          <Link href="/agent/settings#gmail" className="btn btn-secondary btn-sm">
             Go to Settings
           </Link>
         </div>

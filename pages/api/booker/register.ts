@@ -13,7 +13,7 @@
 // code (e.g. an agent beta code) extends the free period exactly as it does for
 // band sign-ups.
 //
-// Existing users don't use this route: they open /booker while signed in and
+// Existing users don't use this route: they open /agent while signed in and
 // set up the workspace there.
 
 import type { NextApiRequest, NextApiResponse } from 'next';

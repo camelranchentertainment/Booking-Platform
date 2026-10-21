@@ -1,4 +1,4 @@
-// pages/booker/venues/index.tsx
+// pages/agent/venues/index.tsx
 // Venues & Buyers: the agent's venue book, in the Tours page style —
 // illustrated hero, four trackers, "Find new venues", type tabs and a grid of
 // venue cards. Venues, festivals, fairs, promoters and private-event buyers,

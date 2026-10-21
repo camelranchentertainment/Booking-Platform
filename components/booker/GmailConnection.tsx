@@ -59,7 +59,7 @@ export default function GmailConnection() {
     if (gmail !== 'connected' && typeof gmail_error !== 'string') return;
     const next = gmail === 'connected' ? { kind: 'ok' as const, text: 'Gmail connected. Email you send from the workspace now goes out from your Gmail.' } : { kind: 'error' as const, text: ERROR_TEXT[String(gmail_error)] ?? 'Gmail could not be connected. Please try again.' };
     const t = setTimeout(() => setNotice(next), 0);
-    void router.replace('/booker/settings', undefined, { shallow: true });
+    void router.replace('/agent/settings', undefined, { shallow: true });
     return () => clearTimeout(t);
   }, [router.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -1,6 +1,6 @@
-// pages/booker/signup.tsx
+// pages/agent/signup.tsx
 // Public sign-up for Booking Agents who don't have a Camel Ranch account yet.
-// Existing agents sign in at /booker/login. Band accounts can't become agent
+// Existing agents sign in at /agent/login. Band accounts can't become agent
 // accounts: each login belongs to one side of the platform.
 
 import { useState, type FormEvent } from 'react';
@@ -62,7 +62,7 @@ export default function BookerSignup() {
         setBusy(false);
         return;
       }
-      window.location.href = '/booker';
+      window.location.href = '/agent';
     } catch {
       setFormError('Network problem. Check your connection and try again.');
       setBusy(false);
@@ -97,7 +97,7 @@ export default function BookerSignup() {
             <p className="text-sm" style={{ color: 'var(--text)' }}>
               {notice}
             </p>
-            <Link className="btn btn-primary" href="/booker">
+            <Link className="btn btn-primary" href="/agent">
               Open my workspace
             </Link>
           </div>
@@ -130,7 +130,7 @@ export default function BookerSignup() {
             </button>
             <p className="text-sm text-muted" style={{ textAlign: 'center', margin: 0 }}>
               Already have an agent account?{' '}
-              <Link href="/booker/login" className="text-accent">
+              <Link href="/agent/login" className="text-accent">
                 Agent sign in
               </Link>
               <br />

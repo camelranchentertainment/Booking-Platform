@@ -28,7 +28,7 @@ describe('bandSideHome', () => {
 
   it('never returns an agent workspace path', () => {
     for (const role of ['superadmin', 'member', 'band_admin', null, undefined, 'unexpected']) {
-      expect(bandSideHome(role).startsWith('/booker')).toBe(false);
+      expect(bandSideHome(role).startsWith('/agent')).toBe(false);
     }
   });
 });
@@ -51,14 +51,14 @@ describe('isAgentShape', () => {
 
 describe('safeAgentNext', () => {
   it('keeps paths inside the agent workspace', () => {
-    expect(safeAgentNext('/booker')).toBe('/booker');
-    expect(safeAgentNext('/booker/shows')).toBe('/booker/shows');
-    expect(safeAgentNext('/booker/bands/abc-123?tab=shows')).toBe('/booker/bands/abc-123?tab=shows');
+    expect(safeAgentNext('/agent')).toBe('/agent');
+    expect(safeAgentNext('/agent/shows')).toBe('/agent/shows');
+    expect(safeAgentNext('/agent/bands/abc-123?tab=shows')).toBe('/agent/bands/abc-123?tab=shows');
   });
 
   it('refuses band pages, other sites and malformed values', () => {
-    for (const bad of ['/band', '/admin', '//evil.example/booker', 'https://evil.example/booker', '/bookerevil', '', undefined, ['/booker'], 42]) {
-      expect(safeAgentNext(bad)).toBe('/booker');
+    for (const bad of ['/band', '/admin', '//evil.example/booker', 'https://evil.example/booker', '/bookerevil', '', undefined, ['/agent'], 42]) {
+      expect(safeAgentNext(bad)).toBe('/agent');
     }
   });
 });

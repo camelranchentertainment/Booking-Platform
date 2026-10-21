@@ -203,7 +203,7 @@ export default function Register() {
               );
             })}
           </div>
-          <Link href="/booker/signup" style={{
+          <Link href="/agent/signup" style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem',
             marginTop: '0.65rem', padding: '0.85rem 1rem',
             border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',

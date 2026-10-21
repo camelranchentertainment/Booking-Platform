@@ -1,8 +1,8 @@
 // pages/booking-agents.tsx
 // Public landing page for independent booking agents. This is the page search
 // engines, the homepage nav, the pricing section, login and register all point
-// to; its call to action leads to /booker/signup (new agents) or the agent
-// sign-in at /booker/login. Agent accounts are separate from band accounts.
+// to; its call to action leads to /agent/signup (new agents) or the agent
+// sign-in at /agent/login. Agent accounts are separate from band accounts.
 //
 // Copy only claims what the Booking Agent workspace does today. Features still
 // on the roadmap (linking to band accounts, proposals, agent email) are not
@@ -158,7 +158,7 @@ export default function BookingAgentsPage() {
                   Pricing
                 </a>
               </div>
-              <Link className="ba-link" href="/booker/login" style={{ color: MUTED, fontSize: '0.72rem', letterSpacing: '0.22em', textTransform: 'uppercase', textDecoration: 'none' }}>
+              <Link className="ba-link" href="/agent/login" style={{ color: MUTED, fontSize: '0.72rem', letterSpacing: '0.22em', textTransform: 'uppercase', textDecoration: 'none' }}>
                 Sign in
               </Link>
             </div>
@@ -181,10 +181,10 @@ export default function BookingAgentsPage() {
                 Shows and holds for your whole roster, your venue book and contacts, this weekend’s lineup across every act, and the commission each band owes you. Built for independent agents, not spreadsheets.
               </p>
               <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                <Link href="/booker/signup" className="ba-cta ba-cta-primary" style={primaryBtn}>
+                <Link href="/agent/signup" className="ba-cta ba-cta-primary" style={primaryBtn}>
                   Create agent workspace
                 </Link>
-                <Link href="/booker/login" className="ba-cta ba-cta-secondary" style={secondaryBtn}>
+                <Link href="/agent/login" className="ba-cta ba-cta-secondary" style={secondaryBtn}>
                   I already have an account
                 </Link>
               </div>
@@ -260,7 +260,7 @@ export default function BookingAgentsPage() {
                           Contact us
                         </a>
                       ) : (
-                        <Link href="/booker/signup" className="ba-cta ba-cta-secondary" style={{ ...secondaryBtn, padding: '0.7rem 1.2rem', fontSize: '0.7rem' }}>
+                        <Link href="/agent/signup" className="ba-cta ba-cta-secondary" style={{ ...secondaryBtn, padding: '0.7rem 1.2rem', fontSize: '0.7rem' }}>
                           Start free trial
                         </Link>
                       )}
@@ -293,7 +293,7 @@ export default function BookingAgentsPage() {
               <h2 id="cta-h" style={{ ...h2, fontSize: 'clamp(1.8rem,4vw,3rem)' }}>Bring your roster in.</h2>
               <p style={{ color: MUTED, margin: '0 auto 2rem', maxWidth: '30rem', lineHeight: 1.65 }}>Set up your agency, add your first band, and see your weekend in one place.</p>
               <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                <Link href="/booker/signup" className="ba-cta ba-cta-primary" style={primaryBtn}>
+                <Link href="/agent/signup" className="ba-cta ba-cta-primary" style={primaryBtn}>
                   Create agent workspace
                 </Link>
                 <Link href="/" className="ba-cta ba-cta-secondary" style={secondaryBtn}>

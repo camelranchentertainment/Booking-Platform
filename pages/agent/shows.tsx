@@ -1,4 +1,4 @@
-// pages/booker/shows.tsx
+// pages/agent/shows.tsx
 // Every show the agent has booked, in the Tours page style: illustrated hero,
 // four metric trackers, Upcoming / Holds / Past / All tabs, band / status /
 // search filters, and the shows grouped under date headings. The Holds tab

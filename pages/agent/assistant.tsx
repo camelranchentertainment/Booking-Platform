@@ -1,4 +1,4 @@
-// pages/booker/assistant.tsx
+// pages/agent/assistant.tsx
 // The agent's AI assistant: ask about bands, shows, venues, follow-ups and
 // money. It answers from the agent's own workspace (and the web) and may
 // suggest changes — shows, bands, venues, contacts, follow-ups and emails;

@@ -1,4 +1,4 @@
-// pages/booker/settings.tsx
+// pages/agent/settings.tsx
 // The agent's profile, their Gmail connection (required to send) and their plan.
 
 import { useState, type FormEvent } from 'react';

@@ -1,4 +1,4 @@
-// pages/booker/commission.tsx
+// pages/agent/commission.tsx
 // Commission ledger, in the Tours page style: what each band owes the agent for
 // a calendar year, and the payments received. Totals are always scoped to one
 // selected year (year tabs under the hero). Money tables stay tables.

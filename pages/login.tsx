@@ -11,7 +11,7 @@ const MUTED = 'rgba(224,120,32,0.55)';
 
 
 // Band-side accounts only. Booking Agents sign up and sign in on their own
-// pages (/booker/signup, /booker/login) so the two sides never mix.
+// pages (/agent/signup, /agent/login) so the two sides never mix.
 const TIERS = [
   { role: 'band_admin', label: 'Band Admin',  icon: '♪', color: '#a78bfa', desc: '$18/mo · 14-day trial', href: '/register?role=band_admin' },
   { role: 'member',     label: 'Band Member', icon: '◉', color: '#34d399', desc: 'Free via invite',       href: '/register?role=member' },
@@ -73,7 +73,7 @@ export default function Login() {
     // band login can't be sent into the agent workspace. An agent account that
     // used this page still goes to its own workspace, never to band pages.
     if (profileLoaded && isAgentShape(role, actId) && (await fetchHasAgentWorkspace(session.user.id))) {
-      window.location.href = '/booker';
+      window.location.href = '/agent';
       return;
     }
 
@@ -295,9 +295,9 @@ export default function Login() {
         </span>
         <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'rgba(154,122,92,0.9)' }}>
           Agent accounts use their own pages.{' '}
-          <Link href="/booker/login" style={{ color: '#33c9b0' }}>Agent sign in</Link>
+          <Link href="/agent/login" style={{ color: '#33c9b0' }}>Agent sign in</Link>
           {' · '}
-          <Link href="/booker/signup" style={{ color: '#33c9b0' }}>Agent sign up</Link>
+          <Link href="/agent/signup" style={{ color: '#33c9b0' }}>Agent sign up</Link>
         </span>
       </div>
 

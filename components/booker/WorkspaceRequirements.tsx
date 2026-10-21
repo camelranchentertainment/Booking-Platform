@@ -57,7 +57,7 @@ export default function WorkspaceRequirements() {
           <p className="text-sm" style={{ color: 'var(--text)', margin: 0, flex: '1 1 280px' }}>
             <strong style={{ color: 'var(--accent)' }}>Action needed:</strong> connect your Gmail before you can send email from the workspace. Everything else works without it.
           </p>
-          <Link href="/booker/settings#gmail" className="btn btn-primary btn-sm">
+          <Link href="/agent/settings#gmail" className="btn btn-primary btn-sm">
             Connect Gmail
           </Link>
         </div>

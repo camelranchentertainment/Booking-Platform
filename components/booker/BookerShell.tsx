@@ -1,5 +1,5 @@
 // components/booker/BookerShell.tsx
-// Layout for the Booking Agent workspace (/booker/*). Deliberately separate from
+// Layout for the Booking Agent workspace (/agent/*). Deliberately separate from
 // the band AppShell: its own navigation, no band data, no inbox sync, no band
 // subscription gate. It shares only the sign-in session and the visual system.
 //
@@ -33,17 +33,17 @@ export function useBooker(): BookerContextValue {
 }
 
 export const BOOKER_NAV = [
-  { label: 'Home', href: '/booker', icon: '◈' },
-  { label: 'Bands', href: '/booker/bands', icon: '♪' },
-  { label: 'Shows', href: '/booker/shows', icon: '◷' },
-  { label: 'Venues', href: '/booker/venues', icon: '⌂' },
-  { label: 'Commission', href: '/booker/commission', icon: '$' },
-  { label: 'Assistant', href: '/booker/assistant', icon: '✦' },
-  { label: 'Settings', href: '/booker/settings', icon: '⚙' },
+  { label: 'Home', href: '/agent', icon: '◈' },
+  { label: 'Bands', href: '/agent/bands', icon: '♪' },
+  { label: 'Shows', href: '/agent/shows', icon: '◷' },
+  { label: 'Venues', href: '/agent/venues', icon: '⌂' },
+  { label: 'Commission', href: '/agent/commission', icon: '$' },
+  { label: 'Assistant', href: '/agent/assistant', icon: '✦' },
+  { label: 'Settings', href: '/agent/settings', icon: '⚙' },
 ] as const;
 
 function isActive(pathname: string, href: string): boolean {
-  return href === '/booker' ? pathname === '/booker' : pathname === href || pathname.startsWith(`${href}/`);
+  return href === '/agent' ? pathname === '/agent' : pathname === href || pathname.startsWith(`${href}/`);
 }
 
 function CenteredMessage({ children }: { children: ReactNode }) {
@@ -58,9 +58,9 @@ function CenteredMessage({ children }: { children: ReactNode }) {
 
 // ── Band-side login that reached the agent workspace ───────────────────────
 // Each login belongs to one side (lib/accountSide.ts). A band admin, member or
-// the superadmin who lands on /booker is never offered an agent workspace; they
+// the superadmin who lands on /agent is never offered an agent workspace; they
 // are pointed back to their own side. Agent workspaces are created only by the
-// agent sign-up (/booker/signup → /api/booker/register).
+// agent sign-up (/agent/signup → /api/booker/register).
 function NotAnAgentAccount({ home, onSignOut }: { home: string; onSignOut: () => Promise<void> }) {
   return (
     <div className="auth-wrap">
@@ -120,7 +120,7 @@ export default function BookerShell({ children, title }: Props) {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      router.replace(`/booker/login?next=${encodeURIComponent(router.asPath)}`);
+      router.replace(`/agent/login?next=${encodeURIComponent(router.asPath)}`);
       return;
     }
     void loadBooker();
@@ -128,7 +128,7 @@ export default function BookerShell({ children, title }: Props) {
 
   const handleSignOut = async () => {
     await signOut();
-    router.replace('/booker/login');
+    router.replace('/agent/login');
   };
 
   if (authLoading || !user || state === 'loading') return <CenteredMessage>Loading…</CenteredMessage>;

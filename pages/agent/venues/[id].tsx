@@ -1,4 +1,4 @@
-// pages/booker/venues/[id].tsx
+// pages/agent/venues/[id].tsx
 // One venue (or festival, fair, promoter, private-event buyer), in the Tours
 // page style: illustrated hero, four trackers, then details, its contacts with
 // a "Show to my bands" checkbox each, website scan, the emails sent about it
@@ -80,7 +80,7 @@ function VenueContent({ venueId }: { venueId: string }) {
         title="Not found"
         body="This venue may have been removed from your book."
         action={
-          <Link href="/booker/venues" className="btn btn-primary">
+          <Link href="/agent/venues" className="btn btn-primary">
             Back to Venues &amp; Buyers
           </Link>
         }
@@ -131,7 +131,7 @@ function VenueContent({ venueId }: { venueId: string }) {
     setActionError('');
     try {
       await archiveVenue(venue.id);
-      await router.push('/booker/venues');
+      await router.push('/agent/venues');
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not remove.');
     }
@@ -147,7 +147,7 @@ function VenueContent({ venueId }: { venueId: string }) {
   return (
     <>
       <div className="text-sm mb-2">
-        <Link href="/booker/venues" className="text-muted">
+        <Link href="/agent/venues" className="text-muted">
           ← Venues &amp; Buyers
         </Link>
       </div>

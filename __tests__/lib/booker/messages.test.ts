@@ -48,9 +48,9 @@ describe('emailFollowups', () => {
       '2026-10-11',
     );
     expect(items.map(i => i.messageId)).toEqual(['b', 'a']);
-    expect(items[1]).toMatchObject({ kind: 'email_followup', href: '/booker/venues/v1' });
+    expect(items[1]).toMatchObject({ kind: 'email_followup', href: '/agent/venues/v1' });
     expect(items[1].message).toContain('Gruene Hall');
-    expect(items[0].href).toBe('/booker/bands/r1');
+    expect(items[0].href).toBe('/agent/bands/r1');
   });
   it('leaves out future, done, failed, archived and date-less messages', () => {
     const items = emailFollowups(

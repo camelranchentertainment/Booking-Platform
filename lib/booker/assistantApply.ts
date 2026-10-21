@@ -223,7 +223,7 @@ export function describeAction(a: AssistantAction, rows: WorkspaceRows, year: nu
               a.answer_by && status !== 'confirmed' ? `answer by ${formatShowDate(a.answer_by, year)}` : null,
             ].filter(Boolean)
           : [];
-      return { title: `Add ${noun}: ${bandName(a.roster_id)} at ${where}`, detail: [formatShowDate(a.show_date, year), ...extras].join(' · '), href: `/booker/bands/${a.roster_id}`, approveLabel: 'Approve' };
+      return { title: `Add ${noun}: ${bandName(a.roster_id)} at ${where}`, detail: [formatShowDate(a.show_date, year), ...extras].join(' · '), href: `/agent/bands/${a.roster_id}`, approveLabel: 'Approve' };
     }
     case 'update_show': {
       const s = rows.shows.find(x => x.id === a.show_id);
@@ -231,7 +231,7 @@ export function describeAction(a: AssistantAction, rows: WorkspaceRows, year: nu
       return {
         title: `${cancelling ? 'Cancel' : 'Update'} ${s ? `${bandName(s.roster_id)} at ${venueLabel(s, venuesById)}, ${formatShowDate(s.show_date, year)}` : 'a show'}`,
         detail: changeList(a.changes, venuesById, year),
-        href: '/booker/shows',
+        href: '/agent/shows',
         approveLabel: cancelling ? 'Approve cancel' : 'Approve',
       };
     }
@@ -240,30 +240,30 @@ export function describeAction(a: AssistantAction, rows: WorkspaceRows, year: nu
       return {
         title: `Set a follow-up for ${s ? `${bandName(s.roster_id)} at ${venueLabel(s, venuesById)}` : 'this show'}`,
         detail: `Follow up ${formatShowDate(a.followup_on, year)}${s ? ` · show ${formatShowDate(s.show_date, year)}` : ''}`,
-        href: '/booker/shows',
+        href: '/agent/shows',
         approveLabel: 'Approve',
       };
     }
     case 'add_band': {
       const { type: _t, reason: _r, band_name, ...rest } = a;
-      return { title: `Add ${band_name} to your roster`, detail: changeList(rest, venuesById, year) || 'Set their commission rate after it is added.', href: '/booker/bands', approveLabel: 'Approve' };
+      return { title: `Add ${band_name} to your roster`, detail: changeList(rest, venuesById, year) || 'Set their commission rate after it is added.', href: '/agent/bands', approveLabel: 'Approve' };
     }
     case 'update_band':
-      return { title: `Update ${bandName(a.roster_id)}`, detail: changeList(a.changes, venuesById, year), href: `/booker/bands/${a.roster_id}`, approveLabel: 'Approve' };
+      return { title: `Update ${bandName(a.roster_id)}`, detail: changeList(a.changes, venuesById, year), href: `/agent/bands/${a.roster_id}`, approveLabel: 'Approve' };
     case 'add_venue': {
       const { type: _t, reason: _r, name, ...rest } = a;
-      return { title: `Add ${name} to your venue book`, detail: changeList(rest, venuesById, year), href: '/booker/venues', approveLabel: 'Approve' };
+      return { title: `Add ${name} to your venue book`, detail: changeList(rest, venuesById, year), href: '/agent/venues', approveLabel: 'Approve' };
     }
     case 'update_venue':
-      return { title: `Update ${venuesById.get(a.venue_id)?.name ?? 'a venue'}`, detail: changeList(a.changes, venuesById, year), href: `/booker/venues/${a.venue_id}`, approveLabel: 'Approve' };
+      return { title: `Update ${venuesById.get(a.venue_id)?.name ?? 'a venue'}`, detail: changeList(a.changes, venuesById, year), href: `/agent/venues/${a.venue_id}`, approveLabel: 'Approve' };
     case 'add_contact': {
       const { type: _t, reason: _r, venue_id, name, ...rest } = a;
-      return { title: `Add ${name} as a contact at ${venuesById.get(venue_id)?.name ?? 'a venue'}`, detail: [changeList(rest, venuesById, year), 'Not shared with your bands'].filter(Boolean).join(' · '), href: `/booker/venues/${venue_id}`, approveLabel: 'Approve' };
+      return { title: `Add ${name} as a contact at ${venuesById.get(venue_id)?.name ?? 'a venue'}`, detail: [changeList(rest, venuesById, year), 'Not shared with your bands'].filter(Boolean).join(' · '), href: `/agent/venues/${venue_id}`, approveLabel: 'Approve' };
     }
     case 'update_contact': {
       const c = rows.contacts.find(x => x.id === a.contact_id);
       const at = c?.venue_id ? venuesById.get(c.venue_id)?.name : undefined;
-      return { title: `Update ${c?.name ?? 'a contact'}${at ? ` at ${at}` : ''}`, detail: changeList(a.changes, venuesById, year), href: c?.venue_id ? `/booker/venues/${c.venue_id}` : '/booker/venues', approveLabel: 'Approve' };
+      return { title: `Update ${c?.name ?? 'a contact'}${at ? ` at ${at}` : ''}`, detail: changeList(a.changes, venuesById, year), href: c?.venue_id ? `/agent/venues/${c.venue_id}` : '/agent/venues', approveLabel: 'Approve' };
     }
     case 'draft_email': {
       const v = a.venue_id ? venuesById.get(a.venue_id) : undefined;
