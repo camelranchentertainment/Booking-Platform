@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { supabase } from '../lib/supabase';
 import { getActId } from '../lib/bookingQueries';
-import { formatShowDate } from '../lib/formatDate';
+import { formatShowDate, localToday } from '../lib/formatDate';
 import { BOOKED_SHOW_STATUSES } from '../lib/types';
 
 const DEAL_LABELS: Record<string, string> = {
@@ -51,6 +51,9 @@ type EditState = {
   rebook_flag: string;
 };
 
+/** Admin roles may see deal and pay figures; members never do (CLAUDE.md). */
+const isAdminRole = (role: string): boolean => role === 'band_admin' || role === 'superadmin';
+
 export default function HistoryPage() {
   const [bookings, setBookings]       = useState<any[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -74,19 +77,28 @@ export default function HistoryPage() {
       setToken(session?.access_token || '');
       if (!session?.user) return;
       const { data: prof } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
-      setRole(prof?.role || '');
+      const userRole = prof?.role || '';
+      setRole(userRole);
       const actId = await getActId(supabase, session.user.id);
       if (!actId) return;
-      const today = new Date().toISOString().split('T')[0];
-      const { data, error } = await supabase
-        .from('bookings')
-        .select(`
-          id, show_date, deal_type, agreed_amount, fee,
+      // Local calendar day: toISOString() is the UTC date, which moved tonight's
+      // show into History every evening in the US.
+      const today = localToday();
+      // Members never see financial data, so deal and pay fields are only
+      // requested for admins — they never reach a member's browser.
+      const fields = isAdminRole(userRole)
+        ? `id, show_date, deal_type, agreed_amount, fee,
           actual_amount_received, payment_status, status,
           post_show_notes, rebook_flag,
           rating, attendance, would_return, venue_feedback,
-          venue:venues(id, name, city, state)
-        `)
+          venue:venues(id, name, city, state)`
+        : `id, show_date, status,
+          post_show_notes, rebook_flag,
+          rating, attendance, would_return, venue_feedback,
+          venue:venues(id, name, city, state)`;
+      const { data, error } = await supabase
+        .from('bookings')
+        .select(fields)
         .eq('act_id', actId)
         // Only shows that were actually booked. Pitches/targets with a past
         // date are venues we looked at, not shows we played.
@@ -197,16 +209,21 @@ export default function HistoryPage() {
   };
 
   const exportCSV = () => {
-    const headers = ['Date', 'Venue', 'City', 'State', 'Deal', 'Agreed', 'Received', 'Payment', 'Rating', 'Would Return', 'Notes'];
+    const showMoney = isAdminRole(role);
+    const headers = showMoney
+      ? ['Date', 'Venue', 'City', 'State', 'Deal', 'Agreed', 'Received', 'Payment', 'Rating', 'Would Return', 'Notes']
+      : ['Date', 'Venue', 'City', 'State', 'Rating', 'Would Return', 'Notes'];
     const lines = filtered.map(b => [
       b.show_date || '',
       b.venue?.name || '',
       b.venue?.city || '',
       b.venue?.state || '',
-      DEAL_LABELS[b.deal_type] || b.deal_type || '',
-      b.agreed_amount ?? b.fee ?? '',
-      b.actual_amount_received ?? '',
-      b.payment_status || '',
+      ...(showMoney ? [
+        DEAL_LABELS[b.deal_type] || b.deal_type || '',
+        b.agreed_amount ?? b.fee ?? '',
+        b.actual_amount_received ?? '',
+        b.payment_status || '',
+      ] : []),
       b.rating ?? '',
       b.would_return != null ? (b.would_return ? 'Yes' : 'No') : (b.rebook_flag || ''),
       (b.post_show_notes || '').replace(/,/g, ';'),
@@ -319,7 +336,7 @@ export default function HistoryPage() {
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                       {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                     </div>
-                    {amount && (
+                    {amount && isAdminRole(role) && (
                       <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)', marginTop: '0.1rem' }}>
                         {DEAL_LABELS[b.deal_type] || b.deal_type || ''} · ${Number(amount).toLocaleString()}
                       </div>
@@ -388,7 +405,7 @@ export default function HistoryPage() {
                     <th>Venue</th>
                     <th>Location</th>
                     <th>Shows</th>
-                    <th>Avg Pay</th>
+                    {isAdminRole(role) && <th>Avg Pay</th>}
                     <th>Rating</th>
                     <th>Would Return</th>
                   </tr>
@@ -399,9 +416,11 @@ export default function HistoryPage() {
                       <td style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{v.name}</td>
                       <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>{v.city}{v.state ? `, ${v.state}` : ''}</td>
                       <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>{v.shows}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent)' }}>
-                        {v.avgPay > 0 ? `$${v.avgPay.toLocaleString()}` : '—'}
-                      </td>
+                      {isAdminRole(role) && (
+                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent)' }}>
+                          {v.avgPay > 0 ? `$${v.avgPay.toLocaleString()}` : '—'}
+                        </td>
+                      )}
                       <td><Stars value={v.avgRating > 0 ? Math.round(v.avgRating) : null} /></td>
                       <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: v.returns > 0 ? '#34d399' : 'var(--text-muted)' }}>
                         {v.returns}/{v.shows}
