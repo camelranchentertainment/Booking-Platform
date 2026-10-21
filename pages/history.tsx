@@ -227,21 +227,21 @@ export default function HistoryPage() {
         <button className="btn btn-ghost btn-sm" onClick={exportCSV}>↓ Export CSV</button>
       </div>
 
-      {/* Summary bar */}
-      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
-        {[
-          ['Total Shows', filtered.length],
-          ['Venues Played', totalVenues],
-          ['States', totalStates],
-          ['Avg Rating', avgRating],
-          ['Would Return', `${returnPct}%`],
-        ].map(([label, val]) => (
-          <div key={label as string} className="stat-block" style={{ flex: '1 1 120px', minWidth: 100 }}>
-            <div className="stat-value" style={{ fontSize: '1.2rem' }}>{val}</div>
-            <div className="stat-label">{label}</div>
+      {/* Summary trackers — the Tours metric style */}
+      <section className="tours-metrics" aria-label="Show history at a glance" style={{ marginBottom: '1.25rem' }}>
+        {([
+          ['Shows played', filtered.length, filtered.length === 1 ? 'show' : 'shows'],
+          ['Venues', totalVenues, 'played'],
+          ['States', totalStates, 'covered'],
+          ['Avg rating', avgRating, 'out of 5'],
+          ['Would return', `${returnPct}%`, 'of shows played'],
+        ] as [string, string | number, string][]).map(([label, val, note]) => (
+          <div key={label} className="tour-metric">
+            <span className="tour-metric-label">{label}</span>
+            <div className="tour-metric-value"><strong>{val}</strong><span>{note}</span></div>
           </div>
         ))}
-      </div>
+      </section>
 
       {/* Filters */}
       <div className="card mb-6" style={{ padding: '0.85rem 1.25rem' }}>
