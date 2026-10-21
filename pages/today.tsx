@@ -1,10 +1,31 @@
-import { useState, useEffect, useRef, CSSProperties } from 'react';
+// pages/today.tsx
+//
+// Today — the show-day view for band admins and members.
+//
+// Layout (Phase 3 redesign, Oct 2026 — matches the Tours page):
+//   1. Illustrated "show night" hero with the date and a one-line status.
+//   2. Left column: tonight's show(s) as a day sheet — run-of-show strip,
+//      where-to-go, logistics, and (admins only) the deal and advance notes.
+//      Off days get the next show instead. Then a compact "Tomorrow" card.
+//   3. Right column: today's notes, with visibility and past-notes browser.
+//
+// All counting/formatting lives in lib/domain/showDay.ts (unit-tested); this
+// file loads rows, holds UI state and renders.
+
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import AppShell from '../components/layout/AppShell';
+import PageHero from '../components/layout/PageHero';
+import ShowNightScene from '../components/today/ShowNightScene';
 import { supabase } from '../lib/supabase';
-import { formatShowDate } from '../lib/formatDate';
+import { formatShowDate, localToday } from '../lib/formatDate';
+import {
+  SHOW_DAY_STATUSES, formatClock, runOfShow, missingTimes, logisticsRows, dealSummary,
+  cityLine, mapsLink, addDays, daysBetween, tourPosition, heroSummary,
+  type ShowDayBooking, type ShowDayVenue,
+} from '../lib/domain/showDay';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type Visibility = 'admin_only' | 'band_admin' | 'all_members';
 
@@ -21,244 +42,359 @@ interface DailyNote {
   author?: { display_name: string | null; email: string | null } | null;
 }
 
-interface TourStub {
-  id: string;
-  name: string;
-  start_date: string | null;
-  end_date: string | null;
+interface TourStub { id: string; name: string; start_date: string | null; end_date: string | null }
+
+/** A booking on the page, with its position on its tour when it has one. */
+interface DayShow extends ShowDayBooking { position: { current: number; total: number } | null }
+
+interface NextShow { id: string; show_date: string; venue: Pick<ShowDayVenue, 'name' | 'city' | 'state'> | null }
+
+type LoadResult =
+  | { kind: 'ok'; userId: string; actId: string; role: string; token: string;
+      todayShows: DayShow[]; tomorrowShows: DayShow[]; next: NextShow | null;
+      activeTour: { id: string; name: string } | null }
+  | { kind: 'no-band'; userId: string; role: string; token: string }
+  | { kind: 'signed-out' }
+  | { kind: 'error' };
+
+const STATUS_LABELS: Readonly<Record<string, string>> = {
+  contract: 'Contract', confirmed: 'Confirmed', advancing: 'Advancing', completed: 'Played',
+};
+
+// Deal and advance fields are fetched for admins only: members never see
+// financial data, and leaving them out of the query keeps them off the wire.
+const BASE_FIELDS = `
+  id, show_date, status, tour_id,
+  load_in_time, soundcheck_time, set_time, end_time,
+  sound_system, meals_provided, drinks_provided, hotel_booked,
+  lodging_details, venue_contact_name, special_requirements,
+  venue:venues(id, name, city, state, address, phone),
+  tour:tours(id, name)`;
+const ADMIN_FIELDS = `${BASE_FIELDS}, advance_notes, deal_type, agreed_amount`;
+
+const isAdminRole = (role: string): boolean => role === 'band_admin' || role === 'superadmin';
+
+/** PostgREST returns a to-one embed as an object, but the generated types allow an array. Take the first either way. */
+function one<T>(v: T | T[] | null | undefined): T | null {
+  if (Array.isArray(v)) return v[0] ?? null;
+  return v ?? null;
 }
 
-// ── Shared card style ────────────────────────────────────────────────────────
-
-const CARD: CSSProperties = {
-  borderRadius: 18,
-  background: 'var(--surface)',
-  border: '1px solid var(--border)',
-  padding: 22,
-};
-
-const EYEBROW: CSSProperties = {
-  fontFamily: 'var(--font-display)',
-  fontSize: 15,
-  letterSpacing: '1.5px',
-  color: 'var(--text-muted)',
-  display: 'block',
-};
-
-// ── Show-detail helpers ───────────────────────────────────────────────────────
-
-const DEAL_LABELS: Record<string, string> = {
-  guarantee:  'Guarantee',
-  door_split: 'Door Split',
-  percentage: 'Percentage',
-  flat_fee:   'Flat Fee',
-  other:      'Other',
-};
-
-function fmt(t: string | null | undefined): string {
-  if (!t) return 'TBD';
-  const [h, m] = t.split(':');
-  const hour = parseInt(h, 10);
-  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+/** Fills in fields the member query leaves out, so every row has the full ShowDayBooking shape. */
+function toBooking(row: Record<string, unknown>): ShowDayBooking {
+  // The row comes from the typed select above; the cast only widens nullable embeds.
+  const r = row as unknown as ShowDayBooking & { venue: unknown; tour: unknown };
+  return {
+    ...r,
+    advance_notes: r.advance_notes ?? null,
+    deal_type: r.deal_type ?? null,
+    agreed_amount: r.agreed_amount ?? null,
+    venue: one(r.venue as ShowDayVenue | ShowDayVenue[] | null),
+    tour: one(r.tour as { id: string; name: string } | { id: string; name: string }[] | null),
+  };
 }
 
-// ── Icons ────────────────────────────────────────────────────────────────────
+/** Each show's place on its tour ("Day 3 of 8"), from one query per tour. */
+async function withTourPositions(actId: string, shows: ShowDayBooking[]): Promise<DayShow[]> {
+  const tourIds = [...new Set(shows.map(s => s.tour_id).filter((id): id is string => !!id))];
+  if (tourIds.length === 0) return shows.map(s => ({ ...s, position: null }));
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('id, tour_id, show_date')
+    .eq('act_id', actId)
+    .in('tour_id', tourIds)
+    .in('status', [...SHOW_DAY_STATUSES]);
+  if (error) console.error('[today] tour positions failed', error);
+  const rows = (data ?? []) as { id: string; tour_id: string; show_date: string | null }[];
+  return shows.map(s => ({
+    ...s,
+    position: s.tour_id ? tourPosition(s.id, rows.filter(r => r.tour_id === s.tour_id)) : null,
+  }));
+}
 
-function CalendarIcon() {
+/**
+ * Loads today's and tomorrow's booked shows, the next show after tomorrow and
+ * the active tour for the signed-in user's band. RLS scopes every query to the
+ * caller's band; the act_id filters keep them explicit. Never throws.
+ */
+async function loadToday(today: string, tomorrow: string): Promise<LoadResult> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return { kind: 'signed-out' };
+    const userId = session.user.id;
+    const token = session.access_token;
+
+    const { data: prof, error: profErr } = await supabase
+      .from('profiles').select('role, act_id').eq('id', userId).maybeSingle();
+    if (profErr) { console.error('[today] profile load failed', profErr); return { kind: 'error' }; }
+    const role = (prof?.role as string | undefined) ?? 'member';
+    const actId = (prof?.act_id as string | null | undefined) ?? null;
+    if (!actId) return { kind: 'no-band', userId, role, token };
+
+    const fields = isAdminRole(role) ? ADMIN_FIELDS : BASE_FIELDS;
+    const statuses = [...SHOW_DAY_STATUSES];
+    const [todayRes, tomorrowRes, nextRes, tourRes] = await Promise.all([
+      supabase.from('bookings').select(fields).eq('act_id', actId).in('status', statuses).eq('show_date', today).order('set_time', { nullsFirst: false }),
+      supabase.from('bookings').select(fields).eq('act_id', actId).in('status', statuses).eq('show_date', tomorrow).order('set_time', { nullsFirst: false }),
+      supabase.from('bookings').select('id, show_date, venue:venues(name, city, state)')
+        .eq('act_id', actId).in('status', statuses).gt('show_date', tomorrow).order('show_date').limit(1),
+      supabase.from('tours').select('id, name').eq('act_id', actId)
+        .in('status', ['active', 'planning']).order('start_date', { ascending: false }).limit(1),
+    ]);
+    if (todayRes.error || tomorrowRes.error || nextRes.error) {
+      console.error('[today] load failed', { today: todayRes.error, tomorrow: tomorrowRes.error, next: nextRes.error });
+      return { kind: 'error' };
+    }
+
+    const todayRows = ((todayRes.data ?? []) as unknown as Record<string, unknown>[]).map(toBooking);
+    const tomorrowRows = ((tomorrowRes.data ?? []) as unknown as Record<string, unknown>[]).map(toBooking);
+    const [todayShows, tomorrowShows] = await Promise.all([
+      withTourPositions(actId, todayRows),
+      withTourPositions(actId, tomorrowRows),
+    ]);
+
+    const nextRow = (nextRes.data ?? [])[0] as unknown as { id: string; show_date: string; venue: unknown } | undefined;
+    const next: NextShow | null = nextRow
+      ? { id: nextRow.id, show_date: nextRow.show_date, venue: one(nextRow.venue as NextShow['venue'] | NextShow['venue'][]) }
+      : null;
+
+    // Notes attach to tonight's tour first, else the band's current run.
+    const tonightTour = todayShows.find(s => s.tour)?.tour ?? null;
+    const runningTour = ((tourRes.data ?? []) as { id: string; name: string }[])[0] ?? null;
+
+    return { kind: 'ok', userId, actId, role, token, todayShows, tomorrowShows, next, activeTour: tonightTour ?? runningTour };
+  } catch (err) {
+    console.error('[today] load threw', err);
+    return { kind: 'error' };
+  }
+}
+
+// ── Show pieces ───────────────────────────────────────────────────────────────
+
+/** Load-in → Soundcheck → Showtime → End, with blanks flagged. */
+function RunOfShow({ booking }: { booking: ShowDayBooking }) {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
-      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
+    <ol className="today-run" aria-label="Run of show">
+      {runOfShow(booking).map(step => {
+        const time = formatClock(step.time);
+        const missing = !time && step.required;
+        return (
+          <li key={step.key} className={`today-run-step${missing ? ' today-run-step--missing' : ''}${!time && !step.required ? ' today-run-step--idle' : ''}`}>
+            <span className="today-run-label">{step.label}</span>
+            <span className="today-run-time">{time ?? 'TBD'}</span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
-function CheckCalendarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
-      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <path d="M8 13l2.5 2.5L16 10" />
-    </svg>
-  );
-}
-
-function StatusBadge({ green }: { green: boolean }) {
-  return (
-    <span style={{
-      width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-      background: green ? 'rgba(74,222,128,0.16)' : 'var(--surface-2)',
-      color: green ? 'var(--green)' : 'var(--text-muted)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
-      {green ? <CheckCalendarIcon /> : <CalendarIcon />}
-    </span>
-  );
-}
-
-// ── ShowDetail ────────────────────────────────────────────────────────────────
-
-function ShowDetail({ booking, role }: { booking: any; role: string }) {
-  const isAdmin = role === 'band_admin' || role === 'superadmin';
+/** Address, maps, phone and the venue contact. */
+function WhereBlock({ booking }: { booking: ShowDayBooking }) {
   const v = booking.venue;
-  const tourName: string | null = booking.tour
-    ? (Array.isArray(booking.tour) ? booking.tour[0]?.name : booking.tour?.name) ?? null
-    : null;
-
-  const pendingFields: string[] = [];
-  if (!booking.load_in_time)    pendingFields.push('Load-in');
-  if (!booking.soundcheck_time) pendingFields.push('Soundcheck');
-  if (!booking.set_time)        pendingFields.push('Set Time');
-
+  const maps = mapsLink(v);
   return (
-    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-
-      {/* Tour position */}
-      {tourName && booking.tourPosition && (
-        <div style={{ marginBottom: 10, fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
-          Day {booking.tourPosition.current} of {booking.tourPosition.total} · {tourName}
-        </div>
+    <section className="today-block" aria-label="Where">
+      <h3 className="today-block-title">Where</h3>
+      <p className="today-where-address">{v?.address || cityLine(v) || 'Address not on file'}</p>
+      <div className="today-where-actions">
+        {maps && (
+          <a className="today-chip-link" href={maps} target="_blank" rel="noopener noreferrer">
+            Directions ↗<span className="sr-only"> (opens Google Maps in a new tab)</span>
+          </a>
+        )}
+        {v?.phone && <a className="today-chip-link" href={`tel:${v.phone}`}>Call {v.phone}</a>}
+      </div>
+      {booking.venue_contact_name && (
+        <p className="today-where-contact"><span>Contact</span> {booking.venue_contact_name}</p>
       )}
+    </section>
+  );
+}
 
-      {/* Address + phone */}
-      {(v?.address || v?.phone) && (
-        <div style={{ marginBottom: 14 }}>
-          {v?.address && (
-            <div style={{ fontSize: 12.5, color: 'var(--text-muted)', fontFamily: 'var(--font-body)', marginBottom: 2 }}>{v.address}</div>
-          )}
-          {v?.phone && (
-            <a href={`tel:${v.phone}`} style={{ fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-body)' }}>{v.phone}</a>
-          )}
-        </div>
-      )}
-
-      {/* Time grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-        {([
-          ['Load-in',    booking.load_in_time],
-          ['Soundcheck', booking.soundcheck_time],
-          ['Showtime',   booking.set_time],
-          ['End',        booking.end_time],
-        ] as [string, string | null][]).map(([label, val]) => (
-          <div key={label} style={{
-            background: 'var(--surface-2)', padding: '8px 12px', borderRadius: 10,
-            borderLeft: `2px solid ${val ? 'var(--accent)' : '#f97316'}`,
-          }}>
-            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 2, fontFamily: 'var(--font-body)' }}>{label}</div>
-            <div style={{ color: val ? 'var(--text-primary)' : '#f97316', fontWeight: 600, fontSize: 13.5 }}>{fmt(val)}</div>
+/** Sound / meals / drinks / hotel with sorted-or-not dots. */
+function LogisticsBlock({ booking }: { booking: ShowDayBooking }) {
+  return (
+    <section className="today-block" aria-label="Logistics">
+      <h3 className="today-block-title">Logistics</h3>
+      <dl className="today-logistics">
+        {logisticsRows(booking).map(row => (
+          <div key={row.label} className="today-logistics-row">
+            <dt>{row.label}</dt>
+            <dd>
+              <span className={`today-dot${row.ok ? ' today-dot--ok' : ''}`} aria-hidden="true" />
+              {row.value}
+            </dd>
           </div>
         ))}
-      </div>
+      </dl>
+    </section>
+  );
+}
 
-      {/* Logistics rows */}
-      <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 12 }}>
-        {([
-          ['Sound',  booking.sound_system === 'house' ? 'House PA' : booking.sound_system === 'self' ? 'Self-Provided' : 'TBD'],
-          ['Meals',  booking.meals_provided  ? 'Provided'   : 'Not provided'],
-          ['Drinks', booking.drinks_provided ? 'Provided'   : 'Not provided'],
-          ['Hotel',  booking.hotel_booked    ? 'Booked'     : 'Not booked'],
-        ] as [string, string][]).map(([label, val]) => (
-          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>{label}</span>
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{val}</span>
-          </div>
-        ))}
-        {booking.lodging_details && (
-          <div style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', marginBottom: 3 }}>Lodging</div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{booking.lodging_details}</div>
-          </div>
-        )}
-        {booking.venue_contact_name && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>Contact</span>
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{booking.venue_contact_name}</span>
-          </div>
-        )}
-        {booking.special_requirements && (
-          <div style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', marginBottom: 3 }}>Requirements</div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{booking.special_requirements}</div>
-          </div>
-        )}
-        {isAdmin && booking.advance_notes && (
-          <div style={{ padding: '6px 0' }}>
-            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', marginBottom: 3 }}>Advance Notes</div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{booking.advance_notes}</div>
-          </div>
-        )}
-      </div>
-
-      {/* Deal box — admin only */}
-      {isAdmin && (booking.deal_type || booking.agreed_amount) && (
-        <div style={{ padding: '10px 14px', background: 'rgba(200,146,26,0.06)', border: '1px solid rgba(200,146,26,0.2)', borderRadius: 10, marginBottom: 10 }}>
-          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 4, fontFamily: 'var(--font-body)' }}>Deal</div>
-          <div style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 13.5 }}>
-            {DEAL_LABELS[booking.deal_type] || booking.deal_type || 'TBD'}
-            {booking.agreed_amount ? ` · $${Number(booking.agreed_amount).toLocaleString()}` : ''}
-          </div>
-        </div>
-      )}
-
-      {/* Pending fields warning */}
-      {pendingFields.length > 0 && (
-        <div style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.3)', borderRadius: 10, padding: '8px 12px', fontSize: 12, color: '#f97316', fontFamily: 'var(--font-body)' }}>
-          ⚠ Unconfirmed: {pendingFields.join(', ')}
-          {isAdmin && (
-            <Link href={`/bookings/${booking.id}`} style={{ marginLeft: 8, color: 'var(--accent)', textDecoration: 'underline' }}>Fill in →</Link>
-          )}
-        </div>
-      )}
-
+/** Free-text day-sheet fields, only when filled in. Advance notes are admin-only. */
+function NotesBlocks({ booking, isAdmin }: { booking: ShowDayBooking; isAdmin: boolean }) {
+  const items: [string, string | null][] = [
+    ['Lodging', booking.lodging_details],
+    ['Requirements', booking.special_requirements],
+    ...(isAdmin ? [['Advance notes', booking.advance_notes] as [string, string | null]] : []),
+  ];
+  const filled = items.filter(([, text]) => !!text?.trim());
+  if (filled.length === 0) return null;
+  return (
+    <div className="today-text-blocks">
+      {filled.map(([label, text]) => (
+        <section key={label} className="today-text-block">
+          <h3 className="today-block-title">{label}</h3>
+          <p>{text}</p>
+        </section>
+      ))}
     </div>
   );
 }
 
-// ── RenderNote ────────────────────────────────────────────────────────────────
-
-function RenderNote({ text }: { text: string }) {
-  if (!text) return null;
+/** Tonight's full day sheet. */
+function ShowCard({ show, isAdmin, eyebrow }: { show: DayShow; isAdmin: boolean; eyebrow: string }) {
+  const where = cityLine(show.venue);
+  const missing = missingTimes(show);
+  const deal = isAdmin ? dealSummary(show) : null;
   return (
-    <>
-      {text.split('\n').map((line, i) => {
-        const cbDone   = line.match(/^\[x\]\s*(.*)/i);
-        const cbOpen   = line.match(/^\[ \]\s*(.*)/);
-        const bullet   = line.match(/^[-*]\s+(.*)/);
-        const numbered = line.match(/^(\d+)\.\s+(.*)/);
+    <article className="today-show" aria-labelledby={`show-${show.id}`}>
+      <header className="today-show-head">
+        <div className="today-show-title-block">
+          <span className="today-eyebrow">
+            {eyebrow}
+            {show.tour && (
+              <span className="today-eyebrow-tour">
+                {' '}· {show.position ? `Day ${show.position.current} of ${show.position.total} · ` : ''}{show.tour.name}
+              </span>
+            )}
+          </span>
+          <h2 className="today-show-name" id={`show-${show.id}`}>{show.venue?.name || 'Venue TBD'}</h2>
+          {where && <span className="today-show-where">{where}</span>}
+        </div>
+        <span className={`tour-badge ${show.status === 'advancing' ? 'tour-badge--done' : 'tour-badge--live'}`}>
+          {STATUS_LABELS[show.status] ?? show.status}
+        </span>
+      </header>
 
-        if (cbDone) return (
-          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem', marginBottom: '0.2rem' }}>
-            <span style={{ color: '#34d399', flexShrink: 0, marginTop: 1 }}>✓</span>
-            <span style={{ color: 'var(--text-muted)', textDecoration: 'line-through', lineHeight: 1.5 }}>{cbDone[1]}</span>
-          </div>
-        );
-        if (cbOpen) return (
-          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem', marginBottom: '0.2rem' }}>
-            <span style={{ flexShrink: 0, display: 'inline-block', width: 13, height: 13, border: '1px solid var(--border)', borderRadius: 2, marginTop: 3 }} />
-            <span style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>{cbOpen[1]}</span>
-          </div>
-        );
-        if (bullet) return (
-          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.2rem' }}>
-            <span style={{ color: 'var(--accent)', flexShrink: 0, fontSize: '1rem', lineHeight: 1.3 }}>·</span>
-            <span style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>{bullet[1]}</span>
-          </div>
-        );
-        if (numbered) return (
-          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem', marginBottom: '0.2rem' }}>
-            <span style={{ color: 'var(--accent)', flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: '0.76rem', lineHeight: 1.6, minWidth: '1.2rem' }}>{numbered[1]}.</span>
-            <span style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>{numbered[2]}</span>
-          </div>
-        );
-        if (line === '') return <div key={i} style={{ height: '0.4rem' }} />;
-        return <div key={i} style={{ color: 'var(--text-primary)', lineHeight: 1.6, marginBottom: '0.1rem' }}>{line}</div>;
-      })}
-    </>
+      <RunOfShow booking={show} />
+
+      <div className="today-show-grid">
+        <WhereBlock booking={show} />
+        <LogisticsBlock booking={show} />
+      </div>
+
+      <NotesBlocks booking={show} isAdmin={isAdmin} />
+
+      {deal && (
+        <div className="today-deal">
+          <span className="today-block-title">Deal</span>
+          <strong>{deal}</strong>
+        </div>
+      )}
+
+      {(missing.length > 0 || isAdmin) && (
+        <footer className="today-show-foot">
+          {missing.length > 0 ? (
+            <p className="today-missing" role="status">
+              <span aria-hidden="true">⚠</span> Still to confirm: {missing.join(', ')}
+            </p>
+          ) : <span />}
+          {isAdmin && (
+            <Link href={`/bookings/${show.id}`} className="tour-card-cta today-show-cta">
+              {missing.length > 0 ? 'Fill in day sheet →' : 'Open day sheet →'}
+            </Link>
+          )}
+        </footer>
+      )}
+    </article>
   );
 }
 
-// ── NotesPanel ────────────────────────────────────────────────────────────────
+/** Off-day card: what's next, so the page is never a dead end. */
+function OffDayCard({ next, today, tomorrowHasShow }: { next: NextShow | null; today: string; tomorrowHasShow: boolean }) {
+  return (
+    <article className="today-show today-show--off">
+      <span className="today-eyebrow">Today</span>
+      <h2 className="today-show-name">Off day</h2>
+      {tomorrowHasShow ? (
+        <p className="today-off-text">No show tonight — you’re back on stage tomorrow. Tomorrow’s sheet is below.</p>
+      ) : next ? (
+        <p className="today-off-text">
+          No show tonight. Next up: <strong>{next.venue?.name || 'Venue TBD'}</strong>
+          {cityLine(next.venue) ? ` in ${cityLine(next.venue)}` : ''} on{' '}
+          {formatShowDate(next.show_date, { weekday: 'long', month: 'long', day: 'numeric' })}
+          {' '}({daysBetween(today, next.show_date)} days out).
+        </p>
+      ) : (
+        <p className="today-off-text">No show tonight and nothing booked ahead yet.</p>
+      )}
+    </article>
+  );
+}
+
+/** Compact tomorrow card; the full sheet opens in place. */
+function TomorrowCard({ show, isAdmin, dateLabel }: { show: DayShow; isAdmin: boolean; dateLabel: string }) {
+  const where = cityLine(show.venue);
+  const showtime = formatClock(show.set_time);
+  const loadIn = formatClock(show.load_in_time);
+  return (
+    <article className="today-tomorrow" aria-labelledby={`tomorrow-${show.id}`}>
+      <div className="today-tomorrow-head">
+        <div className="today-show-title-block">
+          <span className="today-eyebrow">Tomorrow · {dateLabel}</span>
+          <h2 className="today-tomorrow-name" id={`tomorrow-${show.id}`}>{show.venue?.name || 'Venue TBD'}</h2>
+          {where && <span className="today-show-where">{where}</span>}
+        </div>
+        <dl className="today-tomorrow-times">
+          <div><dt>Load-in</dt><dd>{loadIn ?? 'TBD'}</dd></div>
+          <div><dt>Showtime</dt><dd>{showtime ?? 'TBD'}</dd></div>
+        </dl>
+      </div>
+      <details className="today-details">
+        <summary>Full day sheet</summary>
+        <div className="today-details-body">
+          <RunOfShow booking={show} />
+          <div className="today-show-grid">
+            <WhereBlock booking={show} />
+            <LogisticsBlock booking={show} />
+          </div>
+          <NotesBlocks booking={show} isAdmin={isAdmin} />
+        </div>
+      </details>
+    </article>
+  );
+}
+
+// ── Notes ─────────────────────────────────────────────────────────────────────
+
+/** Renders a note's simple markup: [ ] / [x] checkboxes, bullets, numbered lines. */
+function RenderNote({ text }: { text: string }) {
+  if (!text) return null;
+  return (
+    <div className="today-note-render">
+      {text.split('\n').map((line, i) => {
+        const cbDone = line.match(/^\[x\]\s*(.*)/i);
+        const cbOpen = line.match(/^\[ \]\s*(.*)/);
+        const bullet = line.match(/^[-*]\s+(.*)/);
+        const numbered = line.match(/^(\d+)\.\s+(.*)/);
+        if (cbDone) return <div key={i} className="today-note-line today-note-line--done"><span aria-hidden="true">✓</span><s>{cbDone[1]}</s></div>;
+        if (cbOpen) return <div key={i} className="today-note-line"><span className="today-note-box" aria-hidden="true" /><span>{cbOpen[1]}</span></div>;
+        if (bullet) return <div key={i} className="today-note-line"><span className="today-note-mark" aria-hidden="true">·</span><span>{bullet[1]}</span></div>;
+        if (numbered) return <div key={i} className="today-note-line"><span className="today-note-mark">{numbered[1]}.</span><span>{numbered[2]}</span></div>;
+        if (line === '') return <div key={i} className="today-note-gap" />;
+        return <div key={i} className="today-note-line"><span>{line}</span></div>;
+      })}
+    </div>
+  );
+}
+
+const VIS_OPTIONS: { value: Visibility; label: string }[] = [
+  { value: 'admin_only', label: 'Only me' },
+  { value: 'band_admin', label: 'Band admin' },
+  { value: 'all_members', label: 'Whole band' },
+];
 
 interface NotesPanelProps {
   userId: string;
@@ -266,577 +402,381 @@ interface NotesPanelProps {
   tourId: string | null;
   tourName: string | null;
   todayStr: string;
-  role: string;
-  session: string;
+  token: string;
 }
 
-const VIS_OPTIONS: { value: Visibility; label: string }[] = [
-  { value: 'admin_only',  label: 'ONLY ME' },
-  { value: 'band_admin',  label: 'BAND ADMIN CAN SEE' },
-  { value: 'all_members', label: 'WHOLE BAND CAN SEE' },
-];
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
-function NotesPanel({ userId, actId, tourId, tourName, todayStr, session }: NotesPanelProps) {
-  const [content,    setContent]    = useState('');
+/** Today's note for the signed-in user: autosaves, with visibility and a past-notes browser. */
+function NotesPanel({ userId, actId, tourId, tourName, todayStr, token }: NotesPanelProps) {
+  const [content, setContent] = useState('');
   const [visibility, setVisibility] = useState<Visibility>('admin_only');
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [showPast, setShowPast] = useState(false);
 
-  const [showPast,     setShowPast]     = useState(false);
-  const [pastTab,      setPastTab]      = useState<'date' | 'tour'>('date');
-  const [noteDates,    setNoteDates]    = useState<string[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [pastNotes,    setPastNotes]    = useState<DailyNote[]>([]);
-  const [tours,        setTours]        = useState<TourStub[]>([]);
-  const [selectedTour, setSelectedTour] = useState('');
-  const [tourNotes,    setTourNotes]    = useState<DailyNote[]>([]);
-  const [loadingPast,  setLoadingPast]  = useState(false);
-
-  const contentRef    = useRef('');
+  const contentRef = useRef('');
   const visibilityRef = useRef<Visibility>('admin_only');
-  const saveTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const authHeaders = {
-    'Content-Type':  'application/json',
-    'Authorization': `Bearer ${session}`,
-  };
+  useEffect(() => () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    if (savedResetTimer.current) clearTimeout(savedResetTimer.current);
+  }, []);
 
   useEffect(() => {
-    if (!todayStr || !session) return;
-    (async () => {
-      const res = await fetch(`/api/notes?date=${todayStr}&view=day`, {
-        headers: { Authorization: `Bearer ${session}` },
-      });
-      if (!res.ok) return;
-      const { notes } = (await res.json()) as { notes: DailyNote[] };
-      const mine = notes.find((n) => n.user_id === userId);
-      if (mine) {
-        contentRef.current    = mine.content ?? '';
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/notes?date=${todayStr}&view=day`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) { console.error('[today] note load failed', res.status); return; }
+        const { notes } = (await res.json()) as { notes: DailyNote[] };
+        const mine = notes.find(n => n.user_id === userId);
+        if (cancelled || !mine) return;
+        contentRef.current = mine.content ?? '';
         visibilityRef.current = mine.visibility ?? 'admin_only';
         setContent(mine.content ?? '');
         setVisibility(mine.visibility ?? 'admin_only');
-        setSaveStatus('saved');
+      } catch (err) {
+        console.error('[today] note load threw', err);
       }
     })();
-  }, [todayStr, session]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { cancelled = true; };
+  }, [todayStr, token, userId]);
 
-  const triggerSave = async () => {
+  const triggerSave = useCallback(async (): Promise<void> => {
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
     setSaveStatus('saving');
-    const res = await fetch('/api/notes', {
-      method: 'POST',
-      headers: authHeaders,
-      body: JSON.stringify({
-        content:    contentRef.current,
-        note_date:  todayStr,
-        tour_id:    tourId  ?? null,
-        act_id:     actId   ?? null,
-        visibility: visibilityRef.current,
-      }),
-    });
-    if (!res.ok) { setSaveStatus('error'); return; }
-    setSaveStatus('saved');
-    setTimeout(() => setSaveStatus(s => s === 'saved' ? 'idle' : s), 2000);
-  };
+    try {
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          content: contentRef.current,
+          note_date: todayStr,
+          tour_id: tourId ?? null,
+          act_id: actId ?? null,
+          visibility: visibilityRef.current,
+        }),
+      });
+      if (!res.ok) { console.error('[today] note save failed', res.status); setSaveStatus('error'); return; }
+      setSaveStatus('saved');
+      if (savedResetTimer.current) clearTimeout(savedResetTimer.current);
+      savedResetTimer.current = setTimeout(() => setSaveStatus(s => (s === 'saved' ? 'idle' : s)), 2000);
+    } catch (err) {
+      console.error('[today] note save threw', err);
+      setSaveStatus('error');
+    }
+  }, [token, todayStr, tourId, actId]);
 
-  const scheduleAutosave = (delayMs = 2000) => {
+  const scheduleAutosave = (delayMs: number): void => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(triggerSave, delayMs);
+    saveTimer.current = setTimeout(() => { void triggerSave(); }, delayMs);
   };
 
-  const handleChange = (val: string) => {
+  const handleChange = (val: string): void => {
     contentRef.current = val;
     setContent(val);
     setSaveStatus('idle');
     scheduleAutosave(2000);
   };
 
-  const handleVisibilityChange = (vis: Visibility) => {
+  const handleVisibility = (vis: Visibility): void => {
     visibilityRef.current = vis;
     setVisibility(vis);
     scheduleAutosave(500);
   };
 
-  const openPastNotes = async () => {
-    setShowPast(true);
-    setLoadingPast(true);
-    setSelectedDate(null);
-    setPastNotes([]);
-    setSelectedTour('');
-    setTourNotes([]);
+  const statusText =
+    saveStatus === 'saving' ? 'Saving…' :
+    saveStatus === 'saved' ? 'Saved' :
+    saveStatus === 'error' ? 'Couldn’t save — try again' :
+    content ? 'Autosaves as you type' : '';
 
-    const [datesRes, toursRes] = await Promise.all([
-      fetch('/api/notes?view=dates', { headers: { Authorization: `Bearer ${session}` } }),
-      supabase.from('tours').select('id, name, start_date, end_date')
-        .neq('status', 'cancelled').order('start_date', { ascending: false }).limit(30),
-    ]);
+  return (
+    <section className="today-notes" aria-labelledby="today-notes-title">
+      <div className="today-notes-head">
+        <h2 className="today-notes-title" id="today-notes-title">Notes</h2>
+        {tourName && <span className="today-tour-chip">{tourName}</span>}
+      </div>
 
-    if (datesRes.ok) {
-      const { dates } = await datesRes.json();
-      setNoteDates(dates ?? []);
+      <div className="today-vis" role="group" aria-label="Who can see this note">
+        {VIS_OPTIONS.map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            className={`tours-tab today-vis-btn${visibility === value ? ' tours-tab--on' : ''}`}
+            aria-pressed={visibility === value}
+            onClick={() => handleVisibility(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <label className="sr-only" htmlFor="today-note-text">Today’s note</label>
+      <textarea
+        id="today-note-text"
+        className="textarea today-note-input"
+        value={content}
+        onChange={e => handleChange(e.target.value)}
+        placeholder={'Write a note for today…\n- bullet points\n[ ] checklist items'}
+      />
+
+      <div className="today-notes-foot">
+        <button type="button" className="today-link-btn" onClick={() => setShowPast(true)}>Past notes →</button>
+        <span className={`today-save-status${saveStatus === 'error' ? ' today-save-status--error' : ''}`} role="status">{statusText}</span>
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => void triggerSave()} disabled={saveStatus === 'saving'}>
+          {saveStatus === 'saving' ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+
+      {showPast && <PastNotesDialog userId={userId} token={token} onClose={() => setShowPast(false)} />}
+    </section>
+  );
+}
+
+/** Browse earlier notes by date or by tour. */
+function PastNotesDialog({ userId, token, onClose }: { userId: string; token: string; onClose: () => void }) {
+  const [tab, setTab] = useState<'date' | 'tour'>('date');
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [dates, setDates] = useState<string[]>([]);
+  const [tours, setTours] = useState<TourStub[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedTour, setSelectedTour] = useState('');
+  const [notes, setNotes] = useState<DailyNote[] | null>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  // Latest onClose without re-running the focus effect on every parent render.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
+  // Focus the close button on open, close on Escape, hand focus back on close.
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') onCloseRef.current(); };
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('keydown', onKey); previous?.focus(); };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [datesRes, toursRes] = await Promise.all([
+          fetch('/api/notes?view=dates', { headers: { Authorization: `Bearer ${token}` } }),
+          supabase.from('tours').select('id, name, start_date, end_date')
+            .neq('status', 'cancelled').order('start_date', { ascending: false }).limit(30),
+        ]);
+        if (cancelled) return;
+        if (!datesRes.ok) throw new Error(`notes dates ${datesRes.status}`);
+        const { dates: d } = (await datesRes.json()) as { dates: string[] | null };
+        setDates(d ?? []);
+        setTours((toursRes.data as TourStub[] | null) ?? []);
+      } catch (err) {
+        console.error('[today] past notes load failed', err);
+        if (!cancelled) setFailed(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token]);
+
+  const loadNotes = async (query: string): Promise<void> => {
+    setNotes(null);
+    try {
+      const res = await fetch(`/api/notes?${query}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`notes ${res.status}`);
+      const { notes: n } = (await res.json()) as { notes: DailyNote[] | null };
+      setNotes(n ?? []);
+    } catch (err) {
+      console.error('[today] past notes fetch failed', err);
+      setNotes([]);
+      setFailed(true);
     }
-    setTours((toursRes.data as TourStub[]) ?? []);
-    setLoadingPast(false);
   };
 
-  const loadDateNotes = async (date: string) => {
-    setSelectedDate(date);
-    setPastNotes([]);
-    const res = await fetch(`/api/notes?date=${date}&view=day`, {
-      headers: { Authorization: `Bearer ${session}` },
-    });
-    if (res.ok) {
-      const { notes } = await res.json();
-      setPastNotes(notes ?? []);
-    }
-  };
-
-  const loadTourNotes = async (tid: string) => {
-    setSelectedTour(tid);
-    setTourNotes([]);
-    if (!tid) return;
-    const res = await fetch(`/api/notes?tour_id=${tid}&view=tour`, {
-      headers: { Authorization: `Bearer ${session}` },
-    });
-    if (res.ok) {
-      const { notes } = await res.json();
-      setTourNotes(notes ?? []);
-    }
-  };
-
-  const fmtDate = (d: string, opts?: Intl.DateTimeFormatOptions) =>
-    formatShowDate(d, opts ?? { weekday: 'long', month: 'long', day: 'numeric' });
-
-  const authorLabel = (n: DailyNote) => {
+  const pickDate = (d: string): void => { setSelectedDate(d); void loadNotes(`date=${d}&view=day`); };
+  const pickTour = (id: string): void => { setSelectedTour(id); if (id) void loadNotes(`tour_id=${id}&view=tour`); else setNotes(null); };
+  const author = (n: DailyNote): string => {
     const name = n.author?.display_name || n.author?.email || 'Unknown';
     return n.user_id === userId ? `${name} (you)` : name;
   };
 
-  const saveLabel =
-    saveStatus === 'saving' ? 'Saving…' :
-    saveStatus === 'saved'  ? 'Saved ✓' :
-    saveStatus === 'error'  ? 'Failed'  :
-    'Save note';
-
-  const saveBg =
-    saveStatus === 'saved'  ? '#10b981' :
-    saveStatus === 'error'  ? '#f87171' :
-    'var(--accent)';
+  const noteList = (emptyText: string, withDates: boolean) => (
+    notes === null ? <p className="today-past-empty">Loading…</p>
+      : notes.length === 0 ? <p className="today-past-empty">{emptyText}</p>
+      : notes.map(n => (
+        <article key={n.id} className="today-past-note">
+          <header>
+            {withDates && <span className="today-past-date">{formatShowDate(n.note_date, { weekday: 'short', month: 'short', day: 'numeric' })}</span>}
+            <span className={n.user_id === userId ? 'today-past-author today-past-author--me' : 'today-past-author'}>{author(n)}</span>
+          </header>
+          <RenderNote text={n.content} />
+        </article>
+      ))
+  );
 
   return (
-    <div style={{ ...CARD, display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-      {/* Eyebrow */}
-      <span style={EYEBROW}>NOTES</span>
-
-      {/* Date + tour pill */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 12.5, color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
-          {todayStr ? fmtDate(todayStr) : ''}
-        </span>
-        {tourName && (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 800, letterSpacing: '0.5px',
-            background: 'rgba(200,146,26,0.16)', color: 'var(--accent)',
-            border: '1px solid rgba(200,146,26,0.3)',
-            fontFamily: 'var(--font-body)',
-          }}>
-            ⟲ {tourName}
-          </span>
-        )}
-      </div>
-
-      {/* Visibility pills */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {VIS_OPTIONS.map(({ value, label }) => {
-          const active = visibility === value;
-          return (
-            <button
-              key={value}
-              onClick={() => handleVisibilityChange(value)}
-              style={{
-                display: 'inline-flex', alignItems: 'center',
-                padding: '6px 14px', borderRadius: 999,
-                fontSize: 10.5, fontWeight: 800, letterSpacing: '0.5px',
-                fontFamily: 'var(--font-body)', cursor: 'pointer',
-                background: active ? 'rgba(200,146,26,0.16)' : 'var(--surface-2)',
-                color:      active ? 'var(--accent)' : 'var(--text-muted)',
-                border:     active ? '1px solid rgba(200,146,26,0.35)' : '1px solid var(--border)',
-                transition: 'all 0.15s',
-              }}
-            >
-              {label}
+    <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal today-past" role="dialog" aria-modal="true" aria-labelledby="past-notes-title">
+        <div className="modal-header">
+          <h3 className="modal-title" id="past-notes-title">Past notes</h3>
+          <button ref={closeRef} type="button" className="btn btn-ghost btn-sm" aria-label="Close" onClick={onClose}>✕</button>
+        </div>
+        <div className="tours-tabs today-past-tabs" role="group" aria-label="Browse notes">
+          {(['date', 'tour'] as const).map(t => (
+            <button key={t} type="button" className={`tours-tab${tab === t ? ' tours-tab--on' : ''}`} aria-pressed={tab === t}
+              onClick={() => { setTab(t); setNotes(null); setSelectedDate(null); setSelectedTour(''); }}>
+              {t === 'date' ? 'By date' : 'By tour'}
             </button>
-          );
-        })}
-      </div>
-
-      {/* Textarea */}
-      <textarea
-        value={content}
-        onChange={e => handleChange(e.target.value)}
-        placeholder="Write a note for today..."
-        style={{
-          flexGrow: 1, minHeight: 120, resize: 'none',
-          background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12,
-          padding: 14, color: 'var(--text-primary)',
-          fontFamily: 'var(--font-body)', fontSize: 13.5, lineHeight: 1.6,
-          outline: 'none', boxSizing: 'border-box', whiteSpace: 'pre-wrap',
-          transition: 'border-color 0.15s',
-        }}
-        onFocus={e => { e.target.style.borderColor = 'var(--accent)'; }}
-        onBlur={e  => { e.target.style.borderColor = 'var(--border)'; }}
-      />
-
-      {/* Footer */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <button
-          onClick={openPastNotes}
-          style={{
-            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-            color: 'var(--accent)', fontSize: 12.5, fontWeight: 800, fontFamily: 'var(--font-body)',
-          }}
-        >
-          Past notes →
-        </button>
-        <button
-          onClick={triggerSave}
-          disabled={saveStatus === 'saving'}
-          style={{
-            padding: '9px 18px', borderRadius: 10, border: 'none',
-            background: saveBg, color: '#161616',
-            fontSize: 12.5, fontWeight: 800, fontFamily: 'var(--font-body)',
-            cursor: saveStatus === 'saving' ? 'default' : 'pointer',
-            transition: 'background 0.2s',
-          }}
-        >
-          {saveLabel}
-        </button>
-      </div>
-
-      {/* Past Notes Modal */}
-      {showPast && (
-        <div
-          onClick={e => { if (e.target === e.currentTarget) setShowPast(false); }}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', width: '100%', maxWidth: 580, maxHeight: '82vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-          >
-            <div style={{ padding: '0.9rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem', color: 'var(--accent)', letterSpacing: '0.05em' }}>PAST NOTES</span>
-              <button onClick={() => setShowPast(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, padding: '0.15rem 0.4rem' }}>✕</button>
-            </div>
-
-            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-              {(['date', 'tour'] as const).map(tab => (
-                <button key={tab} onClick={() => setPastTab(tab)} style={{
-                  flex: 1, padding: '0.6rem', background: 'none', border: 'none',
-                  borderBottom: pastTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
-                  color: pastTab === tab ? 'var(--accent)' : 'var(--text-muted)',
-                  fontFamily: 'var(--font-body)', fontSize: '0.76rem', fontWeight: pastTab === tab ? 600 : 400,
-                  letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer', transition: 'all 0.15s',
-                }}>
-                  {tab === 'date' ? 'By Date' : 'By Tour'}
-                </button>
+          ))}
+        </div>
+        {failed && <p className="tours-form-error" role="alert">Some notes didn’t load. Close and try again.</p>}
+        {loading ? <p className="today-past-empty">Loading…</p> : tab === 'date' ? (
+          <div className="today-past-split">
+            <ul className="today-past-dates" aria-label="Dates with notes">
+              {dates.length === 0 && <li className="today-past-empty">No notes yet.</li>}
+              {dates.map(d => (
+                <li key={d}>
+                  <button type="button" className={`today-past-date-btn${selectedDate === d ? ' today-past-date-btn--on' : ''}`}
+                    aria-pressed={selectedDate === d} onClick={() => pickDate(d)}>
+                    {formatShowDate(d, { month: 'short', day: 'numeric', year: '2-digit' })}
+                  </button>
+                </li>
               ))}
-            </div>
-
-            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              {loadingPast ? (
-                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading…</div>
-
-              ) : pastTab === 'date' ? (
-                <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-                  <div style={{ width: 155, flexShrink: 0, borderRight: '1px solid var(--border)', overflowY: 'auto', padding: '0.5rem 0.4rem' }}>
-                    {noteDates.length === 0 ? (
-                      <div style={{ padding: '1rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>No notes yet.</div>
-                    ) : noteDates.map(d => (
-                      <button key={d} onClick={() => loadDateNotes(d)} style={{
-                        display: 'block', width: '100%', textAlign: 'left',
-                        background: selectedDate === d ? 'rgba(224,120,32,0.1)' : 'transparent',
-                        border: 'none', borderLeft: selectedDate === d ? '2px solid var(--accent)' : '2px solid transparent',
-                        color: selectedDate === d ? 'var(--accent)' : 'var(--text-secondary)',
-                        fontFamily: 'var(--font-mono)', fontSize: '0.7rem',
-                        padding: '0.45rem 0.65rem', cursor: 'pointer',
-                        borderRadius: '0 var(--radius-sm) var(--radius-sm) 0', marginBottom: '0.1rem', transition: 'all 0.1s',
-                      }}>
-                        {fmtDate(d, { month: 'short', day: 'numeric', year: '2-digit' })}
-                      </button>
-                    ))}
-                  </div>
-                  <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.1rem' }}>
-                    {!selectedDate ? (
-                      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>← Select a date</div>
-                    ) : pastNotes.length === 0 ? (
-                      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>No notes for this date.</div>
-                    ) : pastNotes.map((n) => (
-                      <div key={n.id} style={{ marginBottom: '1.25rem' }}>
-                        {pastNotes.length > 1 && (
-                          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', fontWeight: 600, color: n.user_id === userId ? 'var(--accent)' : '#a78bfa', marginBottom: '0.35rem' }}>
-                            {authorLabel(n)}
-                          </div>
-                        )}
-                        <div style={{ fontSize: '0.83rem' }}><RenderNote text={n.content} /></div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-                  <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-                    <select value={selectedTour} onChange={e => loadTourNotes(e.target.value)} style={{
-                      width: '100%', background: 'var(--bg-base)', border: '1px solid var(--border)',
-                      borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)',
-                      fontFamily: 'var(--font-body)', fontSize: '0.82rem', padding: '0.42rem 0.65rem',
-                    }}>
-                      <option value="">— Select a tour —</option>
-                      {tours.map((t) => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.1rem' }}>
-                    {!selectedTour ? (
-                      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>Select a tour to see its notes.</div>
-                    ) : tourNotes.length === 0 ? (
-                      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>No notes written during this tour.</div>
-                    ) : tourNotes.map((n) => (
-                      <div key={n.id} style={{ marginBottom: '1.5rem', paddingBottom: '1.25rem', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem', gap: '0.5rem' }}>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--accent)', whiteSpace: 'nowrap' }}>
-                            {fmtDate(n.note_date, { weekday: 'short', month: 'short', day: 'numeric' })}
-                          </span>
-                          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', color: n.user_id === userId ? 'var(--accent)' : '#a78bfa' }}>
-                            {authorLabel(n)}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: '0.83rem' }}><RenderNote text={n.content} /></div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+            </ul>
+            <div className="today-past-body">
+              {selectedDate ? noteList('No notes for this date.', false) : <p className="today-past-empty">Pick a date.</p>}
             </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="today-past-body">
+            <label className="field-label" htmlFor="past-tour">Tour</label>
+            <select id="past-tour" className="select" value={selectedTour} onChange={e => pickTour(e.target.value)}>
+              <option value="">Select a tour…</option>
+              {tours.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            {selectedTour && noteList('No notes written during this tour.', true)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-// ── TodayPage ─────────────────────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TodayPage() {
-  const [role,        setRole]        = useState('');
-  const [userId,      setUserId]      = useState('');
-  const [userActId,   setUserActId]   = useState<string | null>(null);
-  const [session,     setSession]     = useState('');
-  const [today,       setToday]       = useState<any>(null);
-  const [tomorrow,    setTomorrow]    = useState<any>(null);
-  const [upcoming,    setUpcoming]    = useState<any>(null);
-  const [activeTour,  setActiveTour]  = useState<{ id: string; name: string } | null>(null);
-  const [loading,     setLoading]     = useState(true);
-  const [todayStr,    setTodayStr]    = useState('');
-  const [tomorrowStr, setTomorrowStr] = useState('');
+  // The browser's local calendar day, not UTC: toISOString() rolls over to
+  // "tomorrow" every US evening. Read after mount so the server render (UTC
+  // clock) and the browser render can't disagree during hydration.
+  const [todayStr, setTodayStr] = useState<string | null>(null);
+  const tomorrowStr = todayStr ? addDays(todayStr, 1) : null;
+  const [result, setResult] = useState<LoadResult | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
+  // The day is re-read on every (re)load, so "Try again" after midnight moves on to the new day.
   useEffect(() => {
-    const now = new Date();
-    const tom = new Date(now); tom.setDate(tom.getDate() + 1);
-    const td  = now.toISOString().substring(0, 10);
-    const tm  = tom.toISOString().substring(0, 10);
-    setTodayStr(td);
-    setTomorrowStr(tm);
-    load(td, tm);
-  }, []);
+    const td = localToday();
+    let cancelled = false;
+    void loadToday(td, addDays(td, 1)).then(r => {
+      if (cancelled) return;
+      setTodayStr(td);
+      setResult(r);
+    });
+    return () => { cancelled = true; };
+  }, [reloadKey]);
 
-  const load = async (td: string, tm: string) => {
-    setLoading(true);
-    try {
-      const { data: { session: sess } } = await supabase.auth.getSession();
-      if (!sess) return;
+  const retry = (): void => { setResult(null); setReloadKey(k => k + 1); };
+  const longDate = (d: string): string => formatShowDate(d, { weekday: 'long', month: 'long', day: 'numeric' });
 
-      setUserId(sess.user.id);
-      setSession(sess.access_token);
-
-      const { data: prof } = await supabase
-        .from('profiles').select('role, act_id').eq('id', sess.user.id).maybeSingle();
-
-      setRole(prof?.role || 'member');
-
-      const actId = prof?.act_id ?? null;
-      setUserActId(actId);
-      if (!actId) return;
-
-      const bookingSelect = `
-        id, show_date, status, tour_id,
-        load_in_time, soundcheck_time, set_time, end_time,
-        sound_system, meals_provided, drinks_provided, hotel_booked,
-        lodging_details, venue_contact_name, special_requirements,
-        advance_notes, deal_type, agreed_amount,
-        venue:venues(id, name, city, state, address, phone),
-        tour:tours(id, name)
-      `;
-
-      const [todayRes, tomorrowRes, upcomingRes] = await Promise.all([
-        supabase.from('bookings').select(bookingSelect)
-          .eq('act_id', actId).eq('status', 'confirmed').eq('show_date', td).limit(1),
-        supabase.from('bookings').select(bookingSelect)
-          .eq('act_id', actId).eq('status', 'confirmed').eq('show_date', tm).limit(1),
-        supabase.from('bookings').select('id, show_date, venue:venues(name, city, state)')
-          .eq('act_id', actId).eq('status', 'confirmed').gt('show_date', tm).order('show_date').limit(1),
-      ]);
-
-      const todayBooking    = todayRes.data?.[0]    ?? null;
-      const tomorrowBooking = tomorrowRes.data?.[0] ?? null;
-      const upcomingBooking = upcomingRes.data?.[0] ?? null;
-
-      // Tour position for today's show
-      if (todayBooking?.tour_id) {
-        const { data: tourShows } = await supabase.from('bookings')
-          .select('id, show_date').eq('tour_id', todayBooking.tour_id)
-          .neq('status', 'cancelled').order('show_date');
-        const sorted = (tourShows || []).filter((b: any) => b.show_date);
-        const pos = sorted.findIndex((b: any) => b.id === todayBooking.id);
-        if (pos !== -1) (todayBooking as any).tourPosition = { current: pos + 1, total: sorted.length };
-      }
-
-      setToday(todayBooking);
-      setTomorrow(tomorrowBooking);
-      setUpcoming(upcomingBooking);
-
-      // Active tour: today's show tour, or most recent active/planning tour
-      if (todayBooking?.tour_id) {
-        const tourAny = todayBooking.tour as any;
-        const tourName: string = (Array.isArray(tourAny) ? tourAny[0]?.name : tourAny?.name) ?? '';
-        if (tourName) setActiveTour({ id: todayBooking.tour_id as string, name: tourName });
-      } else {
-        const { data: activeTours } = await supabase.from('tours')
-          .select('id, name').eq('act_id', actId)
-          .in('status', ['active', 'planning']).order('start_date', { ascending: false }).limit(1);
-        const at = (activeTours as { id: string; name: string }[] | null)?.[0];
-        if (at) setActiveTour({ id: at.id, name: at.name });
-      }
-    } catch (err) {
-      console.error('today load:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const dateLabel = (d: string) =>
-    formatShowDate(d, { weekday: 'long', month: 'long', day: 'numeric' });
+  const ok = result?.kind === 'ok' && todayStr && tomorrowStr ? result : null;
+  const isAdmin = ok ? isAdminRole(ok.role) : false;
+  const summary = ok
+    ? heroSummary({ todayShows: ok.todayShows, tomorrowShows: ok.tomorrowShows, next: ok.next, today: todayStr ?? '' })
+    : undefined;
+  const firstToday = ok?.todayShows[0];
 
   return (
     <AppShell requireRole={['band_admin', 'member']}>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Today</h1>
-          <div className="page-sub">{todayStr ? dateLabel(todayStr) : ''}</div>
+      <PageHero
+        title="Today"
+        subtitle={todayStr ? longDate(todayStr) : 'Show day'}
+        summary={summary}
+        scene={<ShowNightScene />}
+        actions={isAdmin && firstToday ? (
+          <Link href={`/bookings/${firstToday.id}`} className="btn btn-primary tours-new-btn">Tonight’s day sheet</Link>
+        ) : undefined}
+      />
+
+      {result === null && (
+        <div className="today-layout" aria-busy="true">
+          <span className="sr-only" role="status">Loading today…</span>
+          <div className="today-main">
+            <div className="today-show tour-skeleton tour-skeleton--card today-skeleton-lg" />
+            <div className="today-tomorrow tour-skeleton tour-skeleton--card" />
+          </div>
+          <div className="today-notes tour-skeleton tour-skeleton--card today-skeleton-lg" />
         </div>
-      </div>
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, alignItems: 'start' }}>
+      {result?.kind === 'error' && (
+        <div className="card tours-empty" role="alert">
+          <div className="tours-empty-title">Today didn’t load</div>
+          <p>Something went wrong reaching the database. Your shows and notes are safe — try again.</p>
+          <button type="button" className="btn btn-primary" onClick={retry}>Try again</button>
+        </div>
+      )}
 
-        {/* Left column — Today + Tomorrow cards */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {result?.kind === 'signed-out' && (
+        <div className="card tours-empty"><div className="tours-empty-title">Sign in to see today</div></div>
+      )}
 
-          {/* TODAY */}
-          <div style={CARD}>
-            <span style={EYEBROW}>TODAY</span>
-            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-              {loading ? (
-                <div className="skeleton" style={{ height: 38, width: '100%', borderRadius: 10 }} />
-              ) : today ? (
-                <>
-                  <StatusBadge green />
-                  <span style={{ fontSize: 14.5, lineHeight: 1.4 }}>
-                    <strong>{today.venue?.name || 'Venue TBD'}</strong>
-                    {today.venue?.city && (
-                      <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
-                        {' '}· {today.venue.city}, {today.venue.state}
-                      </span>
-                    )}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <StatusBadge green={false} />
-                  <span style={{ fontSize: 14.5, color: 'var(--text-muted)' }}>No show today.</span>
-                </>
-              )}
-            </div>
-            {!loading && today && <ShowDetail booking={today} role={role} />}
+      {result?.kind === 'no-band' && todayStr && (
+        <div className="today-layout">
+          <div className="card tours-empty today-main">
+            <div className="tours-empty-title">No band yet</div>
+            <p>Once you’re on a band’s roster, show days land here with the run of show, directions and logistics.</p>
+          </div>
+          <NotesPanel userId={result.userId} actId={null} tourId={null} tourName={null} todayStr={todayStr} token={result.token} />
+        </div>
+      )}
+
+      {ok && (
+        <div className="today-layout">
+          <div className="today-main">
+            {ok.todayShows.length > 0
+              ? ok.todayShows.map((s, i) => (
+                <ShowCard key={s.id} show={s} isAdmin={isAdmin}
+                  eyebrow={ok.todayShows.length > 1 ? `Tonight · show ${i + 1} of ${ok.todayShows.length}` : 'Tonight'} />
+              ))
+              : <OffDayCard next={ok.next} today={todayStr ?? ''} tomorrowHasShow={ok.tomorrowShows.length > 0} />}
+
+            {ok.tomorrowShows.map(s => (
+              <TomorrowCard key={s.id} show={s} isAdmin={isAdmin}
+                dateLabel={formatShowDate(tomorrowStr ?? '', { weekday: 'short', month: 'short', day: 'numeric' })} />
+            ))}
+            {ok.tomorrowShows.length === 0 && ok.todayShows.length > 0 && (
+              <p className="today-quiet">
+                Nothing tomorrow.
+                {ok.next && <> Next show: <strong>{ok.next.venue?.name || 'Venue TBD'}</strong> on {longDate(ok.next.show_date)}.</>}
+              </p>
+            )}
           </div>
 
-          {/* TOMORROW */}
-          <div style={CARD}>
-            <span style={EYEBROW}>TOMORROW</span>
-            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-              {loading ? (
-                <div className="skeleton" style={{ height: 38, width: '100%', borderRadius: 10 }} />
-              ) : tomorrow ? (
-                <>
-                  <StatusBadge green />
-                  <span style={{ fontSize: 14.5, lineHeight: 1.4 }}>
-                    <strong>{tomorrow.venue?.name || 'Venue TBD'}</strong>
-                    {tomorrow.venue?.city && (
-                      <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
-                        {' '}· {tomorrow.venue.city}, {tomorrow.venue.state}
-                      </span>
-                    )}
-                  </span>
-                </>
-              ) : upcoming ? (
-                <>
-                  <StatusBadge green />
-                  <span style={{ fontSize: 14, lineHeight: 1.5 }}>
-                    No show tomorrow. Next show:{' '}
-                    <strong>{upcoming.venue?.name}</strong>
-                    {upcoming.venue?.city && (
-                      <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
-                        {' '}· {upcoming.venue.city}, {upcoming.venue.state}
-                      </span>
-                    )}
-                    {upcoming.show_date && (
-                      <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
-                        {' '}on {dateLabel(upcoming.show_date)}
-                      </span>
-                    )}.
-                  </span>
-                </>
-              ) : (
-                <>
-                  <StatusBadge green={false} />
-                  <span style={{ fontSize: 14.5, color: 'var(--text-muted)' }}>No upcoming shows.</span>
-                </>
-              )}
-            </div>
-            {!loading && tomorrow && <ShowDetail booking={tomorrow} role={role} />}
-          </div>
-
-        </div>
-
-        {/* Right column — Notes */}
-        {session && (
           <NotesPanel
-            userId={userId}
-            actId={userActId}
-            tourId={activeTour?.id   ?? null}
-            tourName={activeTour?.name ?? null}
-            todayStr={todayStr}
-            role={role}
-            session={session}
+            userId={ok.userId}
+            actId={ok.actId}
+            tourId={ok.activeTour?.id ?? null}
+            tourName={ok.activeTour?.name ?? null}
+            todayStr={todayStr ?? ''}
+            token={ok.token}
           />
-        )}
-        {!session && !loading && (
-          <div style={{ ...CARD, color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>
-            Sign in to write notes.
-          </div>
-        )}
-
-      </div>
+        </div>
+      )}
     </AppShell>
   );
 }
