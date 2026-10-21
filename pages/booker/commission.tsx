@@ -1,11 +1,15 @@
 // pages/booker/commission.tsx
-// Commission ledger: what each band owes the agent for a calendar year, and the
-// payments received. Totals are always scoped to one selected year.
+// Commission ledger, in the Tours page style: what each band owes the agent for
+// a calendar year, and the payments received. Totals are always scoped to one
+// selected year (year tabs under the hero). Money tables stay tables.
 
 import { useMemo, useState } from 'react';
 import BookerShell from '../../components/booker/BookerShell';
 import { PaymentForm } from '../../components/booker/forms';
-import { BandDot, EmptyState, ErrorBanner, PageHeader, SkeletonRows } from '../../components/booker/ui';
+import { BandDot, EmptyState, ErrorBanner, SkeletonRows } from '../../components/booker/ui';
+import RouteMapScene from '../../components/booker/RouteMapScene';
+import PageHero from '../../components/layout/PageHero';
+import { plural } from '../../lib/booker/summary';
 import { archivePayment, listPayments, listRoster, listShows, listVenues } from '../../lib/booker/data';
 import { formatShowDate, todayIso, yearRange } from '../../lib/booker/dates';
 import { commissionDue, commissionTotals, formatMoney, paidForShow, toAmount } from '../../lib/booker/commission';
@@ -62,25 +66,23 @@ function CommissionContent() {
 
   return (
     <>
-      <PageHeader
+      <PageHero
         title="Commission"
-        sub={`Calendar year ${year}`}
+        subtitle={`Calendar year ${year}`}
+        summary={
+          view
+            ? view.totals.outstanding > 0
+              ? `${formatMoney(view.totals.outstanding)} owed to you from ${plural(view.perBand.filter(r => r.totals.outstanding > 0).length, 'band')}.`
+              : view.totals.due > 0
+                ? `All paid up for ${year}.`
+                : `Nothing earned yet in ${year}.`
+            : undefined
+        }
+        scene={<RouteMapScene />}
         actions={
-          <>
-            <label htmlFor="c-year" style={{ position: 'absolute', left: -9999 }}>
-              Year
-            </label>
-            <select id="c-year" className="select" style={{ width: 'auto' }} value={year} onChange={e => setYear(Number(e.target.value))}>
-              {(view?.years ?? [currentYear]).map(y => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-            <button type="button" className="btn btn-primary" onClick={() => setRecording({})} disabled={!view || view.payOptions.length === 0}>
-              + Record payment
-            </button>
-          </>
+          <button type="button" className="btn btn-primary tours-new-btn" onClick={() => setRecording({})} disabled={!view || view.payOptions.length === 0}>
+            + Record payment
+          </button>
         }
       />
       {error && <ErrorBanner message={error} onRetry={reload} />}
@@ -88,30 +90,53 @@ function CommissionContent() {
       {loading && !data && <SkeletonRows />}
 
       {view && (
-        <>
-          <div className="grid-4 mb-6">
-            <div className="card stat-block">
-              <div className="stat-value">{formatMoney(view.totals.due)}</div>
-              <div className="stat-label">Earned</div>
-            </div>
-            <div className="card stat-block">
-              <div className="stat-value">{formatMoney(view.totals.paid)}</div>
-              <div className="stat-label">Received</div>
-            </div>
-            <div className="card stat-block">
-              <div className="stat-value" style={{ color: view.totals.outstanding > 0 ? '#fbbf24' : undefined }}>
-                {formatMoney(view.totals.outstanding)}
+        <div className="tours-body">
+          {view.years.length > 1 && (
+            <div className="tours-toolbar">
+              <div className="tours-tabs" role="group" aria-label="Calendar year">
+                {view.years.map(y => (
+                  <button key={y} type="button" className={`tours-tab${year === y ? ' tours-tab--on' : ''}`} aria-pressed={year === y} onClick={() => setYear(y)}>
+                    {y}
+                  </button>
+                ))}
               </div>
-              <div className="stat-label">Owed to you</div>
+              <span className="tours-sort-note">Totals for one calendar year</span>
             </div>
-            <div className="card stat-block">
-              <div className="stat-value">{formatMoney(view.totals.projected)}</div>
-              <div className="stat-label">Projected (confirmed)</div>
+          )}
+
+          <section className="tours-metrics" aria-label={`Commission for ${year}`}>
+            <div className="tour-metric">
+              <span className="tour-metric-label">Earned</span>
+              <div className="tour-metric-value">
+                <strong>{formatMoney(view.totals.due)}</strong>
+              </div>
+              <span className="tour-metric-note">From {plural(view.played.length, 'played show')} · on the amount received, else the agreed fee</span>
             </div>
-          </div>
-          <p className="text-xs text-muted" style={{ marginTop: '-0.75rem', marginBottom: '1.5rem' }}>
-            Earned counts played shows, on the amount the band actually received when you have entered it, otherwise on the agreed fee.
-          </p>
+            <div className="tour-metric">
+              <span className="tour-metric-label">Received</span>
+              <div className="tour-metric-value">
+                <strong>{formatMoney(view.totals.paid)}</strong>
+                <span>of {formatMoney(view.totals.due)}</span>
+              </div>
+              <div className="tour-meter" role="progressbar" aria-label="Share of earned commission received" aria-valuemin={0} aria-valuemax={100} aria-valuenow={view.totals.due > 0 ? Math.min(100, Math.round((view.totals.paid / view.totals.due) * 100)) : 0}>
+                <div className="tour-meter-bar tour-meter-bar--done" style={{ width: `${view.totals.due > 0 ? Math.min(100, Math.round((view.totals.paid / view.totals.due) * 100)) : 0}%` }} />
+              </div>
+            </div>
+            <div className="tour-metric">
+              <span className="tour-metric-label">Owed to you</span>
+              <div className="tour-metric-value">
+                <strong className={view.totals.outstanding > 0 ? 'tour-metric-hot' : undefined}>{formatMoney(view.totals.outstanding)}</strong>
+              </div>
+              <span className="tour-metric-note">{view.totals.outstanding > 0 ? 'Record payments as bands pay you' : 'Nothing outstanding'}</span>
+            </div>
+            <div className="tour-metric">
+              <span className="tour-metric-label">Projected</span>
+              <div className="tour-metric-value">
+                <strong>{formatMoney(view.totals.projected)}</strong>
+              </div>
+              <span className="tour-metric-note">From confirmed shows still to come</span>
+            </div>
+          </section>
 
           {view.perBand.length === 0 && view.played.length === 0 ? (
             <EmptyState
@@ -121,7 +146,7 @@ function CommissionContent() {
           ) : (
             <>
               <section aria-labelledby="by-band-h" className="mb-6">
-                <h2 id="by-band-h" className="display" style={{ fontSize: '1.6rem', margin: '0 0 0.75rem' }}>
+                <h2 id="by-band-h" className="agent-section-title" style={{ marginBottom: '0.75rem' }}>
                   By band
                 </h2>
                 <div className="card table-wrap" style={{ padding: 0 }}>
@@ -158,7 +183,7 @@ function CommissionContent() {
               </section>
 
               <section aria-labelledby="played-h" className="mb-6">
-                <h2 id="played-h" className="display" style={{ fontSize: '1.6rem', margin: '0 0 0.75rem' }}>
+                <h2 id="played-h" className="agent-section-title" style={{ marginBottom: '0.75rem' }}>
                   Played shows
                 </h2>
                 <div className="card table-wrap" style={{ padding: 0 }}>
@@ -203,7 +228,7 @@ function CommissionContent() {
               </section>
 
               <section aria-labelledby="payments-h">
-                <h2 id="payments-h" className="display" style={{ fontSize: '1.6rem', margin: '0 0 0.75rem' }}>
+                <h2 id="payments-h" className="agent-section-title" style={{ marginBottom: '0.75rem' }}>
                   Payments received
                 </h2>
                 <div className="card table-wrap" style={{ padding: 0 }}>
@@ -256,7 +281,7 @@ function CommissionContent() {
               </section>
             </>
           )}
-        </>
+        </div>
       )}
 
       {recording && view && (

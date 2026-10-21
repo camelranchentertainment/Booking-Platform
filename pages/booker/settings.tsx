@@ -4,7 +4,9 @@
 import { useState, type FormEvent } from 'react';
 import BookerShell, { useBooker } from '../../components/booker/BookerShell';
 import GmailConnection from '../../components/booker/GmailConnection';
-import { ErrorBanner, Field, PageHeader } from '../../components/booker/ui';
+import { ErrorBanner, Field } from '../../components/booker/ui';
+import RouteMapScene from '../../components/booker/RouteMapScene';
+import PageHero from '../../components/layout/PageHero';
 import { listRoster, updateBookerProfile } from '../../lib/booker/data';
 import { BookerProfileSchema, fieldErrors } from '../../lib/booker/schemas';
 import { AGENT_TIERS, tierForBandCount } from '../../lib/booker/pricing';
@@ -51,10 +53,15 @@ function SettingsContent() {
 
   return (
     <>
-      <PageHeader title="Settings" sub="Your agency" />
-      <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', alignItems: 'start' }}>
+      <PageHero
+        title="Settings"
+        subtitle={booker.agency_name}
+        summary={tier && activeBands !== null ? `${tier.label} plan · ${activeBands} active band${activeBands === 1 ? '' : 's'}.` : undefined}
+        scene={<RouteMapScene />}
+      />
+      <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', alignItems: 'start' }}>
         <section aria-labelledby="profile-h" className="card">
-          <h2 id="profile-h" className="eyebrow" style={{ color: 'var(--accent)', fontSize: '1.05rem', margin: '0 0 0.9rem' }}>
+          <h2 id="profile-h" className="agent-card-title">
             Agency profile
           </h2>
           {formError && <ErrorBanner message={formError} />}
@@ -90,7 +97,7 @@ function SettingsContent() {
         <GmailConnection />
 
         <section aria-labelledby="plan-h" className="card">
-          <h2 id="plan-h" className="eyebrow" style={{ color: 'var(--accent)', fontSize: '1.05rem', margin: '0 0 0.9rem' }}>
+          <h2 id="plan-h" className="agent-card-title">
             Plan
           </h2>
           <p className="text-sm" style={{ color: 'var(--text)', marginTop: 0 }}>

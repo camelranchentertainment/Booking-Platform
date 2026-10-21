@@ -1,6 +1,7 @@
 // pages/booker/bands/[id].tsx
-// One band in the agent's roster: details, upcoming and past shows, commission,
-// and the emails sent about the band.
+// One band in the agent's roster, in the Tours page style: illustrated hero,
+// four trackers, Upcoming / Past tabs with shows grouped by date, then the
+// band contact, the emails sent about the band and the remove option.
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -10,11 +11,14 @@ import ShowRow from '../../../components/booker/ShowRow';
 import ComposeEmail, { type Recipient } from '../../../components/booker/ComposeEmail';
 import MessageHistory from '../../../components/booker/MessageHistory';
 import { RosterBandForm, ShowForm } from '../../../components/booker/forms';
-import { EmptyState, ErrorBanner, PageHeader, SkeletonRows } from '../../../components/booker/ui';
+import { EmptyState, ErrorBanner, SkeletonRows } from '../../../components/booker/ui';
+import RouteMapScene from '../../../components/booker/RouteMapScene';
+import PageHero from '../../../components/layout/PageHero';
 import { archiveRosterBand, listMessages, listPayments, listRoster, listShows, listVenues } from '../../../lib/booker/data';
-import { todayIso } from '../../../lib/booker/dates';
+import { formatShowDate, todayIso } from '../../../lib/booker/dates';
+import { bandCards, groupInOrder, showTabCounts, showsForTab } from '../../../lib/booker/summary';
 import { commissionTotals, formatMoney } from '../../../lib/booker/commission';
-import { byId, findConflicts } from '../../../lib/booker/workspace';
+import { byId, findConflicts, venueLabel } from '../../../lib/booker/workspace';
 import { useLoad } from '../../../lib/booker/useLoad';
 import type { BookerShow } from '../../../lib/booker/types';
 
@@ -33,17 +37,23 @@ function BandContent({ bandId }: { bandId: string }) {
   const [removing, setRemoving] = useState(false);
   const [composing, setComposing] = useState(false);
   const [sentNotice, setSentNotice] = useState('');
+  const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
 
   const band = data?.bands.find(b => b.id === bandId);
 
   const view = useMemo(() => {
     if (!data || !band) return null;
     const venuesById = byId(data.venues);
-    const upcoming = data.shows.filter(s => s.show_date >= today);
-    const past = data.shows.filter(s => s.show_date < today).reverse();
     const thisYear = data.shows.filter(s => s.show_date.startsWith(String(year)));
     const totals = commissionTotals(thisYear, new Map([[band.id, band]]), data.payments, today);
-    return { venuesById, upcoming, past, totals };
+    return {
+      venuesById,
+      totals,
+      card: bandCards([band], data.shows, today)[0],
+      counts: showTabCounts(data.shows, today),
+      upcomingGroups: groupInOrder(showsForTab(data.shows, 'upcoming', today)),
+      pastGroups: groupInOrder(showsForTab(data.shows, 'past', today).slice(0, 50)),
+    };
   }, [data, band, today, year]);
 
   const remove = async () => {
@@ -88,21 +98,27 @@ function BandContent({ bandId }: { bandId: string }) {
           ← All bands
         </Link>
       </div>
-      <PageHeader
+      <PageHero
         title={band.band_name}
-        sub={[band.genre, [band.home_city, band.home_state].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || undefined}
+        subtitle={[band.genre, [band.home_city, band.home_state].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'On your roster'}
+        summary={
+          view.card.nextShow
+            ? `${view.card.nextShow.status === 'confirmed' ? 'Next show' : view.card.nextShow.status === 'hold' ? 'Next hold' : 'Next offer'}: ${formatShowDate(view.card.nextShow.show_date, year)} at ${venueLabel(view.card.nextShow, view.venuesById)}.`
+            : 'Nothing on the calendar yet.'
+        }
+        scene={<RouteMapScene />}
         actions={
-          <>
-            <button type="button" className="btn btn-secondary" onClick={() => setEditingBand(true)}>
-              Edit band
-            </button>
-            <button type="button" className="btn btn-secondary" onClick={() => setComposing(true)}>
-              ✉ Email band
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => setEditingShow('new')}>
+          <div className="agent-hero-actions">
+            <button type="button" className="btn btn-primary tours-new-btn" onClick={() => setEditingShow('new')}>
               + Add show
             </button>
-          </>
+            <button type="button" className="btn btn-secondary tours-new-btn" onClick={() => setComposing(true)}>
+              ✉ Email band
+            </button>
+            <button type="button" className="btn btn-secondary tours-new-btn" onClick={() => setEditingBand(true)}>
+              Edit band
+            </button>
+          </div>
         }
       />
 
@@ -114,58 +130,82 @@ function BandContent({ bandId }: { bandId: string }) {
         )}
       </div>
 
-      <div className="grid-4 mb-6">
-        <div className="card stat-block">
-          <div className="stat-value">{band.commission_pct === null ? '—' : `${band.commission_pct}%`}</div>
-          <div className="stat-label">Commission rate</div>
-        </div>
-        <div className="card stat-block">
-          <div className="stat-value">{formatMoney(view.totals.due)}</div>
-          <div className="stat-label">Earned {year}</div>
-        </div>
-        <div className="card stat-block">
-          <div className="stat-value">{formatMoney(view.totals.outstanding)}</div>
-          <div className="stat-label">Owed to you</div>
-        </div>
-        <div className="card stat-block">
-          <div className="stat-value">{formatMoney(view.totals.projected)}</div>
-          <div className="stat-label">Projected (confirmed)</div>
-        </div>
+      <div className="tours-body mb-6">
+        <section className="tours-metrics" aria-label={`${band.band_name} at a glance`}>
+          <div className="tour-metric">
+            <span className="tour-metric-label">Upcoming Shows</span>
+            <div className="tour-metric-value">
+              <strong>{view.card.booked}</strong>
+              <span>confirmed</span>
+            </div>
+            <span className="tour-metric-note">{view.card.holds === 0 ? 'No holds or offers out' : view.card.holds === 1 ? '1 hold or offer still out' : `${view.card.holds} holds & offers still out`}</span>
+          </div>
+          <div className="tour-metric">
+            <span className="tour-metric-label">Commission rate</span>
+            <div className="tour-metric-value">
+              <strong className={band.commission_pct === null ? 'tour-metric-hot' : undefined}>{band.commission_pct === null ? '—' : `${band.commission_pct}%`}</strong>
+            </div>
+            <span className="tour-metric-note">{band.commission_pct === null ? 'Set it in Edit band to track commission' : 'Paid to you by the band'}</span>
+          </div>
+          <div className="tour-metric">
+            <span className="tour-metric-label">Earned {year}</span>
+            <div className="tour-metric-value">
+              <strong>{formatMoney(view.totals.due)}</strong>
+            </div>
+            <span className="tour-metric-note">{view.totals.outstanding > 0 ? `${formatMoney(view.totals.outstanding)} still owed to you` : 'Nothing owed'}</span>
+          </div>
+          <div className="tour-metric">
+            <span className="tour-metric-label">Projected</span>
+            <div className="tour-metric-value">
+              <strong>{formatMoney(view.totals.projected)}</strong>
+            </div>
+            <span className="tour-metric-note">From confirmed shows still to come</span>
+          </div>
+        </section>
+
+        <section aria-labelledby="shows-h" className="agent-section">
+          <div className="agent-section-head">
+            <h2 id="shows-h" className="agent-section-title">
+              Shows
+            </h2>
+          </div>
+          <div className="tours-toolbar">
+            <div className="tours-tabs" role="group" aria-label="Show dates">
+              {(['upcoming', 'past'] as const).map(t => (
+                <button key={t} type="button" className={`tours-tab${tab === t ? ' tours-tab--on' : ''}`} aria-pressed={tab === t} onClick={() => setTab(t)}>
+                  {t === 'upcoming' ? 'Upcoming' : 'Past'} · {view.counts[t]}
+                </button>
+              ))}
+            </div>
+            <span className="tours-sort-note">{tab === 'upcoming' ? 'Soonest first' : 'Most recent first · last 50'}</span>
+          </div>
+          {(tab === 'upcoming' ? view.upcomingGroups : view.pastGroups).length === 0 ? (
+            <div className="card tours-empty">
+              <div className="tours-empty-title">{tab === 'upcoming' ? 'Nothing booked yet' : 'No past shows yet'}</div>
+              {tab === 'upcoming' && (
+                <button type="button" className="btn btn-primary" onClick={() => setEditingShow('new')}>
+                  + Add show
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="agent-days">
+              {(tab === 'upcoming' ? view.upcomingGroups : view.pastGroups).map(g => (
+                <div key={g.date} className="agent-day">
+                  <h3 className={`agent-day-label${g.date === today ? ' agent-day-label--today' : ''}`}>{g.date === today ? `Today · ${formatShowDate(g.date, year)}` : formatShowDate(g.date, year)}</h3>
+                  {g.shows.map(s => (
+                    <ShowRow key={s.id} show={s} band={band} venuesById={view.venuesById} onOpen={setEditingShow} hideBand hideDate currentYear={year} />
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
-
-      <section aria-labelledby="up-h" className="mb-6">
-        <h2 id="up-h" className="display" style={{ fontSize: '1.6rem', margin: '0 0 0.75rem' }}>
-          Upcoming
-        </h2>
-        {view.upcoming.length === 0 ? (
-          <p className="text-sm text-muted">Nothing booked yet.</p>
-        ) : (
-          <div style={{ display: 'grid', gap: '0.5rem' }}>
-            {view.upcoming.map(s => (
-              <ShowRow key={s.id} show={s} band={band} venuesById={view.venuesById} onOpen={setEditingShow} hideBand currentYear={year} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section aria-labelledby="past-h" className="mb-6">
-        <h2 id="past-h" className="display" style={{ fontSize: '1.6rem', margin: '0 0 0.75rem' }}>
-          Past shows
-        </h2>
-        {view.past.length === 0 ? (
-          <p className="text-sm text-muted">No past shows recorded.</p>
-        ) : (
-          <div style={{ display: 'grid', gap: '0.5rem' }}>
-            {view.past.slice(0, 50).map(s => (
-              <ShowRow key={s.id} show={s} band={band} venuesById={view.venuesById} onOpen={setEditingShow} hideBand currentYear={year} />
-            ))}
-          </div>
-        )}
-      </section>
 
       {(band.contact_name || band.contact_email || band.contact_phone || band.notes) && (
         <section aria-labelledby="contact-h" className="card mb-6">
-          <h2 id="contact-h" className="eyebrow" style={{ color: 'var(--accent)', fontSize: '1rem', margin: '0 0 0.5rem' }}>
+          <h2 id="contact-h" className="agent-card-title">
             Band contact
           </h2>
           <div className="text-sm" style={{ display: 'grid', gap: 4, color: 'var(--text)' }}>
@@ -179,7 +219,7 @@ function BandContent({ bandId }: { bandId: string }) {
 
       <section aria-labelledby="bmail-h" className="card mb-6">
         <div className="flex items-center justify-between mb-3" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
-          <h2 id="bmail-h" className="eyebrow" style={{ color: 'var(--accent)', fontSize: '1.05rem', margin: 0 }}>
+          <h2 id="bmail-h" className="agent-card-title">
             Emails about {band.band_name}
           </h2>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => setComposing(true)}>
@@ -190,7 +230,7 @@ function BandContent({ bandId }: { bandId: string }) {
       </section>
 
       <section aria-labelledby="danger-h" className="card" style={{ borderColor: 'rgba(240,104,95,0.35)' }}>
-        <h2 id="danger-h" className="eyebrow" style={{ color: 'var(--red)', fontSize: '1rem', margin: '0 0 0.4rem' }}>
+        <h2 id="danger-h" className="agent-card-title agent-card-title--danger">
           Remove from roster
         </h2>
         <p className="text-sm text-muted" style={{ marginTop: 0 }}>

@@ -14,7 +14,9 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEven
 import Link from 'next/link';
 import BookerShell, { useBooker } from '../../components/booker/BookerShell';
 import ComposeEmail, { type Recipient } from '../../components/booker/ComposeEmail';
-import { ErrorBanner, PageHeader, SkeletonRows } from '../../components/booker/ui';
+import { ErrorBanner, SkeletonRows } from '../../components/booker/ui';
+import RouteMapScene from '../../components/booker/RouteMapScene';
+import PageHero from '../../components/layout/PageHero';
 import {
   askAssistant,
   createContact,
@@ -225,12 +227,14 @@ function AssistantContent() {
 
   return (
     <>
-      <PageHeader
+      <PageHero
         title="Assistant"
-        sub="Ask about your bands, shows, venues and money"
+        subtitle="Your booking right hand"
+        summary="Ask about your bands, shows, venues and money — or have it line up the work. Nothing changes until you click Approve."
+        scene={<RouteMapScene />}
         actions={
           entries.length > 0 ? (
-            <button type="button" className="btn btn-ghost" onClick={clear} disabled={thinking}>
+            <button type="button" className="btn btn-secondary tours-new-btn" onClick={clear} disabled={thinking}>
               Start over
             </button>
           ) : undefined
