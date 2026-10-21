@@ -154,6 +154,22 @@ describe('DELETE /api/account/delete', () => {
     expect(deleteUser).not.toHaveBeenCalled();
   });
 
+  it.each([['trialing'], ['active'], ['cancelled'], [null]])(
+    'deletes a member whose status is %s but who has no Stripe subscription',
+    async (status) => {
+      // Registration sets every account to 'trialing' and comped accounts are
+      // 'active' without Stripe — neither can be billed, so neither may block.
+      const { service, deleteUser } = buildService({
+        profile: { role: 'member', subscription_status: status, stripe_subscription_id: null },
+      });
+      (getServiceClient as jest.Mock).mockReturnValue(service);
+      const res = mockRes();
+      await handler(mockReq(), res);
+      expect(res.statusCode).toBe(200);
+      expect(deleteUser).toHaveBeenCalledWith('user-1');
+    },
+  );
+
   it('blocks an account with a live Stripe subscription', async () => {
     const { service, deleteUser } = buildService({
       profile: { role: 'member', subscription_status: 'active', stripe_subscription_id: 'sub_123' },
