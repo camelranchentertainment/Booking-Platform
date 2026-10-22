@@ -1,5 +1,5 @@
 // __tests__/lib/booker/workspace.test.ts
-import { attentionItems, bandTiles, byId, findConflicts, groupByDate, payableShows, venueLabel } from '../../../lib/booker/workspace';
+import { attentionItems, bandTiles, byId, findConflicts, groupByDate, lapsedOfferItems, payableShows, venueLabel } from '../../../lib/booker/workspace';
 import type { BookerShow, BookerVenue, RosterBand } from '../../../lib/booker/types';
 
 const ts = { created_at: '', updated_at: '', deleted_at: null };
@@ -157,5 +157,36 @@ describe('payableShows', () => {
       ['b', 60],
       ['a', 60],
     ]);
+  });
+});
+
+describe('lapsedOfferItems', () => {
+  const o = (over: Record<string, unknown>) => ({
+    id: 'o1',
+    show_id: 's1',
+    status: 'sent' as const,
+    kind: 'offer' as const,
+    doc_number: 12,
+    band_name: 'The Band',
+    venue_name: 'Saxon Pub',
+    expires_on: '2026-10-18',
+    buyer_name: 'Sarah',
+    deleted_at: null,
+    ...over,
+  });
+  it('lists sent offers past their stand-by date, oldest deadline first, opening the show', () => {
+    const items = lapsedOfferItems(
+      [
+        o({ id: 'a', expires_on: '2026-10-19' }),
+        o({ id: 'b', expires_on: '2026-10-15', buyer_name: null }),
+        o({ id: 'c', expires_on: '2026-10-25' }),
+        o({ id: 'd', status: 'accepted' }),
+        o({ id: 'e', deleted_at: '2026-10-01' }),
+      ],
+      '2026-10-20',
+    );
+    expect(items.map(i => i.key)).toEqual(['o-b', 'o-a']);
+    expect(items[0]).toMatchObject({ kind: 'offer_lapsed', showId: 's1' });
+    expect(items[1].message).toBe('Offer #12 for The Band at Saxon Pub stood until Mon, Oct 19 with no answer from Sarah — chase it, record the answer, or withdraw it');
   });
 });
