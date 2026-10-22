@@ -75,7 +75,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           stripe_subscription_id: sub.id,
           subscription_status:    'active',
           subscription_tier:      tier || undefined,
-          role: 'band_admin',
+          // Paying never changes an account's role: bands and agents are
+          // both band_admin already (agents have no band).
         }).eq('id', userId);
         await createNotification({
           userId,

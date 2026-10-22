@@ -5,6 +5,7 @@ import { useState, type FormEvent } from 'react';
 import BookerShell, { useBooker } from '../../components/booker/BookerShell';
 import GmailConnection from '../../components/booker/GmailConnection';
 import OfferTemplatesCard from '../../components/booker/OfferTemplatesCard';
+import AgentBillingActions from '../../components/booker/AgentBillingActions';
 import { ErrorBanner, Field } from '../../components/booker/ui';
 import RouteMapScene from '../../components/booker/RouteMapScene';
 import PageHero from '../../components/layout/PageHero';
@@ -116,9 +117,7 @@ function SettingsContent() {
               </li>
             ))}
           </ul>
-          <p className="text-xs text-muted" style={{ marginBottom: 0 }}>
-            Billing for Booking Agent accounts is not switched on yet. Beta accounts are free during the beta.
-          </p>
+          <AgentBillingActions />
         </section>
       </div>
     </>

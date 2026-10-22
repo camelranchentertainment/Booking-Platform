@@ -1,62 +1,92 @@
+// pages/api/stripe/checkout.ts
+//
+// POST /api/stripe/checkout — starts a Stripe Checkout subscription for the
+// signed-in account. The plan (Band Admin or Booking Agent) is decided from
+// the account on the server (lib/server/billing.ts); the request body is not
+// trusted for it.
+//
+// Responses: 200 { url } | 401 | 403 | 404 | 409 already subscribed |
+//            500 { error } payments not configured / unexpected (Sentry)
 import type { NextApiRequest, NextApiResponse } from 'next';
 import Stripe from 'stripe';
 import { getServiceClient } from '../../../lib/supabase';
 import { getSetting } from '../../../lib/platformSettings';
+import { AppError, withHandler } from '../../../lib/apiError';
+import { BillingError, getBillingAccount, PRICE_SETTING, RETURN_PATHS } from '../../../lib/server/billing';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') return res.status(405).end();
+const STRIPE_API_VERSION = '2023-10-16' as const;
+
+/**
+ * Creates a Checkout Session for the caller's plan and returns its URL.
+ *
+ * @throws AppError for auth, plan and configuration problems
+ * @throws Error for unexpected Stripe or database failures (500 via withHandler)
+ */
+async function checkout(req: NextApiRequest, res: NextApiResponse): Promise<void> {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    res.status(405).end();
+    return;
+  }
 
   const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
-
-  const [stripeKey, bandPriceIdSetting] = await Promise.all([
-    getSetting('stripe_secret_key'),
-    getSetting('stripe_band_price_id'),
-  ]);
-  if (!stripeKey) return res.status(500).json({ error: 'Payments not configured. Add your Stripe keys in Settings.' });
-
-  const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' });
-  const PRICE_IDS: Record<string, string> = {
-    band_admin: bandPriceIdSetting || process.env.STRIPE_BAND_ADMIN_PRICE_ID || '',
-  };
+  if (!token) throw new AppError(401, 'Unauthorized');
 
   const service = getServiceClient();
-  const { data: { user } } = await service.auth.getUser(token);
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  const { data: { user }, error: authErr } = await service.auth.getUser(token);
+  if (authErr || !user) throw new AppError(401, 'Unauthorized');
 
-  const { data: profile } = await service
-    .from('profiles')
-    .select('stripe_customer_id, subscription_tier, role, email')
-    .eq('id', user.id)
-    .single();
+  let account;
+  try {
+    account = await getBillingAccount(service, user.id);
+  } catch (err) {
+    if (err instanceof BillingError) throw new AppError(err.status, err.message);
+    throw err;
+  }
 
-  if (!profile) return res.status(404).json({ error: 'Profile not found' });
+  // One subscription per account: changes go through the billing portal.
+  if (account.stripeSubscriptionId) {
+    throw new AppError(409, 'You already have a subscription. Use Manage billing to change it.');
+  }
 
-  const tier = (req.body.tier as string) || profile.subscription_tier || 'band_admin';
-  const priceId = PRICE_IDS[tier];
-  if (!priceId) return res.status(400).json({ error: `No price configured for tier: ${tier}. Add your Stripe price IDs in Settings.` });
+  const [stripeKey, priceId] = await Promise.all([
+    getSetting('stripe_secret_key'),
+    getSetting(PRICE_SETTING[account.plan]),
+  ]);
+  if (!stripeKey || !priceId) {
+    console.error('[stripe/checkout] payments not configured', { plan: account.plan, hasKey: !!stripeKey, hasPrice: !!priceId });
+    throw new AppError(500, 'Payments are not set up yet. Please try again later.');
+  }
 
-  let customerId = profile.stripe_customer_id;
+  const stripe = new Stripe(stripeKey, { apiVersion: STRIPE_API_VERSION });
+
+  let customerId = account.stripeCustomerId;
   if (!customerId) {
     const customer = await stripe.customers.create({
-      email: profile.email || user.email,
+      email: account.email || user.email || undefined,
       metadata: { supabase_user_id: user.id },
     });
     customerId = customer.id;
-    await service.from('profiles').update({ stripe_customer_id: customerId }).eq('id', user.id);
+    const { error: saveErr } = await service.from('profiles').update({ stripe_customer_id: customerId }).eq('id', user.id);
+    if (saveErr) throw new Error(`saving stripe customer failed: ${saveErr.message}`);
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  const paths = RETURN_PATHS[account.plan];
+  const metadata = { supabase_user_id: user.id, tier: account.plan };
 
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: 'subscription',
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${baseUrl}/band?subscribed=1`,
-    cancel_url:  `${baseUrl}/pricing?cancelled=1`,
-    metadata: { supabase_user_id: user.id, tier },
-    subscription_data: { metadata: { supabase_user_id: user.id, tier } },
+    success_url: `${baseUrl}${paths.success}`,
+    cancel_url: `${baseUrl}${paths.cancel}`,
+    metadata,
+    subscription_data: { metadata },
   });
 
-  return res.json({ url: session.url });
+  console.info(JSON.stringify({ event: 'stripe_checkout_created', userId: user.id, plan: account.plan }));
+  res.status(200).json({ url: session.url });
 }
+
+export default withHandler(checkout);
