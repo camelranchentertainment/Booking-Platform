@@ -5,6 +5,8 @@
 // lib/booker/data.ts. The submit button is disabled while saving to prevent
 // double submission, and input is kept if the save fails.
 
+import TagInput from './TagInput';
+import { STARTER_TAGS, parseTags, tagsToText } from '../../lib/booker/tags';
 import { useState, type FormEvent } from 'react';
 import type { z } from 'zod';
 import {
@@ -45,6 +47,10 @@ import {
 import { toFormValues } from '../../lib/booker/useLoad';
 import { todayIso } from '../../lib/booker/dates';
 import { mergeVenues } from '../../lib/booker/venueSearch';
+import { fuzzyFilter } from '../../lib/booker/fuzzy';
+
+/** Venue books bigger than this get a find box above the Venue list. */
+const VENUE_FIND_MIN = 12;
 import { holdLabel, venueClashes } from '../../lib/booker/holds';
 import VenueSearchPanel from './VenueSearchPanel';
 import ShowOffersDialog from './ShowOffersDialog';
@@ -180,11 +186,23 @@ export function RosterBandForm({
 }
 
 // ── Venue / buyer ───────────────────────────────────────────────────────────
-const VENUE_KEYS = ['name', 'kind', 'address', 'city', 'state', 'postal_code', 'capacity', 'website', 'email', 'phone', 'notes'] as const;
+const VENUE_KEYS = ['name', 'kind', 'address', 'city', 'state', 'postal_code', 'capacity', 'website', 'email', 'phone', 'notes', 'tags'] as const;
 
-export function VenueForm({ venue, onClose, onSaved }: { venue?: BookerVenue; onClose: () => void; onSaved: (v: BookerVenue) => void }) {
+export function VenueForm({
+  venue,
+  tagSuggestions = [],
+  onClose,
+  onSaved,
+}: {
+  venue?: BookerVenue;
+  /** Tags the agent already uses, offered first */
+  tagSuggestions?: readonly string[];
+  onClose: () => void;
+  onSaved: (v: BookerVenue) => void;
+}) {
   const { booker } = useBooker();
   const initial = toFormValues(venue, VENUE_KEYS);
+  initial.tags = tagsToText(venue?.tags);
   if (!venue) initial.kind = 'venue';
   const f = useFormState(initial, VenueSchema, payload => (venue ? updateVenue(venue.id, payload) : createVenue(booker.id, payload)), onSaved);
   return (
@@ -236,6 +254,16 @@ export function VenueForm({ venue, onClose, onSaved }: { venue?: BookerVenue; on
         </div>
         <Field label="Capacity" error={f.errors.capacity}>
           {p => <input {...p} className="input" inputMode="numeric" value={f.values.capacity} onChange={f.set('capacity')} style={{ maxWidth: 200 }} />}
+        </Field>
+        <Field label="Tags" hint="Your own labels to filter by, like “dance hall” or “all ages”. Private to you." error={f.errors.tags}>
+          {p => (
+            <TagInput
+              inputProps={p}
+              value={parseTags(f.values.tags)}
+              onChange={tags => f.setValues(prev => ({ ...prev, tags: tagsToText(tags) }))}
+              suggestions={Array.from(new Set([...tagSuggestions, ...STARTER_TAGS]))}
+            />
+          )}
         </Field>
         <Field label="Notes" hint="Private to you" error={f.errors.notes}>
           {p => <textarea {...p} className="textarea" value={f.values.notes} onChange={f.set('notes')} />}
@@ -404,6 +432,13 @@ export function ShowForm({
   // Open by default for a new show when the venue book is still empty.
   const [venueSearchOpen, setVenueSearchOpen] = useState(!show && venues.length === 0);
   const venueOptions = mergeVenues(venues, addedVenues);
+  // Narrows the Venue list in big books (typo-tolerant); the chosen venue always stays listed.
+  const [venueFind, setVenueFind] = useState('');
+  const pickable = venueFind.trim()
+    ? fuzzyFilter(venueOptions, venueFind, v => [v.name, v.city, v.state, ...(v.tags ?? [])])
+    : venueOptions;
+  const chosenVenue = venueOptions.find(v => v.id === f.values.venue_id);
+  const listedVenues = chosenVenue && !pickable.includes(chosenVenue) ? [chosenVenue, ...pickable] : pickable;
   const selectedBand = bands.find(b => b.id === f.values.roster_id);
   const useVenue = (venue: BookerVenue) => {
     setAddedVenues(prev => (prev.some(v => v.id === venue.id) ? prev : [...prev, venue]));
@@ -489,11 +524,16 @@ export function ShowForm({
               </span>
             </div>
           )}
+          {venueOptions.length > VENUE_FIND_MIN && (
+            <Field label="Find in your venue book" hint={venueFind.trim() ? `${pickable.length} of ${venueOptions.length} venues listed below` : 'Narrows the Venue list. Typos are OK.'}>
+              {p => <input {...p} className="input" type="search" value={venueFind} onChange={e => setVenueFind(e.target.value)} placeholder="Venue, town or tag" autoComplete="off" />}
+            </Field>
+          )}
           <Field label="Venue" error={f.errors.venue_id}>
             {p => (
               <select {...p} className="select" value={f.values.venue_id} onChange={f.set('venue_id')}>
                 <option value="">Not in my venue book — type it below</option>
-                {venueOptions.map(v => (
+                {listedVenues.map(v => (
                   <option key={v.id} value={v.id}>
                     {v.name}
                     {v.city ? ` — ${v.city}` : ''}

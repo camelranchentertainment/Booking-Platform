@@ -78,6 +78,8 @@ export interface BookerVenue extends Timestamps {
   email: string | null;
   phone: string | null;
   last_scanned_at: string | null;
+  /** The agent's own labels (lower-case, unique, up to 20); private to the agent */
+  tags: string[];
 }
 
 export interface BookerContact extends Timestamps {

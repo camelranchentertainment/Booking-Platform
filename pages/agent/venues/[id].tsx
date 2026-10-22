@@ -15,6 +15,7 @@ import { ContactForm, ShowForm, VenueForm } from '../../../components/booker/for
 import { EmptyState, ErrorBanner, SkeletonRows } from '../../../components/booker/ui';
 import PageHero from '../../../components/layout/PageHero';
 import MainStreetScene from '../../../components/venues/MainStreetScene';
+import { tagCounts } from '../../../lib/booker/tags';
 import { archiveContact, archiveVenue, listContacts, listMessages, listRoster, listShows, listVenues, scanVenueWebsite, setContactShared } from '../../../lib/booker/data';
 import { listOffers } from '../../../lib/booker/offerData';
 import { OFFER_STATUS_BADGE, OFFER_STATUS_LABEL, dealSummary, offerLabel, venueOfferRecord, type BookerOffer } from '../../../lib/booker/offers';
@@ -151,7 +152,7 @@ function VenueContent({ venueId }: { venueId: string }) {
   return (
     <>
       <div className="text-sm mb-2">
-        <Link href="/agent/venues" className="text-muted">
+        <Link href="/agent/venues" className="text-muted tap-target">
           ← Venues &amp; Buyers
         </Link>
       </div>
@@ -249,6 +250,20 @@ function VenueContent({ venueId }: { venueId: string }) {
             <dd style={{ margin: 0 }}>{venue.phone ? <a href={`tel:${venue.phone}`}>{venue.phone}</a> : '—'}</dd>
             <dt className="text-muted">Capacity</dt>
             <dd style={{ margin: 0, color: 'var(--text)' }}>{venue.capacity ?? '—'}</dd>
+            <dt className="text-muted">Tags</dt>
+            <dd style={{ margin: 0 }}>
+              {(venue.tags ?? []).length > 0 ? (
+                <ul className="tag-list">
+                  {venue.tags.map(t => (
+                    <li key={t} className="tag-pill">
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <span className="text-muted">None — add some in Edit details</span>
+              )}
+            </dd>
           </dl>
           {venue.notes && <p style={{ whiteSpace: 'pre-wrap', margin: '0.9rem 0 0', color: 'var(--text-muted)', fontSize: '0.88rem' }}>{venue.notes}</p>}
         </section>
@@ -293,19 +308,28 @@ function VenueContent({ venueId }: { venueId: string }) {
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '0.6rem' }}>
               {view.contacts.map(c => (
                 <li key={c.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '0.7rem 0.85rem', background: 'var(--surface-2)' }}>
-                  <div className="flex justify-between" style={{ gap: '0.75rem', alignItems: 'flex-start' }}>
-                    <div style={{ minWidth: 0 }}>
+                  {/* Wraps on narrow phones so the buttons drop below the name instead of running off the card. */}
+                  <div className="flex justify-between" style={{ gap: '0.5rem 0.75rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <div style={{ minWidth: 0, flex: '1 1 12rem', overflowWrap: 'anywhere' }}>
                       <div style={{ color: 'var(--text)', fontWeight: 800 }}>
                         {c.name}
                         {c.source === 'website' && <span className="badge badge-completed" style={{ marginLeft: 8 }}>From website</span>}
                       </div>
                       {c.title && <div className="text-xs text-muted">{c.title}</div>}
                       <div className="text-sm" style={{ display: 'flex', gap: '0.9rem', flexWrap: 'wrap', marginTop: 4 }}>
-                        {c.email && <a href={`mailto:${c.email}`}>{c.email}</a>}
-                        {c.phone && <a href={`tel:${c.phone}`}>{c.phone}</a>}
+                        {c.email && (
+                          <a className="tap-target" href={`mailto:${c.email}`}>
+                            {c.email}
+                          </a>
+                        )}
+                        {c.phone && (
+                          <a className="tap-target" href={`tel:${c.phone}`}>
+                            {c.phone}
+                          </a>
+                        )}
                       </div>
                     </div>
-                    <span style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
+                    <span style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
                       {c.email && (
                         <button
                           type="button"
@@ -335,7 +359,7 @@ function VenueContent({ venueId }: { venueId: string }) {
                       )}
                     </span>
                   </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.55rem', cursor: 'pointer', fontSize: '0.85rem', color: c.share_with_bands ? 'var(--text)' : 'var(--text-muted)' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem', minHeight: 44, cursor: 'pointer', fontSize: '0.85rem', color: c.share_with_bands ? 'var(--text)' : 'var(--text-muted)' }}>
                     <input
                       type="checkbox"
                       checked={c.share_with_bands}
@@ -459,6 +483,7 @@ function VenueContent({ venueId }: { venueId: string }) {
       {editingVenue && (
         <VenueForm
           venue={venue}
+          tagSuggestions={tagCounts(data?.venues ?? []).map(t => t.tag)}
           onClose={() => setEditingVenue(false)}
           onSaved={() => {
             setEditingVenue(false);

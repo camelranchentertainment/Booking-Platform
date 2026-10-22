@@ -7,6 +7,7 @@
 // lib/booker/holds.ts (unit-tested).
 
 import { useMemo, useState } from 'react';
+import { fuzzyFilter } from '../../lib/booker/fuzzy';
 import BookerShell from '../../components/booker/BookerShell';
 import RouteMapScene from '../../components/booker/RouteMapScene';
 import ShowRow from '../../components/booker/ShowRow';
@@ -50,15 +51,15 @@ function ShowsContent() {
     if (!data) return null;
     const bandsById = byId(data.bands);
     const venuesById = byId(data.venues);
-    const q = search.trim().toLowerCase();
     const base = tab === 'holds' ? holdsByUrgency(data.shows, today) : showsForTab(data.shows, tab, today);
+    // Typo-tolerant match on band, venue and town; the list keeps its date order.
+    const matched = search.trim()
+      ? new Set(fuzzyFilter(base, search, s => [bandsById.get(s.roster_id)?.band_name, venueLabel(s, venuesById), s.venue_city]).map(s => s.id))
+      : null;
     const filtered = base.filter(s => {
       if (bandFilter && s.roster_id !== bandFilter) return false;
       if (statusFilter && s.status !== statusFilter) return false;
-      if (q) {
-        const hay = `${bandsById.get(s.roster_id)?.band_name ?? ''} ${venueLabel(s, venuesById)}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
+      if (matched && !matched.has(s.id)) return false;
       return true;
     });
     const holds = holdCounts(data.shows, today);
@@ -215,7 +216,7 @@ function ShowsContent() {
             <label className="sr-only" htmlFor="f-search">
               Search band or venue
             </label>
-            <input id="f-search" className="input" type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search band or venue" />
+            <input id="f-search" className="input" type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search band, venue or town — typos are OK" enterKeyHint="search" />
             {filtersOn && (
               <button type="button" className="btn btn-ghost btn-sm" onClick={clearFilters}>
                 Clear filters

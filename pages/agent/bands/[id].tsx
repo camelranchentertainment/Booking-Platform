@@ -123,7 +123,7 @@ function BandContent({ bandId }: { bandId: string }) {
   return (
     <>
       <div className="text-sm mb-2">
-        <Link href="/agent/bands" className="text-muted">
+        <Link href="/agent/bands" className="text-muted tap-target">
           ← All bands
         </Link>
       </div>
@@ -287,7 +287,7 @@ function BandContent({ bandId }: { bandId: string }) {
         </p>
         {removeError && <ErrorBanner message={removeError} />}
         {!confirmRemove ? (
-          <button type="button" className="btn btn-danger btn-sm" onClick={() => setConfirmRemove(true)}>
+          <button type="button" className="btn btn-danger btn-sm" onClick={() => setConfirmRemove(true)} style={{ whiteSpace: 'normal', height: 'auto', minHeight: 44, maxWidth: '100%', textAlign: 'left' }}>
             Remove {band.band_name}
           </button>
         ) : (

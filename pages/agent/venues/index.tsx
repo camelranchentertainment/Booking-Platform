@@ -7,7 +7,9 @@
 // Two searches, deliberately separate and both always visible:
 //   • "Find new venues" searches Google by city and adds to the book.
 //   • "Search your book" filters what is already saved, including contacts'
-//     names and emails, so there is no separate Contacts page.
+//     names and emails and the agent's tags, so there is no separate
+//     Contacts page. It tolerates typos (lib/booker/fuzzy.ts).
+// Tag, state and size filters narrow the book further; all filters combine.
 // Counting lives in lib/booker/summary.ts (unit-tested).
 
 import { useMemo, useState } from 'react';
@@ -20,7 +22,9 @@ import PageHero from '../../../components/layout/PageHero';
 import MainStreetScene from '../../../components/venues/MainStreetScene';
 import { listContacts, listShows, listVenues } from '../../../lib/booker/data';
 import { todayIso } from '../../../lib/booker/dates';
-import { plural, searchVenues, venueBookSummary, venueCards, venueKindCounts } from '../../../lib/booker/summary';
+import { VENUE_SIZES, filterVenueCards, plural, venueBookSummary, venueCards, venueIndex, venueKindCounts, venueStates, type VenueSize } from '../../../lib/booker/summary';
+import { searchIndex } from '../../../lib/booker/fuzzy';
+import { tagCounts } from '../../../lib/booker/tags';
 import { useLoad } from '../../../lib/booker/useLoad';
 import { VENUE_KINDS, VENUE_KIND_LABEL, type VenueKind } from '../../../lib/booker/types';
 
@@ -37,18 +41,41 @@ function VenuesContent() {
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<VenueKind | 'all'>('all');
+  const [tags, setTags] = useState<string[]>([]);
+  const [state, setState] = useState('');
+  const [size, setSize] = useState<VenueSize | ''>('');
   const [limit, setLimit] = useState(PAGE_SIZE);
 
   const view = useMemo(() => {
     if (!data) return null;
     const cards = venueCards(data.venues, data.contacts, data.shows, today);
-    return { cards, summary: venueBookSummary(cards), kinds: venueKindCounts(cards) };
+    return {
+      cards,
+      // Built once per load; each keystroke only queries it.
+      index: venueIndex(cards),
+      summary: venueBookSummary(cards),
+      kinds: venueKindCounts(cards),
+      tags: tagCounts(data.venues),
+      states: venueStates(cards),
+    };
   }, [data, today]);
 
   const shown = useMemo(() => {
     if (!view) return [];
-    return searchVenues(kind === 'all' ? view.cards : view.cards.filter(c => c.venue.kind === kind), search);
-  }, [view, kind, search]);
+    const allowed = new Set(filterVenueCards(kind === 'all' ? view.cards : view.cards.filter(c => c.venue.kind === kind), { tags, state, size }).map(c => c.venue.id));
+    return searchIndex(view.index, search).filter(c => allowed.has(c.venue.id));
+  }, [view, kind, search, tags, state, size]);
+
+  const filtersOn = Boolean(search.trim() || tags.length || state || size || kind !== 'all');
+  const clearFilters = () =>
+    changeFilter(() => {
+      setSearch('');
+      setTags([]);
+      setState('');
+      setSize('');
+      setKind('all');
+    });
+  const toggleTag = (t: string) => changeFilter(() => setTags(prev => (prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])));
 
   const kindTabs = view ? VENUE_KINDS.filter(k => (view.kinds[k] ?? 0) > 0) : [];
   const heroSummary = view && view.summary.venues > 0
@@ -159,7 +186,7 @@ function VenuesContent() {
               <h2 id="book-h" className="agent-section-title">
                 Your book
               </h2>
-              <span className="agent-section-note">Sorted by name</span>
+              <span className="agent-section-note">{search.trim() ? 'Best match first' : 'Sorted by name'}</span>
             </div>
             {kindTabs.length > 1 && (
               <div className="tours-toolbar">
@@ -175,7 +202,7 @@ function VenuesContent() {
                 </div>
               </div>
             )}
-            <div role="search" className="agent-filters" aria-label="Search your book">
+            <div role="search" className="agent-filters" aria-label="Search and filter your book">
               <label className="sr-only" htmlFor="v-search">
                 Search your book
               </label>
@@ -185,20 +212,65 @@ function VenuesContent() {
                 type="search"
                 value={search}
                 onChange={e => changeFilter(() => setSearch(e.target.value))}
-                placeholder="Search venue, city, or a contact’s name or email"
+                placeholder="Search venue, city, tag, or a contact — typos are OK"
                 style={{ minWidth: 'min(100%, 22rem)' }}
+                enterKeyHint="search"
               />
-              {search.trim() && (
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => changeFilter(() => setSearch(''))}>
-                  Clear
+              {view.states.length > 1 && (
+                <>
+                  <label className="sr-only" htmlFor="v-state">
+                    State
+                  </label>
+                  <select id="v-state" className="select" value={state} onChange={e => changeFilter(() => setState(e.target.value))}>
+                    <option value="">All states</option>
+                    {view.states.map(st => (
+                      <option key={st} value={st}>
+                        {st}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+              <label className="sr-only" htmlFor="v-size">
+                Capacity
+              </label>
+              <select id="v-size" className="select" value={size} onChange={e => changeFilter(() => setSize(e.target.value as VenueSize | ''))}>
+                <option value="">Any size</option>
+                {VENUE_SIZES.map(z => (
+                  <option key={z.key} value={z.key}>
+                    Capacity {z.label}
+                  </option>
+                ))}
+              </select>
+              {filtersOn && (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={clearFilters}>
+                  Clear all
                 </button>
               )}
             </div>
+            {view.tags.length > 0 && (
+              <div className="agent-filter-row" role="group" aria-label="Filter by tag (a venue must have every tag picked)">
+                <span className="agent-filter-label" aria-hidden="true">
+                  Tags
+                </span>
+                {view.tags.map(({ tag, count }) => (
+                  <button key={tag} type="button" className="tag-filter" aria-pressed={tags.includes(tag)} onClick={() => toggleTag(tag)}>
+                    {tag} <span className="tag-filter-count">{count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="sr-only" role="status" aria-live="polite">
+              {filtersOn ? `${plural(shown.length, 'venue')} shown` : ''}
+            </p>
 
             {shown.length === 0 ? (
               <div className="card tours-empty">
                 <div className="tours-empty-title">Nothing matches</div>
-                <p>No venue or contact in your book matches “{search.trim()}”. Try Find new venues above.</p>
+                <p>{search.trim() ? `No venue or contact in your book matches “${search.trim()}” with the filters picked.` : 'No venue in your book has everything picked.'} Clear a filter, or try Find new venues above.</p>
+                <button type="button" className="btn btn-secondary" onClick={clearFilters}>
+                  Clear all filters
+                </button>
               </div>
             ) : (
               <>
@@ -222,6 +294,7 @@ function VenuesContent() {
 
       {adding && (
         <VenueForm
+          tagSuggestions={view?.tags.map(t => t.tag)}
           onClose={() => setAdding(false)}
           onSaved={() => {
             setAdding(false);

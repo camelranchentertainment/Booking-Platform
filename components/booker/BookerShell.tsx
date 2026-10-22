@@ -105,6 +105,15 @@ export default function BookerShell({ children, title }: Props) {
   const [state, setState] = useState<'loading' | 'ready' | 'not-agent' | 'error'>('loading');
   const [loadError, setLoadError] = useState('');
   const [navOpen, setNavOpen] = useState(false);
+  // Escape closes the phone menu, like any other drawer.
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setNavOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navOpen]);
 
   const loadBooker = useCallback(async () => {
     if (!user) return;

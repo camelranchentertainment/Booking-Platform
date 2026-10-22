@@ -31,7 +31,7 @@ export interface AssistantSnapshot {
   agency: string;
   bands: Array<Pick<RosterBand, 'id' | 'band_name' | 'genre' | 'home_city' | 'home_state' | 'commission_pct' | 'status' | 'contact_name' | 'contact_email' | 'contact_phone' | 'notes'>>;
   shows: Array<Pick<BookerShow, 'id' | 'roster_id' | 'venue_id' | 'venue_name' | 'venue_city' | 'show_date' | 'status' | 'fee' | 'actual_amount' | 'commission_pct_override' | 'followup_on' | 'set_time' | 'door_time' | 'load_in_time' | 'deal_type' | 'deleted_at' | 'hold_rank' | 'hold_expires_on' | 'answer_by' | 'challenge_note'>>;
-  venues: Array<{ id: string; name: string; city: string | null; state: string | null; kind: string; capacity: number | null; email: string | null; phone: string | null; website: string | null }>;
+  venues: Array<{ id: string; name: string; city: string | null; state: string | null; kind: string; capacity: number | null; email: string | null; phone: string | null; website: string | null; tags?: string[] | null }>;
   venuesTruncated: boolean;
   contacts: Array<{ id: string; venue_id: string | null; name: string; title: string | null; email: string | null; phone: string | null; share_with_bands: boolean }>;
   contactsTruncated: boolean;
@@ -90,7 +90,7 @@ export async function loadSnapshot(service: SupabaseClient, bookerId: string, to
       'shows',
     ),
     rows<AssistantSnapshot['venues'][number]>(
-      service.from('booker_venues').select('id, name, city, state, kind, capacity, email, phone, website').eq('booker_id', bookerId).is('deleted_at', null).order('name').limit(MAX_VENUES + 1),
+      service.from('booker_venues').select('id, name, city, state, kind, capacity, email, phone, website, tags').eq('booker_id', bookerId).is('deleted_at', null).order('name').limit(MAX_VENUES + 1),
       'venues',
     ),
     rows<Row>(
@@ -196,7 +196,7 @@ export function snapshotText(s: AssistantSnapshot): string {
   lines.push('', `VENUE BOOK (${s.venues.length}${s.venuesTruncated ? '+, first 300 shown' : ''}):`);
   for (const v of s.venues) {
     const reach = [v.email, v.phone, v.website].filter(Boolean).join(', ');
-    lines.push(`- id=${v.id} | ${v.name} | ${[v.city, v.state].filter(Boolean).join(', ') || 'no city'} | ${v.kind}${v.capacity ? ` | cap ${v.capacity}` : ''}${reach ? ` | ${reach}` : ''}`);
+    lines.push(`- id=${v.id} | ${v.name} | ${[v.city, v.state].filter(Boolean).join(', ') || 'no city'} | ${v.kind}${v.capacity ? ` | cap ${v.capacity}` : ''}${v.tags?.length ? ` | tags: ${v.tags.join(', ')}` : ''}${reach ? ` | ${reach}` : ''}`);
   }
   lines.push('', `CONTACTS (${s.contacts.length}${s.contactsTruncated ? '+, first 400 shown' : ''}):`);
   for (const c of s.contacts) {

@@ -15,8 +15,8 @@ const bands: Pick<RosterBand, 'id' | 'band_name' | 'commission_pct' | 'repeat_co
 ];
 
 const venuesById = byId<BookerVenue>([
-  { id: 'v1', booker_id: 'k', name: 'Gruene Hall', address: null, city: 'New Braunfels', state: 'TX', postal_code: null, capacity: null, website: null, notes: null, kind: 'venue', place_id: null, email: null, phone: null, last_scanned_at: null, ...ts },
-  { id: 'v2', booker_id: 'k', name: 'Cain’s Ballroom', address: null, city: 'Tulsa', state: 'OK', postal_code: null, capacity: null, website: null, notes: null, kind: 'venue', place_id: null, email: null, phone: null, last_scanned_at: null, ...ts },
+  { id: 'v1', booker_id: 'k', name: 'Gruene Hall', address: null, city: 'New Braunfels', state: 'TX', postal_code: null, capacity: null, website: null, notes: null, kind: 'venue', place_id: null, email: null, phone: null, last_scanned_at: null, tags: [], ...ts },
+  { id: 'v2', booker_id: 'k', name: 'Cain’s Ballroom', address: null, city: 'Tulsa', state: 'OK', postal_code: null, capacity: null, website: null, notes: null, kind: 'venue', place_id: null, email: null, phone: null, last_scanned_at: null, tags: [], ...ts },
 ]);
 
 type S = Parameters<typeof reportRows>[0]['shows'][number];

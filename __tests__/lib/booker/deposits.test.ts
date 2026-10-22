@@ -73,7 +73,7 @@ const payment = (show_id: string, amount: number, over: Partial<CommissionPaymen
   ...over,
 });
 
-const venue: BookerVenue = { id: 'v1', booker_id: 'k', name: 'Gruene Hall', address: null, city: 'New Braunfels', state: 'TX', postal_code: null, capacity: null, website: null, notes: null, kind: 'venue', place_id: null, email: null, phone: null, last_scanned_at: null, ...ts };
+const venue: BookerVenue = { id: 'v1', booker_id: 'k', name: 'Gruene Hall', address: null, city: 'New Braunfels', state: 'TX', postal_code: null, capacity: null, website: null, notes: null, kind: 'venue', place_id: null, email: null, phone: null, last_scanned_at: null, tags: [], ...ts };
 const venues = byId([venue]);
 
 describe('effectiveRate with a repeat-booking rate', () => {

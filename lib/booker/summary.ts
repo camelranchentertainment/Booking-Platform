@@ -10,6 +10,7 @@
 //   * Archived rows (deleted_at set) are ignored.
 
 import { commissionProjected, repeatShowIds } from './commission';
+import { buildIndex, fuzzyFilter, searchIndex, type SearchIndex } from './fuzzy';
 import { addDays, weekendRange } from './dates';
 import type { BookerContact, BookerShow, BookerVenue, RosterBand, VenueKind } from './types';
 
@@ -278,18 +279,68 @@ export function venueKindCounts(cards: readonly VenueCardData[]): Partial<Record
   return out;
 }
 
+/** The text a venue card is searched by: the venue, its tags and its contacts. */
+function venueSearchFields(card: VenueCardData): (string | null | undefined)[] {
+  const { venue, contacts } = card;
+  return [venue.name, venue.city, venue.state, venue.email, ...(venue.tags ?? []), ...contacts.flatMap(c => [c.name, c.email, c.title])];
+}
+
+/** A search index over venue cards; build once per data load. */
+export function venueIndex(cards: readonly VenueCardData[]): SearchIndex<VenueCardData> {
+  return buildIndex(cards, venueSearchFields);
+}
+
 /**
- * Venues matching a search across the venue's name, city, state and email and
- * its contacts' names, titles and emails. Case-insensitive; blank matches all.
+ * Venues matching a search across the venue's name, town, state, email and
+ * tags and its contacts' names, titles and emails. Tolerates typos (see
+ * lib/booker/fuzzy.ts); best match first. Blank matches all, in order.
  */
 export function searchVenues(cards: readonly VenueCardData[], query: string): VenueCardData[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [...cards];
-  return cards.filter(({ venue, contacts }) =>
-    [venue.name, venue.city, venue.state, venue.email, ...contacts.flatMap(c => [c.name, c.email, c.title])]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-      .includes(q),
-  );
+  return searchIndex(venueIndex(cards), query);
+}
+
+/**
+ * The contact a search found when the venue's own details did not match, so
+ * the card can say who matched. Null when the venue itself matched.
+ */
+export function matchedContactName(card: VenueCardData, query: string): string | null {
+  if (!query.trim()) return null;
+  const { venue } = card;
+  if (fuzzyFilter([venue], query, v => [v.name, v.city, v.state, v.email, ...(v.tags ?? [])]).length > 0) return null;
+  return fuzzyFilter(card.contacts, query, c => [c.name, c.email, c.title])[0]?.name ?? null;
+}
+
+/** Capacity bands for the venue filter. */
+export const VENUE_SIZES = [
+  { key: 'small', label: 'Up to 150', min: 0, max: 150 },
+  { key: 'mid', label: '151–500', min: 151, max: 500 },
+  { key: 'large', label: '501–1,500', min: 501, max: 1500 },
+  { key: 'xl', label: '1,500+', min: 1501, max: Number.POSITIVE_INFINITY },
+] as const;
+export type VenueSize = (typeof VENUE_SIZES)[number]['key'];
+
+export interface VenueFilters {
+  /** Every one of these tags must be on the venue */
+  tags?: readonly string[];
+  /** Two-letter or full state, matched case-insensitively */
+  state?: string;
+  size?: VenueSize | '';
+}
+
+/** Venue cards passing every filter that is set. A size filter leaves out venues with no capacity. */
+export function filterVenueCards(cards: readonly VenueCardData[], filters: VenueFilters): VenueCardData[] {
+  const tags = filters.tags ?? [];
+  const state = filters.state?.trim().toUpperCase() ?? '';
+  const size = filters.size ? VENUE_SIZES.find(z => z.key === filters.size) : undefined;
+  return cards.filter(({ venue }) => {
+    if (tags.length && !tags.every(t => (venue.tags ?? []).includes(t))) return false;
+    if (state && (venue.state ?? '').trim().toUpperCase() !== state) return false;
+    if (size && (venue.capacity === null || venue.capacity < size.min || venue.capacity > size.max)) return false;
+    return true;
+  });
+}
+
+/** States in the book, A–Z, for the state filter. */
+export function venueStates(cards: readonly VenueCardData[]): string[] {
+  return Array.from(new Set(cards.map(c => (c.venue.state ?? '').trim().toUpperCase()).filter(Boolean))).sort();
 }
