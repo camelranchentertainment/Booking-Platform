@@ -554,7 +554,7 @@ export default function BookingDetail() {
                   <Row label="Meals"         value={booking.meals_provided  ? 'Provided'    : null} />
                   <Row label="Drinks"        value={booking.drinks_provided ? 'Provided'    : null} />
                   <Row label="Hotel"         value={booking.hotel_booked    ? 'Booked'      : null} />
-                  <Row label="Venue Contact" value={booking.venue_contact_name} />
+                  <Row label="Show Contact"  value={booking.venue_contact_name} />
                   <Row label="Deposit"       value={booking.deposit_amount ? `$${Number(booking.deposit_amount).toLocaleString()} ${booking.deposit_paid ? '(PAID)' : '(UNPAID)'}` : null} />
                 </div>
                 {booking.lodging_details && (
@@ -761,7 +761,7 @@ export default function BookingDetail() {
               </div>
               <div className="field"><label className="field-label">Set Length (min)</label>
                 <input className="input" type="number" value={detailsForm.set_length_min || ''} onChange={setDet('set_length_min')} /></div>
-              <div className="field"><label className="field-label">Venue Contact Name</label>
+              <div className="field"><label className="field-label">Show Contact (day-of)</label>
                 <input className="input" value={detailsForm.venue_contact_name || ''} onChange={setDet('venue_contact_name')} placeholder="Day-of contact" /></div>
               <div className="field"><label className="field-label">Sound System</label>
                 <select className="select" value={detailsForm.sound_system || ''} onChange={setDet('sound_system')}>

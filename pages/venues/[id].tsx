@@ -77,6 +77,7 @@ export default function VenueDetail() {
       state:      form.state,
       address:    form.address    || null,
       phone:      form.phone      || null,
+      booking_contact: form.booking_contact || null,
       email:      form.email      || null,
       website:    form.website    || null,
       venue_type: form.venue_type || null,
@@ -234,10 +235,15 @@ export default function VenueDetail() {
                 <div className="field"><label className="field-label">State</label><input className="input" value={form.state || ''} onChange={set('state')} maxLength={2} /></div>
               </div>
               <div className="field"><label className="field-label">Address</label><input className="input" value={form.address || ''} onChange={set('address')} /></div>
-              <div className="grid-2">
-                <div className="field"><label className="field-label">Email</label><input className="input" type="email" value={form.email || ''} onChange={set('email')} /></div>
-                <div className="field"><label className="field-label">Phone</label><input className="input" value={form.phone || ''} onChange={set('phone')} /></div>
-              </div>
+              <fieldset className="venues-fieldset">
+                <legend className="venues-section-title venues-legend">Venue Contact</legend>
+                <p className="venues-hint">The venue's talent buyer or booking manager. Each show keeps its own day-of show contact.</p>
+                <div className="field"><label className="field-label" htmlFor="venue-edit-contact">Contact name</label><input id="venue-edit-contact" className="input" value={form.booking_contact || ''} onChange={set('booking_contact')} placeholder="e.g. Jess Carter" /></div>
+                <div className="grid-2">
+                  <div className="field"><label className="field-label" htmlFor="venue-edit-email">Email</label><input id="venue-edit-email" className="input" type="email" value={form.email || ''} onChange={set('email')} /></div>
+                  <div className="field"><label className="field-label" htmlFor="venue-edit-phone">Phone</label><input id="venue-edit-phone" className="input" type="tel" value={form.phone || ''} onChange={set('phone')} /></div>
+                </div>
+              </fieldset>
               <div className="grid-2">
                 <div className="field"><label className="field-label">Capacity</label><input className="input" type="number" value={form.capacity || ''} onChange={set('capacity')} /></div>
                 <div className="field">
@@ -259,6 +265,7 @@ export default function VenueDetail() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.88rem' }}>
               {([
+                ['Venue Contact', venue.booking_contact],
                 ['Address',  venue.address],
                 ['Phone',    venue.phone],
                 ['Email',    venue.email],
