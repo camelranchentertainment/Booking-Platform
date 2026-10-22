@@ -160,7 +160,8 @@ export interface VenueScanResult {
   pagesScanned: number;
 }
 
-async function callBookerApi<T>(path: string, init: RequestInit, action: string): Promise<T> {
+/** Calls an /api/booker route with the signed-in session; errors become readable messages. */
+export async function callBookerApi<T>(path: string, init: RequestInit, action: string): Promise<T> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new BookerDataError('Your session has expired. Sign in again.');

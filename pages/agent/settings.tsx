@@ -4,6 +4,7 @@
 import { useState, type FormEvent } from 'react';
 import BookerShell, { useBooker } from '../../components/booker/BookerShell';
 import GmailConnection from '../../components/booker/GmailConnection';
+import OfferTemplatesCard from '../../components/booker/OfferTemplatesCard';
 import { ErrorBanner, Field } from '../../components/booker/ui';
 import RouteMapScene from '../../components/booker/RouteMapScene';
 import PageHero from '../../components/layout/PageHero';
@@ -95,6 +96,8 @@ function SettingsContent() {
         </section>
 
         <GmailConnection />
+
+        <OfferTemplatesCard />
 
         <section aria-labelledby="plan-h" className="card">
           <h2 id="plan-h" className="agent-card-title">
