@@ -30,7 +30,8 @@ export type AssistantWrite =
   | { op: 'updateVenue'; id: string; input: VenueInput }
   | { op: 'createContact'; input: ContactInput }
   | { op: 'updateContact'; id: string; input: ContactInput }
-  | { op: 'composeEmail' };
+  | { op: 'composeEmail' }
+  | { op: 'draftOffer'; showId: string; kind: 'offer' | 'deal_memo'; contactId: string | null; expiresOn: string | null };
 
 /** The agent's current rows, as loaded on the page. */
 export interface WorkspaceRows {
@@ -159,6 +160,12 @@ export function buildWrite(a: AssistantAction, rows: WorkspaceRows): ApplyResult
     }
     case 'draft_email':
       return { ok: true, write: { op: 'composeEmail' } };
+    case 'draft_offer': {
+      const show = rows.shows.find(x => x.id === a.show_id && !x.deleted_at);
+      if (!show) return { ok: false, message: 'That show is no longer in your workspace.' };
+      if (a.contact_id && !rows.contacts.some(c => c.id === a.contact_id)) return { ok: false, message: 'That contact is no longer in your workspace.' };
+      return { ok: true, write: { op: 'draftOffer', showId: show.id, kind: a.doc_kind, contactId: a.contact_id ?? null, expiresOn: a.doc_kind === 'offer' ? (a.expires_on ?? null) : null } };
+    }
   }
 }
 
@@ -268,6 +275,25 @@ export function describeAction(a: AssistantAction, rows: WorkspaceRows, year: nu
     case 'draft_email': {
       const v = a.venue_id ? venuesById.get(a.venue_id) : undefined;
       return { title: `Draft email${v ? ` to ${v.name}` : ''}: “${a.subject}”`, detail: a.body, href: null, approveLabel: 'Review & send' };
+    }
+    case 'draft_offer': {
+      const show = rows.shows.find(x => x.id === a.show_id);
+      const band = show ? rows.bands.find(b => b.id === show.roster_id)?.band_name : undefined;
+      const where = show ? venueLabel(show, venuesById) : 'the venue';
+      const to = a.contact_id ? rows.contacts.find(c => c.id === a.contact_id)?.name : undefined;
+      const what = a.doc_kind === 'deal_memo' ? 'deal memo' : 'offer';
+      return {
+        title: `Draft ${what}: ${band ?? 'a band'} at ${where}${show ? `, ${formatShowDate(show.show_date, year)}` : ''}`,
+        detail: [
+          to ? `For ${to}` : null,
+          a.doc_kind === 'offer' && a.expires_on ? `Stands until ${formatShowDate(a.expires_on, year)}` : null,
+          "Uses your default standard terms and the show's deal and fee. Saved as a draft — nothing is sent until you send it from the show.",
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        href: show ? (show.roster_id ? `/agent/bands/${show.roster_id}` : '/agent/shows') : null,
+        approveLabel: 'Draft it',
+      };
     }
   }
 }

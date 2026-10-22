@@ -278,3 +278,45 @@ describe('assistant prompt', () => {
     expect(p.endsWith('DATA')).toBe(true);
   });
 });
+
+describe('draft_offer', () => {
+  it('keeps proposals for the agent’s own show and contact, and drops the rest', () => {
+    const out = validActions(
+      [
+        { type: 'draft_offer', show_id: SHOW, contact_id: CONTACT, expires_on: '2026-10-19', reason: 'Venue asked for terms' },
+        { type: 'draft_offer', show_id: SHOW, doc_kind: 'deal_memo', reason: 'Agreed by phone' },
+        { type: 'draft_offer', show_id: FOREIGN, reason: 'x' },
+        { type: 'draft_offer', show_id: SHOW, contact_id: FOREIGN, reason: 'x' },
+        { type: 'draft_offer', show_id: SHOW, expires_on: '2026-10-01', reason: 'x' },
+      ],
+      known,
+      today,
+    );
+    expect(out).toEqual([
+      { type: 'draft_offer', show_id: SHOW, doc_kind: 'offer', contact_id: CONTACT, expires_on: '2026-10-19', reason: 'Venue asked for terms' },
+      { type: 'draft_offer', show_id: SHOW, doc_kind: 'deal_memo', reason: 'Agreed by phone' },
+    ]);
+  });
+
+  it('carries no money: a fee in the proposal is ignored', () => {
+    const [a] = validActions([{ type: 'draft_offer', show_id: SHOW, fee: 99999, deposit_amount: 5000, reason: 'x' }], known, today);
+    expect(a).not.toHaveProperty('fee');
+    expect(a).not.toHaveProperty('deposit_amount');
+  });
+
+  it('builds a draft-only write, with no stand-by date on a deal memo', () => {
+    expect(buildWrite({ type: 'draft_offer', show_id: SHOW, doc_kind: 'offer', contact_id: CONTACT, expires_on: '2026-10-19', reason: 'x' }, rows)).toEqual({
+      ok: true,
+      write: { op: 'draftOffer', showId: SHOW, kind: 'offer', contactId: CONTACT, expiresOn: '2026-10-19' },
+    });
+    expect(buildWrite({ type: 'draft_offer', show_id: SHOW, doc_kind: 'deal_memo', expires_on: '2026-10-19', reason: 'x' }, rows)).toMatchObject({ write: { kind: 'deal_memo', expiresOn: null, contactId: null } });
+    expect(buildWrite({ type: 'draft_offer', show_id: FOREIGN, doc_kind: 'offer', reason: 'x' }, rows)).toMatchObject({ ok: false });
+  });
+
+  it('says on the card that nothing is sent', () => {
+    const d = describeAction({ type: 'draft_offer', show_id: SHOW, doc_kind: 'offer', contact_id: CONTACT, reason: 'x' }, rows, 2026);
+    expect(d.title).toMatch(/^Draft offer: /);
+    expect(d.detail).toContain('nothing is sent');
+    expect(d.approveLabel).toBe('Draft it');
+  });
+});

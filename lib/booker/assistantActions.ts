@@ -199,6 +199,25 @@ export const DraftEmailAction = z.object({
   reason,
 });
 
+// ── Offers ──────────────────────────────────────────────────────────────────
+/**
+ * A draft offer or deal memo for an existing show. Approving saves a draft
+ * from the show and the agent's default standard terms; nothing is sent.
+ * No money fields: the deal and fee always come from the show as the agent
+ * set them (the assistant never sets money).
+ */
+export const DraftOfferAction = z.object({
+  type: z.literal('draft_offer'),
+  show_id: uuid,
+  /** "doc_kind", not "kind": "kind" already means a venue's type in proposals */
+  doc_kind: z.enum(['offer', 'deal_memo']).default('offer'),
+  /** Who it goes to: one of the agent's contacts at the venue */
+  contact_id: uuid.nullable().optional(),
+  /** Offer stands until (offers only) */
+  expires_on: isoDate.nullable().optional(),
+  reason,
+});
+
 export const AssistantAction = z.discriminatedUnion('type', [
   AddShowAction,
   AddHoldAction,
@@ -211,6 +230,7 @@ export const AssistantAction = z.discriminatedUnion('type', [
   AddContactAction,
   UpdateContactAction,
   DraftEmailAction,
+  DraftOfferAction,
 ]);
 export type AssistantAction = z.infer<typeof AssistantAction>;
 export type AssistantActionType = AssistantAction['type'];
@@ -309,6 +329,9 @@ export function validActions(raw: readonly unknown[], known: KnownIds, today: st
         break;
       case 'draft_email':
         if (!venueOk(a.venue_id) || (a.roster_id && !known.bands.has(a.roster_id))) continue;
+        break;
+      case 'draft_offer':
+        if (!known.shows.has(a.show_id) || (a.contact_id && !known.contacts.has(a.contact_id)) || (a.expires_on && a.expires_on < today)) continue;
         break;
       case 'add_band':
       case 'add_venue':

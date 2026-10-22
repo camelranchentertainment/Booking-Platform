@@ -39,6 +39,9 @@ import { buildWrite, describeAction, type AssistantWrite } from '../../lib/booke
 import { addDays, todayIso } from '../../lib/booker/dates';
 import { byId } from '../../lib/booker/workspace';
 import { useLoad } from '../../lib/booker/useLoad';
+import { createOffer, listOfferTemplates } from '../../lib/booker/offerData';
+import { draftFromShow, offerLabel } from '../../lib/booker/offers';
+import { OfferTermsSchema } from '../../lib/booker/schemas';
 
 const STORAGE_KEY = 'crb.booker.assistant.v1';
 /** Turns sent with each question; older ones stay on screen only. */
@@ -192,6 +195,27 @@ function AssistantContent() {
       case 'updateContact':
         await updateContact(w.id, w.input);
         return 'Contact updated.';
+      case 'draftOffer': {
+        if (!data) throw new Error('The workspace is still loading.');
+        const show = data.shows.find(x => x.id === w.showId);
+        if (!show) throw new Error('That show is no longer in your workspace.');
+        const templates = await listOfferTemplates();
+        const contact = w.contactId ? (data.contacts.find(c => c.id === w.contactId) ?? null) : (data.contacts.find(c => c.venue_id === show.venue_id && c.email) ?? null);
+        const terms = draftFromShow({
+          show,
+          band: data.bands.find(b => b.id === show.roster_id) ?? { band_name: 'Band' },
+          venue: data.venues.find(v => v.id === show.venue_id) ?? null,
+          contact,
+          template: templates.find(t => t.is_default) ?? null,
+          kind: w.kind,
+          agencyName: booker.agency_name,
+          today: todayIso(),
+        });
+        const parsed = OfferTermsSchema.safeParse(w.expiresOn ? { ...terms, expires_on: w.expiresOn } : terms);
+        if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'The offer could not be drafted.');
+        const offer = await createOffer(booker.id, show.id, parsed.data);
+        return `${offerLabel(offer)} drafted. Open the show and choose Offers & deal memos to review and send it.`;
+      }
     }
   };
 

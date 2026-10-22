@@ -2,6 +2,7 @@
 // Pure helpers that combine the agent's rows for display: lookups, venue labels,
 // grouping by date and the "needs attention" list. No I/O, so they are unit-tested.
 
+import { isLapsed, offerLabel, type BookerOffer } from './offers';
 import type { BookerMessage, BookerShow, BookerVenue, RosterBand } from './types';
 import { commissionDue } from './commission';
 import { formatShowDate } from './dates';
@@ -36,7 +37,7 @@ export function findConflicts(shows: readonly BookerShow[], rosterId: string, da
   return shows.filter(s => s.roster_id === rosterId && s.show_date === date && s.status !== 'cancelled' && s.id !== excludeId && !s.deleted_at);
 }
 
-export type AttentionKind = 'email_followup' | 'hold_deadline' | 'hold_clash' | 'followup_due' | 'stale_hold' | 'needs_settling' | 'band_without_rate';
+export type AttentionKind = 'email_followup' | 'offer_lapsed' | 'hold_deadline' | 'hold_clash' | 'followup_due' | 'stale_hold' | 'needs_settling' | 'band_without_rate';
 
 export interface AttentionItem {
   kind: AttentionKind;
@@ -177,4 +178,25 @@ export function emailFollowups(messages: readonly BookerMessage[], venuesById: R
         message: `Follow up with ${who}${venue ? ` (${venue})` : ''}: “${m.subject}”`,
       };
     });
+}
+
+/**
+ * Sent offers still waiting on the buyer after their stand-by date, oldest
+ * deadline first: chase the buyer, record their answer, or withdraw.
+ * "Open" opens the show, where Offers & deal memos lives.
+ */
+export function lapsedOfferItems(
+  offers: readonly Pick<BookerOffer, 'id' | 'show_id' | 'status' | 'kind' | 'doc_number' | 'band_name' | 'venue_name' | 'expires_on' | 'buyer_name' | 'deleted_at'>[],
+  today: string,
+): AttentionItem[] {
+  const year = Number(today.slice(0, 4));
+  return offers
+    .filter(o => !o.deleted_at && isLapsed(o, today))
+    .sort((a, b) => (a.expires_on ?? '').localeCompare(b.expires_on ?? ''))
+    .map(o => ({
+      kind: 'offer_lapsed' as const,
+      key: `o-${o.id}`,
+      showId: o.show_id,
+      message: `${offerLabel(o)} for ${o.band_name} at ${o.venue_name} stood until ${formatShowDate(o.expires_on ?? today, year)} with no answer${o.buyer_name ? ` from ${o.buyer_name}` : ''} — chase it, record the answer, or withdraw it`,
+    }));
 }

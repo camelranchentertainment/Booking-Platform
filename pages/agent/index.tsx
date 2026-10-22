@@ -24,7 +24,9 @@ import { addDays, formatShowDate, formatTime, todayIso, weekendRange } from '../
 import { tierForBandCount } from '../../lib/booker/pricing';
 import { bandCards, deskSummary, plural } from '../../lib/booker/summary';
 import { holdCounts } from '../../lib/booker/holds';
-import { attentionItems, byId, emailFollowups, findConflicts, groupByDate, venueLabel } from '../../lib/booker/workspace';
+import { attentionItems, byId, emailFollowups, findConflicts, groupByDate, lapsedOfferItems, venueLabel } from '../../lib/booker/workspace';
+import { listOffers } from '../../lib/booker/offerData';
+import type { BookerOffer } from '../../lib/booker/offers';
 import { useLoad } from '../../lib/booker/useLoad';
 import type { BookerShow, BookerVenue, RosterBand } from '../../lib/booker/types';
 
@@ -71,13 +73,15 @@ function HomeContent() {
   const year = Number(today.slice(0, 4));
   const { data, loading, error, reload } = useLoad(
     async () => {
-      const [bands, venues, shows, followups] = await Promise.all([
+      const [bands, venues, shows, followups, offers] = await Promise.all([
         listRoster(),
         listVenues(),
         listShows({ from: addDays(today, -LOOKBACK_DAYS) }),
         listMessages({ openFollowups: true, limit: 200 }),
+        // Offers are extra on the desk: if they can't load, the rest still shows.
+        listOffers({ limit: 200 }).catch(() => [] as BookerOffer[]),
       ]);
-      return { bands, venues, shows, followups };
+      return { bands, venues, shows, followups, offers };
     },
     today,
   );
@@ -102,7 +106,7 @@ function HomeContent() {
       weekendGroups,
       agenda,
       // Email follow-ups first: they are the agent's own promises to get back to someone.
-      attention: [...emailFollowups(data.followups, venuesById, today), ...attentionItems(data.shows, data.bands, venuesById, today)],
+      attention: [...emailFollowups(data.followups, venuesById, today), ...lapsedOfferItems(data.offers, today), ...attentionItems(data.shows, data.bands, venuesById, today)],
       cards: bandCards(data.bands, data.shows, today).filter(c => c.band.status === 'active'),
       summary: deskSummary(data.bands, data.shows, today, AGENDA_DAYS),
       holds: holdCounts(data.shows, today),
@@ -270,6 +274,7 @@ function HomeContent() {
                     <li key={item.key}>
                       <span>
                         {item.kind === 'email_followup' && <span aria-hidden="true">✉ </span>}
+                        {item.kind === 'offer_lapsed' && <span aria-hidden="true">⌛ </span>}
                         {item.message}
                       </span>
                       {item.messageId ? (
