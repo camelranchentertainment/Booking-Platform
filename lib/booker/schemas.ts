@@ -8,6 +8,7 @@
 // exists to give the person a clear message before anything is sent.
 
 import { z } from 'zod';
+import { MAX_TAGS, MAX_TAG_LENGTH, parseTags } from './tags';
 import { DEAL_TYPES, PAYMENT_METHODS, ROSTER_STATUSES, SHOW_STATUSES, VENUE_KINDS } from './types';
 import { isIsoDate } from './dates';
 import { TEMPLATE_KEYS } from './templates';
@@ -116,6 +117,16 @@ export const VenueSchema = z.object({
   capacity: optionalNumber('Capacity', 0, 200_000, { integer: true }),
   website: optionalText('Website', 300),
   notes: optionalText('Notes', 5000),
+  // Optional on purpose: only the venue form sends tags. Writers that leave
+  // them out (the assistant, adding from search) never overwrite them.
+  tags: z
+    .preprocess(
+      parseTags,
+      z
+        .array(z.string().min(1).max(MAX_TAG_LENGTH))
+        .max(MAX_TAGS, `Up to ${MAX_TAGS} tags`),
+    )
+    .optional(),
 });
 export type VenueInput = z.infer<typeof VenueSchema>;
 

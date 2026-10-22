@@ -1,13 +1,14 @@
 // components/booker/VenueCard.tsx
 // One venue (or festival, fair, promoter, private event) in the agent's book,
 // drawn as a Tours-style card (.tour-card): name in the display face, type
-// badge, town, booking email, a matched contact when the search hit one, and
+// badge, town, booking email, a matched contact when the search hit one, the
+// agent's tags, and
 // Contacts / Shows / Upcoming counts. The whole card links to the venue page.
 // Counting comes from lib/booker/summary.ts.
 
 import Link from 'next/link';
 import { formatShowDate } from '../../lib/booker/dates';
-import type { VenueCardData } from '../../lib/booker/summary';
+import { matchedContactName, type VenueCardData } from '../../lib/booker/summary';
 import { VENUE_KIND_LABEL } from '../../lib/booker/types';
 
 interface Props {
@@ -17,20 +18,12 @@ interface Props {
   search?: string;
 }
 
-/** The first contact whose name or email matches the search, if the venue itself didn't. */
-function matchedContact(card: VenueCardData, search: string | undefined): string | null {
-  const q = search?.trim().toLowerCase();
-  if (!q) return null;
-  const v = card.venue;
-  if ([v.name, v.city, v.state, v.email].some(x => x?.toLowerCase().includes(q))) return null;
-  return card.contacts.find(c => c.name.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q) || c.title?.toLowerCase().includes(q))?.name ?? null;
-}
-
 export default function VenueCard({ card, currentYear, search }: Props) {
   const { venue } = card;
   const town = [venue.city, venue.state].filter(Boolean).join(', ');
   const email = venue.email ?? card.contacts.find(c => c.email)?.email ?? null;
-  const hit = matchedContact(card, search);
+  const hit = search ? matchedContactName(card, search) : null;
+  const tags = venue.tags ?? [];
 
   return (
     <Link href={`/agent/venues/${venue.id}`} className="tour-card">
@@ -49,6 +42,17 @@ export default function VenueCard({ card, currentYear, search }: Props) {
         <span className="agent-band-next-label">{hit ? 'Matched contact' : card.lastPlayed ? 'Last played' : 'Booking email'}</span>
         {hit ? hit : card.lastPlayed ? `${formatShowDate(card.lastPlayed, currentYear)}${email ? ` · ${email}` : ''}` : (email ?? 'None yet — open it to scan the website')}
       </p>
+
+      {tags.length > 0 && (
+        <ul className="tag-list" aria-label="Tags">
+          {tags.slice(0, 6).map(t => (
+            <li key={t} className="tag-pill">
+              {t}
+            </li>
+          ))}
+          {tags.length > 6 && <li className="tag-pill">+{tags.length - 6}</li>}
+        </ul>
+      )}
 
       <div className="tour-card-foot">
         <dl className="tour-card-counts">

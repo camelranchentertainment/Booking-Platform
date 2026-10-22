@@ -218,7 +218,7 @@ describe('groupInOrder', () => {
 describe('venue book', () => {
   const venue = (over: Partial<BookerVenue> = {}): BookerVenue => ({
     id: 'v1', booker_id: 'k', name: 'Gruene Hall', address: null, city: 'New Braunfels', state: 'TX', postal_code: null, capacity: null,
-    website: null, notes: null, kind: 'venue', place_id: null, email: null, phone: null, last_scanned_at: null, ...ts, ...over,
+    website: null, notes: null, kind: 'venue', place_id: null, email: null, phone: null, last_scanned_at: null, tags: [], ...ts, ...over,
   });
   const contact = (over: Partial<BookerContact> = {}): BookerContact => ({
     id: 'c1', booker_id: 'k', venue_id: 'v1', name: 'Sarah Lee', title: 'Talent buyer', email: null, phone: null, notes: null,

@@ -915,14 +915,18 @@ tr:hover td { background: rgba(232,130,58,0.06); color: var(--text-primary); }
 
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 768px) {
+  /* Closed drawer is hidden, not just slid away, so keyboard and screen-reader
+     users never land on links they cannot see. Visibility flips after the
+     slide-out finishes, and at once when opening. */
   .sidebar {
     transform: translateX(-100%);
-    transition: transform 0.25s;
+    visibility: hidden;
+    transition: transform 0.25s, visibility 0s linear 0.25s;
     position: fixed;
     top: 0; left: 0; bottom: 0;
     z-index: 200;
   }
-  .sidebar.open { transform: translateX(0); }
+  .sidebar.open { transform: translateX(0); visibility: visible; transition: transform 0.25s, visibility 0s; }
 
   .main-content {
     margin-left: 0;
@@ -1572,6 +1576,54 @@ tr:hover td { background: rgba(232,130,58,0.06); color: var(--text-primary); }
 .agent-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .agent-filters .select, .agent-filters .input { width: auto; min-width: 11rem; min-height: 40px; }
 .agent-hero-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+/* Venue tags (components/booker/TagInput.tsx, venue cards, tag filters) */
+.tag-input { display: flex; flex-direction: column; gap: 0.5rem; }
+.tag-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0; padding: 0; list-style: none; }
+.tag-chip {
+  display: inline-flex; align-items: center; gap: 0.15rem;
+  min-height: 32px; padding: 0 0.25rem 0 0.7rem;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface-2); color: var(--text);
+  font-size: 0.82rem; font-weight: 600;
+}
+.tag-chip-remove {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--text-muted); font-size: 1.05rem; cursor: pointer;
+}
+.tag-chip-remove:hover { color: var(--text); background: var(--surface); }
+.tag-chip-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tag-list { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0; padding: 0; list-style: none; }
+.tag-pill {
+  display: inline-block; padding: 0.1rem 0.55rem;
+  border: 1px solid var(--border); border-radius: 999px;
+  color: var(--text-muted); font-size: 0.74rem; font-weight: 600;
+}
+.tag-filter {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  min-height: 44px; padding: 0 0.85rem;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--text-muted);
+  font-family: var(--font-body); font-size: 0.82rem; font-weight: 600; cursor: pointer;
+}
+.tag-filter:hover { color: var(--text); border-color: var(--text-muted); }
+.tag-filter[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.tag-filter:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tag-filter-count { font-size: 0.72rem; opacity: 0.8; }
+.tap-target { display: inline-flex; align-items: center; min-height: 44px; }
+
+/* One show as a row (components/booker/ShowRow.tsx). Phones stack the
+   date, details and badges so nothing runs past the screen edge. */
+.row-link.show-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.row-link.show-row--dated { grid-template-columns: 7.5rem minmax(0, 1fr) auto; }
+.show-row-badges { display: flex; align-items: center; gap: 0.6rem; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 480px) {
+  .row-link.show-row, .row-link.show-row--dated { grid-template-columns: minmax(0, 1fr); row-gap: 0.4rem; }
+  .show-row-badges { justify-content: flex-start; }
+}
+.agent-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.agent-filter-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin-right: 0.25rem; }
 .agent-plan-note { font-size: 0.85rem; color: var(--text-muted); }
 @media (max-width: 768px) {
   .agent-filters .select, .agent-filters .input { flex: 1 1 100%; }

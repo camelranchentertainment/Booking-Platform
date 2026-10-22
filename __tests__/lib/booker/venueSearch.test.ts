@@ -18,7 +18,7 @@ function venue(id: string, name: string): BookerVenue {
     place_id: null,
     email: null,
     phone: null,
-    last_scanned_at: null,
+    last_scanned_at: null, tags: [],
     created_at: '2026-10-01T00:00:00Z',
     updated_at: '2026-10-01T00:00:00Z',
     deleted_at: null,

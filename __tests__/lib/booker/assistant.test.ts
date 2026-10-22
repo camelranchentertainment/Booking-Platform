@@ -21,7 +21,7 @@ const band: RosterBand = {
 };
 const venue: BookerVenue = {
   id: VENUE, booker_id: 'k', name: 'Gruene Hall', address: null, city: 'New Braunfels', state: 'TX', postal_code: null, capacity: 800,
-  website: 'https://gruenehall.com', notes: null, kind: 'venue', place_id: null, email: 'booking@gruenehall.com', phone: null, last_scanned_at: null, ...ts,
+  website: 'https://gruenehall.com', notes: null, kind: 'venue', place_id: null, email: 'booking@gruenehall.com', phone: null, last_scanned_at: null, tags: [], ...ts,
 };
 const show: BookerShow = {
   id: SHOW, booker_id: 'k', roster_id: BAND, venue_id: VENUE, venue_name: null, venue_city: null, show_date: '2026-10-24', load_in_time: '17:00:00',
