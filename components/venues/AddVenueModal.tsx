@@ -30,11 +30,15 @@ type VenueForm = {
   name: string; city: string; state: string; address: string;
   phone: string; email: string; website: string; venue_type: string;
   capacity: string; place_id: string; google_maps_url: string; music_genres: string;
+  /** The venue's own contact (talent buyer / booking manager). Each show keeps its own day-of show contact. */
+  booking_contact: string;
+  notes: string;
 };
 
 const BLANK: VenueForm = {
   name: '', city: '', state: '', address: '', phone: '', email: '', website: '',
   venue_type: '', capacity: '', place_id: '', google_maps_url: '', music_genres: '',
+  booking_contact: '', notes: '',
 };
 
 const FALLBACK_TYPES = ['bar', 'club', 'concert_hall', 'festival', 'restaurant', 'winery', 'outdoor', 'theater', 'other'];
@@ -86,7 +90,7 @@ export default function AddVenueModal({ mapsReady, venueTypes, onClose, onSaved 
   }, [mapsReady]);
 
   const set = (k: keyof VenueForm) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const save = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -114,6 +118,8 @@ export default function AddVenueModal({ mapsReady, venueTypes, onClose, onSaved 
         place_id: form.place_id || null,
         google_maps_url: form.google_maps_url || null,
         music_genres: genres.length ? genres : null,
+        booking_contact: form.booking_contact.trim() || null,
+        notes: form.notes.trim() || null,
         created_by: s.userId,
       });
       if (insertError) {
@@ -175,16 +181,24 @@ export default function AddVenueModal({ mapsReady, venueTypes, onClose, onSaved 
               <input id="venue-state" className="input" value={form.state} onChange={set('state')} placeholder="TX" required maxLength={2} />
             </div>
           </div>
-          <div className="grid-2">
+          <fieldset className="venues-fieldset">
+            <legend className="venues-section-title venues-legend">Venue Contact</legend>
+            <p className="venues-hint">The venue's talent buyer or booking manager. Each show keeps its own day-of show contact.</p>
             <div className="field">
-              <label className="field-label" htmlFor="venue-email">Booking email</label>
-              <input id="venue-email" className="input" type="email" value={form.email} onChange={set('email')} />
+              <label className="field-label" htmlFor="venue-contact-name">Contact name</label>
+              <input id="venue-contact-name" className="input" value={form.booking_contact} onChange={set('booking_contact')} autoComplete="off" placeholder="e.g. Jess Carter" />
             </div>
-            <div className="field">
-              <label className="field-label" htmlFor="venue-phone">Phone</label>
-              <input id="venue-phone" className="input" type="tel" value={form.phone} onChange={set('phone')} />
+            <div className="grid-2">
+              <div className="field">
+                <label className="field-label" htmlFor="venue-email">Booking email</label>
+                <input id="venue-email" className="input" type="email" value={form.email} onChange={set('email')} />
+              </div>
+              <div className="field">
+                <label className="field-label" htmlFor="venue-phone">Phone</label>
+                <input id="venue-phone" className="input" type="tel" value={form.phone} onChange={set('phone')} />
+              </div>
             </div>
-          </div>
+          </fieldset>
           <div className="grid-2">
             <div className="field">
               <label className="field-label" htmlFor="venue-type">Venue type</label>
@@ -205,6 +219,10 @@ export default function AddVenueModal({ mapsReady, venueTypes, onClose, onSaved 
           <div className="field">
             <label className="field-label" htmlFor="venue-genres">Music genres</label>
             <input id="venue-genres" className="input" value={form.music_genres} onChange={set('music_genres')} placeholder="Rock, Jazz, Folk (comma-separated)" />
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="venue-notes">Notes</label>
+            <textarea id="venue-notes" className="textarea" rows={3} value={form.notes} onChange={set('notes')} placeholder="Anything worth remembering about this venue…" />
           </div>
           {form.google_maps_url && (
             <p className="venues-hint venues-linked">

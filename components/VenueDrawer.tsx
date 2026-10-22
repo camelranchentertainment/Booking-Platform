@@ -403,8 +403,8 @@ export default function VenueDrawer({ venueId, isOpen, onClose, onSaved }: Props
                 <input style={INPUT} value={form.website} onChange={set('website')} placeholder="https://venue.com" />
               </Field>
 
-              <Field label="Booking Contact">
-                <input style={INPUT} value={form.booking_contact} onChange={set('booking_contact')} placeholder="e.g. Jake Smith" />
+              <Field label="Venue Contact">
+                <input style={INPUT} value={form.booking_contact} onChange={set('booking_contact')} placeholder="Talent buyer or booking manager" />
               </Field>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: '10px' }}>
@@ -479,7 +479,7 @@ export default function VenueDrawer({ venueId, isOpen, onClose, onSaved }: Props
               <section>
                 <SectionLabel>Contact</SectionLabel>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <Row label="Booking Contact">
+                  <Row label="Venue Contact">
                     {venue?.booking_contact
                       ? <span style={{ color: TEXT_PRI, fontWeight: 600 }}>{venue.booking_contact}</span>
                       : <span style={{ color: TEXT_MUT, fontSize: '0.8rem', fontStyle: 'italic' }}>— click Edit to add</span>}
