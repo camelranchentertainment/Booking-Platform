@@ -47,6 +47,7 @@ import { todayIso } from '../../lib/booker/dates';
 import { mergeVenues } from '../../lib/booker/venueSearch';
 import { holdLabel, venueClashes } from '../../lib/booker/holds';
 import VenueSearchPanel from './VenueSearchPanel';
+import ShowOffersDialog from './ShowOffersDialog';
 import { ErrorBanner, Field, FormActions, Modal } from './ui';
 import { useBooker } from './BookerShell';
 
@@ -367,6 +368,9 @@ export function ShowForm({
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [archiveError, setArchiveError] = useState('');
+  // Offers & deal memos open in place of this dialog; the form keeps its state.
+  const [offersOpen, setOffersOpen] = useState(false);
+  const [confirmedByOffer, setConfirmedByOffer] = useState<BookerShow | null>(null);
   const initial = toFormValues(show, SHOW_KEYS);
   if (!show) {
     initial.status = 'hold';
@@ -399,9 +403,35 @@ export function ShowForm({
     setVenueSearchOpen(false);
   };
 
+  if (show && offersOpen) {
+    return (
+      <ShowOffersDialog
+        show={confirmedByOffer ?? show}
+        band={bands.find(b => b.id === show.roster_id)}
+        venue={venueOptions.find(v => v.id === show.venue_id) ?? null}
+        onShowChanged={updated => {
+          setConfirmedByOffer(updated);
+          f.setValues(toFormValues(updated, SHOW_KEYS));
+        }}
+        onClose={() => {
+          setOffersOpen(false);
+          // Accepting confirmed the show: hand the saved row back so the page refreshes.
+          if (confirmedByOffer) onSaved(confirmedByOffer);
+        }}
+      />
+    );
+  }
+
   return (
     <Modal title={show ? 'Edit show' : 'Add a show'} onClose={onClose} wide>
       {f.formError && <ErrorBanner message={f.formError} />}
+      {show && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOffersOpen(true)}>
+            ✉ Offers &amp; deal memos
+          </button>
+        </div>
+      )}
       <form onSubmit={f.submit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
         <fieldset style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
           <legend className="eyebrow" style={{ color: 'var(--accent)', marginBottom: '0.5rem' }}>

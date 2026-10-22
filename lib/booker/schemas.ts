@@ -241,3 +241,64 @@ export function fieldErrors(error: z.ZodError): Record<string, string> {
   }
   return out;
 }
+
+// ── Offers and deal memos (build list item 4) ───────────────────────────────
+/** An offer's editable terms. Limits mirror booker_offers' CHECK constraints. */
+export const OfferTermsSchema = z
+  .object({
+    kind: z.enum(['offer', 'deal_memo']).default('offer'),
+    template_id: optionalUuid,
+    band_name: requiredText('Band', 120),
+    venue_name: requiredText('Venue', 160),
+    venue_city: optionalText('Town', 100),
+    venue_state: optionalText('State', 100),
+    show_date: isoDate('Show date'),
+    load_in_time: optionalTime('Load-in'),
+    door_time: optionalTime('Doors'),
+    set_time: optionalTime('Set time'),
+    set_length_min: optionalNumber('Set length', 1, 600, { integer: true }),
+    deal_type: z.preprocess(blankToNull, z.enum(DEAL_TYPES).nullable()),
+    fee: money('Fee'),
+    deal_terms: optionalText('Deal terms', 1000),
+    deposit_amount: money('Deposit'),
+    deposit_due_on: optionalIsoDate('Deposit due'),
+    hospitality: optionalText('Hospitality', 2000),
+    terms: optionalText('Terms', 8000),
+    buyer_name: optionalText('Talent buyer', 120),
+    buyer_email: optionalEmail('Talent buyer email'),
+    expires_on: optionalIsoDate('Offer stands until'),
+  })
+  .superRefine((v, ctx) => {
+    if (v.deposit_due_on && v.deposit_amount === null) {
+      ctx.addIssue({ code: 'custom', path: ['deposit_amount'], message: 'Add the deposit amount, or clear the due date' });
+    }
+    if (v.deposit_amount !== null && v.fee !== null && v.deposit_amount > v.fee) {
+      ctx.addIssue({ code: 'custom', path: ['deposit_amount'], message: 'The deposit is more than the fee' });
+    }
+  });
+export type OfferTermsInput = z.infer<typeof OfferTermsSchema>;
+
+/** Recording the buyer's answer on an offer. */
+export const OfferAnswerSchema = z.object({
+  status: z.enum(['accepted', 'declined', 'withdrawn']),
+  response_note: optionalText('Note', 1000),
+});
+export type OfferAnswerInput = z.infer<typeof OfferAnswerSchema>;
+
+/** Sending an offer: who it goes to, and the covering email. */
+export const OfferSendSchema = z.object({
+  to_email: z.preprocess(v => (typeof v === 'string' ? v.trim() : v), z.email('Enter a valid email address').max(254)),
+  to_name: optionalText('Recipient name', 120),
+  subject: requiredText('Subject', 200),
+  body: requiredText('Message', 20000),
+});
+export type OfferSendInput = z.infer<typeof OfferSendSchema>;
+
+/** An agent's standard terms. */
+export const OfferTemplateSchema = z.object({
+  name: requiredText('Template name', 80),
+  terms: z.preprocess(v => (typeof v === 'string' ? v.trim() : v), z.string().max(8000, 'Terms must be 8000 characters or fewer')),
+  hospitality: optionalText('Hospitality', 2000),
+  is_default: z.preprocess(v => v === true || v === 'true', z.boolean()).default(false),
+});
+export type OfferTemplateInput = z.infer<typeof OfferTemplateSchema>;

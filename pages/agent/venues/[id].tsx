@@ -16,6 +16,8 @@ import { EmptyState, ErrorBanner, SkeletonRows } from '../../../components/booke
 import PageHero from '../../../components/layout/PageHero';
 import MainStreetScene from '../../../components/venues/MainStreetScene';
 import { archiveContact, archiveVenue, listContacts, listMessages, listRoster, listShows, listVenues, scanVenueWebsite, setContactShared } from '../../../lib/booker/data';
+import { listOffers } from '../../../lib/booker/offerData';
+import { OFFER_STATUS_BADGE, OFFER_STATUS_LABEL, dealSummary, offerLabel, venueOfferRecord, type BookerOffer } from '../../../lib/booker/offers';
 import { formatShowDate, todayIso } from '../../../lib/booker/dates';
 import { plural, venueCards } from '../../../lib/booker/summary';
 import { byId, findConflicts } from '../../../lib/booker/workspace';
@@ -30,7 +32,9 @@ function VenueContent({ venueId }: { venueId: string }) {
   const year = Number(today.slice(0, 4));
   const { data, loading, error, reload } = useLoad(async () => {
     const [venues, contacts, shows, bands, messages] = await Promise.all([listVenues(), listContacts(), listShows(), listRoster(), listMessages({ venueId })]);
-    return { venues, contacts, shows, bands, messages };
+    // Offers are extra: if they can't load, the rest of the venue page still shows.
+    const offers = await listOffers({ showIds: shows.filter(s => s.venue_id === venueId).map(s => s.id) }).catch(() => [] as BookerOffer[]);
+    return { venues, contacts, shows, bands, messages, offers };
   }, venueId);
 
   const [editingVenue, setEditingVenue] = useState(false);
@@ -363,6 +367,50 @@ function VenueContent({ venueId }: { venueId: string }) {
         </div>
         <MessageHistory messages={data.messages} onChanged={() => void reload()} emptyText="No emails sent from here yet. Emails you send to this venue’s contacts are kept here with their follow-up dates." />
       </section>
+
+      {data.offers.length > 0 && (
+        <section aria-labelledby="voffers-h" className="card mb-6">
+          <h2 id="voffers-h" className="agent-card-title">
+            Offers here
+          </h2>
+          {(() => {
+            const rec = venueOfferRecord(data.offers);
+            return (
+              <p className="text-sm" style={{ marginTop: 0, color: 'var(--text)' }}>
+                {rec.sent === 0
+                  ? 'No offers sent here yet.'
+                  : `${rec.sent} offer${rec.sent === 1 ? '' : 's'} sent · ${rec.accepted} accepted · ${rec.declined} declined${rec.acceptRate === null ? '' : ` · ${rec.acceptRate}% of answers were yes`}.`}
+              </p>
+            );
+          })()}
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '0.4rem' }}>
+            {data.offers.slice(0, 20).map(o => {
+              const show = data.shows.find(s => s.id === o.show_id);
+              return (
+                <li key={o.id}>
+                  <button
+                    type="button"
+                    className="agent-handoff-row row-link"
+                    style={{ width: '100%', textAlign: 'left', cursor: show ? 'pointer' : 'default' }}
+                    disabled={!show}
+                    onClick={() => show && setEditingShow(show)}
+                    aria-label={`${offerLabel(o)} for ${o.band_name}, ${formatShowDate(o.show_date, year)}, ${OFFER_STATUS_LABEL[o.status]}. Open the show.`}
+                  >
+                    <span>
+                      <strong>{offerLabel(o)}</strong> · {o.band_name} · {formatShowDate(o.show_date, year)}
+                      <span className="text-xs text-muted" style={{ display: 'block' }}>
+                        {dealSummary(o)}
+                        {o.response_note ? ` · “${o.response_note}”` : ''}
+                      </span>
+                    </span>
+                    <span className={`badge ${OFFER_STATUS_BADGE[o.status]}`}>{OFFER_STATUS_LABEL[o.status]}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       <section aria-labelledby="vshows-h" className="mb-6">
         <div className="agent-section-head" style={{ marginBottom: '0.75rem' }}>
