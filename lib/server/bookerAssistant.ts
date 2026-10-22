@@ -248,12 +248,14 @@ export const ASSISTANT_TOOL = {
           properties: {
             type: {
               type: 'string',
-              enum: ['add_show', 'update_show', 'set_followup', 'add_band', 'update_band', 'add_venue', 'update_venue', 'add_contact', 'update_contact', 'draft_email'],
+              enum: ['add_show', 'update_show', 'set_followup', 'add_band', 'update_band', 'add_venue', 'update_venue', 'add_contact', 'update_contact', 'draft_email', 'draft_offer'],
             },
             reason: { type: 'string' },
             roster_id: { type: 'string', description: 'Band id (add_show, update_band, draft_email)' },
-            show_id: { type: 'string', description: 'Show id (update_show, set_followup)' },
-            contact_id: { type: 'string', description: 'Contact id (update_contact)' },
+            show_id: { type: 'string', description: 'Show id (update_show, set_followup, draft_offer)' },
+            contact_id: { type: 'string', description: 'Contact id (update_contact; draft_offer: the talent buyer it goes to)' },
+            doc_kind: { type: 'string', enum: ['offer', 'deal_memo'], description: 'draft_offer: "offer" for proposed terms, "deal_memo" once agreed' },
+            expires_on: { type: 'string', description: 'draft_offer, offers only: YYYY-MM-DD the offer stands until' },
             show_date: { type: 'string', description: 'YYYY-MM-DD (add_show)' },
             status: { type: 'string', enum: ['hold', 'pending', 'confirmed'], description: 'add_show only' },
             band_name: { type: 'string', description: 'add_band' },
@@ -292,6 +294,7 @@ WHAT YOU CAN DO
   - add_venue / update_venue: add a venue, festival, fair, promoter or private event to the book, or correct one — e.g. after finding its booking email on the web.
   - add_contact / update_contact: add or correct a person at a venue in the book.
   - draft_email: a short email in a plain, working booking-agent voice (no "I hope this finds you well", no sales language), using only real facts. The agent reviews and sends it.
+  - draft_offer: a draft offer (or, once agreed, a deal memo) for an existing show, addressed to a contact at the venue. It uses the agent's default standard terms and the show's own deal and fee; you never set money on it. Approving only saves a draft; the agent reviews and sends it from the show.
 - When the agent asks for several things at once, propose them together (up to 10).
 
 WHAT YOU CANNOT DO — tell the agent to do these themselves, on the page named
