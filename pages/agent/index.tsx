@@ -19,18 +19,20 @@ import WorkspaceRequirements from '../../components/booker/WorkspaceRequirements
 import { RosterBandForm, ShowForm } from '../../components/booker/forms';
 import PageHero from '../../components/layout/PageHero';
 import { formatMoney } from '../../lib/booker/commission';
-import { listMessages, listRoster, listShows, listVenues, setFollowupDone } from '../../lib/booker/data';
+import { listMessages, listPayments, listRoster, listShows, listVenues, setFollowupDone } from '../../lib/booker/data';
 import { addDays, formatShowDate, formatTime, todayIso, weekendRange } from '../../lib/booker/dates';
 import { tierForBandCount } from '../../lib/booker/pricing';
 import { bandCards, deskSummary, plural } from '../../lib/booker/summary';
 import { holdCounts } from '../../lib/booker/holds';
-import { attentionItems, byId, emailFollowups, findConflicts, groupByDate, lapsedOfferItems, venueLabel } from '../../lib/booker/workspace';
+import { attentionItems, byId, emailFollowups, findConflicts, groupByDate, lapsedOfferItems, moneyAttentionItems, venueLabel } from '../../lib/booker/workspace';
+import { repeatShowIds } from '../../lib/booker/commission';
 import { listOffers } from '../../lib/booker/offerData';
 import type { BookerOffer } from '../../lib/booker/offers';
 import { useLoad } from '../../lib/booker/useLoad';
-import type { BookerShow, BookerVenue, RosterBand } from '../../lib/booker/types';
+import type { BookerShow, BookerVenue, CommissionPayment, RosterBand } from '../../lib/booker/types';
 
 const LOOKBACK_DAYS = 90;
+const MONEY_LOOKBACK_DAYS = 365;
 const AGENDA_DAYS = 60;
 const ATTENTION_LIMIT = 12;
 
@@ -73,15 +75,19 @@ function HomeContent() {
   const year = Number(today.slice(0, 4));
   const { data, loading, error, reload } = useLoad(
     async () => {
-      const [bands, venues, shows, followups, offers] = await Promise.all([
+      const [bands, venues, yearOfShows, followups, offers, payments] = await Promise.all([
         listRoster(),
         listVenues(),
-        listShows({ from: addDays(today, -LOOKBACK_DAYS) }),
+        // A year back for the money checks (commission owed on older shows);
+        // everything else on the desk keeps its 90-day window.
+        listShows({ from: addDays(today, -MONEY_LOOKBACK_DAYS) }),
         listMessages({ openFollowups: true, limit: 200 }),
-        // Offers are extra on the desk: if they can't load, the rest still shows.
+        // Offers and payments are extra on the desk: if they can't load, the rest still shows.
         listOffers({ limit: 200 }).catch(() => [] as BookerOffer[]),
+        listPayments().catch(() => [] as CommissionPayment[]),
       ]);
-      return { bands, venues, shows, followups, offers };
+      const from = addDays(today, -LOOKBACK_DAYS);
+      return { bands, venues, shows: yearOfShows.filter(s => s.show_date >= from), yearOfShows, followups, offers, payments };
     },
     today,
   );
@@ -99,6 +105,7 @@ function HomeContent() {
     const weekendGroups = groupByDate(data.shows.filter(s => s.show_date >= weekend.start && s.show_date <= weekend.end));
     const agendaEnd = addDays(today, AGENDA_DAYS);
     const agenda = groupByDate(data.shows.filter(s => s.show_date > weekend.end && s.show_date <= agendaEnd));
+    const money = moneyAttentionItems(data.yearOfShows, data.bands, data.payments, venuesById, today, repeatShowIds(data.yearOfShows));
     return {
       bandsById,
       venuesById,
@@ -106,7 +113,14 @@ function HomeContent() {
       weekendGroups,
       agenda,
       // Email follow-ups first: they are the agent's own promises to get back to someone.
-      attention: [...emailFollowups(data.followups, venuesById, today), ...lapsedOfferItems(data.offers, today), ...attentionItems(data.shows, data.bands, venuesById, today)],
+      attention: [
+        ...emailFollowups(data.followups, venuesById, today),
+        ...lapsedOfferItems(data.offers, today),
+        ...money.filter(i => i.kind !== 'commission_overdue'),
+        ...attentionItems(data.shows, data.bands, venuesById, today),
+        // Unpaid commission has no deadline, so it goes after anything dated.
+        ...money.filter(i => i.kind === 'commission_overdue'),
+      ],
       cards: bandCards(data.bands, data.shows, today).filter(c => c.band.status === 'active'),
       summary: deskSummary(data.bands, data.shows, today, AGENDA_DAYS),
       holds: holdCounts(data.shows, today),
@@ -269,12 +283,13 @@ function HomeContent() {
               )}
               <ul className="agent-attention-list">
                 {view.attention.slice(0, ATTENTION_LIMIT).map(item => {
-                  const target = item.showId ? data.shows.find(s => s.id === item.showId) : undefined;
+                  const target = item.showId ? data.yearOfShows.find(s => s.id === item.showId) : undefined;
                   return (
                     <li key={item.key}>
                       <span>
                         {item.kind === 'email_followup' && <span aria-hidden="true">✉ </span>}
                         {item.kind === 'offer_lapsed' && <span aria-hidden="true">⌛ </span>}
+                        {(item.kind === 'deposit_overdue' || item.kind === 'deposit_due' || item.kind === 'commission_overdue') && <span aria-hidden="true">$ </span>}
                         {item.message}
                       </span>
                       {item.messageId ? (
@@ -294,6 +309,10 @@ function HomeContent() {
                         </button>
                       ) : item.rosterId ? (
                         <Link className="btn btn-ghost btn-sm" href={`/agent/bands/${item.rosterId}`}>
+                          Open
+                        </Link>
+                      ) : item.href ? (
+                        <Link className="btn btn-ghost btn-sm" href={item.href}>
                           Open
                         </Link>
                       ) : null}

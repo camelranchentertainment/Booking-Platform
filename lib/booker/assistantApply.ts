@@ -47,8 +47,10 @@ const SHOW_KEYS = [
   'roster_id', 'venue_id', 'venue_name', 'venue_city', 'show_date', 'load_in_time', 'door_time', 'set_time', 'set_length_min',
   'status', 'deal_type', 'fee', 'actual_amount', 'commission_pct_override', 'deal_notes', 'internal_notes', 'followup_on',
   'hold_rank', 'hold_expires_on', 'answer_by', 'challenge_note',
+  // Carried over untouched: the assistant never proposes deposit changes.
+  'deposit_amount', 'deposit_due_on', 'deposit_received_on',
 ] as const;
-const BAND_KEYS = ['band_name', 'genre', 'home_city', 'home_state', 'contact_name', 'contact_email', 'contact_phone', 'commission_pct', 'color', 'notes', 'status'] as const;
+const BAND_KEYS = ['band_name', 'genre', 'home_city', 'home_state', 'contact_name', 'contact_email', 'contact_phone', 'commission_pct', 'repeat_commission_pct', 'color', 'notes', 'status'] as const;
 const VENUE_KEYS = ['name', 'kind', 'email', 'phone', 'address', 'city', 'state', 'postal_code', 'capacity', 'website', 'notes'] as const;
 const CONTACT_KEYS = ['venue_id', 'name', 'title', 'email', 'phone', 'notes', 'share_with_bands'] as const;
 

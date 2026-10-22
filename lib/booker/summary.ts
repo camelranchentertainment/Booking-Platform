@@ -9,7 +9,7 @@
 //   * Cancelled shows are never counted anywhere.
 //   * Archived rows (deleted_at set) are ignored.
 
-import { commissionProjected } from './commission';
+import { commissionProjected, repeatShowIds } from './commission';
 import { addDays, weekendRange } from './dates';
 import type { BookerContact, BookerShow, BookerVenue, RosterBand, VenueKind } from './types';
 
@@ -59,7 +59,8 @@ export function deskSummary(bands: readonly RosterBand[], shows: readonly Booker
     .sort((a, b) => a.show_date.localeCompare(b.show_date));
   const holds = live.filter(s => isInPlay(s) && s.show_date >= today);
 
-  const windowCommission = windowShows.reduce((sum, s) => sum + commissionProjected(s, bandsById.get(s.roster_id), today), 0);
+  const repeats = repeatShowIds(shows);
+  const windowCommission = windowShows.reduce((sum, s) => sum + commissionProjected(s, bandsById.get(s.roster_id), today, repeats.has(s.id)), 0);
 
   return {
     activeBands: active.length,
