@@ -55,6 +55,8 @@ export interface RosterBand extends Timestamps {
   contact_email: string | null;
   contact_phone: string | null;
   commission_pct: number | null;
+  /** Rate when the band plays a venue it has played before; null = the usual rate */
+  repeat_commission_pct: number | null;
   color: string | null;
   notes: string | null;
   status: RosterStatus;
@@ -122,6 +124,11 @@ export interface BookerShow extends Timestamps {
   answer_by: string | null;
   /** Who challenged the hold and why, one line */
   challenge_note: string | null;
+  /** Deposit the buyer pays ahead of the show */
+  deposit_amount: number | null;
+  deposit_due_on: string | null;
+  /** When the deposit came in; null = not received yet */
+  deposit_received_on: string | null;
 }
 
 export interface CommissionPayment extends Timestamps {

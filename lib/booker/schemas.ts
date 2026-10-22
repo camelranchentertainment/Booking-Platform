@@ -96,6 +96,7 @@ export const RosterBandSchema = z.object({
   contact_email: optionalEmail('Contact email'),
   contact_phone: optionalText('Contact phone', 40),
   commission_pct: percent('Commission'),
+  repeat_commission_pct: percent('Repeat-booking commission'),
   color: z.preprocess(blankToNull, z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Color must be a hex color').nullable()),
   notes: optionalText('Notes', 5000),
   status: z.enum(ROSTER_STATUSES).default('active'),
@@ -154,10 +155,17 @@ export const ShowSchema = z
     hold_expires_on: optionalIsoDate('Hold expires'),
     answer_by: optionalIsoDate('Answer by'),
     challenge_note: optionalText('Challenge note', 300),
+    deposit_amount: money('Deposit'),
+    deposit_due_on: optionalIsoDate('Deposit due'),
+    deposit_received_on: optionalIsoDate('Deposit received'),
   })
   .superRefine((v, ctx) => {
     if (!v.venue_id && !v.venue_name) {
       ctx.addIssue({ code: 'custom', path: ['venue_name'], message: 'Choose a saved venue or type a venue name' });
+    }
+    // Mirrors the database: a deposit date needs a deposit amount.
+    if (v.deposit_amount === null && (v.deposit_due_on || v.deposit_received_on)) {
+      ctx.addIssue({ code: 'custom', path: ['deposit_amount'], message: 'Add the deposit amount, or clear the dates' });
     }
   })
   // A saved venue wins; the free-text fields are only for venues not in the book.

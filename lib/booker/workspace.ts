@@ -3,9 +3,9 @@
 // grouping by date and the "needs attention" list. No I/O, so they are unit-tested.
 
 import { isLapsed, offerLabel, type BookerOffer } from './offers';
-import type { BookerMessage, BookerShow, BookerVenue, RosterBand } from './types';
-import { commissionDue } from './commission';
-import { formatShowDate } from './dates';
+import type { BookerMessage, BookerShow, BookerVenue, CommissionPayment, RosterBand } from './types';
+import { commissionDue, formatMoney, paidForShow, toAmount } from './commission';
+import { addDays, formatShowDate } from './dates';
 import { findHoldClashes, holdLabel, holdStatus, holdStatusText, holdsByUrgency } from './holds';
 
 export function byId<T extends { id: string }>(rows: readonly T[]): Map<string, T> {
@@ -37,7 +37,7 @@ export function findConflicts(shows: readonly BookerShow[], rosterId: string, da
   return shows.filter(s => s.roster_id === rosterId && s.show_date === date && s.status !== 'cancelled' && s.id !== excludeId && !s.deleted_at);
 }
 
-export type AttentionKind = 'email_followup' | 'offer_lapsed' | 'hold_deadline' | 'hold_clash' | 'followup_due' | 'stale_hold' | 'needs_settling' | 'band_without_rate';
+export type AttentionKind = 'email_followup' | 'offer_lapsed' | 'deposit_overdue' | 'deposit_due' | 'commission_overdue' | 'hold_deadline' | 'hold_clash' | 'followup_due' | 'stale_hold' | 'needs_settling' | 'band_without_rate';
 
 export interface AttentionItem {
   kind: AttentionKind;
@@ -144,18 +144,23 @@ export function bandTiles(bands: readonly RosterBand[], shows: readonly BookerSh
     });
 }
 
-/** Played shows still owed commission, as options for the payment form. */
+/**
+ * Played shows still owed commission, as options for the payment form.
+ *
+ * @param repeats ids of repeat bookings (repeatShowIds), for the band's repeat rate
+ */
 export function payableShows(
   shows: readonly BookerShow[],
   bandsById: ReadonlyMap<string, RosterBand>,
   venuesById: ReadonlyMap<string, BookerVenue>,
+  repeats: ReadonlySet<string> = new Set(),
 ): Array<{ id: string; label: string; due: number }> {
   return shows
     .filter(s => s.status === 'played' && !s.deleted_at)
     .sort((a, b) => b.show_date.localeCompare(a.show_date))
     .map(s => {
       const band = bandsById.get(s.roster_id);
-      return { id: s.id, label: `${formatShowDate(s.show_date)} · ${band?.band_name ?? 'Unknown band'} · ${venueLabel(s, venuesById)}`, due: commissionDue(s, band) };
+      return { id: s.id, label: `${formatShowDate(s.show_date)} · ${band?.band_name ?? 'Unknown band'} · ${venueLabel(s, venuesById)}`, due: commissionDue(s, band, repeats.has(s.id)) };
     });
 }
 
@@ -199,4 +204,89 @@ export function lapsedOfferItems(
       showId: o.show_id,
       message: `${offerLabel(o)} for ${o.band_name} at ${o.venue_name} stood until ${formatShowDate(o.expires_on ?? today, year)} with no answer${o.buyer_name ? ` from ${o.buyer_name}` : ''} — chase it, record the answer, or withdraw it`,
     }));
+}
+
+/** Days ahead that make a deposit "due soon". */
+export const DEPOSIT_WARN_DAYS = 7;
+/** Days after a played show before unpaid commission counts as overdue. */
+export const COMMISSION_OVERDUE_DAYS = 30;
+
+/**
+ * Money that needs chasing, most pressing first:
+ *   1. deposits past their due date and not received (live shows only)
+ *   2. deposits due within DEPOSIT_WARN_DAYS
+ *   3. commission still owed COMMISSION_OVERDUE_DAYS or more after a played
+ *      show, one line per band, biggest balance first
+ *
+ * @param repeats ids of repeat bookings (repeatShowIds), for the band's repeat rate
+ */
+export function moneyAttentionItems(
+  shows: readonly BookerShow[],
+  bands: readonly RosterBand[],
+  payments: ReadonlyArray<Pick<CommissionPayment, 'show_id' | 'amount' | 'deleted_at'>>,
+  venuesById: ReadonlyMap<string, BookerVenue>,
+  today: string,
+  repeats: ReadonlySet<string> = new Set(),
+): AttentionItem[] {
+  const bandsById = byId(bands);
+  const year = Number(today.slice(0, 4));
+  const name = (s: BookerShow) => bandsById.get(s.roster_id)?.band_name ?? 'Unknown band';
+  const live = shows.filter(s => !s.deleted_at && s.status !== 'cancelled');
+  const soon = addDays(today, DEPOSIT_WARN_DAYS);
+  const owedDeposits = live
+    .filter(s => toAmount(s.deposit_amount) !== null && s.deposit_due_on && !s.deposit_received_on)
+    .sort((a, b) => (a.deposit_due_on ?? '').localeCompare(b.deposit_due_on ?? ''));
+
+  const items: AttentionItem[] = [];
+  for (const s of owedDeposits) {
+    const due = s.deposit_due_on as string;
+    if (due >= today) continue;
+    items.push({
+      kind: 'deposit_overdue',
+      key: `do-${s.id}`,
+      showId: s.id,
+      message: `Deposit of ${formatMoney(toAmount(s.deposit_amount))} for ${name(s)} at ${venueLabel(s, venuesById)} (${formatShowDate(s.show_date, year)}) was due ${formatShowDate(due, year)} — chase it or mark it received`,
+    });
+  }
+  for (const s of owedDeposits) {
+    const due = s.deposit_due_on as string;
+    if (due < today || due > soon) continue;
+    items.push({
+      kind: 'deposit_due',
+      key: `dd-${s.id}`,
+      showId: s.id,
+      message: `Deposit of ${formatMoney(toAmount(s.deposit_amount))} for ${name(s)} at ${venueLabel(s, venuesById)} is due ${due === today ? 'today' : formatShowDate(due, year)}`,
+    });
+  }
+  // Commission: one line per band (not per show), so a long payment backlog
+  // never crowds dated items such as expiring holds off the list.
+  const cutoff = addDays(today, -COMMISSION_OVERDUE_DAYS);
+  const owedByBand = new Map<string, { cents: number; shows: number; oldest: string }>();
+  for (const s of live) {
+    if (s.status !== 'played' || s.show_date > cutoff) continue;
+    const due = commissionDue(s, bandsById.get(s.roster_id), repeats.has(s.id));
+    const owedCents = Math.round(due * 100) - Math.round(paidForShow(s.id, payments) * 100);
+    if (owedCents <= 0) continue;
+    const prev = owedByBand.get(s.roster_id);
+    owedByBand.set(s.roster_id, {
+      cents: (prev?.cents ?? 0) + owedCents,
+      shows: (prev?.shows ?? 0) + 1,
+      oldest: prev && prev.oldest < s.show_date ? prev.oldest : s.show_date,
+    });
+  }
+  const bandLines = [...owedByBand].sort((a, b) => b[1].cents - a[1].cents);
+  for (const [rosterId, o] of bandLines) {
+    const bandName = bandsById.get(rosterId)?.band_name ?? 'Unknown band';
+    items.push({
+      kind: 'commission_overdue',
+      key: `co-${rosterId}`,
+      // Payments are recorded on the Commission page, so Open goes there.
+      href: '/agent/commission',
+      message:
+        o.shows === 1
+          ? `${formatMoney(o.cents / 100)} commission still owed by ${bandName} for a show on ${formatShowDate(o.oldest, year)}`
+          : `${formatMoney(o.cents / 100)} commission still owed by ${bandName} across ${o.shows} shows, the oldest on ${formatShowDate(o.oldest, year)}`,
+    });
+  }
+  return items;
 }

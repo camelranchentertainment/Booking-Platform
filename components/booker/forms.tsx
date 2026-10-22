@@ -96,7 +96,7 @@ function useFormState<K extends string, S extends z.ZodType, R>(
 }
 
 // ── Band ────────────────────────────────────────────────────────────────────
-const BAND_KEYS = ['band_name', 'genre', 'home_city', 'home_state', 'contact_name', 'contact_email', 'contact_phone', 'commission_pct', 'color', 'notes', 'status'] as const;
+const BAND_KEYS = ['band_name', 'genre', 'home_city', 'home_state', 'contact_name', 'contact_email', 'contact_phone', 'commission_pct', 'repeat_commission_pct', 'color', 'notes', 'status'] as const;
 const BAND_COLORS = ['#e8823a', '#33c9b0', '#5b9bd8', '#b48cf0', '#f0685f', '#4ade80', '#fbbf24', '#f472b6'];
 
 export function RosterBandForm({
@@ -149,10 +149,15 @@ export function RosterBandForm({
             {p => <input {...p} className="input" type="tel" value={f.values.contact_phone} onChange={f.set('contact_phone')} />}
           </Field>
         </div>
-        <div className="grid-3">
+        <div className="grid-2">
           <Field label="Commission %" hint="Your cut, paid by the band" error={f.errors.commission_pct}>
             {p => <input {...p} className="input" inputMode="decimal" value={f.values.commission_pct} onChange={f.set('commission_pct')} placeholder="e.g. 10" />}
           </Field>
+          <Field label="Repeat-booking commission %" hint="When the band plays a venue it has played before. Blank = same rate." error={f.errors.repeat_commission_pct}>
+            {p => <input {...p} className="input" inputMode="decimal" value={f.values.repeat_commission_pct} onChange={f.set('repeat_commission_pct')} placeholder="e.g. 7" />}
+          </Field>
+        </div>
+        <div className="grid-2">
           <Field label="Calendar color" error={f.errors.color}>
             {p => <input {...p} className="input" type="color" value={f.values.color || '#e8823a'} onChange={f.set('color')} style={{ height: 42, padding: 4 }} />}
           </Field>
@@ -330,6 +335,9 @@ const SHOW_KEYS = [
   'hold_expires_on',
   'answer_by',
   'challenge_note',
+  'deposit_amount',
+  'deposit_due_on',
+  'deposit_received_on',
 ] as const;
 
 /** Hold positions offered in the form. The database allows up to 9th. */
@@ -609,6 +617,17 @@ export function ShowForm({
           <Field label="Deal notes" error={f.errors.deal_notes}>
             {p => <textarea {...p} className="textarea" value={f.values.deal_notes} onChange={f.set('deal_notes')} />}
           </Field>
+          <div className="grid-3">
+            <Field label="Deposit ($)" hint="Paid by the buyer ahead of the show" error={f.errors.deposit_amount}>
+              {p => <input {...p} className="input" inputMode="decimal" value={f.values.deposit_amount} onChange={f.set('deposit_amount')} />}
+            </Field>
+            <Field label="Deposit due" error={f.errors.deposit_due_on}>
+              {p => <input {...p} className="input" type="date" value={f.values.deposit_due_on} onChange={f.set('deposit_due_on')} />}
+            </Field>
+            <Field label="Deposit received" hint="Leave blank until it comes in" error={f.errors.deposit_received_on}>
+              {p => <input {...p} className="input" type="date" value={f.values.deposit_received_on} onChange={f.set('deposit_received_on')} />}
+            </Field>
+          </div>
         </fieldset>
 
         <div className="grid-2">

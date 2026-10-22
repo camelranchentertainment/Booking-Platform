@@ -17,7 +17,7 @@ const ts = { created_at: '', updated_at: '', deleted_at: null };
 
 const band: RosterBand = {
   id: BAND, booker_id: 'k', band_name: 'The Jackwagons', genre: 'rock', home_city: 'Austin', home_state: 'TX', contact_name: null, contact_email: null,
-  contact_phone: null, commission_pct: 15, color: '#e8823a', notes: 'Prefers Saturdays', status: 'active', ...ts,
+  contact_phone: null, commission_pct: 15, repeat_commission_pct: null, color: '#e8823a', notes: 'Prefers Saturdays', status: 'active', ...ts,
 };
 const venue: BookerVenue = {
   id: VENUE, booker_id: 'k', name: 'Gruene Hall', address: null, city: 'New Braunfels', state: 'TX', postal_code: null, capacity: 800,
@@ -27,7 +27,7 @@ const show: BookerShow = {
   id: SHOW, booker_id: 'k', roster_id: BAND, venue_id: VENUE, venue_name: null, venue_city: null, show_date: '2026-10-24', load_in_time: '17:00:00',
   door_time: null, set_time: '21:00:00', set_length_min: 90, status: 'hold', deal_type: 'guarantee', fee: 700, actual_amount: 650,
   commission_pct_override: 12, deal_notes: 'Plus meal', internal_notes: 'Ask about green room', followup_on: '2026-10-15',
-  hold_rank: 1, hold_expires_on: '2026-10-20', answer_by: null, challenge_note: null, ...ts,
+  hold_rank: 1, hold_expires_on: '2026-10-20', answer_by: null, challenge_note: null, deposit_amount: null, deposit_due_on: null, deposit_received_on: null, ...ts,
 };
 const contact: BookerContact = {
   id: CONTACT, booker_id: 'k', venue_id: VENUE, name: 'Sarah Lee', title: 'Talent buyer', email: 'sarah@gruenehall.com', phone: null, notes: null,
@@ -90,6 +90,8 @@ describe('validActions', () => {
         { type: 'update_show', show_id: SHOW, changes: { actual_amount: 900 }, reason: 'x' },
         { type: 'update_show', show_id: SHOW, changes: { commission_pct_override: 5 }, reason: 'x' },
         { type: 'update_band', roster_id: BAND, changes: { commission_pct: 5 }, reason: 'x' },
+        { type: 'update_band', roster_id: BAND, changes: { repeat_commission_pct: 5 }, reason: 'x' },
+        { type: 'update_show', show_id: SHOW, changes: { deposit_amount: 200, deposit_due_on: '2026-10-30', deposit_received_on: '2026-10-12' }, reason: 'x' },
         { type: 'update_contact', contact_id: CONTACT, changes: { share_with_bands: true }, reason: 'x' },
       ],
       known,
@@ -151,6 +153,12 @@ describe('buildWrite', () => {
       ok: true,
       write: { op: 'updateShow', id: SHOW, input: { status: 'played', fee: 750, actual_amount: 650, commission_pct_override: 12, set_time: '21:00', deal_notes: 'Plus meal' } },
     });
+  });
+
+  it('keeps the deposit as it was when the assistant updates a show', () => {
+    const withDeposit: WorkspaceRows = { ...rows, shows: [{ ...show, deposit_amount: 200, deposit_due_on: '2026-10-18', deposit_received_on: '2026-10-17' }] };
+    const r = buildWrite({ type: 'update_show', show_id: SHOW, changes: { status: 'confirmed' }, reason: 'Venue said yes' }, withDeposit);
+    expect(r).toMatchObject({ ok: true, write: { input: { deposit_amount: 200, deposit_due_on: '2026-10-18', deposit_received_on: '2026-10-17' } } });
   });
 
   it('switches a show from a saved venue to a typed one cleanly', () => {

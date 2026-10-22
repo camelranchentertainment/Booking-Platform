@@ -19,7 +19,7 @@ import PageHero from '../../../components/layout/PageHero';
 import { archiveRosterBand, listMessages, listPayments, listRoster, listShows, listVenues } from '../../../lib/booker/data';
 import { formatShowDate, todayIso } from '../../../lib/booker/dates';
 import { bandCards, groupInOrder, showTabCounts, showsForTab } from '../../../lib/booker/summary';
-import { commissionTotals, formatMoney } from '../../../lib/booker/commission';
+import { commissionTotals, formatMoney, repeatShowIds } from '../../../lib/booker/commission';
 import { byId, findConflicts, venueLabel } from '../../../lib/booker/workspace';
 import { useLoad } from '../../../lib/booker/useLoad';
 import { currentLink, handoffChip, latestProposalByShow, type BandLink, type BandProposal } from '../../../lib/booker/handoff';
@@ -72,7 +72,7 @@ function BandContent({ bandId }: { bandId: string }) {
     if (!data || !band) return null;
     const venuesById = byId(data.venues);
     const thisYear = data.shows.filter(s => s.show_date.startsWith(String(year)));
-    const totals = commissionTotals(thisYear, new Map([[band.id, band]]), data.payments, today);
+    const totals = commissionTotals(thisYear, new Map([[band.id, band]]), data.payments, today, repeatShowIds(data.shows));
     return {
       venuesById,
       totals,

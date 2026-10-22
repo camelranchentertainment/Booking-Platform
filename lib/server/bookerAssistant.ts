@@ -12,7 +12,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AppError } from '../apiError';
 import { addDays, formatShowDate } from '../booker/dates';
-import { commissionTotals, formatMoney } from '../booker/commission';
+import { commissionTotals, formatMoney, repeatShowIds } from '../booker/commission';
 import { holdLabel } from '../booker/holds';
 import type { BookerShow, CommissionPayment, RosterBand } from '../booker/types';
 
@@ -75,7 +75,7 @@ export async function loadSnapshot(service: SupabaseClient, bookerId: string, to
   const [profile, bands, shows, venues, followups, payments, contacts, sent] = await Promise.all([
     service.from('booker_profiles').select('agency_name').eq('id', bookerId).maybeSingle().then(r => (r.data as Row | null) ?? null),
     rows<AssistantSnapshot['bands'][number]>(
-      service.from('booker_roster').select('id, band_name, genre, home_city, home_state, commission_pct, status, contact_name, contact_email, contact_phone, notes').eq('booker_id', bookerId).is('deleted_at', null).order('band_name'),
+      service.from('booker_roster').select('id, band_name, genre, home_city, home_state, commission_pct, repeat_commission_pct, status, contact_name, contact_email, contact_phone, notes').eq('booker_id', bookerId).is('deleted_at', null).order('band_name'),
       'roster',
     ),
     rows<AssistantSnapshot['shows'][number]>(
@@ -154,7 +154,14 @@ export async function loadSnapshot(service: SupabaseClient, bookerId: string, to
       venue_id: (f.venue_id as string | null) ?? null,
       roster_id: (f.roster_id as string | null) ?? null,
     })),
-    commission: commissionTotals(thisYear as unknown as Parameters<typeof commissionTotals>[0], bandsById, payments, today),
+    commission: commissionTotals(
+      thisYear as unknown as Parameters<typeof commissionTotals>[0],
+      bandsById,
+      payments,
+      today,
+      // Repeat bookings within the loaded window use the band's repeat rate.
+      repeatShowIds(shows as unknown as Parameters<typeof repeatShowIds>[0]),
+    ),
   };
 }
 

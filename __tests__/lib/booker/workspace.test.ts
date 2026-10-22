@@ -15,6 +15,7 @@ const band = (over: Partial<RosterBand> = {}): RosterBand => ({
   contact_email: null,
   contact_phone: null,
   commission_pct: 10,
+  repeat_commission_pct: null,
   color: null,
   notes: null,
   status: 'active',
@@ -41,7 +42,7 @@ const show = (over: Partial<BookerShow> = {}): BookerShow => ({
   commission_pct_override: null,
   deal_notes: null,
   internal_notes: null,
-  followup_on: null, hold_rank: null, hold_expires_on: null, answer_by: null, challenge_note: null,
+  followup_on: null, hold_rank: null, hold_expires_on: null, answer_by: null, challenge_note: null, deposit_amount: null, deposit_due_on: null, deposit_received_on: null,
   ...ts,
   ...over,
 });

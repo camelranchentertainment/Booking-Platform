@@ -12,7 +12,7 @@ import PageHero from '../../components/layout/PageHero';
 import { plural } from '../../lib/booker/summary';
 import { archivePayment, listPayments, listRoster, listShows, listVenues } from '../../lib/booker/data';
 import { formatShowDate, todayIso, yearRange } from '../../lib/booker/dates';
-import { commissionDue, commissionTotals, formatMoney, paidForShow, toAmount } from '../../lib/booker/commission';
+import { commissionDue, commissionTotals, formatMoney, paidForShow, repeatShowIds, toAmount } from '../../lib/booker/commission';
 import { byId, payableShows, venueLabel } from '../../lib/booker/workspace';
 import { useLoad } from '../../lib/booker/useLoad';
 import { PAYMENT_METHOD_LABEL } from '../../lib/booker/types';
@@ -37,20 +37,22 @@ function CommissionContent() {
     const yearShows = data.shows.filter(s => s.show_date >= start && s.show_date <= end);
     const showIds = new Set(yearShows.map(s => s.id));
     const yearPayments = data.payments.filter(p => showIds.has(p.show_id));
-    const totals = commissionTotals(yearShows, bandsById, yearPayments, today);
+    // Repeat bookings use the band's repeat rate; history from every year counts.
+    const repeats = repeatShowIds(data.shows);
+    const totals = commissionTotals(yearShows, bandsById, yearPayments, today, repeats);
     const perBand = data.bands
-      .map(b => ({ band: b, totals: commissionTotals(yearShows.filter(s => s.roster_id === b.id), bandsById, yearPayments, today) }))
+      .map(b => ({ band: b, totals: commissionTotals(yearShows.filter(s => s.roster_id === b.id), bandsById, yearPayments, today, repeats) }))
       .filter(r => r.totals.due > 0 || r.totals.projected > 0 || r.totals.paid > 0);
     const played = yearShows
       .filter(s => s.status === 'played')
       .sort((a, b) => b.show_date.localeCompare(a.show_date))
       .map(s => {
-        const due = commissionDue(s, bandsById.get(s.roster_id));
+        const due = commissionDue(s, bandsById.get(s.roster_id), repeats.has(s.id));
         const paid = paidForShow(s.id, yearPayments);
-        return { show: s, due, paid, owed: Math.max(0, Math.round((due - paid) * 100) / 100) };
+        return { show: s, due, paid, repeat: repeats.has(s.id), owed: Math.max(0, Math.round((due - paid) * 100) / 100) };
       });
     const years = Array.from(new Set([currentYear, ...data.shows.map(s => Number(s.show_date.slice(0, 4)))])).sort((a, b) => b - a);
-    return { bandsById, venuesById, totals, perBand, played, yearPayments, years, payOptions: payableShows(yearShows, bandsById, venuesById) };
+    return { bandsById, venuesById, totals, perBand, played, yearPayments, years, payOptions: payableShows(yearShows, bandsById, venuesById, repeats) };
   }, [data, year, currentYear, today]);
 
   const removePayment = async (id: string) => {
@@ -203,13 +205,20 @@ function CommissionContent() {
                       </tr>
                     </thead>
                     <tbody>
-                      {view.played.map(({ show, due, paid, owed }) => (
+                      {view.played.map(({ show, due, paid, owed, repeat }) => (
                         <tr key={show.id}>
                           <td>{formatShowDate(show.show_date, currentYear)}</td>
                           <td style={{ color: 'var(--text)' }}>{view.bandsById.get(show.roster_id)?.band_name ?? '—'}</td>
                           <td>{venueLabel(show, view.venuesById)}</td>
                           <td>{formatMoney(toAmount(show.actual_amount) ?? toAmount(show.fee))}</td>
-                          <td>{formatMoney(due)}</td>
+                          <td>
+                            {formatMoney(due)}
+                            {repeat && toAmount(show.commission_pct_override) === null && toAmount(view.bandsById.get(show.roster_id)?.repeat_commission_pct ?? null) !== null && (
+                              <span className="text-xs text-muted" style={{ display: 'block' }}>
+                                Repeat-booking rate
+                              </span>
+                            )}
+                          </td>
                           <td>{formatMoney(paid)}</td>
                           <td style={{ color: owed > 0 ? '#fbbf24' : undefined }}>{formatMoney(owed)}</td>
                           <td style={{ textAlign: 'right' }}>
