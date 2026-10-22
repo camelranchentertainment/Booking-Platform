@@ -20,6 +20,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AppError } from '../apiError';
 import { buildMimeMessage } from '../gmailSend';
+import type { ResolvedAttachment } from './emailAttachments';
 import { fromHeader } from '../booker/emailFormat';
 
 export const BOOKER_STATE_PREFIX = 'bk.';
@@ -202,10 +203,16 @@ async function accessToken(service: SupabaseClient, row: BookerGmailRow): Promis
 export async function sendViaBookerGmail(
   service: SupabaseClient,
   row: BookerGmailRow,
-  email: { displayName: string; to: string; subject: string; html: string },
+  email: { displayName: string; to: string; subject: string; html: string; attachments?: ResolvedAttachment[] },
 ): Promise<{ providerMessageId: string | null; fromAddress: string }> {
   const token = await accessToken(service, row);
-  const mime = buildMimeMessage({ from: fromHeader(email.displayName, row.gmail_address), to: email.to, subject: email.subject, html: email.html });
+  const mime = buildMimeMessage({
+    from: fromHeader(email.displayName, row.gmail_address),
+    to: email.to,
+    subject: email.subject,
+    html: email.html,
+    attachments: email.attachments,
+  });
   const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
