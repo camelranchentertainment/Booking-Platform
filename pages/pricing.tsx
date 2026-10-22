@@ -52,6 +52,7 @@ export default function PricingPage() {
   const [loading, setLoading] = useState<Plan | null>(null);
   const [isAuthed, setIsAuthed] = useState(false);
   const [trialMessage, setTrialMessage] = useState('');
+  const [checkoutError, setCheckoutError] = useState('');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -64,6 +65,7 @@ export default function PricingPage() {
 
   const subscribe = async (tier: Plan) => {
     setLoading(tier);
+    setCheckoutError('');
     try {
       if (!isAuthed) {
         router.push(`/register?role=band_admin`);
@@ -75,8 +77,11 @@ export default function PricingPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ tier }),
       });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (res.ok && data.url) { window.location.href = data.url; return; }
+      setCheckoutError(data.error || 'Checkout is unavailable right now. Please try again in a moment.');
+    } catch {
+      setCheckoutError('We couldn’t reach checkout. Check your connection and try again.');
     } finally {
       setLoading(null);
     }
@@ -96,6 +101,11 @@ export default function PricingPage() {
         <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', maxWidth: 480, margin: '0 auto' }}>
           14-day free trial. No credit card required to start.
         </p>
+        {checkoutError && (
+          <div role="alert" style={{ marginTop: '1rem', padding: '0.65rem 1.25rem', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '4px', color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
+            {checkoutError}
+          </div>
+        )}
         {trialMessage && (
           <div style={{ marginTop: '1rem', padding: '0.65rem 1.25rem', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', borderRadius: '4px', color: '#fbbf24', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>
             ⚠ {trialMessage}
