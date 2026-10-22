@@ -36,10 +36,9 @@ export default function ShowRow({ show, band, venuesById, onOpen, hideDate, hide
       type="button"
       onClick={() => onOpen(show)}
       aria-label={`Open show: ${label}`}
-      className="row-link"
+      // Columns live in CSS (.show-row) so narrow phones can stack them.
+      className={`row-link show-row${hideDate ? '' : ' show-row--dated'}`}
       style={{
-        display: 'grid',
-        gridTemplateColumns: `${hideDate ? '' : '7.5rem '}minmax(0, 1fr) auto`,
         alignItems: 'center',
         gap: '0.75rem',
         width: '100%',
@@ -66,7 +65,7 @@ export default function ShowRow({ show, band, venuesById, onOpen, hideDate, hide
           {time ? ` · ${time}` : ''}
         </span>
       </span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+      <span className="show-row-badges">
         {fee !== null && <span style={{ fontWeight: 800, fontSize: '0.85rem', color: 'var(--text-muted)' }}>{formatMoney(fee)}</span>}
         {deadline && (
           <span className={`badge ${deadline.urgency === 'soon' ? 'badge-negotiation' : 'badge-hold'}`} style={{ whiteSpace: 'nowrap' }}>

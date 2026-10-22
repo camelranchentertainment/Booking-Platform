@@ -266,7 +266,8 @@ function AssistantContent() {
       />
       {loading && !data && <SkeletonRows rows={3} />}
 
-      <section aria-label="Conversation" className="card" style={{ display: 'grid', gap: '1rem', minHeight: 260 }}>
+      {/* minmax(0, 1fr): the one column never grows past the card, so a long line can't push the page sideways on a phone. */}
+      <section aria-label="Conversation" className="card" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '1rem', minHeight: 260 }}>
         {entries.length === 0 && (
           <div>
             <p className="text-sm" style={{ color: 'var(--text)', marginTop: 0, lineHeight: 1.6 }}>
@@ -274,7 +275,7 @@ function AssistantContent() {
             </p>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {STARTER_QUESTIONS.map(q => (
-                <button key={q} type="button" className="btn btn-secondary btn-sm" onClick={() => void ask(q)} disabled={thinking || !data} style={{ textTransform: 'none', letterSpacing: 0 }}>
+                <button key={q} type="button" className="btn btn-secondary btn-sm" onClick={() => void ask(q)} disabled={thinking || !data} style={{ textTransform: 'none', letterSpacing: 0, whiteSpace: 'normal', textAlign: 'left', maxWidth: '100%', height: 'auto', minHeight: 44 }}>
                   {q}
                 </button>
               ))}
@@ -369,7 +370,7 @@ function AssistantContent() {
         </div>
       )}
 
-      <form onSubmit={submit} style={{ display: 'flex', gap: '0.5rem', marginTop: '0.9rem', alignItems: 'flex-end' }}>
+      <form onSubmit={submit} style={{ display: 'flex', gap: '0.5rem', marginTop: '0.9rem', alignItems: 'flex-end', minWidth: 0 }}>
         <label htmlFor="assistant-input" style={SR_ONLY}>
           Ask the assistant
         </label>
@@ -384,7 +385,7 @@ function AssistantContent() {
           onKeyDown={onKeyDown}
           placeholder="e.g. Which Saturdays in November are open for The Jackwagons?"
           disabled={thinking || !data}
-          style={{ flex: 1, minHeight: 56, resize: 'vertical' }}
+          style={{ flex: 1, minWidth: 0, minHeight: 56, resize: 'vertical' }}
         />
         <button type="submit" className="btn btn-primary" disabled={thinking || !data || !input.trim()} aria-busy={thinking}>
           {thinking ? 'Thinking…' : 'Ask'}

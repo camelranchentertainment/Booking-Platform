@@ -453,7 +453,7 @@ export default function ComposeEmail({ recipients, bands, shows = [], venuesById
         </div>
 
         <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text)' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minHeight: 44, cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text)' }}>
             <input type="checkbox" checked={followup} onChange={e => setFollowup(e.target.checked)} disabled={busy} style={{ width: 18, height: 18 }} />
             Remind me to follow up on
           </label>

@@ -363,7 +363,7 @@ function HomeContent() {
               <h2 id="bands-h" className="agent-section-title">
                 Your bands
               </h2>
-              <Link href="/agent/bands" className="tour-card-cta">
+              <Link href="/agent/bands" className="tour-card-cta tap-target">
                 Whole roster →
               </Link>
             </div>
@@ -383,7 +383,7 @@ function HomeContent() {
               <h2 id="agenda-h" className="agent-section-title">
                 Next {AGENDA_DAYS} days
               </h2>
-              <Link href="/agent/shows" className="tour-card-cta">
+              <Link href="/agent/shows" className="tour-card-cta tap-target">
                 All shows →
               </Link>
             </div>
