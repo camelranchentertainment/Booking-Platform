@@ -9,8 +9,8 @@
 // kind of data, update SERVICE_PROVIDERS / the sections below and bump
 // LEGAL_EFFECTIVE_DATE.
 
-export const LEGAL_EFFECTIVE_DATE = 'October 20, 2026';
-export const LEGAL_CONTACT_EMAIL = 'booking@camelranchbooking.com';
+export const LEGAL_EFFECTIVE_DATE = 'October 26, 2026';
+export const LEGAL_CONTACT_EMAIL = 'scott@camelranchbooking.com';
 export const LEGAL_OPERATOR = 'Camel Ranch Entertainment';
 
 /** A heading plus paragraphs and/or bullet items. */

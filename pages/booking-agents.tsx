@@ -256,7 +256,7 @@ export default function BookingAgentsPage() {
                     </p>
                     <div style={{ marginTop: 'auto' }}>
                       {t.monthlyUsd === null ? (
-                        <a className="ba-cta ba-cta-secondary" href="mailto:booking@camelranchbooking.com?subject=Booking%20Agent%20pricing" style={{ ...secondaryBtn, padding: '0.7rem 1.2rem', fontSize: '0.7rem' }}>
+                        <a className="ba-cta ba-cta-secondary" href="mailto:scott@camelranchbooking.com?subject=Booking%20Agent%20pricing" style={{ ...secondaryBtn, padding: '0.7rem 1.2rem', fontSize: '0.7rem' }}>
                           Contact us
                         </a>
                       ) : (
@@ -307,8 +307,8 @@ export default function BookingAgentsPage() {
         <footer style={{ background: '#060F1A', borderTop: BORDER, padding: '2rem 0' }}>
           <div className="ba-wrap" style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', color: 'rgba(239,224,189,0.35)', fontSize: '0.72rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
             <span>© {new Date().getFullYear()} Camel Ranch Entertainment</span>
-            <a className="ba-link" href="mailto:booking@camelranchbooking.com" style={{ color: 'rgba(239,224,189,0.5)', textDecoration: 'none' }}>
-              booking@camelranchbooking.com
+            <a className="ba-link" href="mailto:scott@camelranchbooking.com" style={{ color: 'rgba(239,224,189,0.5)', textDecoration: 'none' }}>
+              scott@camelranchbooking.com
             </a>
           </div>
         </footer>
