@@ -9,6 +9,8 @@ import { supabase } from '../../lib/supabase';
 import { parseCapacity } from '../../lib/domain/venueImport';
 import { getVenueSession } from './venueSession';
 import { useModalKeys } from './useModalKeys';
+import ShowDayContactFields from './ShowDayContactFields';
+import { BLANK_SHOW_DAY_CONTACTS, venueColumns, type ShowDayContacts } from '../../lib/showDayContacts';
 
 /** Minimal shape of the Google Places Autocomplete we use (loaded at runtime from Google's script). */
 interface PlaceComponent { long_name: string; short_name: string; types: string[] }
@@ -53,6 +55,7 @@ interface Props {
 
 export default function AddVenueModal({ mapsReady, venueTypes, onClose, onSaved }: Props) {
   const [form, setForm] = useState<VenueForm>(BLANK);
+  const [showDay, setShowDay] = useState<ShowDayContacts>(BLANK_SHOW_DAY_CONTACTS);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
@@ -119,6 +122,7 @@ export default function AddVenueModal({ mapsReady, venueTypes, onClose, onSaved 
         google_maps_url: form.google_maps_url || null,
         music_genres: genres.length ? genres : null,
         booking_contact: form.booking_contact.trim() || null,
+        ...venueColumns(showDay),
         notes: form.notes.trim() || null,
         created_by: s.userId,
       });
@@ -183,7 +187,7 @@ export default function AddVenueModal({ mapsReady, venueTypes, onClose, onSaved 
           </div>
           <fieldset className="venues-fieldset">
             <legend className="venues-section-title venues-legend">Venue Contact</legend>
-            <p className="venues-hint">The venue's talent buyer or booking manager. Each show keeps its own day-of show contact.</p>
+            <p className="venues-hint">The venue's talent buyer or booking manager — who you book the show with.</p>
             <div className="field">
               <label className="field-label" htmlFor="venue-contact-name">Contact name</label>
               <input id="venue-contact-name" className="input" value={form.booking_contact} onChange={set('booking_contact')} autoComplete="off" placeholder="e.g. Jess Carter" />
@@ -199,6 +203,13 @@ export default function AddVenueModal({ mapsReady, venueTypes, onClose, onSaved 
               </div>
             </div>
           </fieldset>
+          <ShowDayContactFields
+            idPrefix="add-venue"
+            value={showDay}
+            onChange={setShowDay}
+            disabled={saving}
+            hint="Who you deal with on show night. Every new show here starts with these filled in, and you can change them per show."
+          />
           <div className="grid-2">
             <div className="field">
               <label className="field-label" htmlFor="venue-type">Venue type</label>
