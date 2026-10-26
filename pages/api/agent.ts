@@ -56,13 +56,19 @@ import {
 } from '../../lib/server/agentWebSearch';
 import { normaliseLookupNames, stageVenueBatch } from '../../lib/server/agentVenueBatch';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
-import { buildInboxContext } from '../../lib/server/agentInboxContext';
+import { buildInboxContext, cleanEmailBody } from '../../lib/server/agentInboxContext';
+import { buildOutreachContext } from '../../lib/server/agentOutreachContext';
 import { formatShowDate } from '../../lib/formatDate';
-import { buildVoiceSystemPrompt } from '../../lib/emailVoice';
+import { buildVoiceSystemPrompt, relationshipFor } from '../../lib/emailVoice';
 import {
   matchTour,
   buildOutreachVenues,
   formatTargetLines,
+  parseOutreachStage,
+  selectOutreachRows,
+  emptyOutreachMessage,
+  type OutreachStage,
+  type StageRow,
   type TargetRow,
   type VenueContact,
 } from '../../lib/domain/tourOutreach';
@@ -134,8 +140,15 @@ respond ONLY with valid JSON in the exact shape for that action. Output the raw 
 no markdown code fences (no \`\`\`), no text before or after it. For ALL other messages: respond with
 plain text only — no JSON, no wrapper.
 
-For bulk tour outreach ("send emails to targets on [tour]", "blast the Spring Tour", etc.):
-{"reply":"<conversational text>","action":{"type":"tour_outreach","tourName":"<best match from context>"}}
+For bulk tour outreach — a first pitch to a tour's Target venues ("send emails to targets on [tour]",
+"blast the Spring Tour"), OR a follow-up to the venues already pitched and waiting ("send the follow-ups
+for Lone Star", "write the overdue follow up to my TX venues"):
+{"reply":"<conversational text>","action":{"type":"tour_outreach","tourName":"<best match from context>","stage":"target|follow_up","overdueOnly":false}}
+"stage":"target" emails venues in Target; "stage":"follow_up" emails venues in Follow up and drafts the
+follow-up from the last email they were sent. Set "overdueOnly":true when the user says overdue (7+
+days with no contact). Pick the stage from the Outreach section: if every venue on that tour is in
+Follow up, a request to email them is a follow-up. The user reviews the venue list and the draft
+before anything is sent.
 
 For city venue search ("find venues in Tulsa", "what clubs are in Nashville for July 4th", etc.):
 {"reply":"<conversational text>","action":{"type":"city_search","city":"<city>","state":"<2-letter state>","dateRange":"<parsed range or empty>"}}
@@ -216,7 +229,7 @@ The results come straight back to you as a message starting "[find_venue result"
 To compose and send an individual email to a venue ("email the Rusty Rail", "send a follow-up to Memphis Music Hall", "write a confirmation to [venue]"):
 {"reply":"<conversational text>","action":{"type":"stage_email","venue_id":"<UUID from find_venue>","booking_id":"<UUID if related to a booking, otherwise omit>","recipient":"<email from find_venue result>","subject":"<subject line>","body":"<plain text body>","category":"target"}}
 category values: target, follow_up_1, follow_up_2, confirmation, decline, advance, thank_you, reply. WARNING: confirming this proposal sends a real email immediately to a real person outside the platform — make sure the subject, body, and recipient are correct before presenting this for approval.
-Never call stage_email without a real venue_id already confirmed via find_venue in this conversation. If the user hasn't specified which venue/show, or there are multiple matches, ask them to clarify first — do not guess, and do not stage with a missing or placeholder venue_id.
+Never call stage_email without a real venue_id — one listed in the Outreach section (venue_id=…) or confirmed via find_venue in this conversation. If the user hasn't specified which venue/show, or there are multiple matches, ask them to clarify first — do not guess, and do not stage with a missing or placeholder venue_id.
 
 To save a reusable email TEMPLATE ("save this as a template", "make a template for brewery pitches",
 "turn that email into a template called X"):
@@ -341,6 +354,21 @@ update it — never stage a second show at the same venue on the same date. A sa
 different venue is fine (that's a real scheduling conflict, not a duplicate) and will surface to the
 user as a warning to review.
 
+═══════════════════ OUTREACH & SENT EMAIL ═══════════════════
+
+The "Outreach" section of your context is the Email page's Outreach tab: every venue being pitched on an
+open tour, in every stage (Target, Follow up, Confirmed, Declined, Thank you), with its last contact
+date, OVERDUE flag, how many emails were sent and the last subject, and when the venue last replied. Below
+it are the emails the band SENT in the last 60 days (archived ones too), grouped so one blast to 17
+venues is one entry, each with its body. You CAN see sent emails — never tell the user you can't read
+their outbox or sent mail. Use this for "who still needs a follow-up", "what did I send the Texas
+venues", "which venues haven't answered", "write the follow-up to my last email".
+
+To follow up with many venues on a tour, use tour_outreach with "stage":"follow_up" (above). To answer
+or follow up with ONE venue, use stage_email with that venue's venue_id from the Outreach section and the
+category follow_up_1 (first follow-up) or follow_up_2 (later ones); base the text on the last email
+listed for it. If a venue says NO EMAIL ON FILE, say so and offer to look one up with web search.
+
 ═══════════════════ INBOX ═══════════════════
 
 The "Inbox" section of your context lists recent emails the band received from its saved venues and
@@ -407,6 +435,8 @@ READ (available from your context):
     routing notes. No show times, no notes, no financial fields.
   ✓ History — all bookings including completed shows (id, date, venue, status only).
     No fee or payment amounts are present for any booking.
+  ✓ Outreach — every tour venue in every stage, last contact, overdue, emails sent, replies.
+  ✓ Sent emails — last 60 days, grouped by send, with bodies (archived included).
   ✓ Inbox — recent emails from saved venues/contacts (sender, date, subject, excerpt).
     Read-only; replies go out only through stage_email with user approval.
 
@@ -513,7 +543,8 @@ async function buildContext(service: ReturnType<typeof getServiceClient>, actId:
     }
     tourLines.push(...(targetsLoadFailed
       ? ['    Targets: could not be loaded right now — do not say there are none; point the user to the tour page']
-      : formatTargetLines(targetsByTour.get(t.id) ?? [])));
+      // Venue-by-venue detail (stage, last contact, emails) is in the Outreach section.
+      : formatTargetLines(targetsByTour.get(t.id) ?? [], 0).slice(0, 1).map(l => l.replace(/:$/, ' (each venue, its stage and its emails are listed under Outreach).'))));
   }
 
   const openTargetSummary = tours
@@ -562,12 +593,19 @@ async function buildContext(service: ReturnType<typeof getServiceClient>, actId:
 }
 
 // ── Resolve tour outreach action — query venues + generate draft ───────────────
+/**
+ * Builds the bulk-outreach card for one tour: the venues in the requested
+ * stage (first pitch to Target, or follow-up to Follow up) and one shared
+ * draft. A follow-up draft is written from the last email those venues got.
+ */
 async function resolveTourOutreach(
   service: ReturnType<typeof getServiceClient>,
   actId: string,
   tourName: string,
   anthropicKey: string,
-): Promise<{ tourId: string; tourName: string; venues: any[]; draft: { subject: string; body: string } } | { error: string }> {
+  stage: OutreachStage,
+  overdueOnly: boolean,
+): Promise<{ tourId: string; tourName: string; stage: OutreachStage; venues: any[]; draft: { subject: string; body: string } } | { error: string }> {
   // Find the tour the user named. No silent fallback to "some tour": emailing
   // the wrong tour's venues is worse than asking.
   const { data: tours, error: toursErr } = await service.from('tours')
@@ -581,21 +619,22 @@ async function resolveTourOutreach(
   const tour = matchTour((tours || []) as Array<{ id: string; name: string; start_date: string | null; end_date: string | null; routing_notes: string | null }>, tourName);
   if (!tour) return { error: `I couldn’t tell which tour you mean by "${tourName}". Your open tours: ${(tours || []).map((t: any) => t.name).join(', ') || 'none'}.` };
 
-  // Targets on this tour, with their venue. Contacts hang off the venue (not the
-  // target), so they are loaded separately below.
+  // Every venue on the tour, so an empty stage can say where the venues are.
+  // Contacts hang off the venue (not the target), so they are loaded below.
   const { data: tvRows, error: tvErr } = await service
     .from('tour_venues')
-    .select('id, tour_id, status, booking_date, venue:venues(id, name, city, state, email)')
+    .select('id, tour_id, status, booking_date, last_contacted_at, pitched_at, updated_at, venue:venues(id, name, city, state, email)')
     .eq('tour_id', tour.id)
-    .eq('status', 'target');
+    .in('status', ['target', 'follow_up']);
   if (tvErr) {
     // Previously this error was swallowed and read as "no targets".
     console.error('[agent] tour outreach: targets load failed', { actId, tourId: tour.id, message: tvErr.message });
-    return { error: `I couldn’t load the targets on "${tour.name}" just now. Please try again in a moment.` };
+    return { error: `I couldn’t load the venues on "${tour.name}" just now. Please try again in a moment.` };
   }
 
-  const rows = ((tvRows || []) as unknown as TargetRow[]).filter(r => r.venue);
-  if (!rows.length) return { error: `"${tour.name}" has no venues still marked Targeted. Add targets on the tour page, or ask me about ones you're following up with.` };
+  const allRows = ((tvRows || []) as unknown as (TargetRow & StageRow)[]).filter(r => r.venue);
+  const rows = selectOutreachRows(allRows, stage, overdueOnly);
+  if (!rows.length) return { error: emptyOutreachMessage(tour.name, allRows, stage, overdueOnly) };
 
   // Saved contacts for those venues. Service role bypasses RLS, so act_id scopes
   // this to the caller's band — another band's contacts at the same venue never leak.
@@ -610,6 +649,18 @@ async function resolveTourOutreach(
   }
   const venues = buildOutreachVenues(rows, (contactRows || []) as VenueContact[]);
 
+  // The last email these venues were sent — what a follow-up follows up on.
+  let lastSent: { subject: string | null; body: string | null; sent_at: string | null } | null = null;
+  if (stage === 'follow_up') {
+    const { data: prior, error: priorErr } = await service.from('email_log')
+      .select('subject, body, sent_at')
+      .eq('act_id', actId).eq('direction', 'sent')
+      .in('tour_venue_id', rows.map(r => r.id))
+      .order('sent_at', { ascending: false }).limit(1).maybeSingle();
+    if (priorErr) console.error('[agent] tour outreach: last email load failed', { actId, tourId: tour.id, message: priorErr.message });
+    lastSent = prior ?? null;
+  }
+
   // Fetch act for draft
   const { data: act } = await service.from('acts').select('act_name, genre, bio, website, spotify, instagram').eq('id', actId).single();
 
@@ -619,14 +670,28 @@ async function resolveTourOutreach(
     ? `${fmt(tour.start_date)}${tour.end_date ? ` through ${fmt(tour.end_date)}` : ''}`
     : '[dates TBD]';
 
-  const draftPrompt = `Write a cold pitch booking email for the following act. Use {venue_name} and {contact_name} as placeholders that will be personalized per recipient.
-
-Act: ${act?.act_name}
+  const facts = `Act: ${act?.act_name}
 Genre: ${act?.genre || 'N/A'}
 Bio: ${act?.bio || 'Solid regional act with a growing following'}
 Website: ${act?.website || ''}
 Tour: ${tour.name} — ${dateRange}
-Routing notes: ${tour.routing_notes || 'N/A'}
+Routing notes: ${tour.routing_notes || 'N/A'}`;
+
+  const draftPrompt = stage === 'follow_up'
+    ? `Write a short follow-up to a booking email these venues have not answered. Use {venue_name} and {contact_name} as placeholders that will be personalized per recipient.
+
+${facts}
+
+The email they were sent${lastSent?.sent_at ? ` on ${fmt(lastSent.sent_at.slice(0, 10))}` : ''}:
+Subject: ${lastSent?.subject || '(unknown)'}
+${cleanEmailBody(lastSent?.body, 1500) || '(the original text was not stored — write a follow-up that stands on its own)'}
+
+Refer back to that email in one line, restate the dates and the ask, and keep it to two or three sentences. Use "Re: " plus the original subject as the subject when there is one.
+
+Output ONLY valid JSON: { "subject": "...", "body": "..." }`
+    : `Write a cold pitch booking email for the following act. Use {venue_name} and {contact_name} as placeholders that will be personalized per recipient.
+
+${facts}
 
 Lead with the dates and the ask. Keep it to a few sentences.
 
@@ -637,19 +702,28 @@ Output ONLY valid JSON: { "subject": "...", "body": "..." }`;
     model: 'claude-sonnet-4-6',
     max_tokens: 600,
     system: buildVoiceSystemPrompt({
-      task: `You draft one cold pitch booking email, sent to many venues, for a working band's booking team. Write as a person from the band's side, not a booking firm.`,
-      relationship: 'new',
+      task: stage === 'follow_up'
+        ? `You draft one short follow-up booking email, sent to many venues that haven't answered a pitch, for a working band's booking team. Write as a person from the band's side, not a booking firm.`
+        : `You draft one cold pitch booking email, sent to many venues, for a working band's booking team. Write as a person from the band's side, not a booking firm.`,
+      relationship: relationshipFor(stage === 'follow_up' ? 'follow_up_1' : 'target', false),
       outputSpec: 'Output ONLY valid JSON: { "subject": "...", "body": "..." }',
     }),
     messages: [{ role: 'user', content: draftPrompt }],
   });
   const raw = msg.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  const draft = jsonMatch ? JSON.parse(jsonMatch[0]) : { subject: `Booking - ${act?.act_name}`, body: `{contact_name},\n\nI'm looking to get ${act?.act_name} booked at {venue_name} during our ${tour.name} run (${dateRange}). Do you have any of those dates open?\n\nThanks,\nCamel Ranch Booking` };
+  const fallback = stage === 'follow_up'
+    ? { subject: lastSent?.subject ? `Re: ${lastSent.subject}` : `Following up - ${act?.act_name}`, body: `{contact_name},\n\nFollowing up on my email about ${act?.act_name} at {venue_name} during our ${tour.name} run (${dateRange}). Do any of those dates work?\n\nThanks,` }
+    : { subject: `Booking - ${act?.act_name}`, body: `{contact_name},\n\nI'm looking to get ${act?.act_name} booked at {venue_name} during our ${tour.name} run (${dateRange}). Do you have any of those dates open?\n\nThanks,\nCamel Ranch Booking` };
+  let draft = fallback;
+  if (jsonMatch) {
+    try { draft = JSON.parse(jsonMatch[0]); } catch { /* malformed draft: use the fallback text */ }
+  }
 
   return {
     tourId: tour.id,
     tourName: tour.name,
+    stage,
     venues,
     draft,
   };
@@ -947,14 +1021,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // ── Build context with pending summary so model knows what was outstanding ───
   const todayIso = new Date().toISOString().slice(0, 10);
-  const [context, inboxContext, moneyContext, officeContext] = await Promise.all([
+  const [context, inboxContext, outreachContext, moneyContext, officeContext] = await Promise.all([
     buildContext(service, actId),
     buildInboxContext(service, actId),
+    buildOutreachContext(service, actId),
     buildMoneyContext(service, actId, todayIso),
     buildOfficeContext(service, actId, user.id, todayIso),
   ]);
   const pendingContextStr = formatPendingContextSummary(pendingRows ?? []);
-  const fullContext = [context, moneyContext, inboxContext, officeContext, pendingContextStr].filter(Boolean).join('\n\n');
+  const fullContext = [context, moneyContext, outreachContext, inboxContext, officeContext, pendingContextStr].filter(Boolean).join('\n\n');
 
   const client = new Anthropic({ apiKey: anthropicKey });
   const messages: Anthropic.MessageParam[] = [...history, { role: 'user', content: message }];
@@ -1075,7 +1150,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const parsed: any = parsedResponse;
 
       if (parsed?.action?.type === 'tour_outreach') {
-        const result = await resolveTourOutreach(service, actId, parsed.action.tourName || '', anthropicKey);
+        const result = await resolveTourOutreach(
+          service, actId, parsed.action.tourName || '', anthropicKey,
+          parseOutreachStage(parsed.action.stage), parsed.action.overdueOnly === true,
+        );
         if ('error' in result) {
           return res.status(200).json({ reply: result.error });
         }

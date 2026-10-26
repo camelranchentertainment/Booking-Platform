@@ -31,10 +31,12 @@ interface World {
   role?: string;
   tourVenues?: Array<{ id: string; tour_id: string; venue_id: string }>;
   ownedVenueIds?: string[];
+  /** tour_venue_id of each email already sent (one entry per email). */
+  priorEmails?: string[];
 }
 
 function setup(world: World = {}) {
-  const { role = 'band_admin', tourVenues = [], ownedVenueIds = [] } = world;
+  const { role = 'band_admin', tourVenues = [], ownedVenueIds = [], priorEmails = [] } = world;
   const notifications: unknown[] = [];
   const from = jest.fn((table: string) => {
     const filters: Record<string, unknown> = {};
@@ -42,12 +44,14 @@ function setup(world: World = {}) {
     c.select = () => c;
     c.eq = (col: string, v: unknown) => ((filters[col] = v), c);
     c.in = (col: string, v: unknown) => ((filters[`in:${col}`] = v), c);
+    c.or = () => c;
     c.single = () => Promise.resolve({ data: table === 'profiles' ? { act_id: ACT, role } : null, error: null });
     c.maybeSingle = () => Promise.resolve({ data: table === 'tours' && filters.id === TOUR && filters.act_id === ACT ? { id: TOUR } : null, error: null });
     c.then = (ok: (v: unknown) => unknown) => {
       let data: unknown = [];
       if (table === 'tour_venues') data = tourVenues.filter(tv => (filters['in:id'] as string[]).includes(tv.id));
       if (table === 'venues') data = ((filters['in:id'] as string[]) ?? []).filter(id => ownedVenueIds.includes(id) && filters.act_id === ACT).map(id => ({ id }));
+      if (table === 'email_log') data = priorEmails.filter(id => (filters['in:tour_venue_id'] as string[]).includes(id)).map(id => ({ tour_venue_id: id }));
       return Promise.resolve({ data, error: null }).then(ok);
     };
     c.insert = (row: unknown) => {
@@ -70,6 +74,23 @@ const base = { subject: 'Booking - {venue_name}', body: 'Hi {contact_name},\n\nP
 
 describe('/api/agent-bulk-send', () => {
   beforeEach(() => jest.clearAllMocks());
+
+  it('logs a follow-up as Follow up 1 or 2 from how many emails the venue already got', async () => {
+    setup({
+      tourVenues: [{ id: TV1, tour_id: TOUR, venue_id: V1 }, { id: TV2, tour_id: TOUR, venue_id: V2 }],
+      priorEmails: [TV1, TV2, TV2],
+    });
+    const r = await send({
+      ...base,
+      venues: [
+        { tourVenueId: TV1, name: 'Dirty Water Saloon', email: 'book@dirtywater.com' },
+        { tourVenueId: TV2, name: 'Rhinestone Saloon', email: 'hello@rhinestone.com' },
+      ],
+    });
+    expect(r.status).toBe(200);
+    const categories = (sendActEmail as jest.Mock).mock.calls.map(([args]) => [args.tourVenueId, args.category]);
+    expect(categories).toEqual([[TV1, 'follow_up_1'], [TV2, 'follow_up_2']]);
+  });
 
   it('sends each pitch through sendActEmail against the tour target, with the venue from the database', async () => {
     const { notifications } = setup({ tourVenues: [{ id: TV1, tour_id: TOUR, venue_id: V1 }, { id: TV2, tour_id: TOUR, venue_id: V2 }] });

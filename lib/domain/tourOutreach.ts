@@ -167,3 +167,63 @@ export function formatTargetLines(rows: TargetRow[], max = MAX_TARGETS_LISTED): 
   if (sorted.length > max) lines.push(`    …and ${sorted.length - max} more`);
   return lines;
 }
+
+// ── Follow-up outreach (agent "tour_outreach" with stage follow_up) ─────────
+
+export type OutreachStage = 'target' | 'follow_up';
+
+/** The model's stage value → a stage; anything unknown is a first pitch. */
+export const parseOutreachStage = (raw: unknown): OutreachStage => (raw === 'follow_up' ? 'follow_up' : 'target');
+
+const MS_DAY = 86_400_000;
+/** Days without contact after which a Follow up venue is overdue (matches the Email page). */
+export const OVERDUE_DAYS = 7;
+
+export interface StageRow {
+  status: string;
+  last_contacted_at?: string | null;
+  pitched_at?: string | null;
+  updated_at?: string | null;
+}
+
+/** True when a row has had no contact for OVERDUE_DAYS or more. */
+export function isOverdue(r: StageRow, now: number = Date.now()): boolean {
+  const touched = r.last_contacted_at || r.pitched_at || r.updated_at;
+  if (!touched) return false;
+  const t = new Date(touched).getTime();
+  return Number.isFinite(t) && now - t >= OVERDUE_DAYS * MS_DAY;
+}
+
+/** The rows to email for a stage, optionally only the overdue ones. */
+export function selectOutreachRows<T extends StageRow>(rows: T[], stage: OutreachStage, overdueOnly: boolean, now: number = Date.now()): T[] {
+  return rows.filter(r => r.status === stage && (!overdueOnly || isOverdue(r, now)));
+}
+
+/**
+ * Explains why nothing matched and where the tour's venues actually are, so
+ * the next request can be right. The old message repeated "no venues still
+ * marked Targeted" even when the user had asked for the follow-ups.
+ */
+export function emptyOutreachMessage(tourName: string, rows: StageRow[], stage: OutreachStage, overdueOnly: boolean, now: number = Date.now()): string {
+  const inTarget = rows.filter(r => r.status === 'target').length;
+  const inFollowUp = rows.filter(r => r.status === 'follow_up').length;
+  if (stage === 'follow_up' && overdueOnly && inFollowUp > 0) {
+    return `None of the ${inFollowUp} follow-up venues on "${tourName}" are overdue yet — every one was contacted in the last ${OVERDUE_DAYS} days. Say "send the follow-up anyway" to email all ${inFollowUp}.`;
+  }
+  if (stage === 'follow_up') {
+    return inTarget > 0
+      ? `"${tourName}" has no venues in Follow up yet. ${inTarget} ${inTarget === 1 ? 'is' : 'are'} still in Target — say "pitch the ${tourName} targets" to send the first email.`
+      : `"${tourName}" has no venues in Follow up. Add venues on the tour page first.`;
+  }
+  if (inFollowUp > 0) {
+    const overdue = rows.filter(r => r.status === 'follow_up' && isOverdue(r, now)).length;
+    return `"${tourName}" has no venues left in Target — all ${inFollowUp} have been pitched and are in Follow up${overdue ? ` (${overdue} overdue)` : ''}. Say "send the follow-up" and I'll draft it from the last email they got.`;
+  }
+  return `"${tourName}" has no venues in Target. Add venues on the tour page, or ask me to find some.`;
+}
+
+/** Category for the next email to a tour venue, from how many it has already been sent. */
+export function categoryForNextEmail(priorEmails: number): 'target' | 'follow_up_1' | 'follow_up_2' {
+  if (priorEmails <= 0) return 'target';
+  return priorEmails === 1 ? 'follow_up_1' : 'follow_up_2';
+}

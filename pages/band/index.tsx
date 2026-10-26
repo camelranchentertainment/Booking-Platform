@@ -41,6 +41,8 @@ type TourOutreachAction = {
   type: 'tour_outreach';
   tourId: string;
   tourName: string;
+  /** 'follow_up' when the card emails venues already pitched (agent outreach to Follow up). */
+  stage?: 'target' | 'follow_up';
   venues: { tourVenueId: string; venueId: string; name: string; city?: string; state?: string; email?: string | null; contactName?: string | null }[];
   draft: { subject: string; body: string };
 };
@@ -1082,7 +1084,7 @@ export default function BandDashboard() {
                 <div style={{ background: 'var(--bg-overlay)', border: '1px solid var(--accent)', padding: '0.85rem 1rem', fontSize: 13, display: 'flex', flexDirection: 'column', gap: '0.65rem', alignSelf: 'stretch' }}>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)' }}>
                     {pendingAction.type === 'tour_outreach'
-                      ? `${pendingAction.venues.length} VENUES — ${pendingAction.tourName.toUpperCase()}`
+                      ? `${pendingAction.stage === 'follow_up' ? 'FOLLOW-UP · ' : ''}${pendingAction.venues.length} VENUES — ${pendingAction.tourName.toUpperCase()}`
                       : `${pendingAction.venues.length} VENUES — ${pendingAction.city.toUpperCase()}, ${pendingAction.state}`}
                   </div>
 
