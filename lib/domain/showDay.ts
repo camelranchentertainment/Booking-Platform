@@ -28,6 +28,9 @@ export interface ShowDayBooking {
   hotel_booked: boolean | null;
   lodging_details: string | null;
   venue_contact_name: string | null;
+  day_of_contact_phone: string | null;
+  sound_engineer_name: string | null;
+  sound_engineer_phone: string | null;
   special_requirements: string | null;
   advance_notes: string | null;
   deal_type: string | null;
