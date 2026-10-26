@@ -957,7 +957,7 @@ function Footer() {
           </div>
           <div>
             <div style={{ color: 'rgba(239,224,189,0.22)', fontSize: '0.68rem', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '1rem' }}>Contact</div>
-            <a href="mailto:booking@camelranchbooking.com" style={{
+            <a href="mailto:scott@camelranchbooking.com" style={{
               color: 'rgba(239,224,189,0.52)', fontSize: '0.88rem',
               textDecoration: 'none', display: 'block', marginBottom: '0.5rem',
               transition: 'color 0.2s',
@@ -965,7 +965,7 @@ function Footer() {
               onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
               onMouseLeave={e => (e.currentTarget.style.color = 'rgba(239,224,189,0.52)')}
             >
-              booking@camelranchbooking.com
+              scott@camelranchbooking.com
             </a>
           </div>
           <div>
