@@ -10,6 +10,8 @@ import StageScene from '../../components/dashboard/StageScene';
 import AgentRequests from '../../components/band/AgentRequests';
 import styles from '../../styles/dashboard.module.css';
 import { FEATURES } from '../../lib/featureFlags';
+import AssistantHistoryList from '../../components/dashboard/AssistantHistoryList';
+import type { ConversationDaySummary } from '../../lib/agentConversationDays';
 import { STATUS_COLORS } from '../../lib/statusSync';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
 import { buildConfirmMessage, describeTourUpdate, describeVenueUpsert, describeContactUpsert, describeWrapup, describeExpenseUpdate, describeOfficeAction, describeDelete } from '../../lib/agentStagingHelpers';
@@ -121,6 +123,15 @@ export default function BandDashboard() {
   const [pendingAction, setPendingAction] = useState<AgentAction | null>(null);
   const [greetingSent, setGreetingSent]   = useState(false);
   const [conversationLoaded, setConversationLoaded] = useState(false);
+  // The local day this chat is filed under. Set once on load so a chat that runs
+  // past midnight keeps saving to the day it started; the next visit starts fresh.
+  const chatDayRef                        = useRef<string>('');
+  // History: null = live chat; 'list' = picking a past day; otherwise the day being read.
+  const [historyView, setHistoryView]     = useState<null | 'list' | string>(null);
+  const [historyDays, setHistoryDays]     = useState<ConversationDaySummary[]>([]);
+  const [historyMessages, setHistoryMessages] = useState<Message[]>([]);
+  const [historyLoading, setHistoryLoading]   = useState(false);
+  const [historyError, setHistoryError]       = useState('');
   const [attachedFile, setAttachedFile]   = useState<{ name: string; content: string } | null>(null);
   const [fileLoading, setFileLoading]     = useState(false);
   const [expandedMsgs, setExpandedMsgs]   = useState<Set<number>>(new Set());
@@ -156,8 +167,10 @@ export default function BandDashboard() {
     if (!myAct || !userProfile || conversationLoaded) return;
     (async () => {
       try {
+        // Each day starts fresh: only today's chat is restored; earlier days live in History.
+        chatDayRef.current = localToday();
         const { data: { session } } = await supabase.auth.getSession();
-        const res = await fetch('/api/agent-conversation', {
+        const res = await fetch(`/api/agent-conversation?day=${encodeURIComponent(chatDayRef.current)}`, {
           headers: { Authorization: `Bearer ${session?.access_token}` },
         });
         if (res.ok) {
@@ -190,12 +203,64 @@ export default function BandDashboard() {
         await fetch('/api/agent-conversation', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-          body: JSON.stringify({ messages: msgs }),
+          body: JSON.stringify({ day: chatDayRef.current || localToday(), messages: msgs }),
         });
       } catch {
         // Non-fatal.
       }
     })();
+  };
+
+  /** Opens History and loads the list of past days (today is left out — it's the live chat). */
+  const openHistory = async () => {
+    setHistoryView('list');
+    setHistoryError('');
+    setHistoryLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/agent-conversation?view=days', {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'History could not be loaded.');
+      const today = chatDayRef.current || localToday();
+      setHistoryDays((json.days as ConversationDaySummary[] ?? []).filter(d => d.day !== today));
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : 'History could not be loaded.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  /** Loads one past day's chat to read. Past days are read-only. */
+  const openHistoryDay = async (day: string) => {
+    setHistoryView(day);
+    setHistoryMessages([]);
+    setExpandedMsgs(new Set());
+    setHistoryError('');
+    setHistoryLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/agent-conversation?day=${encodeURIComponent(day)}`, {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'That day could not be loaded.');
+      setHistoryMessages(Array.isArray(json.messages) ? json.messages : []);
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : 'That day could not be loaded.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  /** Leaves History and returns to today's live chat, focusing the input. */
+  const closeHistory = () => {
+    setHistoryView(null);
+    setHistoryMessages([]);
+    setHistoryError('');
+    setExpandedMsgs(new Set());
+    setTimeout(() => agentInputRef.current?.focus(), 0);
   };
 
   const startNewChat = async () => {
@@ -205,7 +270,7 @@ export default function BandDashboard() {
     setSendResult(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      await fetch('/api/agent-conversation', {
+      await fetch(`/api/agent-conversation?day=${encodeURIComponent(chatDayRef.current || localToday())}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
@@ -889,13 +954,22 @@ export default function BandDashboard() {
                   </span>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                {messages.length > 1 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                {historyView !== null ? (
+                  <button type="button" onClick={closeHistory} className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>
+                    ← Back to today
+                  </button>
+                ) : (
+                  <button type="button" onClick={openHistory} className="btn btn-ghost btn-sm" style={{ color: 'var(--text-muted)' }} disabled={agentLoading || !conversationLoaded}>
+                    History
+                  </button>
+                )}
+                {historyView === null && messages.length > 1 && (
                   <button onClick={startNewChat} className="btn btn-ghost btn-sm" style={{ color: 'var(--text-muted)' }} disabled={agentLoading}>
                     + New Chat
                   </button>
                 )}
-                {messages.length > 1 && (
+                {historyView === null && messages.length > 1 && (
                   <button onClick={saveConversation} className="btn btn-ghost btn-sm" style={{ color: noteSaved ? '#34d399' : 'var(--text-muted)' }} disabled={agentLoading}>
                     {noteSaved ? '✓ Saved' : '↓ Save Note'}
                   </button>
@@ -908,13 +982,36 @@ export default function BandDashboard() {
               ref={threadRef}
               role="log"
               aria-live="polite"
-              aria-label="Agent conversation"
+              aria-label={historyView === null ? 'Agent conversation' : historyView === 'list' ? 'Past assistant chats' : 'Saved assistant chat'}
               tabIndex={0}
               onFocus={e => { e.currentTarget.style.outline = '2px solid var(--accent)'; e.currentTarget.style.outlineOffset = '-2px'; }}
               onBlur={e => { e.currentTarget.style.outline = ''; e.currentTarget.style.outlineOffset = ''; }}
               style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.65rem', minHeight: 0 }}
             >
-              {messages.map((m, i) => {
+              {historyView === 'list' && (
+                <AssistantHistoryList
+                  days={historyDays}
+                  loading={historyLoading}
+                  error={historyError}
+                  onOpen={openHistoryDay}
+                  onRetry={openHistory}
+                />
+              )}
+              {historyView !== null && historyView !== 'list' && (
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', alignSelf: 'center', textAlign: 'center' }}>
+                  {formatShowDate(historyView, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} · saved chat · read only
+                </div>
+              )}
+              {historyView !== null && historyView !== 'list' && historyLoading && (
+                <div role="status" style={{ color: 'var(--text-muted)', fontSize: 13, alignSelf: 'center' }}>Loading that day…</div>
+              )}
+              {historyView !== null && historyView !== 'list' && historyError && (
+                <div role="alert" style={{ color: '#f87171', fontSize: 13, alignSelf: 'center', textAlign: 'center' }}>
+                  {historyError}{' '}
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => openHistoryDay(historyView)}>Try again</button>
+                </div>
+              )}
+              {(historyView === 'list' ? [] : historyView !== null ? historyMessages : messages).map((m, i) => {
                 const isLong     = m.content.length > 280;
                 const isExpanded = expandedMsgs.has(i);
                 const toggleExpand = () => setExpandedMsgs(prev => {
@@ -959,10 +1056,10 @@ export default function BandDashboard() {
                   </div>
                 );
               })}
-              {agentLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontFamily: 'var(--font-mono)', alignSelf: 'flex-start' }}>thinking…</div>}
+              {historyView === null && agentLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontFamily: 'var(--font-mono)', alignSelf: 'flex-start' }}>thinking…</div>}
 
               {/* Approval panel */}
-              {pendingAction && pendingAction.type === 'stage_items' && (
+              {historyView === null && pendingAction && pendingAction.type === 'stage_items' && (
                 <div style={{ background: 'var(--bg-overlay)', border: '1px solid var(--accent)', padding: '0.85rem 1rem', fontSize: 13, display: 'flex', flexDirection: 'column', gap: '0.65rem', alignSelf: 'stretch' }}>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)' }}>
                     {`STAGING ${pendingAction.staged.length} ITEM${pendingAction.staged.length !== 1 ? 'S' : ''}${pendingAction.staged[0]?.proposal?.tour_name ? ` — ${pendingAction.staged[0].proposal.tour_name.toUpperCase()}` : ''}`}
@@ -1080,7 +1177,7 @@ export default function BandDashboard() {
                 </div>
               )}
 
-              {pendingAction && (pendingAction.type === 'tour_outreach' || pendingAction.type === 'city_search') && (
+              {historyView === null && pendingAction && (pendingAction.type === 'tour_outreach' || pendingAction.type === 'city_search') && (
                 <div style={{ background: 'var(--bg-overlay)', border: '1px solid var(--accent)', padding: '0.85rem 1rem', fontSize: 13, display: 'flex', flexDirection: 'column', gap: '0.65rem', alignSelf: 'stretch' }}>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)' }}>
                     {pendingAction.type === 'tour_outreach'
@@ -1132,6 +1229,8 @@ export default function BandDashboard() {
               )}
             </div>
 
+            {/* Chips, errors and input belong to today's live chat; History is read-only. */}
+            {historyView === null && (<>
             {/* Quick chips */}
             <div className="dash-agent-chips" role="group" aria-label="Suggested questions">
               {QUICK_CHIPS.map(chip =>
@@ -1249,6 +1348,7 @@ export default function BandDashboard() {
                 </button>
               </form>
             </div>
+            </>)}
             </div>{/* end right column */}
           </div>{/* end agent panel */}
 
