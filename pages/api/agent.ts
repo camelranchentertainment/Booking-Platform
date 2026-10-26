@@ -65,8 +65,10 @@ import {
   buildOutreachVenues,
   formatTargetLines,
   parseOutreachStage,
+  parseAgreedDraft,
   selectOutreachRows,
   emptyOutreachMessage,
+  type AgreedDraft,
   type OutreachStage,
   type StageRow,
   type TargetRow,
@@ -143,7 +145,12 @@ plain text only — no JSON, no wrapper.
 For bulk tour outreach — a first pitch to a tour's Target venues ("send emails to targets on [tour]",
 "blast the Spring Tour"), OR a follow-up to the venues already pitched and waiting ("send the follow-ups
 for Lone Star", "write the overdue follow up to my TX venues"):
-{"reply":"<conversational text>","action":{"type":"tour_outreach","tourName":"<best match from context>","stage":"target|follow_up","overdueOnly":false}}
+{"reply":"<conversational text>","action":{"type":"tour_outreach","tourName":"<best match from context>","stage":"target|follow_up","overdueOnly":false,"draft":{"subject":"...","body":"..."}}}
+"draft" is the email the user already agreed to in THIS conversation. If you showed them a draft and they
+approved it, edited it, or said to send it, copy that exact subject and body into "draft" — word for word,
+same signature, same price and details. Never reword, shorten or "improve" an agreed draft, and never add
+{venue_name} or {contact_name} unless they were in the agreed text. Leave "draft" out entirely when no email
+text was agreed; a fresh draft is then written for the user to review.
 "stage":"target" emails venues in Target; "stage":"follow_up" emails venues in Follow up and drafts the
 follow-up from the last email they were sent. Set "overdueOnly":true when the user says overdue (7+
 days with no contact). Pick the stage from the Outreach section: if every venue on that tour is in
@@ -605,7 +612,8 @@ async function resolveTourOutreach(
   anthropicKey: string,
   stage: OutreachStage,
   overdueOnly: boolean,
-): Promise<{ tourId: string; tourName: string; stage: OutreachStage; venues: any[]; draft: { subject: string; body: string } } | { error: string }> {
+  agreedDraft: AgreedDraft | null,
+): Promise<{ tourId: string; tourName: string; stage: OutreachStage; venues: any[]; draft: { subject: string; body: string }; draftSource: 'agreed' | 'generated' } | { error: string }> {
   // Find the tour the user named. No silent fallback to "some tour": emailing
   // the wrong tour's venues is worse than asking.
   const { data: tours, error: toursErr } = await service.from('tours')
@@ -677,6 +685,22 @@ Website: ${act?.website || ''}
 Tour: ${tour.name} — ${dateRange}
 Routing notes: ${tour.routing_notes || 'N/A'}`;
 
+  const fallback = stage === 'follow_up'
+    ? { subject: lastSent?.subject ? `Re: ${lastSent.subject}` : `Following up - ${act?.act_name}`, body: `{contact_name},\n\nFollowing up on my email about ${act?.act_name} at {venue_name} during our ${tour.name} run (${dateRange}). Do any of those dates work?\n\nThanks,` }
+    : { subject: `Booking - ${act?.act_name}`, body: `{contact_name},\n\nI'm looking to get ${act?.act_name} booked at {venue_name} during our ${tour.name} run (${dateRange}). Do you have any of those dates open?\n\nThanks,\nCamel Ranch Booking` };
+
+  // The user already approved this exact email in chat: send that, not a rewrite.
+  if (agreedDraft) {
+    return {
+      tourId: tour.id,
+      tourName: tour.name,
+      stage,
+      venues,
+      draft: { subject: agreedDraft.subject ?? fallback.subject, body: agreedDraft.body },
+      draftSource: 'agreed',
+    };
+  }
+
   const draftPrompt = stage === 'follow_up'
     ? `Write a short follow-up to a booking email these venues have not answered. Use {venue_name} and {contact_name} as placeholders that will be personalized per recipient.
 
@@ -712,9 +736,6 @@ Output ONLY valid JSON: { "subject": "...", "body": "..." }`;
   });
   const raw = msg.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  const fallback = stage === 'follow_up'
-    ? { subject: lastSent?.subject ? `Re: ${lastSent.subject}` : `Following up - ${act?.act_name}`, body: `{contact_name},\n\nFollowing up on my email about ${act?.act_name} at {venue_name} during our ${tour.name} run (${dateRange}). Do any of those dates work?\n\nThanks,` }
-    : { subject: `Booking - ${act?.act_name}`, body: `{contact_name},\n\nI'm looking to get ${act?.act_name} booked at {venue_name} during our ${tour.name} run (${dateRange}). Do you have any of those dates open?\n\nThanks,\nCamel Ranch Booking` };
   let draft = fallback;
   if (jsonMatch) {
     try { draft = JSON.parse(jsonMatch[0]); } catch { /* malformed draft: use the fallback text */ }
@@ -726,6 +747,7 @@ Output ONLY valid JSON: { "subject": "...", "body": "..." }`;
     stage,
     venues,
     draft,
+    draftSource: 'generated',
   };
 }
 
@@ -1153,6 +1175,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const result = await resolveTourOutreach(
           service, actId, parsed.action.tourName || '', anthropicKey,
           parseOutreachStage(parsed.action.stage), parsed.action.overdueOnly === true,
+          parseAgreedDraft(parsed.action.draft),
         );
         if ('error' in result) {
           return res.status(200).json({ reply: result.error });
