@@ -4,6 +4,9 @@ import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BookingStatus, BOOKING_STATUS_LABELS, BOOKING_STATUS_ORDER } from '../../lib/types';
 import { formatShowDate } from '../../lib/formatDate';
+import ShowDayContactFields from '../../components/venues/ShowDayContactFields';
+import ShowDayPerson from '../../components/venues/ShowDayPerson';
+import { bookingColumns, contactsFromBooking } from '../../lib/showDayContacts';
 import Link from 'next/link';
 import EmailComposer from '../../components/email/EmailComposer';
 
@@ -232,7 +235,7 @@ export default function BookingDetail() {
       soundcheck_time:      detailsForm.soundcheck_time      || null,
       set_time:             detailsForm.set_time             || null,
       end_time:             detailsForm.end_time             || null,
-      venue_contact_name:   detailsForm.venue_contact_name   || null,
+      ...bookingColumns(contactsFromBooking(detailsForm)),
       sound_system:         detailsForm.sound_system         || null,
       meals_provided:       !!detailsForm.meals_provided,
       drinks_provided:      !!detailsForm.drinks_provided,
@@ -554,7 +557,10 @@ export default function BookingDetail() {
                   <Row label="Meals"         value={booking.meals_provided  ? 'Provided'    : null} />
                   <Row label="Drinks"        value={booking.drinks_provided ? 'Provided'    : null} />
                   <Row label="Hotel"         value={booking.hotel_booked    ? 'Booked'      : null} />
-                  <Row label="Show Contact"  value={booking.venue_contact_name} />
+                  <Row label="Day-of Contact" value={(booking.venue_contact_name || booking.day_of_contact_phone)
+                    ? <ShowDayPerson name={booking.venue_contact_name} phone={booking.day_of_contact_phone} /> : null} />
+                  <Row label="Sound Engineer" value={(booking.sound_engineer_name || booking.sound_engineer_phone)
+                    ? <ShowDayPerson name={booking.sound_engineer_name} phone={booking.sound_engineer_phone} /> : null} />
                   <Row label="Deposit"       value={booking.deposit_amount ? `$${Number(booking.deposit_amount).toLocaleString()} ${booking.deposit_paid ? '(PAID)' : '(UNPAID)'}` : null} />
                 </div>
                 {booking.lodging_details && (
@@ -761,8 +767,13 @@ export default function BookingDetail() {
               </div>
               <div className="field"><label className="field-label">Set Length (min)</label>
                 <input className="input" type="number" value={detailsForm.set_length_min || ''} onChange={setDet('set_length_min')} /></div>
-              <div className="field"><label className="field-label">Show Contact (day-of)</label>
-                <input className="input" value={detailsForm.venue_contact_name || ''} onChange={setDet('venue_contact_name')} placeholder="Day-of contact" /></div>
+              <ShowDayContactFields
+                idPrefix="show-details"
+                value={contactsFromBooking(detailsForm)}
+                onChange={next => setDetailsForm((f: any) => ({ ...f, ...bookingColumns(next) }))}
+                disabled={savingDetails}
+                hint="For this show only. New shows start with the venue's day-of contact and sound engineer."
+              />
               <div className="field"><label className="field-label">Sound System</label>
                 <select className="select" value={detailsForm.sound_system || ''} onChange={setDet('sound_system')}>
                   <option value="">Unknown</option>

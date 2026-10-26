@@ -7,6 +7,9 @@ import { formatShowDate } from '../../lib/formatDate';
 import { useLookup } from '../../lib/hooks/useLookup';
 import Link from 'next/link';
 import EmailComposer from '../../components/email/EmailComposer';
+import ShowDayContactFields from '../../components/venues/ShowDayContactFields';
+import ShowDayPerson from '../../components/venues/ShowDayPerson';
+import { BLANK_SHOW_DAY_CONTACTS, contactsFromVenue, venueColumns, type ShowDayContacts } from '../../lib/showDayContacts';
 
 type Contact = {
   id: string; first_name: string; last_name: string; title?: string | null;
@@ -36,6 +39,7 @@ export default function VenueDetail() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [edit, setEdit]         = useState(false);
   const [form, setForm]         = useState<Partial<Venue>>({});
+  const [showDay, setShowDay]   = useState<ShowDayContacts>(BLANK_SHOW_DAY_CONTACTS);
   const [saving, setSaving]     = useState(false);
   const [scraping, setScraping] = useState(false);
   const [scrapeResult, setScrapeResult] = useState<any>(null);
@@ -62,7 +66,7 @@ export default function VenueDetail() {
       supabase.from('contacts').select('*').eq('venue_id', id).order('last_name'),
       user ? supabase.from('acts').select('id, act_name').eq('owner_id', user.id).eq('is_active', true).order('act_name') : Promise.resolve({ data: [] }),
     ]);
-    if (venueRes.data) { setVenue(venueRes.data); setForm(venueRes.data); }
+    if (venueRes.data) { setVenue(venueRes.data); setForm(venueRes.data); setShowDay(contactsFromVenue(venueRes.data)); }
     setBookings(bookingsRes.data || []);
     setContacts(contactsRes.data || []);
     setAgentActs(actsRes.data || []);
@@ -78,6 +82,7 @@ export default function VenueDetail() {
       address:    form.address    || null,
       phone:      form.phone      || null,
       booking_contact: form.booking_contact || null,
+      ...venueColumns(showDay),
       email:      form.email      || null,
       website:    form.website    || null,
       venue_type: form.venue_type || null,
@@ -237,13 +242,20 @@ export default function VenueDetail() {
               <div className="field"><label className="field-label">Address</label><input className="input" value={form.address || ''} onChange={set('address')} /></div>
               <fieldset className="venues-fieldset">
                 <legend className="venues-section-title venues-legend">Venue Contact</legend>
-                <p className="venues-hint">The venue's talent buyer or booking manager. Each show keeps its own day-of show contact.</p>
+                <p className="venues-hint">The venue's talent buyer or booking manager — who you book the show with.</p>
                 <div className="field"><label className="field-label" htmlFor="venue-edit-contact">Contact name</label><input id="venue-edit-contact" className="input" value={form.booking_contact || ''} onChange={set('booking_contact')} placeholder="e.g. Jess Carter" /></div>
                 <div className="grid-2">
                   <div className="field"><label className="field-label" htmlFor="venue-edit-email">Email</label><input id="venue-edit-email" className="input" type="email" value={form.email || ''} onChange={set('email')} /></div>
                   <div className="field"><label className="field-label" htmlFor="venue-edit-phone">Phone</label><input id="venue-edit-phone" className="input" type="tel" value={form.phone || ''} onChange={set('phone')} /></div>
                 </div>
               </fieldset>
+              <ShowDayContactFields
+                idPrefix="venue-edit"
+                value={showDay}
+                onChange={setShowDay}
+                disabled={saving}
+                hint="Who you deal with on show night. New shows here start with these filled in; changing them here doesn't change shows already booked."
+              />
               <div className="grid-2">
                 <div className="field"><label className="field-label">Capacity</label><input className="input" type="number" value={form.capacity || ''} onChange={set('capacity')} /></div>
                 <div className="field">
@@ -258,7 +270,7 @@ export default function VenueDetail() {
               <div className="field"><label className="field-label">Backline</label><textarea className="textarea" value={form.backline || ''} onChange={set('backline')} /></div>
               <div className="field"><label className="field-label">Notes</label><textarea className="textarea" value={form.notes || ''} onChange={set('notes')} /></div>
               <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button className="btn btn-secondary" onClick={() => setEdit(false)}>Cancel</button>
+                <button className="btn btn-secondary" onClick={() => { setEdit(false); setShowDay(contactsFromVenue(venue)); }}>Cancel</button>
                 <button className="btn btn-primary" onClick={saveEdit} disabled={saving}>Save</button>
               </div>
             </div>
@@ -266,6 +278,10 @@ export default function VenueDetail() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.88rem' }}>
               {([
                 ['Venue Contact', venue.booking_contact],
+                ['Day-of Contact', (venue.day_of_contact_name || venue.day_of_contact_phone)
+                  ? <ShowDayPerson name={venue.day_of_contact_name} phone={venue.day_of_contact_phone} /> : null],
+                ['Sound Engineer', (venue.sound_engineer_name || venue.sound_engineer_phone)
+                  ? <ShowDayPerson name={venue.sound_engineer_name} phone={venue.sound_engineer_phone} /> : null],
                 ['Address',  venue.address],
                 ['Phone',    venue.phone],
                 ['Email',    venue.email],

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import ShowDayPerson from '../../components/venues/ShowDayPerson';
 import AppShell from '../../components/layout/AppShell';
 import { supabase } from '../../lib/supabase';
 import { BOOKING_STATUS_LABELS } from '../../lib/types';
@@ -25,7 +26,8 @@ export default function MemberView() {
         const { data: bookings } = await supabase.from('bookings')
           .select(`id, status, show_date, set_time, set_length_min, load_in_time, door_time,
             soundcheck_time, end_time, meals_provided, drinks_provided, hotel_booked, sound_system,
-            special_requirements, venue_contact_name,
+            special_requirements, venue_contact_name, day_of_contact_phone,
+            sound_engineer_name, sound_engineer_phone,
             venue:venues(name, city, state, address, phone)`)
           .eq('act_id', profile.act_id)
           .in('status', ['confirmed', 'advancing', 'completed'])
@@ -144,9 +146,14 @@ function ShowCard({ booking: b }: { booking: any }) {
           📞 {b.venue.phone}
         </div>
       )}
-      {b.venue_contact_name && (
+      {(b.venue_contact_name || b.day_of_contact_phone) && (
         <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
-          Contact: {b.venue_contact_name}
+          Day-of contact: <ShowDayPerson name={b.venue_contact_name} phone={b.day_of_contact_phone} />
+        </div>
+      )}
+      {(b.sound_engineer_name || b.sound_engineer_phone) && (
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
+          Sound engineer: <ShowDayPerson name={b.sound_engineer_name} phone={b.sound_engineer_phone} />
         </div>
       )}
       {b.special_requirements && (

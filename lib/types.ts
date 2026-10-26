@@ -81,6 +81,11 @@ export interface Venue {
   backline_notes?: string | null;
   pay_notes?: string | null;
   booking_contact?: string | null;
+  /** Show-day defaults copied onto each new show (see lib/showDayContacts.ts). */
+  day_of_contact_name?: string | null;
+  day_of_contact_phone?: string | null;
+  sound_engineer_name?: string | null;
+  sound_engineer_phone?: string | null;
   notes?: string | null;
   source: string;
   place_id?: string | null;
@@ -161,7 +166,11 @@ export interface Booking {
   hotel_booked?: boolean | null;
   lodging_details?: string | null;
   sound_system?: SoundSystem | null;
+  /** The show's day-of contact name (filled from the venue on create). */
   venue_contact_name?: string | null;
+  day_of_contact_phone?: string | null;
+  sound_engineer_name?: string | null;
+  sound_engineer_phone?: string | null;
   special_requirements?: string | null;
   rebook_flag?: RebookFlag | null;
   issue_notes?: string | null;

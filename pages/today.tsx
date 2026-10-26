@@ -24,6 +24,7 @@ import {
   cityLine, mapsLink, addDays, daysBetween, tourPosition, heroSummary,
   type ShowDayBooking, type ShowDayVenue,
 } from '../lib/domain/showDay';
+import { telHref } from '../lib/showDayContacts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,7 +68,8 @@ const BASE_FIELDS = `
   id, show_date, status, tour_id,
   load_in_time, soundcheck_time, set_time, end_time,
   sound_system, meals_provided, drinks_provided, hotel_booked,
-  lodging_details, venue_contact_name, special_requirements,
+  lodging_details, venue_contact_name, day_of_contact_phone,
+  sound_engineer_name, sound_engineer_phone, special_requirements,
   venue:venues(id, name, city, state, address, phone),
   tour:tours(id, name)`;
 const ADMIN_FIELDS = `${BASE_FIELDS}, advance_notes, deal_type, agreed_amount`;
@@ -189,7 +191,21 @@ function RunOfShow({ booking }: { booking: ShowDayBooking }) {
   );
 }
 
-/** Address, maps, phone and the venue contact. */
+/** One show-day person: name, and a Call chip when the phone is dialable. */
+function ShowDayPersonLine({ label, name, phone }: { label: string; name: string | null; phone: string | null }) {
+  if (!name && !phone) return null;
+  const href = telHref(phone);
+  return (
+    <p className="today-where-contact">
+      <span>{label}</span> {name || 'No name on file'}
+      {phone && (href
+        ? <> <a className="today-chip-link" href={href} aria-label={`Call ${label === 'Sound' ? 'the sound engineer' : 'the day-of contact'}${name ? `, ${name},` : ''} at ${phone}`}>Call {phone}</a></>
+        : <> · {phone}</>)}
+    </p>
+  );
+}
+
+/** Address, maps, phone and the show-day contacts. */
 function WhereBlock({ booking }: { booking: ShowDayBooking }) {
   const v = booking.venue;
   const maps = mapsLink(v);
@@ -205,9 +221,8 @@ function WhereBlock({ booking }: { booking: ShowDayBooking }) {
         )}
         {v?.phone && <a className="today-chip-link" href={`tel:${v.phone}`}>Call {v.phone}</a>}
       </div>
-      {booking.venue_contact_name && (
-        <p className="today-where-contact"><span>Contact</span> {booking.venue_contact_name}</p>
-      )}
+      <ShowDayPersonLine label="Day-of" name={booking.venue_contact_name} phone={booking.day_of_contact_phone} />
+      <ShowDayPersonLine label="Sound" name={booking.sound_engineer_name} phone={booking.sound_engineer_phone} />
     </section>
   );
 }

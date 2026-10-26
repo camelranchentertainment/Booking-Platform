@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import ShowDayPerson from './venues/ShowDayPerson';
+import { SHOW_DAY_NAME_MAX, SHOW_DAY_PHONE_MAX, venueColumns } from '../lib/showDayContacts';
 import { getActId } from '../lib/bookingQueries';
 import { formatShowDate } from '../lib/formatDate';
 import EmailComposer from './email/EmailComposer';
@@ -127,6 +129,10 @@ export default function VenueDrawer({ venueId, isOpen, onClose, onSaved }: Props
         website:         v?.website         || '',
         venue_type:      v?.venue_type      || '',
         booking_contact: v?.booking_contact || '',
+        day_of_contact_name:  v?.day_of_contact_name  || '',
+        day_of_contact_phone: v?.day_of_contact_phone || '',
+        sound_engineer_name:  v?.sound_engineer_name  || '',
+        sound_engineer_phone: v?.sound_engineer_phone || '',
         capacity:        v?.capacity        || '',
         backline:        v?.backline        ?? false,
         backline_notes: v?.backline_notes || '',
@@ -181,6 +187,12 @@ export default function VenueDrawer({ venueId, isOpen, onClose, onSaved }: Props
       website:         form.website         || null,
       venue_type:      form.venue_type      || null,
       booking_contact: form.booking_contact || null,
+      ...venueColumns({
+        dayOfName: form.day_of_contact_name ?? '',
+        dayOfPhone: form.day_of_contact_phone ?? '',
+        soundName: form.sound_engineer_name ?? '',
+        soundPhone: form.sound_engineer_phone ?? '',
+      }),
       capacity:        form.capacity ? Number(form.capacity) : null,
       backline:        form.backline,
       backline_notes:  form.backline_notes  || null,
@@ -407,6 +419,22 @@ export default function VenueDrawer({ venueId, isOpen, onClose, onSaved }: Props
                 <input style={INPUT} value={form.booking_contact} onChange={set('booking_contact')} placeholder="Talent buyer or booking manager" />
               </Field>
 
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <Field label="Day-of Contact">
+                  <input style={INPUT} value={form.day_of_contact_name} onChange={set('day_of_contact_name')} maxLength={SHOW_DAY_NAME_MAX} placeholder="Who meets you on the night" />
+                </Field>
+                <Field label="Day-of Phone">
+                  <input style={INPUT} type="tel" inputMode="tel" value={form.day_of_contact_phone} onChange={set('day_of_contact_phone')} maxLength={SHOW_DAY_PHONE_MAX} />
+                </Field>
+                <Field label="Sound Engineer">
+                  <input style={INPUT} value={form.sound_engineer_name} onChange={set('sound_engineer_name')} maxLength={SHOW_DAY_NAME_MAX} placeholder="House sound engineer" />
+                </Field>
+                <Field label="Sound Phone">
+                  <input style={INPUT} type="tel" inputMode="tel" value={form.sound_engineer_phone} onChange={set('sound_engineer_phone')} maxLength={SHOW_DAY_PHONE_MAX} />
+                </Field>
+              </div>
+              <p style={{ margin: '-4px 0 0', fontSize: '0.75rem', color: TEXT_MUT }}>New shows here start with the day-of contact and sound engineer filled in.</p>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: '10px' }}>
                 <Field label="City">
                   <input style={INPUT} value={form.city} onChange={set('city')} />
@@ -505,6 +533,12 @@ export default function VenueDrawer({ venueId, isOpen, onClose, onSaved }: Props
                       ? <a href={`tel:${venue.phone}`} style={{ color: ACCENT, textDecoration: 'none' }}>{venue.phone}</a>
                       : <span style={{ color: TEXT_MUT, fontSize: '0.8rem', fontStyle: 'italic' }}>—</span>}
                   </Row>
+                  {(venue?.day_of_contact_name || venue?.day_of_contact_phone) && (
+                    <Row label="Day-of"><ShowDayPerson name={venue.day_of_contact_name} phone={venue.day_of_contact_phone} /></Row>
+                  )}
+                  {(venue?.sound_engineer_name || venue?.sound_engineer_phone) && (
+                    <Row label="Sound"><ShowDayPerson name={venue.sound_engineer_name} phone={venue.sound_engineer_phone} /></Row>
+                  )}
                   {venue?.website && (
                     <Row label="Website">
                       <a href={venue.website} target="_blank" rel="noopener noreferrer" style={{ color: ACCENT, textDecoration: 'none' }}>
