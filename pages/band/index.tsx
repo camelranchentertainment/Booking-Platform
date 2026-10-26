@@ -47,6 +47,8 @@ type TourOutreachAction = {
   stage?: 'target' | 'follow_up';
   venues: { tourVenueId: string; venueId: string; name: string; city?: string; state?: string; email?: string | null; contactName?: string | null }[];
   draft: { subject: string; body: string };
+  /** 'agreed' = the email approved in chat, word for word; 'generated' = a new draft to review. */
+  draftSource?: 'agreed' | 'generated';
 };
 type CitySearchAction = {
   type: 'city_search';
@@ -1203,6 +1205,13 @@ export default function BandDashboard() {
                   </div>
 
                   {/* Email draft editor */}
+                  {pendingAction.type === 'tour_outreach' && (
+                    <div role="note" style={{ fontSize: 12, fontWeight: 600, color: pendingAction.draftSource === 'agreed' ? 'var(--green)' : '#f59e0b' }}>
+                      {pendingAction.draftSource === 'agreed'
+                        ? '✓ This is the email you approved in chat. Edit below if needed.'
+                        : '⚠ New draft written for this send. Read it before sending.'}
+                    </div>
+                  )}
                   {pendingAction.type === 'tour_outreach' && (
                     <div className="dash-draft-grid">
                       <input className="input" style={{ fontSize: 13 }} placeholder="Subject" value={draftSubject} onChange={e => setDraftSubject(e.target.value)} />

@@ -227,3 +227,43 @@ export function categoryForNextEmail(priorEmails: number): 'target' | 'follow_up
   if (priorEmails <= 0) return 'target';
   return priorEmails === 1 ? 'follow_up_1' : 'follow_up_2';
 }
+
+/** Longest agreed subject / body carried from chat into the send panel. */
+export const MAX_AGREED_SUBJECT = 300;
+export const MAX_AGREED_BODY = 6000;
+
+/** The email the user worked out with the assistant in chat. */
+export interface AgreedDraft {
+  /** null when the agreed text had no subject; the server then supplies one. */
+  subject: string | null;
+  body: string;
+}
+
+/**
+ * Reads the email the user already agreed to in chat from a tour_outreach
+ * action (`action.draft`). When this returns a draft, the send panel must show
+ * it word for word: writing a fresh email at this point replaced what the user
+ * approved with text they never saw.
+ *
+ * Tolerates the model wrapping the text in "Subject:" / "Body:" labels.
+ *
+ * @returns the agreed draft, or null when there isn't a usable one (then a new draft is written)
+ */
+export function parseAgreedDraft(raw: unknown): AgreedDraft | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const { subject, body } = raw as { subject?: unknown; body?: unknown };
+  if (typeof body !== 'string') return null;
+
+  const cleanBody = body
+    .replace(/\r\n?/g, '\n')
+    .replace(/^\s*\**\s*body\s*:\s*\**\s*/i, '')
+    .trim();
+  if (!cleanBody || cleanBody.length > MAX_AGREED_BODY) return null;
+
+  let cleanSubject: string | null = null;
+  if (typeof subject === 'string') {
+    const s = subject.replace(/^\s*\**\s*subject\s*:\s*\**\s*/i, '').replace(/\s+/g, ' ').trim();
+    if (s && s.length <= MAX_AGREED_SUBJECT) cleanSubject = s;
+  }
+  return { subject: cleanSubject, body: cleanBody };
+}

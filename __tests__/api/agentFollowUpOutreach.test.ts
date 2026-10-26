@@ -100,6 +100,33 @@ describe('agent tour_outreach — follow-ups', () => {
     expect(body.reply).not.toMatch(/still marked Targeted/);
   });
 
+  // Regression (Oct 26): the user approved a follow-up in chat ($800 ask,
+  // signature), then the send card showed a different email written by a second
+  // AI call. The agreed text must go out word for word.
+  it('sends the email approved in chat word for word instead of writing a new one', async () => {
+    const agreed = "Hey, just wanted to follow up on my email from a couple weeks back.\n\nAsking $800 for the night.\n\nThanks,\nScott McCumber\nCamel Ranch Booking";
+    const body = await ask({
+      type: 'tour_outreach', tourName: 'LONE STAR', stage: 'follow_up',
+      draft: { subject: 'Re: Live Music Booking Inquiry', body: agreed },
+    });
+    expect(body.action?.draft).toEqual({ subject: 'Re: Live Music Booking Inquiry', body: agreed });
+    expect((body.action as { draftSource?: string }).draftSource).toBe('agreed');
+    expect(body.action?.venues).toHaveLength(17);
+    // Only the conversation call ran: no second AI call rewrote the email.
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to the last-email subject when the agreed draft has none', async () => {
+    const body = await ask({ type: 'tour_outreach', tourName: 'LONE STAR', stage: 'follow_up', draft: { body: 'Still have Jan 7-9 open?' } });
+    expect(body.action?.draft).toEqual({ subject: 'Re: Booking - Jan 7-9', body: 'Still have Jan 7-9 open?' });
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks a freshly written draft so the card can warn before sending', async () => {
+    const body = await ask({ type: 'tour_outreach', tourName: 'LONE STAR', stage: 'follow_up' });
+    expect((body.action as { draftSource?: string }).draftSource).toBe('generated');
+  });
+
   it('gives the model the Outreach section with sent emails', async () => {
     await ask({ type: 'tour_outreach', tourName: 'LONE STAR', stage: 'follow_up' });
     const system = mockCreate.mock.calls[0][0].system as Array<{ text: string }>;
