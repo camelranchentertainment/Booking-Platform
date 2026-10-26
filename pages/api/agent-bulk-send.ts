@@ -1,6 +1,8 @@
 // pages/api/agent-bulk-send.ts
 // POST — sends one personalised outreach email per venue for the Booking
-// Agent ("blast the Lone Star targets", or a city search with "add to tour").
+// Agent ("blast the Lone Star targets", "send the Lone Star follow-ups", or a
+// city search with "add to tour"). Each email is logged as a cold pitch or as
+// Follow up 1 / 2 from how many emails that tour venue already got.
 //
 // Every email goes through sendActEmail, the same path as a single send, so it
 // leaves from the band's connected Gmail when there is one (Resend otherwise),
@@ -18,6 +20,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getServiceClient } from '../../lib/supabase';
 import { isBandAdminRole } from '../../lib/server/requireBandAdmin';
 import { sendActEmail } from '../../lib/emailSend';
+import { categoryForNextEmail } from '../../lib/domain/tourOutreach';
 
 const MAX_VENUES_PER_SEND = 100;
 
@@ -123,6 +126,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!owned || owned.length !== directVenueIds.length) return res.status(403).json({ error: 'Forbidden' });
   }
 
+  // How many emails each target already got decides this one's category, so a
+  // follow-up is logged as Follow up 1 / 2 instead of another cold pitch.
+  const priorByTarget = new Map<string, number>();
+  if (tvIds.length > 0) {
+    const { data: prior, error: priorErr } = await service.from('email_log').select('tour_venue_id')
+      .eq('act_id', actId).eq('direction', 'sent').in('tour_venue_id', tvIds)
+      .or('is_draft.is.null,is_draft.eq.false');
+    if (priorErr) console.error('[agent-bulk-send] prior email count failed', { code: priorErr.code });
+    for (const row of prior ?? []) {
+      const id = String(row.tour_venue_id);
+      priorByTarget.set(id, (priorByTarget.get(id) ?? 0) + 1);
+    }
+  }
+
   const results: SendResult[] = [];
   for (const v of venues) {
     const email = v.email?.trim();
@@ -157,7 +174,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         bodyHtml: toHtml(text),
         venueId: venueId ?? undefined,
         tourVenueId: tourVenueId ?? undefined,
-        category: 'target',
+        category: categoryForNextEmail(tourVenueId ? priorByTarget.get(tourVenueId) ?? 0 : 0),
         notify: false,
       });
       results.push({ venue: v.name, status: 'sent' });

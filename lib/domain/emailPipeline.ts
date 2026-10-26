@@ -142,7 +142,10 @@ export function sortTargets<T extends TargetRow>(rows: ReadonlyArray<T>, field: 
 }
 
 /** A follow-up target that has gone a week without contact. */
-export function isOverdueFollowUp(t: TargetRow, now: number = Date.now()): boolean {
+export function isOverdueFollowUp(
+  t: Pick<TargetRow, 'status' | 'last_contacted_at' | 'pitched_at' | 'updated_at'>,
+  now: number = Date.now(),
+): boolean {
   const d = daysSince(lastTouch(t), now);
   return t.status === 'follow_up' && d !== null && d >= 7;
 }
