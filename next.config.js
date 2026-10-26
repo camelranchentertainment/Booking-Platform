@@ -3,6 +3,15 @@ const { withSentryConfig } = require('@sentry/nextjs');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   generateEtags: false,
+  // pdfjs (inside pdf-parse) loads pdf.worker.mjs at runtime from a path it
+  // computes, which the build's file tracing can't see. Without this the file
+  // isn't shipped and every PDF upload fails on Vercel with "Setting up fake
+  // worker failed: Cannot find module …/pdf.worker.mjs". Every route that
+  // calls lib/server/pdfText.ts must be listed here.
+  outputFileTracingIncludes: {
+    '/api/import/parse': ['./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'],
+    '/api/parse-file': ['./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'],
+  },
   // The Booking Agent pages moved from /booker/* to /agent/* (Oct 2026). Old
   // links, bookmarks and emails keep working through permanent redirects.
   async redirects() {
