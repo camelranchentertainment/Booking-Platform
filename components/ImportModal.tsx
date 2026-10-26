@@ -47,6 +47,23 @@ const NEW_BADGE: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
+/**
+ * Reads a JSON reply. A timeout or crash on Vercel returns an HTML/text page,
+ * which used to surface as "Network error: Unexpected token"; this turns it
+ * into a plain message instead.
+ */
+async function readJson(res: Response): Promise<{ error?: string } & Record<string, any>> {
+  try {
+    return await res.json();
+  } catch {
+    if (res.status === 504 || res.status === 408) {
+      return { error: 'That took too long. Try a smaller file, or split the list into a few files.' };
+    }
+    if (res.status === 413) return { error: 'That file is too large. Try one under 4 MB.' };
+    return { error: `The server had a problem (${res.status}). Please try again.` };
+  }
+}
+
 export default function ImportModal({ defaultType = 'venues', onClose, onComplete }: ImportModalProps) {
   const [phase, setPhase]           = useState<Phase>('upload');
   const [importType, setImportType] = useState<ImportType>(defaultType);
@@ -95,7 +112,7 @@ export default function ImportModal({ defaultType = 'venues', onClose, onComplet
     setPhase('parsing');
     setError('');
     setParsingMsg('Reading document...');
-    const t = setTimeout(() => setParsingMsg('AI is extracting data...'), 1800);
+    const t = setTimeout(() => setParsingMsg('Finding your venues and shows — long PDFs can take up to a minute...'), 1800);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -108,8 +125,8 @@ export default function ImportModal({ defaultType = 'venues', onClose, onComplet
         headers: { Authorization: `Bearer ${session?.access_token}` },
         body: fd,
       });
-      const json = await res.json();
-      if (!res.ok) {
+      const json = await readJson(res);
+      if (!res.ok || json.error) {
         setError(json.error || 'Parse failed');
         setPhase('upload');
         return;
@@ -143,8 +160,8 @@ export default function ImportModal({ defaultType = 'venues', onClose, onComplet
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ type: importType, data: payload }),
       });
-      const json = await res.json();
-      if (!res.ok) {
+      const json = await readJson(res);
+      if (!res.ok || json.error) {
         setError(json.error || 'Save failed');
         setPhase('review');
         return;
