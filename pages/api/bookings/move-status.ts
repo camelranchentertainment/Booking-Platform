@@ -6,6 +6,7 @@ import { AppError, withHandler } from '../../../lib/apiError';
 import { notifyActMembers } from '../../../lib/notifications';
 import { formatShowDate } from '../../../lib/formatDate';
 import { syncBookingToGoogleCalendar } from '../../../lib/calendarSync';
+import { requireBandAdmin } from '../../../lib/server/requireBandAdmin';
 
 export default withHandler(async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') throw new AppError(405, 'Method not allowed');
@@ -13,29 +14,19 @@ export default withHandler(async function handler(req: NextApiRequest, res: Next
   const { bookingId, status } = req.body;
   if (!bookingId || !status) throw new AppError(400, 'bookingId and status required');
 
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) throw new AppError(401, 'Unauthorized');
-
+  // Service role bypasses RLS: only band admins (own band) or superadmin may
+  // change a show's status. Members previously could call this.
   const service = getServiceClient();
-  const { data: { user } } = await service.auth.getUser(token);
-  if (!user) throw new AppError(401, 'Unauthorized');
+  const caller = await requireBandAdmin(req, service);
 
-  // Resolve caller's act and verify booking ownership before any mutation.
-  // Service client bypasses RLS so the ownership check must be explicit.
-  const { data: profile } = await service
-    .from('profiles')
-    .select('act_id')
-    .eq('id', user.id)
-    .single();
-  if (!profile?.act_id) throw new AppError(403, 'Forbidden');
-
-  const { data: booking } = await service
+  let bookingQuery = service
     .from('bookings')
     .select('id, act_id, venue:venues(name, city, state), show_date')
-    .eq('id', bookingId)
-    .eq('act_id', profile.act_id)
-    .maybeSingle();
-  if (!booking) throw new AppError(403, 'Forbidden');
+    .eq('id', bookingId);
+  if (caller.role !== 'superadmin') bookingQuery = bookingQuery.eq('act_id', caller.actId);
+  const { data: booking } = await bookingQuery.maybeSingle();
+  if (!booking) throw new AppError(404, 'Booking not found');
+  const profile = { act_id: String(booking.act_id) };
 
   await updateBookingStatus(service, bookingId, status as BookingStatus, profile.act_id);
 
