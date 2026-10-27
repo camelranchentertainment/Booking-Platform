@@ -9,6 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import Sidebar from './Sidebar';
 import BrandLogo from '../BrandLogo';
 import { INBOX_SYNCED_EVENT, startInboxAutoSync, stopInboxAutoSync, type InboxSyncedEventDetail } from '../../lib/inboxSync';
+import { NOTIFICATION_COLOR, NOTIFICATION_LABEL } from '../../lib/notificationTypes';
 
 /** Decorative full-page photo shown behind a page's content (dark theme only). */
 export type ShellBackdrop = 'desert';
@@ -57,22 +58,8 @@ type InviteNotif = {
   act: { act_name: string } | null;
 };
 
-const TYPE_COLOR: Record<string, string> = {
-  bulk_send:        '#34d399',
-  advance_due:      '#f97316',
-  thank_you_due:    '#a78bfa',
-  follow_up_due:    '#fbbf24',
-  post_show_review: '#E8602A',
-  system:           'var(--accent)',
-};
-const TYPE_LABEL: Record<string, string> = {
-  bulk_send:        'Bulk Send',
-  advance_due:      'Advance Due',
-  thank_you_due:    'Thank You Due',
-  follow_up_due:    'Follow Up',
-  post_show_review: 'Post-Show',
-  system:           'Notice',
-};
+const TYPE_COLOR: Record<string, string> = NOTIFICATION_COLOR;
+const TYPE_LABEL: Record<string, string> = NOTIFICATION_LABEL;
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
