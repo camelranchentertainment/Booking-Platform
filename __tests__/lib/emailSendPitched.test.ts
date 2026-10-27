@@ -49,7 +49,10 @@ function setup({ gmail }: { gmail: boolean }) {
   return { updates, inserts };
 }
 
-const params = { actId: 'act-1', sentBy: 'u-1', recipient: 'book@pond.com', subject: 'Booking', body: 'Hi', tourVenueId: 'tv-1', venueId: 'v-1', category: 'target' };
+// Real-shaped ids: sendActEmail drops links that aren't UUIDs of the band's records.
+const TV = '5b1d7c2e-0000-4000-8000-0000000000a1';
+const VENUE = '5b1d7c2e-0000-4000-8000-0000000000b2';
+const params = { actId: 'act-1', sentBy: 'u-1', recipient: 'book@pond.com', subject: 'Booking', body: 'Hi', tourVenueId: TV, venueId: VENUE, category: 'target' };
 
 describe('sendActEmail', () => {
   const OLD_ENV = process.env.RESEND_API_KEY;
@@ -73,7 +76,7 @@ describe('sendActEmail', () => {
     await sendActEmail(params);
     const tv = updates.filter(u => u.table === 'tour_venues');
     const pitched = tv.find(u => 'pitched_at' in u.values);
-    expect(pitched?.filters).toEqual(expect.arrayContaining([['eq', 'id', 'tv-1'], ['is', 'pitched_at', null]]));
+    expect(pitched?.filters).toEqual(expect.arrayContaining([['eq', 'id', TV], ['is', 'pitched_at', null]]));
     expect(tv.some(u => 'last_contacted_at' in u.values)).toBe(true);
     expect(tv.every(u => !('status' in u.values))).toBe(true);
   });
