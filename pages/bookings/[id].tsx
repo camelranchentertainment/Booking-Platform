@@ -1,90 +1,108 @@
-import { useState, useEffect } from 'react';
+// pages/bookings/[id].tsx
+//
+// Show detail — one show from pitch to paid: where it sits in the pipeline,
+// the show-day schedule and people, logistics, the deal and money, who's
+// playing and what they're paid, and the notes.
+//
+// Layout (Phase 3 redesign, Oct 2026 — matches the Tours page):
+//   1. Illustrated hero (show night) with venue, band, date and countdown.
+//   2. Pipeline chips (tap to move the show), then metric trackers.
+//   3. Left: schedule, show-day people, logistics, lineup.
+//      Right: deal & money, notes, and the cancel/delete zone.
+//
+// Pure rules live in lib/domain/showDetail.ts (unit-tested). Status changes,
+// edits and settling go through the band-admin-only API routes; logistics,
+// money and lineup write under the admin's own session (RLS is the boundary).
+
+import { useState, useEffect, useCallback, useId } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import AppShell from '../../components/layout/AppShell';
+import PageHero from '../../components/layout/PageHero';
+import ShowNightScene from '../../components/today/ShowNightScene';
+import ShowDayContactFields from '../../components/venues/ShowDayContactFields';
+import EmailComposer from '../../components/email/EmailComposer';
 import { supabase } from '../../lib/supabase';
 import { BookingStatus, BOOKING_STATUS_LABELS, BOOKING_STATUS_ORDER } from '../../lib/types';
-import { formatShowDate } from '../../lib/formatDate';
-import ShowDayContactFields from '../../components/venues/ShowDayContactFields';
-import ShowDayPerson from '../../components/venues/ShowDayPerson';
+import { formatShowDate, localToday } from '../../lib/formatDate';
 import { bookingColumns, contactsFromBooking } from '../../lib/showDayContacts';
-import Link from 'next/link';
-import EmailComposer from '../../components/email/EmailComposer';
+import { DEAL_LABELS, mapsLink } from '../../lib/domain/showDay';
+import {
+  PAYMENT_LABELS, PAYMENT_STATUSES, canDeleteShow, canMarkPlayed, countdown, dollars, lineupTotal,
+  parseMoneyInput, schedule, toPaymentStatus,
+} from '../../lib/domain/showDetail';
+import { telLink } from '../../lib/domain/venueDetail';
+import css from '../../styles/detail.module.css';
+
 
 type ActPick   = { id: string; act_name: string };
 type VenuePick = { id: string; name: string; city: string; state: string };
 type TourPick  = { id: string; name: string; act_id: string };
 
-type RosterMember     = { id: string; name: string; instrument_role: string | null; default_pay_amount: number | null };
-type LoadedAssignment = { expenseId: string; personnel_id: string; amount: number; name: string; instrument_role: string | null };
+type RosterMember      = { id: string; name: string; instrument_role: string | null; default_pay_amount: number | null };
+type LoadedAssignment  = { expenseId: string; personnel_id: string; amount: number; name: string; instrument_role: string | null };
 type LoadedRosterEntry = { id: string; personnel_id: string };
-type PersonnelFormRow = { personnel_id: string; name: string; instrument_role: string; pay_amount: string };
+type PersonnelFormRow  = { personnel_id: string; name: string; instrument_role: string; pay_amount: string };
 
-const DEAL_OPTIONS = [
-  { value: 'guarantee',  label: 'Guarantee' },
-  { value: 'door_split', label: 'Door Split' },
-  { value: 'percentage', label: 'Percentage' },
-  { value: 'flat_fee',   label: 'Flat Fee' },
-  { value: 'other',      label: 'Other' },
+const DEAL_OPTIONS = Object.entries(DEAL_LABELS).map(([value, label]) => ({ value, label }));
+const TIME_FIELDS: Array<[string, string]> = [
+  ['load_in_time', 'Load-in'], ['soundcheck_time', 'Sound check'], ['door_time', 'Doors'],
+  ['set_time', 'Set time'], ['end_time', 'Done by'],
 ];
-const DEAL_LABELS: Record<string, string> = Object.fromEntries(DEAL_OPTIONS.map(d => [d.value, d.label]));
-const PAY_COLORS: Record<string, string> = { pending: '#f97316', partial: '#fbbf24', received: '#34d399', waived: '#60a5fa' };
 
-function Row({ label, value }: { label: string; value: any }) {
-  if (!value && value !== 0 && value !== false) return null;
+function one<T>(v: T | T[] | null | undefined): T | null {
+  return Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
+}
+
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+  if (children === null || children === undefined || children === '' || children === false) return null;
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--border)' }}>
-      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
-      <span style={{ color: 'var(--text-primary)', textAlign: 'right', fontSize: '0.88rem' }}>{value}</span>
+    <div className={css.fact}>
+      <dt className={css.factLabel}>{label}</dt>
+      <dd className={css.factValue}>{children}</dd>
     </div>
   );
 }
 
-function fmt(t: string | null | undefined) {
-  if (!t) return null;
-  const [h, m] = t.split(':');
-  const hour = parseInt(h, 10);
-  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
-}
-
 export default function BookingDetail() {
   const router = useRouter();
-  const { id } = router.query;
+  const id = typeof router.query.id === 'string' ? router.query.id : null;
+  const uid = useId();
+  const fid = (k: string) => `${uid}-${k}`;
+
   const [booking, setBooking] = useState<any>(null);
+  const [missing, setMissing] = useState(false);
   const [acts, setActs]       = useState<ActPick[]>([]);
   const [venues, setVenues]   = useState<VenuePick[]>([]);
   const [tours, setTours]     = useState<TourPick[]>([]);
-  const [edit, setEdit]           = useState(false);
-  const [form, setForm]           = useState<any>({});
-  const [saving, setSaving]       = useState(false);
-  const [showEmail, setShowEmail] = useState(false);
+  const [today]               = useState(() => localToday());
+  const [pageError, setPageError] = useState('');
 
-  // Show Details modal (Item 2)
+  const [edit, setEdit]         = useState(false);
+  const [form, setForm]         = useState<any>({});
+  const [saving, setSaving]     = useState(false);
+  const [editError, setEditError] = useState('');
+  const [showEmail, setShowEmail] = useState(false);
+  const [movingTo, setMovingTo] = useState<string | null>(null);
+
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [detailsForm, setDetailsForm]           = useState<any>({});
   const [savingDetails, setSavingDetails]       = useState(false);
+  const [detailsError, setDetailsError]         = useState('');
 
-  // Financial inline edit (Item 4)
-  const [editFinancial, setEditFinancial]         = useState(false);
-  const [financialForm, setFinancialForm]         = useState<any>({});
-  const [savingFinancial, setSavingFinancial]     = useState(false);
+  const [editFinancial, setEditFinancial]     = useState(false);
+  const [financialForm, setFinancialForm]     = useState<any>({});
+  const [savingFinancial, setSavingFinancial] = useState(false);
+  const [financialError, setFinancialError]   = useState('');
 
-  // Post-Show / Settle modal (Item 5)
   const [showSettle, setShowSettle] = useState(false);
-  const [settleForm, setSettleForm] = useState<any>({
-    actual_amount_received:  '',
-    final_payment_received:  '',
-    payment_status:          'received',
-    post_show_notes:         '',
-    issue_notes:             '',
-    rating:                  0,
-    attendance:              '',
+  const [settleForm, setSettleForm] = useState({
+    actual_amount_received: '', post_show_notes: '', issue_notes: '', rating: 0, attendance: '',
   });
-  const [wouldReturn, setWouldReturn]   = useState<boolean | null>(null);
-  const [memberPay, setMemberPay]       = useState<Record<string, string>>({});
-  const [settling, setSettling]         = useState(false);
-  const [settleError, setSettleError]   = useState('');
+  const [wouldReturn, setWouldReturn] = useState<'yes' | 'maybe' | 'no' | null>(null);
+  const [settling, setSettling]       = useState(false);
+  const [settleError, setSettleError] = useState('');
 
-  // Band Lineup modal
   const [roster, setRoster]                         = useState<RosterMember[]>([]);
   const [loadedAssignments, setLoadedAssignments]   = useState<LoadedAssignment[]>([]);
   const [loadedRoster, setLoadedRoster]             = useState<LoadedRosterEntry[]>([]);
@@ -92,149 +110,132 @@ export default function BookingDetail() {
   const [personnelForm, setPersonnelForm]           = useState<PersonnelFormRow[]>([]);
   const [savingPersonnel, setSavingPersonnel]       = useState(false);
   const [personnelError, setPersonnelError]         = useState('');
-  const [personnelSuccess, setPersonnelSuccess]     = useState('');
 
-  useEffect(() => { if (id) loadAll(); }, [id]);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [removing, setRemoving]           = useState(false);
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
+    if (!id) return;
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user ?? null;
     if (!user) return;
     const [bookingRes, actsRes, venuesRes] = await Promise.all([
-      supabase.from('bookings').select(`*, act:acts(*), venue:venues(*), tour:tours(id, name), contact:contacts(*)`).eq('id', id).single(),
+      supabase.from('bookings').select('*, act:acts(*), venue:venues(*), tour:tours(id, name), contact:contacts(*)').eq('id', id).maybeSingle(),
       supabase.from('acts').select('id, act_name').eq('owner_id', user.id).order('act_name'),
       supabase.from('venues').select('id, name, city, state').order('name'),
     ]);
-    if (bookingRes.data) {
-      setBooking(bookingRes.data);
-      setForm(bookingRes.data);
-      setDetailsForm(bookingRes.data);
-      setFinancialForm(bookingRes.data);
-      setSettleForm((f: any) => ({ ...f, actual_amount_received: bookingRes.data.agreed_amount ?? bookingRes.data.fee ?? '' }));
-    }
-    setActs(actsRes.data || []);
-    setVenues(venuesRes.data || []);
-    const actIds = (actsRes.data || []).map((a: ActPick) => a.id);
-    const bookingActId = bookingRes.data?.act_id;
-    const filterIds = actIds.length > 0 ? actIds : bookingActId ? [bookingActId] : [];
+    const b = bookingRes.data;
+    if (!b) { setMissing(true); return; }
+    setBooking(b);
+    setForm(b);
+    setDetailsForm(b);
+    setFinancialForm(b);
+    setSettleForm(f => ({ ...f, actual_amount_received: String(b.agreed_amount ?? b.fee ?? '') }));
+    setActs((actsRes.data || []) as ActPick[]);
+    setVenues((venuesRes.data || []) as VenuePick[]);
+
+    const actIds = ((actsRes.data || []) as ActPick[]).map(a => a.id);
+    const filterIds = actIds.length > 0 ? actIds : b.act_id ? [b.act_id] : [];
     if (filterIds.length > 0) {
-      const { data: toursData } = await supabase
-        .from('tours')
-        .select('id, name, act_id')
-        .in('act_id', filterIds)
-        .neq('status', 'cancelled')
-        .order('name');
-      setTours(toursData || []);
+      const { data: toursData } = await supabase.from('tours').select('id, name, act_id')
+        .in('act_id', filterIds).neq('status', 'cancelled').order('name');
+      setTours((toursData || []) as TourPick[]);
     }
-    if (bookingActId) {
+    if (b.act_id) {
       const [rosterRes, expensesRes, bpRes] = await Promise.all([
-        supabase.from('act_personnel')
-          .select('id, name, instrument_role, default_pay_amount')
-          .eq('act_id', bookingActId).eq('is_active', true).order('name'),
-        supabase.from('expenses')
-          .select('id, personnel_id, amount, act_personnel(name, instrument_role)')
-          .eq('booking_id', id as string).not('personnel_id', 'is', null).eq('category', 'band_pay').is('archived_at', null),
-        supabase.from('booking_personnel')
-          .select('id, personnel_id')
-          .eq('booking_id', id as string),
+        supabase.from('act_personnel').select('id, name, instrument_role, default_pay_amount')
+          .eq('act_id', b.act_id).eq('is_active', true).order('name'),
+        supabase.from('expenses').select('id, personnel_id, amount, act_personnel(name, instrument_role)')
+          .eq('booking_id', id).not('personnel_id', 'is', null).eq('category', 'band_pay').is('archived_at', null),
+        supabase.from('booking_personnel').select('id, personnel_id').eq('booking_id', id),
       ]);
       setRoster((rosterRes.data || []) as RosterMember[]);
-      const prefill: Record<string, string> = {};
-      for (const m of (rosterRes.data || []) as RosterMember[]) {
-        prefill[m.id] = m.default_pay_amount != null ? String(m.default_pay_amount) : '';
-      }
-      setMemberPay(prefill);
       setLoadedRoster((bpRes.data || []) as LoadedRosterEntry[]);
-      setLoadedAssignments(
-        ((expensesRes.data || []) as any[]).map(e => ({
-          expenseId:       e.id,
-          personnel_id:    e.personnel_id,
-          amount:          Number(e.amount),
-          name:            (e.act_personnel as any)?.name || '',
-          instrument_role: (e.act_personnel as any)?.instrument_role || null,
-        }))
-      );
+      setLoadedAssignments(((expensesRes.data || []) as any[]).map(e => {
+        const p = one(e.act_personnel) as { name?: string; instrument_role?: string | null } | null;
+        return { expenseId: e.id, personnel_id: e.personnel_id, amount: Number(e.amount), name: p?.name || '', instrument_role: p?.instrument_role || null };
+      }));
     }
+  }, [id]);
+
+  useEffect(() => { void loadAll(); }, [loadAll]);
+
+  const authHeader = async (): Promise<Record<string, string> | null> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ? { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` } : null;
   };
 
   const setStatus = async (newStatus: BookingStatus) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) return;
-
-  const res = await fetch('/api/bookings/move-status', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({ bookingId: id, status: newStatus }),
-  });
-
-  if (!res.ok) {
-    console.error('Failed to update booking status:', await res.text());
-    return;
-  }
-
-  setBooking((b: any) => ({ ...b, status: newStatus }));
-};
+    if (!id || newStatus === booking?.status || movingTo) return;
+    setMovingTo(newStatus);
+    setPageError('');
+    try {
+      const headers = await authHeader();
+      if (!headers) return;
+      const res = await fetch('/api/bookings/move-status', { method: 'POST', headers, body: JSON.stringify({ bookingId: id, status: newStatus }) });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setPageError(`Couldn’t move the show: ${j.error || res.statusText}`);
+        return;
+      }
+      setBooking((b: any) => ({ ...b, status: newStatus }));
+    } finally {
+      setMovingTo(null);
+    }
+  };
 
   const saveEdit = async () => {
-  setSaving(true);
-
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) return;
-
-    const updates = {
-      act_id:         form.act_id,
-      venue_id:       form.venue_id       || null,
-      tour_id:        form.tour_id        || null,
-      status:         form.status,
-      show_date:      form.show_date      || null,
-      load_in_time:   form.load_in_time   || null,
-      set_time:       form.set_time       || null,
-      set_length_min: form.set_length_min ? Number(form.set_length_min) : null,
-      deal_type:      form.deal_type      || null,
-      agreed_amount:  form.agreed_amount  ? Number(form.agreed_amount) : null,
-      deal_notes:     form.deal_notes     || null,
-      internal_notes: form.internal_notes || null,
-      advance_notes:  form.advance_notes  || null,
-      contract_url:   form.contract_url   || null,
-      deposit_paid:   form.deposit_paid,
-      deposit_amount: form.deposit_amount ? Number(form.deposit_amount) : null,
-    };
-
-    const res = await fetch('/api/bookings/update', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        bookingId: id,
-        updates,
-      }),
-    });
-
-    if (!res.ok) {
-      console.error('Failed to update booking:', await res.text());
-      return;
+    const agreed = parseMoneyInput(String(form.agreed_amount ?? ''));
+    const deposit = parseMoneyInput(String(form.deposit_amount ?? ''));
+    if (!agreed.ok || !deposit.ok) { setEditError('Amounts must be dollar figures, like 500 or 450.50.'); return; }
+    setSaving(true);
+    setEditError('');
+    try {
+      const headers = await authHeader();
+      if (!headers) return;
+      const updates = {
+        act_id:         form.act_id,
+        venue_id:       form.venue_id       || null,
+        tour_id:        form.tour_id        || null,
+        status:         form.status,
+        show_date:      form.show_date      || null,
+        deal_type:      form.deal_type      || null,
+        agreed_amount:  agreed.value,
+        deal_notes:     form.deal_notes     || null,
+        internal_notes: form.internal_notes || null,
+        advance_notes:  form.advance_notes  || null,
+        contract_url:   form.contract_url   || null,
+        deposit_paid:   !!form.deposit_paid,
+        deposit_amount: deposit.value,
+      };
+      const res = await fetch('/api/bookings/update', { method: 'POST', headers, body: JSON.stringify({ bookingId: id, updates }) });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setEditError(`Couldn’t save: ${j.error || res.statusText}`);
+        return;
+      }
+      await loadAll();
+      setEdit(false);
+    } finally {
+      setSaving(false);
     }
-
-    await loadAll();
-    setEdit(false);
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   const saveDetails = async () => {
+    const len = String(detailsForm.set_length_min ?? '').trim();
+    if (len && (!/^\d{1,3}$/.test(len) || Number(len) < 1 || Number(len) > 600)) {
+      setDetailsError('Set length is whole minutes, 1–600.');
+      return;
+    }
     setSavingDetails(true);
-    await supabase.from('bookings').update({
+    setDetailsError('');
+    const { error } = await supabase.from('bookings').update({
       load_in_time:         detailsForm.load_in_time         || null,
       soundcheck_time:      detailsForm.soundcheck_time      || null,
+      door_time:            detailsForm.door_time            || null,
       set_time:             detailsForm.set_time             || null,
       end_time:             detailsForm.end_time             || null,
+      set_length_min:       len ? Number(len) : null,
       ...bookingColumns(contactsFromBooking(detailsForm)),
       sound_system:         detailsForm.sound_system         || null,
       meals_provided:       !!detailsForm.meals_provided,
@@ -242,159 +243,138 @@ export default function BookingDetail() {
       hotel_booked:         !!detailsForm.hotel_booked,
       lodging_details:      detailsForm.lodging_details      || null,
       special_requirements: detailsForm.special_requirements || null,
-      set_length_min:       detailsForm.set_length_min ? Number(detailsForm.set_length_min) : null,
       details_pending:      false,
-    }).eq('id', id);
+    }).eq('id', id as string);
+    if (error) { setDetailsError(`Couldn’t save: ${error.message}`); setSavingDetails(false); return; }
     await loadAll();
     setShowDetailsModal(false);
     setSavingDetails(false);
   };
 
   const saveFinancial = async () => {
+    const agreed = parseMoneyInput(String(financialForm.agreed_amount ?? ''));
+    const received = parseMoneyInput(String(financialForm.actual_amount_received ?? ''));
+    if (!agreed.ok || !received.ok) { setFinancialError('Amounts must be dollar figures, like 500 or 450.50.'); return; }
     setSavingFinancial(true);
-    await supabase.from('bookings').update({
-      deal_type:              financialForm.deal_type              || null,
-      agreed_amount:          financialForm.agreed_amount          ? Number(financialForm.agreed_amount)          : null,
-      actual_amount_received: financialForm.actual_amount_received ? Number(financialForm.actual_amount_received) : null,
-      payment_status:         financialForm.payment_status         || 'pending',
-      date_paid:              financialForm.date_paid              || null,
-      expense_notes:          financialForm.expense_notes          || null,
-      payout_notes:           financialForm.payout_notes           || null,
-    }).eq('id', id);
+    setFinancialError('');
+    const { error } = await supabase.from('bookings').update({
+      deal_type:              financialForm.deal_type || null,
+      agreed_amount:          agreed.value,
+      actual_amount_received: received.value,
+      payment_status:         toPaymentStatus(financialForm.payment_status) ?? 'pending',
+      date_paid:              financialForm.date_paid     || null,
+      expense_notes:          financialForm.expense_notes || null,
+      payout_notes:           financialForm.payout_notes  || null,
+    }).eq('id', id as string);
+    if (error) { setFinancialError(`Couldn’t save: ${error.message}`); setSavingFinancial(false); return; }
     await loadAll();
     setEditFinancial(false);
     setSavingFinancial(false);
   };
 
   const savePersonnel = async () => {
+    for (const p of personnelForm) {
+      const v = parseMoneyInput(p.pay_amount);
+      if (!v.ok) { setPersonnelError(`Pay for ${p.name} must be a dollar figure.`); return; }
+    }
     setSavingPersonnel(true);
     setPersonnelError('');
-    setPersonnelSuccess('');
     const { data: { session } } = await supabase.auth.getSession();
     const currentUserId = session?.user?.id;
 
     const loadedMap   = new Map(loadedAssignments.map(a => [a.personnel_id, a]));
     const selectedMap = new Map(personnelForm.map(p => [p.personnel_id, p]));
-
     const toInsert = personnelForm.filter(p => !loadedMap.has(p.personnel_id));
     const toUpdate = personnelForm.filter(p => {
       const existing = loadedMap.get(p.personnel_id);
       return existing !== undefined && Number(p.pay_amount) !== existing.amount;
     });
-    const toDelete = loadedAssignments.filter(a => !selectedMap.has(a.personnel_id));
-
-    // booking_personnel diff
-    const rosterMap    = new Map(loadedRoster.map(r => [r.personnel_id, r]));
-    const toInsertBP   = personnelForm.filter(p => !rosterMap.has(p.personnel_id));
-    const toDeleteBP   = loadedRoster.filter(r => !selectedMap.has(r.personnel_id));
+    const toDelete   = loadedAssignments.filter(a => !selectedMap.has(a.personnel_id));
+    const rosterMap  = new Map(loadedRoster.map(r => [r.personnel_id, r]));
+    const toInsertBP = personnelForm.filter(p => !rosterMap.has(p.personnel_id));
+    const toDeleteBP = loadedRoster.filter(r => !selectedMap.has(r.personnel_id));
 
     const errors: string[] = [];
-
     const phase1 = await Promise.all([
-      // Removing someone's pay from a show archives the pay line (financial
-      // data is never deleted); archived lines drop out of totals.
-      ...toDelete.map(a => supabase.from('expenses')
-        .update({ archived_at: new Date().toISOString() })
-        .eq('id', a.expenseId)),
-      ...toUpdate.map(p => supabase.from('expenses')
-        .update({ amount: Number(p.pay_amount) })
-        .eq('id', loadedMap.get(p.personnel_id)!.expenseId)),
+      // Removing someone's pay archives the pay line (financial data is never deleted).
+      ...toDelete.map(a => supabase.from('expenses').update({ archived_at: new Date().toISOString() }).eq('id', a.expenseId)),
+      ...toUpdate.map(p => supabase.from('expenses').update({ amount: Number(p.pay_amount) || 0 }).eq('id', loadedMap.get(p.personnel_id)!.expenseId)),
     ]);
-    for (const r of phase1) {
-      if (r.error) errors.push(r.error.message);
-    }
+    phase1.forEach(r => { if (r.error) errors.push(r.error.message); });
 
-    const phase2 = await Promise.all(
-      toInsert.map(p => supabase.from('expenses').insert({
-        booking_id:   id as string,
-        act_id:       booking.act_id,
-        personnel_id: p.personnel_id,
-        category:     'band_pay',
-        amount:       Number(p.pay_amount) || 0,
-        expense_date: booking.show_date || null,
-        user_id:      currentUserId,
-      }))
-    );
-    for (const r of phase2) {
-      if (r.error) errors.push(r.error.message);
-    }
+    const phase2 = await Promise.all(toInsert.map(p => supabase.from('expenses').insert({
+      booking_id: id as string, act_id: booking.act_id, personnel_id: p.personnel_id, category: 'band_pay',
+      amount: Number(p.pay_amount) || 0, expense_date: booking.show_date || null, user_id: currentUserId,
+    })));
+    phase2.forEach(r => { if (r.error) errors.push(r.error.message); });
 
     const phase3 = await Promise.all([
       ...toDeleteBP.map(r => supabase.from('booking_personnel').delete().eq('id', r.id)),
-      ...toInsertBP.map(p => supabase.from('booking_personnel').insert({
-        booking_id:   id as string,
-        personnel_id: p.personnel_id,
-        act_id:       booking.act_id,
-      })),
+      ...toInsertBP.map(p => supabase.from('booking_personnel').insert({ booking_id: id as string, personnel_id: p.personnel_id, act_id: booking.act_id })),
     ]);
-    for (const r of phase3) {
-      if (r.error) errors.push(r.error.message);
-    }
+    phase3.forEach(r => { if (r.error) errors.push(r.error.message); });
 
     if (errors.length > 0) {
       setPersonnelError(`Save incomplete — ${errors.join('; ')}`);
       setSavingPersonnel(false);
       return;
     }
-
     await loadAll();
-    setPersonnelSuccess('Lineup saved.');
+    setShowPersonnelModal(false);
     setSavingPersonnel(false);
   };
 
+  const openLineup = () => {
+    setPersonnelForm(loadedAssignments.map(a => ({
+      personnel_id: a.personnel_id, name: a.name, instrument_role: a.instrument_role || '', pay_amount: String(a.amount),
+    })));
+    setPersonnelError('');
+    setShowPersonnelModal(true);
+  };
+
+  // Band pay is recorded once, on the Lineup (category band_pay). Settling only
+  // records what the venue paid and how the night went; it no longer writes a
+  // second "member pay" line per roster member, which double-counted pay.
   const settle = async () => {
+    const received = parseMoneyInput(settleForm.actual_amount_received);
+    if (!received.ok) { setSettleError('Amount received must be a dollar figure.'); return; }
     setSettling(true);
     setSettleError('');
-    const { data: { session } } = await supabase.auth.getSession();
-    const rebook_flag = wouldReturn === true ? 'yes' : wouldReturn === false ? 'no' : 'maybe';
+    const headers = await authHeader();
+    if (!headers) { setSettling(false); return; }
     const res = await fetch('/api/bookings/settle', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      headers,
       body: JSON.stringify({
         bookingId: id,
-        ...settleForm,
-        would_return: wouldReturn,
-        rebook_flag,
+        actual_amount_received: received.value,
+        payment_status: received.value !== null ? 'received' : 'pending',
+        post_show_notes: settleForm.post_show_notes,
+        issue_notes: settleForm.issue_notes,
+        rating: settleForm.rating || null,
+        attendance: settleForm.attendance,
+        would_return: wouldReturn === 'yes' ? true : wouldReturn === 'no' ? false : null,
+        rebook_flag: wouldReturn,
       }),
     });
-    const data = await res.json();
-    if (!res.ok) { setSettleError(data.error || 'Failed to settle'); setSettling(false); return; }
-
-    // Upsert member pay into expenses
-    for (const member of roster) {
-      const amount = parseFloat(memberPay[member.id] ?? '0');
-      if (amount <= 0) continue;
-      const { data: existing } = await supabase
-        .from('expenses')
-        .select('id')
-        .eq('booking_id', id as string)
-        .eq('personnel_id', member.id)
-        .eq('category', 'member_pay')
-        .is('archived_at', null)
-        .maybeSingle();
-      if (existing) {
-        await supabase.from('expenses').update({ amount }).eq('id', existing.id);
-      } else {
-        await supabase.from('expenses').insert({
-          act_id:       booking.act_id,
-          booking_id:   id as string,
-          personnel_id: member.id,
-          category:     'member_pay',
-          amount,
-          expense_date: booking.show_date || null,
-          notes:        `Member pay — ${member.name}`,
-        });
-      }
-    }
-
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { setSettleError(data.error || 'Couldn’t record the show. Try again.'); setSettling(false); return; }
     await loadAll();
     setShowSettle(false);
     setSettling(false);
   };
 
-  const deleteBooking = async () => {
-    if (!confirm('Delete this booking? This cannot be undone.')) return;
-    await supabase.from('bookings').delete().eq('id', id);
+  const removeShow = async (mode: 'delete' | 'cancel') => {
+    setRemoving(true);
+    setPageError('');
+    if (mode === 'cancel') {
+      await setStatus('cancelled' as BookingStatus);
+      setRemoving(false);
+      setConfirmRemove(false);
+      return;
+    }
+    const { error } = await supabase.from('bookings').delete().eq('id', id as string);
+    if (error) { setPageError(`Couldn’t delete: ${error.message}`); setRemoving(false); return; }
     router.push('/bookings');
   };
 
@@ -402,644 +382,587 @@ export default function BookingDetail() {
   const setDet = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setDetailsForm((f: any) => ({ ...f, [k]: e.target.value }));
   const setFin = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setFinancialForm((f: any) => ({ ...f, [k]: e.target.value }));
 
-  if (!booking) return <AppShell requireRole="band_admin"><div style={{ color: 'var(--text-muted)', padding: '2rem' }}>Loading...</div></AppShell>;
+  if (missing) {
+    return (
+      <AppShell requireRole="band_admin">
+        <p className={css.empty}>That show isn’t on your calendar. <Link href="/calendar">Back to the calendar</Link></p>
+      </AppShell>
+    );
+  }
+  if (!booking) {
+    return (
+      <AppShell requireRole="band_admin">
+        <div className={`skeleton ${css.skeleton}`} aria-busy="true"><span className="sr-only" role="status">Loading show…</span></div>
+      </AppShell>
+    );
+  }
 
-  const isPast     = booking.show_date && new Date(booking.show_date + 'T23:59:59') < new Date();
-  const canSettle  = booking.status === 'confirmed' && isPast;
+  const venue = one(booking.venue) as any;
+  const act = one(booking.act) as any;
+  const tour = one(booking.tour) as any;
+  const contact = one(booking.contact) as any;
+  const status = booking.status as BookingStatus;
+  const longDate = booking.show_date ? formatShowDate(booking.show_date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'Date TBD';
+  const when = countdown(booking.show_date, today);
+  const steps = schedule(booking);
+  const map = mapsLink(venue);
   const filteredTours = tours.filter(t => t.act_id === (form.act_id || booking.act_id));
+  const payTotal = lineupTotal(loadedAssignments);
+  const played = canMarkPlayed(status, booking.show_date, today);
+  const deletable = canDeleteShow(booking, today);
+  const payStatus = toPaymentStatus(booking.payment_status);
+  const logistics: Array<[string, string]> = [
+    ['Sound', booking.sound_system === 'house' ? 'House PA' : booking.sound_system === 'self' ? 'Bringing our own' : 'TBD'],
+    ['Meals', booking.meals_provided ? 'Provided' : 'Not provided'],
+    ['Drinks', booking.drinks_provided ? 'Provided' : 'Not provided'],
+    ['Hotel', booking.hotel_booked ? 'Booked' : 'Not booked'],
+  ];
 
   return (
     <AppShell requireRole="band_admin">
-      <div className="page-header">
-        <div>
-          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
-            {booking.act?.act_name || '—'}
+      <Link href="/calendar" className={css.backLink}>← Calendar</Link>
+      <PageHero
+        title={venue?.name || 'Show'}
+        subtitle={[act?.act_name, [venue?.city, venue?.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ') || 'Show'}
+        summary={`${longDate}${when ? ` · ${when}` : ''} · ${BOOKING_STATUS_LABELS[status] ?? status}`}
+        scene={<ShowNightScene />}
+        actions={
+          <div className={css.heroActions}>
+            {played && <button type="button" className="btn btn-primary tours-new-btn" onClick={() => setShowSettle(true)}>✓ Mark as played</button>}
+            <button type="button" className="btn btn-secondary tours-new-btn" onClick={() => setShowEmail(true)}>Email</button>
+            <button type="button" className="btn btn-secondary tours-new-btn" onClick={() => { setEdit(e => !e); setEditError(''); setForm(booking); }}>
+              {edit ? 'Close edit' : 'Edit show'}
+            </button>
           </div>
-          <h1 className="page-title">{booking.venue?.name || 'No Venue'}</h1>
-          {booking.venue?.city && <div className="page-sub">{booking.venue.city}, {booking.venue.state}</div>}
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className={`badge badge-${booking.status}`}>{BOOKING_STATUS_LABELS[booking.status as BookingStatus]}</span>
-          {canSettle && (
-            <button className="btn btn-secondary btn-sm" onClick={() => setShowSettle(true)}>✓ Mark as Played</button>
-          )}
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowEmail(true)}>✉ Email</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => setEdit(!edit)}>{edit ? 'Cancel Edit' : 'Edit'}</button>
-          <button className="btn btn-ghost btn-sm" style={{ color: '#f87171' }} onClick={deleteBooking}>Delete</button>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Details pending banner */}
-      {booking.details_pending && !edit && (
-        <div style={{ background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.35)', borderRadius: 'var(--radius)', padding: '0.65rem 1rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: '#f97316' }}>
-            ⚠ Show logistics not yet entered — soundcheck, meals, lodging, and other day-of details are pending.
-          </span>
-          <button className="btn btn-ghost btn-sm" style={{ color: '#f97316', borderColor: '#f97316', flexShrink: 0 }} onClick={() => { setDetailsForm(booking); setShowDetailsModal(true); }}>
-            Fill In Details →
-          </button>
-        </div>
-      )}
+      <div className="tours-body">
+        {pageError && <p className={css.error} role="alert">{pageError}</p>}
 
-      {/* Status pipeline */}
-      <div className="card mb-6">
-        <div className="card-header"><span className="card-title">STATUS PIPELINE</span></div>
-        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+        <nav className="tours-tabs" aria-label="Move this show">
           {BOOKING_STATUS_ORDER.map(s => (
-            <button key={s} onClick={() => setStatus(s)} className="btn btn-sm"
-              style={{
-                background:  booking.status === s ? `var(--status-${s})` : 'var(--bg-overlay)',
-                color:       booking.status === s ? '#000' : 'var(--text-muted)',
-                borderColor: booking.status === s ? `var(--status-${s})` : 'var(--border)',
-                fontFamily: 'var(--font-body)', fontSize: '0.78rem', letterSpacing: '0.1em',
-              }}>
-              {BOOKING_STATUS_LABELS[s]}
+            <button key={s} type="button" className={`tours-tab ${status === s ? 'tours-tab--on' : ''}`}
+              aria-pressed={status === s} disabled={!!movingTo} onClick={() => setStatus(s)}>
+              {movingTo === s ? 'Moving…' : BOOKING_STATUS_LABELS[s]}
             </button>
           ))}
-        </div>
-      </div>
+        </nav>
 
-      {edit ? (
-        /* ── Edit form ── */
-        <div className="card" style={{ maxWidth: 720 }}>
-          <div className="card-header"><span className="card-title">EDIT BOOKING</span></div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div className="grid-2">
-              <div className="field"><label className="field-label">Band</label>
-                <select className="select" value={form.act_id || ''} onChange={set('act_id')}>
-                  {acts.map(a => <option key={a.id} value={a.id}>{a.act_name}</option>)}
-                </select></div>
-              <div className="field"><label className="field-label">Venue</label>
-                <select className="select" value={form.venue_id || ''} onChange={set('venue_id')}>
-                  <option value="">No venue</option>
-                  {venues.map(v => <option key={v.id} value={v.id}>{v.name} — {v.city}, {v.state}</option>)}
-                </select></div>
-            </div>
-            <div className="field"><label className="field-label">Tour</label>
-              <select className="select" value={form.tour_id || ''} onChange={set('tour_id')}>
-                <option value="">No tour</option>
-                {filteredTours.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select></div>
-            <div className="grid-2">
-              <div className="field"><label className="field-label">Show Date</label>
-                <input className="input" type="date" value={form.show_date?.substring(0, 10) || ''} onChange={set('show_date')} /></div>
-              <div className="field"><label className="field-label">Status</label>
-                <select className="select" value={form.status} onChange={set('status')}>
-                  {BOOKING_STATUS_ORDER.map(s => <option key={s} value={s}>{BOOKING_STATUS_LABELS[s]}</option>)}
-                </select></div>
-            </div>
-            <div className="grid-2">
-              <div className="field"><label className="field-label">Deal Type</label>
-                <select className="select" value={form.deal_type || ''} onChange={set('deal_type')}>
-                  <option value="">Select...</option>
-                  {DEAL_OPTIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-                </select></div>
-              <div className="field"><label className="field-label">Agreed Amount ($)</label>
-                <input className="input" type="number" min="0" step="0.01" value={form.agreed_amount ?? ''} onChange={set('agreed_amount')} placeholder="0.00" /></div>
-            </div>
-            <div className="grid-3">
-              <div className="field"><label className="field-label">Load-in</label>
-                <input className="input" type="time" value={form.load_in_time || ''} onChange={set('load_in_time')} /></div>
-              <div className="field"><label className="field-label">Set Time</label>
-                <input className="input" type="time" value={form.set_time || ''} onChange={set('set_time')} /></div>
-              <div className="field"><label className="field-label">Set Length (min)</label>
-                <input className="input" type="number" value={form.set_length_min || ''} onChange={set('set_length_min')} /></div>
-            </div>
-            <div className="grid-2">
-              <div className="field"><label className="field-label">Deposit Amount</label>
-                <input className="input" type="number" value={form.deposit_amount || ''} onChange={set('deposit_amount')} /></div>
-              <div className="field" style={{ justifyContent: 'flex-end' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginTop: '1.5rem' }}>
-                  <input type="checkbox" checked={form.deposit_paid || false} onChange={e => setForm((f: any) => ({ ...f, deposit_paid: e.target.checked }))} />
-                  <span className="field-label" style={{ margin: 0 }}>Deposit Paid</span>
-                </label>
-              </div>
-            </div>
-            <div className="field"><label className="field-label">Contract URL</label>
-              <input className="input" value={form.contract_url || ''} onChange={set('contract_url')} placeholder="https://..." /></div>
-            <div className="field"><label className="field-label">Deal Notes</label>
-              <textarea className="textarea" value={form.deal_notes || ''} onChange={set('deal_notes')} /></div>
-            <div className="field"><label className="field-label">Internal Notes</label>
-              <textarea className="textarea" value={form.internal_notes || ''} onChange={set('internal_notes')} /></div>
-            <div className="field"><label className="field-label">Advance Notes (visible to band)</label>
-              <textarea className="textarea" value={form.advance_notes || ''} onChange={set('advance_notes')} /></div>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button className="btn btn-secondary" onClick={() => setEdit(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={saveEdit} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</button>
-            </div>
+        {booking.details_pending && (
+          <div className={css.panel} role="status">
+            <p className={css.note}>Show-day details aren’t in yet — times, meals, lodging and who to call on the night.</p>
+            <div><button type="button" className="btn btn-primary" onClick={() => { setDetailsForm(booking); setDetailsError(''); setShowDetailsModal(true); }}>Fill in details</button></div>
           </div>
-        </div>
-      ) : (
-        /* ── View mode ── */
-        <>
-          <div className="grid-2">
-            {/* LEFT: Show Details + Logistics */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {/* SHOW DETAILS */}
-              <div className="card">
-                <div className="card-header">
-                  <span className="card-title">SHOW DETAILS</span>
-                  <button className="btn btn-ghost btn-sm" onClick={() => { setDetailsForm(booking); setShowDetailsModal(true); }}>
-                    {booking.details_pending ? 'Fill In Details' : 'Edit Logistics'}
+        )}
+
+        <section className="tours-metrics" aria-label="This show at a glance">
+          <div className="tour-metric">
+            <span className="tour-metric-label">Show date</span>
+            <span className="tour-metric-value"><strong>{booking.show_date ? formatShowDate(booking.show_date, { month: 'short', day: 'numeric' }) : 'TBD'}</strong></span>
+            <span className={`tour-metric-note ${when === 'Tonight' ? 'tour-metric-hot' : ''}`}>{when ?? 'No date yet'}</span>
+          </div>
+          <div className="tour-metric">
+            <span className="tour-metric-label">Agreed pay</span>
+            <span className="tour-metric-value"><strong>{dollars(booking.agreed_amount ?? booking.fee) ?? '—'}</strong></span>
+            <span className="tour-metric-note">{booking.deal_type ? DEAL_LABELS[booking.deal_type] ?? booking.deal_type : 'Deal not set'}</span>
+          </div>
+          <div className="tour-metric">
+            <span className="tour-metric-label">Received</span>
+            <span className="tour-metric-value"><strong className={payStatus === 'pending' && played ? 'tour-metric-hot' : ''}>{dollars(booking.actual_amount_received) ?? '—'}</strong></span>
+            <span className="tour-metric-note">{payStatus ? PAYMENT_LABELS[payStatus] : 'Nothing recorded'}</span>
+          </div>
+          <div className="tour-metric">
+            <span className="tour-metric-label">Lineup</span>
+            <span className="tour-metric-value"><strong>{loadedAssignments.length}</strong><span>{loadedAssignments.length === 1 ? 'player' : 'players'}</span></span>
+            <span className="tour-metric-note">{payTotal ? `${dollars(payTotal)} band pay` : 'No band pay set'}</span>
+          </div>
+        </section>
+
+        {edit ? (
+          <section className={css.panel} aria-labelledby={fid('edit-title')}>
+            <div className={css.panelHead}><h2 className={css.panelTitle} id={fid('edit-title')}>Edit show</h2></div>
+            <form className={css.form} onSubmit={e => { e.preventDefault(); void saveEdit(); }}>
+              <div className={css.formGrid}>
+                {acts.length > 1 && (
+                  <div className="field">
+                    <label className="field-label" htmlFor={fid('act')}>Band</label>
+                    <select id={fid('act')} className="select" value={form.act_id || ''} onChange={set('act_id')}>
+                      {acts.map(a => <option key={a.id} value={a.id}>{a.act_name}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div className="field">
+                  <label className="field-label" htmlFor={fid('venue')}>Venue</label>
+                  <select id={fid('venue')} className="select" value={form.venue_id || ''} onChange={set('venue_id')}>
+                    <option value="">No venue yet</option>
+                    {venues.map(v => <option key={v.id} value={v.id}>{v.name} — {v.city}, {v.state}</option>)}
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor={fid('tour')}>Tour</label>
+                  <select id={fid('tour')} className="select" value={form.tour_id || ''} onChange={set('tour_id')}>
+                    <option value="">Not on a tour</option>
+                    {filteredTours.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor={fid('date')}>Show date</label>
+                  <input id={fid('date')} className="input" type="date" value={form.show_date?.substring(0, 10) || ''} onChange={set('show_date')} />
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor={fid('status')}>Status</label>
+                  <select id={fid('status')} className="select" value={form.status} onChange={set('status')}>
+                    {BOOKING_STATUS_ORDER.map(s => <option key={s} value={s}>{BOOKING_STATUS_LABELS[s]}</option>)}
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor={fid('deal')}>Deal type</label>
+                  <select id={fid('deal')} className="select" value={form.deal_type || ''} onChange={set('deal_type')}>
+                    <option value="">Not set</option>
+                    {DEAL_OPTIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor={fid('agreed')}>Agreed pay ($)</label>
+                  <input id={fid('agreed')} className="input" inputMode="decimal" value={form.agreed_amount ?? ''} onChange={set('agreed_amount')} placeholder="0.00" />
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor={fid('deposit')}>Deposit ($)</label>
+                  <input id={fid('deposit')} className="input" inputMode="decimal" value={form.deposit_amount ?? ''} onChange={set('deposit_amount')} placeholder="0.00" />
+                </div>
+                <div className="field">
+                  <span className="field-label">Deposit</span>
+                  <label className="checkbox-row" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minHeight: 44 }}>
+                    <input type="checkbox" checked={!!form.deposit_paid} onChange={e => setForm((f: any) => ({ ...f, deposit_paid: e.target.checked }))} />
+                    Deposit paid
+                  </label>
+                </div>
+                <div className={`field ${css.full}`}>
+                  <label className="field-label" htmlFor={fid('contract')}>Contract link</label>
+                  <input id={fid('contract')} className="input" type="url" value={form.contract_url || ''} onChange={set('contract_url')} placeholder="https://…" />
+                </div>
+                <div className={`field ${css.full}`}>
+                  <label className="field-label" htmlFor={fid('dealnotes')}>Deal notes</label>
+                  <textarea id={fid('dealnotes')} className="textarea" value={form.deal_notes || ''} onChange={set('deal_notes')} />
+                </div>
+                <div className={`field ${css.full}`}>
+                  <label className="field-label" htmlFor={fid('advance')}>Advance notes (members see these)</label>
+                  <textarea id={fid('advance')} className="textarea" value={form.advance_notes || ''} onChange={set('advance_notes')} />
+                </div>
+                <div className={`field ${css.full}`}>
+                  <label className="field-label" htmlFor={fid('internal')}>Internal notes (admins only)</label>
+                  <textarea id={fid('internal')} className="textarea" value={form.internal_notes || ''} onChange={set('internal_notes')} />
+                </div>
+              </div>
+              <p className={css.note}>Times, contacts and logistics are edited from the Schedule panel.</p>
+              {editError && <p className={css.error} role="alert">{editError}</p>}
+              <div className={css.formActions}>
+                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setEdit(false)}>Cancel</button>
+              </div>
+            </form>
+          </section>
+        ) : (
+          <div className={css.layout}>
+            {/* ── Show day ─────────────────────────────────────── */}
+            <div className={css.column}>
+              <section className={css.panel} aria-labelledby={fid('sched-title')}>
+                <div className={css.panelHead}>
+                  <h2 className={css.panelTitle} id={fid('sched-title')}>Schedule</h2>
+                  <button type="button" className={`btn btn-secondary ${css.btnSmall}`} onClick={() => { setDetailsForm(booking); setDetailsError(''); setShowDetailsModal(true); }}>
+                    Edit show day
                   </button>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <Row label="Band"      value={booking.act?.act_name} />
-                  <Row label="Venue"     value={booking.venue ? `${booking.venue.name}, ${booking.venue.city} ${booking.venue.state}` : null} />
-                  <Row label="Tour"      value={booking.tour?.name} />
-                  <Row label="Show Date" value={booking.show_date ? formatShowDate(booking.show_date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : null} />
-                  <Row label="Load-in"       value={fmt(booking.load_in_time)} />
-                  <Row label="Soundcheck"    value={fmt(booking.soundcheck_time)} />
-                  <Row label="Set Time"      value={fmt(booking.set_time)} />
-                  <Row label="End Time"      value={fmt(booking.end_time)} />
-                  <Row label="Set Length"    value={booking.set_length_min ? `${booking.set_length_min} min` : null} />
-                  <Row label="Sound System"  value={booking.sound_system === 'house' ? 'House PA' : booking.sound_system === 'self' ? 'Self-Provided' : null} />
-                  <Row label="Meals"         value={booking.meals_provided  ? 'Provided'    : null} />
-                  <Row label="Drinks"        value={booking.drinks_provided ? 'Provided'    : null} />
-                  <Row label="Hotel"         value={booking.hotel_booked    ? 'Booked'      : null} />
-                  <Row label="Day-of Contact" value={(booking.venue_contact_name || booking.day_of_contact_phone)
-                    ? <ShowDayPerson name={booking.venue_contact_name} phone={booking.day_of_contact_phone} /> : null} />
-                  <Row label="Sound Engineer" value={(booking.sound_engineer_name || booking.sound_engineer_phone)
-                    ? <ShowDayPerson name={booking.sound_engineer_name} phone={booking.sound_engineer_phone} /> : null} />
-                  <Row label="Deposit"       value={booking.deposit_amount ? `$${Number(booking.deposit_amount).toLocaleString()} ${booking.deposit_paid ? '(PAID)' : '(UNPAID)'}` : null} />
-                </div>
-                {booking.lodging_details && (
-                  <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Lodging</div>
-                    {booking.lodging_details}
-                  </div>
-                )}
-                {booking.special_requirements && (
-                  <div style={{ marginTop: '0.5rem', padding: '0.6rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Special Requirements</div>
-                    {booking.special_requirements}
-                  </div>
-                )}
-              </div>
+                <dl className={css.facts}>
+                  {steps.map(s => (
+                    <div key={s.key} className={css.fact}>
+                      <dt className={css.factLabel}>{s.label}</dt>
+                      <dd className={css.factValue}>{s.value ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
 
-              {/* FINANCIAL (Item 4) */}
-              <div className="card">
-                <div className="card-header">
-                  <span className="card-title">FINANCIAL</span>
-                  <button className="btn btn-ghost btn-sm" onClick={() => { setFinancialForm(booking); setEditFinancial(!editFinancial); }}>
+              <section className={css.panel} aria-labelledby={fid('people-title')}>
+                <div className={css.panelHead}><h2 className={css.panelTitle} id={fid('people-title')}>Who to call</h2></div>
+                <div className={css.people}>
+                  {(booking.venue_contact_name || booking.day_of_contact_phone) && (
+                    <div className={css.person}>
+                      <span className={css.personRole}>Day-of contact</span>
+                      <p className={css.personName}>{booking.venue_contact_name || '—'}</p>
+                      {booking.day_of_contact_phone && <p className={css.personLine}><a href={telLink(booking.day_of_contact_phone)}>{booking.day_of_contact_phone}</a></p>}
+                    </div>
+                  )}
+                  {(booking.sound_engineer_name || booking.sound_engineer_phone) && (
+                    <div className={css.person}>
+                      <span className={css.personRole}>Sound engineer</span>
+                      <p className={css.personName}>{booking.sound_engineer_name || '—'}</p>
+                      {booking.sound_engineer_phone && <p className={css.personLine}><a href={telLink(booking.sound_engineer_phone)}>{booking.sound_engineer_phone}</a></p>}
+                    </div>
+                  )}
+                  {(venue?.booking_contact || venue?.email || venue?.phone) && (
+                    <div className={css.person}>
+                      <span className={css.personRole}>Venue contact</span>
+                      <p className={css.personName}>{venue.booking_contact || '—'}</p>
+                      {venue.phone && <p className={css.personLine}><a href={telLink(venue.phone)}>{venue.phone}</a></p>}
+                      {venue.email && <p className={css.personLine}><a href={`mailto:${venue.email}`}>{venue.email}</a></p>}
+                    </div>
+                  )}
+                </div>
+                {!booking.venue_contact_name && !booking.day_of_contact_phone && !booking.sound_engineer_name && !venue?.booking_contact && (
+                  <p className={css.note}>No contacts yet. Add the day-of contact and sound engineer under Edit show day.</p>
+                )}
+                <dl className={css.facts}>
+                  <Fact label="Venue">{venue ? <Link href={`/venues/${venue.id}`}>{venue.name}</Link> : null}</Fact>
+                  <Fact label="Address">{venue?.address ? (map ? <a href={map} target="_blank" rel="noopener noreferrer">{venue.address}</a> : venue.address) : null}</Fact>
+                  <Fact label="Tour">{tour ? <Link href={`/tours/${tour.id}`}>{tour.name}</Link> : null}</Fact>
+                </dl>
+              </section>
+
+              <section className={css.panel} aria-labelledby={fid('log-title')}>
+                <div className={css.panelHead}><h2 className={css.panelTitle} id={fid('log-title')}>Logistics</h2></div>
+                <dl className={css.facts}>
+                  {logistics.map(([l, v]) => <Fact key={l} label={l}>{v}</Fact>)}
+                  <Fact label="Lodging">{booking.lodging_details}</Fact>
+                  <Fact label="Requirements">{booking.special_requirements}</Fact>
+                </dl>
+              </section>
+
+              <section className={css.panel} aria-labelledby={fid('lineup-title')}>
+                <div className={css.panelHead}>
+                  <h2 className={css.panelTitle} id={fid('lineup-title')}>Lineup</h2>
+                  <button type="button" className={`btn btn-secondary ${css.btnSmall}`} onClick={openLineup}>
+                    {loadedAssignments.length ? 'Edit lineup' : 'Add lineup'}
+                  </button>
+                </div>
+                {loadedAssignments.length === 0 ? (
+                  <p className={css.note}>Who’s playing this one, and what they’re paid. Band pay is tracked from here.</p>
+                ) : (
+                  <ul className={css.list}>
+                    {loadedAssignments.map(a => (
+                      <li key={a.personnel_id} className={css.row}>
+                        <div className={css.rowText}>
+                          <p className={css.rowMain}>{a.name || 'Unknown'}</p>
+                          {a.instrument_role && <p className={css.rowSub}>{a.instrument_role}</p>}
+                        </div>
+                        <span className={css.amount}>{dollars(a.amount)}</span>
+                      </li>
+                    ))}
+                    <li className={css.row} style={{ background: 'transparent' }}>
+                      <span className={css.rowText}><span className={css.panelMeta}>Total band pay</span></span>
+                      <span className={css.amount} style={{ color: 'var(--accent)' }}>{dollars(payTotal)}</span>
+                    </li>
+                  </ul>
+                )}
+              </section>
+            </div>
+
+            {/* ── Deal, money, notes ─────────────────────────────── */}
+            <div className={css.column}>
+              <section className={css.panel} aria-labelledby={fid('money-title')}>
+                <div className={css.panelHead}>
+                  <h2 className={css.panelTitle} id={fid('money-title')}>Deal & money</h2>
+                  <button type="button" className={`btn btn-secondary ${css.btnSmall}`}
+                    onClick={() => { setFinancialForm(booking); setFinancialError(''); setEditFinancial(v => !v); }}>
                     {editFinancial ? 'Cancel' : 'Edit'}
                   </button>
                 </div>
                 {editFinancial ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                    <div className="grid-2">
-                      <div className="field"><label className="field-label">Deal Type</label>
-                        <select className="select" value={financialForm.deal_type || ''} onChange={setFin('deal_type')}>
-                          <option value="">Select...</option>
+                  <form className={css.form} onSubmit={e => { e.preventDefault(); void saveFinancial(); }}>
+                    <div className={css.formGrid}>
+                      <div className="field">
+                        <label className="field-label" htmlFor={fid('f-deal')}>Deal type</label>
+                        <select id={fid('f-deal')} className="select" value={financialForm.deal_type || ''} onChange={setFin('deal_type')}>
+                          <option value="">Not set</option>
                           {DEAL_OPTIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-                        </select></div>
-                      <div className="field"><label className="field-label">Agreed Amount ($)</label>
-                        <input className="input" type="number" min="0" step="0.01" value={financialForm.agreed_amount ?? ''} onChange={setFin('agreed_amount')} /></div>
+                        </select>
+                      </div>
+                      <div className="field">
+                        <label className="field-label" htmlFor={fid('f-agreed')}>Agreed pay ($)</label>
+                        <input id={fid('f-agreed')} className="input" inputMode="decimal" value={financialForm.agreed_amount ?? ''} onChange={setFin('agreed_amount')} />
+                      </div>
+                      <div className="field">
+                        <label className="field-label" htmlFor={fid('f-rec')}>Received ($)</label>
+                        <input id={fid('f-rec')} className="input" inputMode="decimal" value={financialForm.actual_amount_received ?? ''} onChange={setFin('actual_amount_received')} />
+                      </div>
+                      <div className="field">
+                        <label className="field-label" htmlFor={fid('f-status')}>Payment</label>
+                        <select id={fid('f-status')} className="select" value={toPaymentStatus(financialForm.payment_status) ?? 'pending'} onChange={setFin('payment_status')}>
+                          {PAYMENT_STATUSES.map(p => <option key={p} value={p}>{PAYMENT_LABELS[p]}</option>)}
+                        </select>
+                      </div>
+                      <div className="field">
+                        <label className="field-label" htmlFor={fid('f-date')}>Date paid</label>
+                        <input id={fid('f-date')} className="input" type="date" value={financialForm.date_paid?.substring(0, 10) || ''} onChange={setFin('date_paid')} />
+                      </div>
+                      <div className={`field ${css.full}`}>
+                        <label className="field-label" htmlFor={fid('f-exp')}>Expense notes</label>
+                        <textarea id={fid('f-exp')} className="textarea" value={financialForm.expense_notes || ''} onChange={setFin('expense_notes')} />
+                      </div>
+                      <div className={`field ${css.full}`}>
+                        <label className="field-label" htmlFor={fid('f-pay')}>Payout notes</label>
+                        <textarea id={fid('f-pay')} className="textarea" value={financialForm.payout_notes || ''} onChange={setFin('payout_notes')} />
+                      </div>
                     </div>
-                    <div className="grid-2">
-                      <div className="field"><label className="field-label">Actual Received ($)</label>
-                        <input className="input" type="number" min="0" step="0.01" value={financialForm.actual_amount_received ?? ''} onChange={setFin('actual_amount_received')} /></div>
-                      <div className="field"><label className="field-label">Payment Status</label>
-                        <select className="select" value={financialForm.payment_status || 'pending'} onChange={setFin('payment_status')}>
-                          <option value="pending">Pending</option>
-                          <option value="partial">Partial</option>
-                          <option value="received">Received</option>
-                          <option value="waived">Waived</option>
-                        </select></div>
+                    {financialError && <p className={css.error} role="alert">{financialError}</p>}
+                    <div className={css.formActions}>
+                      <button type="submit" className="btn btn-primary" disabled={savingFinancial}>{savingFinancial ? 'Saving…' : 'Save'}</button>
                     </div>
-                    <div className="field"><label className="field-label">Date Paid</label>
-                      <input className="input" type="date" value={financialForm.date_paid?.substring(0, 10) || ''} onChange={setFin('date_paid')} /></div>
-                    <div className="field"><label className="field-label">Expense Notes</label>
-                      <textarea className="textarea" value={financialForm.expense_notes || ''} onChange={setFin('expense_notes')} /></div>
-                    <div className="field"><label className="field-label">Payout Notes</label>
-                      <textarea className="textarea" value={financialForm.payout_notes || ''} onChange={setFin('payout_notes')} /></div>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button className="btn btn-secondary btn-sm" onClick={() => setEditFinancial(false)}>Cancel</button>
-                      <button className="btn btn-primary btn-sm" onClick={saveFinancial} disabled={savingFinancial}>{savingFinancial ? 'Saving...' : 'Save'}</button>
-                    </div>
-                  </div>
+                  </form>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <Row label="Deal Type"    value={booking.deal_type ? DEAL_LABELS[booking.deal_type] || booking.deal_type : null} />
-                    <Row label="Agreed"       value={booking.agreed_amount != null ? `$${Number(booking.agreed_amount).toLocaleString()}` : null} />
-                    <Row label="Received"     value={booking.actual_amount_received != null ? `$${Number(booking.actual_amount_received).toLocaleString()}` : null} />
-                    <Row label="Payment"
-                      value={booking.payment_status ? (
-                        <span style={{ color: PAY_COLORS[booking.payment_status] || 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: '0.78rem' }}>
-                          {booking.payment_status}
-                        </span>
-                      ) : null} />
-                    <Row label="Date Paid"    value={booking.date_paid ? formatShowDate(booking.date_paid, { month: 'short', day: 'numeric', year: 'numeric' }) : null} />
-                    {booking.expense_notes && (
-                      <div style={{ marginTop: '0.5rem', padding: '0.5rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Expenses</div>
-                        {booking.expense_notes}
-                      </div>
-                    )}
-                    {booking.payout_notes && (
-                      <div style={{ marginTop: '0.5rem', padding: '0.5rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Payout</div>
-                        {booking.payout_notes}
-                      </div>
-                    )}
-                    {!booking.deal_type && !booking.agreed_amount && !booking.payment_status && (
-                      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem', padding: '0.5rem 0' }}>
-                        No financial details recorded. Click Edit to add.
-                      </div>
-                    )}
-                  </div>
+                  <dl className={css.facts}>
+                    <Fact label="Deal">{booking.deal_type ? DEAL_LABELS[booking.deal_type] ?? booking.deal_type : 'Not set'}</Fact>
+                    <Fact label="Agreed">{dollars(booking.agreed_amount ?? booking.fee) ?? '—'}</Fact>
+                    <Fact label="Deposit">{booking.deposit_amount ? `${dollars(booking.deposit_amount)} · ${booking.deposit_paid ? 'paid' : 'not paid yet'}` : null}</Fact>
+                    <Fact label="Received">{dollars(booking.actual_amount_received)}</Fact>
+                    <Fact label="Payment">{payStatus ? PAYMENT_LABELS[payStatus] : null}</Fact>
+                    <Fact label="Date paid">{booking.date_paid ? formatShowDate(booking.date_paid, { month: 'short', day: 'numeric', year: 'numeric' }) : null}</Fact>
+                    <Fact label="Contract">{booking.contract_url ? <a href={booking.contract_url} target="_blank" rel="noopener noreferrer">Open contract</a> : null}</Fact>
+                    <Fact label="Expenses">{booking.expense_notes}</Fact>
+                    <Fact label="Payout">{booking.payout_notes}</Fact>
+                  </dl>
                 )}
-              </div>
+              </section>
 
-              {/* LINEUP */}
-              <div className="card">
-                <div className="card-header">
-                  <span className="card-title">LINEUP</span>
-                  <button className="btn btn-ghost btn-sm" onClick={() => {
-                    setPersonnelForm(
-                      loadedAssignments.map(a => ({
-                        personnel_id:    a.personnel_id,
-                        name:            a.name,
-                        instrument_role: a.instrument_role || '',
-                        pay_amount:      String(a.amount),
-                      }))
-                    );
-                    setPersonnelError('');
-                    setPersonnelSuccess('');
-                    setShowPersonnelModal(true);
-                  }}>
-                    {loadedAssignments.length === 0 ? 'Add Lineup' : 'Edit Lineup'}
-                  </button>
-                </div>
-                {loadedAssignments.length === 0 ? (
-                  <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem', padding: '0.5rem 0' }}>
-                    No lineup recorded.
+              {[
+                ['Deal notes', booking.deal_notes, null],
+                ['Advance notes', booking.advance_notes, 'Members see these'],
+                ['Internal notes', booking.internal_notes, 'Admins only'],
+                ['After the show', booking.post_show_notes, null],
+                ['Issues', booking.issue_notes, null],
+              ].filter(([, v]) => v).map(([title, text, meta]) => (
+                <section key={String(title)} className={css.panel}>
+                  <div className={css.panelHead}>
+                    <h2 className={css.panelTitle}>{title}</h2>
+                    {meta && <span className={css.panelMeta}>{meta}</span>}
                   </div>
-                ) : (
-                  <div>
-                    {loadedAssignments.map(a => (
-                      <div key={a.personnel_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--border)' }}>
-                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.86rem', color: 'var(--text-secondary)' }}>
-                          {a.name || 'Unknown'}
-                          {a.instrument_role && (
-                            <span style={{ color: 'var(--text-muted)', marginLeft: '0.35rem' }}>({a.instrument_role})</span>
-                          )}
-                        </span>
-                        <span style={{ fontSize: '0.86rem', color: 'var(--text-primary)' }}>
-                          ${Number(a.amount).toLocaleString()}
-                        </span>
-                      </div>
-                    ))}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0 0.25rem' }}>
-                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Total</span>
-                      <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--accent)' }}>
-                        ${loadedAssignments.reduce((sum, a) => sum + Number(a.amount), 0).toLocaleString()}
-                      </span>
+                  <p className={css.factValue}>{text}</p>
+                </section>
+              ))}
+
+              {status !== 'cancelled' && (
+                <section className={css.panel} aria-labelledby={fid('remove-title')}>
+                  <div className={css.panelHead}>
+                    <h2 className={css.panelTitle} id={fid('remove-title')}>{deletable ? 'Cancel or delete' : 'Cancel show'}</h2>
+                  </div>
+                  <p className={css.note}>
+                    {deletable
+                      ? 'Cancelling keeps the show on record. Delete removes it completely — only for shows entered by mistake.'
+                      : 'This show has history or money on it, so it can be cancelled but not deleted. Its records are kept.'}
+                  </p>
+                  {confirmRemove ? (
+                    <div className={css.formActions} role="group" aria-label="Confirm">
+                      <button type="button" className="btn btn-secondary" disabled={removing} onClick={() => removeShow('cancel')}>Yes, cancel the show</button>
+                      {deletable && <button type="button" className="btn btn-ghost" style={{ color: 'var(--red)' }} disabled={removing} onClick={() => removeShow('delete')}>Delete for good</button>}
+                      <button type="button" className="btn btn-ghost" disabled={removing} onClick={() => setConfirmRemove(false)}>Keep it</button>
                     </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* RIGHT: Notes */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {booking.deal_notes && (
-                <div className="card">
-                  <div className="card-header"><span className="card-title">DEAL NOTES</span></div>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.6 }}>{booking.deal_notes}</p>
-                </div>
+                  ) : (
+                    <div><button type="button" className="btn btn-ghost" style={{ color: 'var(--red)' }} onClick={() => setConfirmRemove(true)}>Cancel this show…</button></div>
+                  )}
+                </section>
               )}
-              {booking.advance_notes && (
-                <div className="card">
-                  <div className="card-header"><span className="card-title">ADVANCE NOTES</span></div>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.6 }}>{booking.advance_notes}</p>
-                </div>
-              )}
-              {booking.internal_notes && (
-                <div className="card">
-                  <div className="card-header">
-                    <span className="card-title">INTERNAL NOTES</span>
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)' }}>Agent only</span>
-                  </div>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.6 }}>{booking.internal_notes}</p>
-                </div>
-              )}
-              {booking.post_show_notes && (
-                <div className="card">
-                  <div className="card-header"><span className="card-title">POST-SHOW NOTES</span></div>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.6 }}>{booking.post_show_notes}</p>
-                </div>
-              )}
+              {status === 'completed' && <Link href="/history" className={css.backLink}>View in show history →</Link>}
             </div>
           </div>
+        )}
+      </div>
 
-          {/* History link */}
-          {booking.status === 'completed' && (
-            <div style={{ marginTop: '1rem', textAlign: 'right' }}>
-              <Link href="/history" style={{ fontSize: '0.82rem', color: 'var(--text-muted)', textDecoration: 'none' }}>
-                View in Show History →
-              </Link>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ── Show Details Modal (Item 2) ── */}
+      {/* ── Show day modal ── */}
       {showDetailsModal && (
-        <div className="modal-backdrop" onClick={() => setShowDetailsModal(false)}>
-          <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setShowDetailsModal(false)}>✕</button>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--accent)', marginBottom: '1.25rem' }}>
-              Show Logistics — {booking.venue?.name}
+        <div className="modal-backdrop" onClick={() => !savingDetails && setShowDetailsModal(false)}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby={fid('det-title')} style={{ maxWidth: 600 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title" id={fid('det-title')}>Show day — {venue?.name || 'show'}</h3>
+              <button type="button" className="btn btn-ghost btn-sm" aria-label="Close" onClick={() => setShowDetailsModal(false)}>✕</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-              <div className="grid-2">
-                <div className="field"><label className="field-label">Load-in Time</label>
-                  <input className="input" type="time" value={detailsForm.load_in_time || ''} onChange={setDet('load_in_time')} /></div>
-                <div className="field"><label className="field-label">Soundcheck Time</label>
-                  <input className="input" type="time" value={detailsForm.soundcheck_time || ''} onChange={setDet('soundcheck_time')} /></div>
+            <form className={css.form} onSubmit={e => { e.preventDefault(); void saveDetails(); }}>
+              <div className={css.formGrid}>
+                {TIME_FIELDS.map(([k, label]) => (
+                  <div className="field" key={k}>
+                    <label className="field-label" htmlFor={fid(`d-${k}`)}>{label}</label>
+                    <input id={fid(`d-${k}`)} className="input" type="time" value={(detailsForm[k] || '').slice(0, 5)} onChange={setDet(k)} />
+                  </div>
+                ))}
+                <div className="field">
+                  <label className="field-label" htmlFor={fid('d-len')}>Set length (min)</label>
+                  <input id={fid('d-len')} className="input" inputMode="numeric" value={detailsForm.set_length_min ?? ''} onChange={setDet('set_length_min')} placeholder="90" />
+                </div>
               </div>
-              <div className="grid-2">
-                <div className="field"><label className="field-label">Set Time (Showtime)</label>
-                  <input className="input" type="time" value={detailsForm.set_time || ''} onChange={setDet('set_time')} /></div>
-                <div className="field"><label className="field-label">Estimated End Time</label>
-                  <input className="input" type="time" value={detailsForm.end_time || ''} onChange={setDet('end_time')} /></div>
-              </div>
-              <div className="field"><label className="field-label">Set Length (min)</label>
-                <input className="input" type="number" value={detailsForm.set_length_min || ''} onChange={setDet('set_length_min')} /></div>
               <ShowDayContactFields
-                idPrefix="show-details"
+                idPrefix={fid('d-contacts')}
                 value={contactsFromBooking(detailsForm)}
                 onChange={next => setDetailsForm((f: any) => ({ ...f, ...bookingColumns(next) }))}
                 disabled={savingDetails}
                 hint="For this show only. New shows start with the venue's day-of contact and sound engineer."
               />
-              <div className="field"><label className="field-label">Sound System</label>
-                <select className="select" value={detailsForm.sound_system || ''} onChange={setDet('sound_system')}>
-                  <option value="">Unknown</option>
+              <div className="field">
+                <label className="field-label" htmlFor={fid('d-sound')}>Sound</label>
+                <select id={fid('d-sound')} className="select" value={detailsForm.sound_system || ''} onChange={setDet('sound_system')}>
+                  <option value="">Not sure yet</option>
                   <option value="house">House PA</option>
-                  <option value="self">Self-Provided</option>
-                </select></div>
-              <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', padding: '0.25rem 0' }}>
-                {[
-                  ['meals_provided',  'Meals Provided'],
-                  ['drinks_provided', 'Drinks Provided'],
-                  ['hotel_booked',    'Hotel Booked'],
-                ].map(([key, lbl]) => (
-                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.86rem' }}>
+                  <option value="self">Bringing our own</option>
+                </select>
+              </div>
+              <fieldset style={{ border: 0, padding: 0, margin: 0, display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
+                <legend className="field-label">Provided</legend>
+                {([['meals_provided', 'Meals'], ['drinks_provided', 'Drinks'], ['hotel_booked', 'Hotel booked']] as const).map(([key, lbl]) => (
+                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minHeight: 44 }}>
                     <input type="checkbox" checked={!!detailsForm[key]} onChange={e => setDetailsForm((f: any) => ({ ...f, [key]: e.target.checked }))} />
-                    <span style={{ color: 'var(--text-secondary)' }}>{lbl}</span>
+                    {lbl}
                   </label>
                 ))}
+              </fieldset>
+              <div className="field">
+                <label className="field-label" htmlFor={fid('d-lodging')}>Lodging</label>
+                <textarea id={fid('d-lodging')} className="textarea" rows={2} value={detailsForm.lodging_details || ''} onChange={setDet('lodging_details')} placeholder="Hotel, address, confirmation #" />
               </div>
-              <div className="field"><label className="field-label">Lodging Details</label>
-                <textarea className="textarea" rows={2} value={detailsForm.lodging_details || ''} onChange={setDet('lodging_details')} placeholder="Hotel name, address, confirmation #..." /></div>
-              <div className="field"><label className="field-label">Special Requirements / Notes</label>
-                <textarea className="textarea" rows={3} value={detailsForm.special_requirements || ''} onChange={setDet('special_requirements')} placeholder="Backline, rider requests, parking, stage plot..." /></div>
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-                <button className="btn btn-secondary" onClick={() => setShowDetailsModal(false)}>Cancel</button>
-                <button className="btn btn-primary" onClick={saveDetails} disabled={savingDetails}>
-                  {savingDetails ? 'Saving...' : 'Save Details'}
-                </button>
+              <div className="field">
+                <label className="field-label" htmlFor={fid('d-req')}>Requirements / notes</label>
+                <textarea id={fid('d-req')} className="textarea" rows={3} value={detailsForm.special_requirements || ''} onChange={setDet('special_requirements')} placeholder="Backline, rider, parking, stage plot" />
               </div>
-            </div>
+              {detailsError && <p className={css.error} role="alert">{detailsError}</p>}
+              <div className={css.formActions}>
+                <button type="submit" className="btn btn-primary" disabled={savingDetails}>{savingDetails ? 'Saving…' : 'Save show day'}</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setShowDetailsModal(false)}>Cancel</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* ── Post-Show / Settle Modal (Item 5) ── */}
+      {/* ── Mark as played ── */}
       {showSettle && (
-        <div className="modal-backdrop" onClick={() => setShowSettle(false)}>
-          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setShowSettle(false)}>✕</button>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--accent)', marginBottom: '0.25rem' }}>
-              Post-Show Record
+        <div className="modal-backdrop" onClick={() => !settling && setShowSettle(false)}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby={fid('settle-title')} style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title" id={fid('settle-title')}>How did {venue?.name || 'the show'} go?</h3>
+              <button type="button" className="btn btn-ghost btn-sm" aria-label="Close" onClick={() => setShowSettle(false)}>✕</button>
             </div>
-            <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.8rem', marginBottom: '1.25rem' }}>
-              {booking.venue?.name}{booking.show_date ? ` · ${formatShowDate(booking.show_date, { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-
-              {/* Section 1 — Show outcome */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {/* Rating */}
+            <form className={css.form} onSubmit={e => { e.preventDefault(); void settle(); }}>
+              <p className={css.note}>{longDate}. Marks the show played and records the money; you’ll get a reminder to thank the venue.</p>
+              <div className={css.formGrid}>
                 <div className="field">
-                  <label className="field-label">Rating</label>
-                  <div style={{ display: 'flex', gap: '0.25rem', marginTop: '0.25rem' }}>
-                    {[1, 2, 3, 4, 5].map(star => (
-                      <button
-                        key={star}
-                        onClick={() => setSettleForm((f: any) => ({ ...f, rating: f.rating === star ? 0 : star }))}
-                        style={{
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          fontSize: '1.4rem', lineHeight: 1, padding: '0 2px',
-                          color: star <= settleForm.rating ? '#fbbf24' : 'rgba(255,255,255,0.2)',
-                          transition: 'color 0.1s',
-                        }}
-                      >★</button>
-                    ))}
-                  </div>
+                  <label className="field-label" htmlFor={fid('s-rec')}>Venue paid us ($)</label>
+                  <input id={fid('s-rec')} className="input" inputMode="decimal" value={settleForm.actual_amount_received}
+                    onChange={e => setSettleForm(f => ({ ...f, actual_amount_received: e.target.value }))} />
                 </div>
-
-                <div className="grid-2">
-                  {/* Attendance */}
-                  <div className="field">
-                    <label className="field-label">Attendance</label>
-                    <input className="input" type="number" min="0" step="1"
-                      placeholder="# of people"
-                      value={settleForm.attendance}
-                      onChange={e => setSettleForm((f: any) => ({ ...f, attendance: e.target.value }))} />
-                  </div>
-
-                  {/* Would return */}
-                  <div className="field">
-                    <label className="field-label">Would Return?</label>
-                    <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.25rem' }}>
-                      {(['Yes', 'Maybe', 'No'] as const).map(opt => {
-                        const val = opt === 'Yes' ? true : opt === 'No' ? false : null;
-                        const active = wouldReturn === val;
-                        return (
-                          <button
-                            key={opt}
-                            onClick={() => setWouldReturn(active ? null : val)}
-                            style={{
-                              padding: '0.4rem 0.85rem', borderRadius: '8px', border: '2px solid',
-                              borderColor: active ? '#E8602A' : 'rgba(255,255,255,0.15)',
-                              background: active ? 'rgba(232,96,42,0.15)' : 'transparent',
-                              color: '#F5EDD9', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem',
-                            }}
-                          >{opt}</button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                <div className="field">
+                  <label className="field-label" htmlFor={fid('s-att')}>Crowd (about)</label>
+                  <input id={fid('s-att')} className="input" inputMode="numeric" value={settleForm.attendance}
+                    onChange={e => setSettleForm(f => ({ ...f, attendance: e.target.value.replace(/\D/g, '') }))} />
                 </div>
               </div>
-
-              {/* Section 2 — Financials */}
-              <div className="grid-2">
-                <div className="field">
-                  <label className="field-label">Final Payment Received ($)</label>
-                  <input className="input" type="number" min="0" step="0.01"
-                    value={settleForm.final_payment_received}
-                    onChange={e => setSettleForm((f: any) => ({ ...f, final_payment_received: e.target.value }))} />
+              <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+                <legend className="field-label">Rating</legend>
+                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <button key={star} type="button" aria-label={`${star} star${star === 1 ? '' : 's'}`} aria-pressed={settleForm.rating === star}
+                      onClick={() => setSettleForm(f => ({ ...f, rating: f.rating === star ? 0 : star }))}
+                      style={{ minWidth: 44, minHeight: 44, background: 'none', border: 0, cursor: 'pointer', fontSize: '1.5rem', color: star <= settleForm.rating ? 'var(--accent)' : 'var(--border)' }}>
+                      ★
+                    </button>
+                  ))}
                 </div>
-                <div className="field">
-                  <label className="field-label">Actual Amount Received ($)</label>
-                  <input className="input" type="number" min="0" step="0.01"
-                    value={settleForm.actual_amount_received}
-                    onChange={e => setSettleForm((f: any) => ({ ...f, actual_amount_received: e.target.value }))} />
+              </fieldset>
+              <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+                <legend className="field-label">Book them again?</legend>
+                <div className="tours-tabs">
+                  {(['yes', 'maybe', 'no'] as const).map(opt => (
+                    <button key={opt} type="button" className={`tours-tab ${wouldReturn === opt ? 'tours-tab--on' : ''}`} aria-pressed={wouldReturn === opt}
+                      onClick={() => setWouldReturn(w => (w === opt ? null : opt))}>
+                      {opt === 'yes' ? 'Yes' : opt === 'no' ? 'No' : 'Maybe'}
+                    </button>
+                  ))}
                 </div>
-              </div>
-
-              {/* Section 3 — Member Pay */}
-              {roster.length > 0 && (
-                <div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                    Member Pay
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-                    {roster.map(member => (
-                      <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: '0.88rem', color: 'var(--text-primary)' }}>{member.name}</div>
-                          {member.instrument_role && (
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{member.instrument_role}</div>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}>
-                          <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>$</span>
-                          <input
-                            className="input"
-                            type="number" min="0" step="0.01"
-                            style={{ width: 90, padding: '0.3rem 0.5rem', fontSize: '0.86rem' }}
-                            value={memberPay[member.id] ?? ''}
-                            onChange={e => setMemberPay(prev => ({ ...prev, [member.id]: e.target.value }))}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Section 4 — Notes */}
+              </fieldset>
+              <p className={css.note}>
+                Band pay: {loadedAssignments.length ? `${loadedAssignments.length} on the lineup · ${dollars(payTotal)}` : 'no lineup yet'} —
+                {' '}<button type="button" className="btn btn-ghost btn-sm" onClick={() => { setShowSettle(false); openLineup(); }}>Edit lineup</button>
+              </p>
               <div className="field">
-                <label className="field-label">Post-Show Notes</label>
-                <textarea className="textarea" rows={3}
-                  value={settleForm.post_show_notes}
-                  onChange={e => setSettleForm((f: any) => ({ ...f, post_show_notes: e.target.value }))}
-                  placeholder="How did it go? Crowd size, sound quality, notable moments..." />
+                <label className="field-label" htmlFor={fid('s-notes')}>How it went</label>
+                <textarea id={fid('s-notes')} className="textarea" rows={3} value={settleForm.post_show_notes}
+                  onChange={e => setSettleForm(f => ({ ...f, post_show_notes: e.target.value }))} placeholder="Crowd, sound, anything to remember" />
               </div>
               <div className="field">
-                <label className="field-label">Issues to Flag</label>
-                <textarea className="textarea" rows={2}
-                  value={settleForm.issue_notes}
-                  onChange={e => setSettleForm((f: any) => ({ ...f, issue_notes: e.target.value }))}
-                  placeholder="Any problems for future reference..." />
+                <label className="field-label" htmlFor={fid('s-issues')}>Issues to flag</label>
+                <textarea id={fid('s-issues')} className="textarea" rows={2} value={settleForm.issue_notes}
+                  onChange={e => setSettleForm(f => ({ ...f, issue_notes: e.target.value }))} />
               </div>
-
-              {settleError && <div style={{ color: '#f87171', fontSize: '0.83rem' }}>{settleError}</div>}
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
-                <button className="btn btn-secondary" onClick={() => setShowSettle(false)}>Cancel</button>
-                <button className="btn btn-primary" onClick={settle} disabled={settling}>
-                  {settling ? 'Saving...' : 'Mark as Played'}
-                </button>
+              {settleError && <p className={css.error} role="alert">{settleError}</p>}
+              <div className={css.formActions}>
+                <button type="submit" className="btn btn-primary" disabled={settling}>{settling ? 'Saving…' : 'Mark as played'}</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setShowSettle(false)}>Cancel</button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* ── Band Lineup Modal ── */}
+      {/* ── Lineup ── */}
       {showPersonnelModal && (
-        <div className="modal-backdrop" onClick={() => setShowPersonnelModal(false)}>
-          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setShowPersonnelModal(false)}>✕</button>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--accent)', marginBottom: '0.25rem' }}>
-              Who Played This Show
-            </div>
-            <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.8rem', marginBottom: '1.25rem' }}>
-              {booking.venue?.name}{booking.show_date ? ` · ${formatShowDate(booking.show_date, { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
+        <div className="modal-backdrop" onClick={() => !savingPersonnel && setShowPersonnelModal(false)}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby={fid('lineup-modal')} style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title" id={fid('lineup-modal')}>Who’s playing</h3>
+              <button type="button" className="btn btn-ghost btn-sm" aria-label="Close" onClick={() => setShowPersonnelModal(false)}>✕</button>
             </div>
             {roster.length === 0 ? (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.86rem', padding: '0.5rem 0' }}>
-                No active roster members. Add members in Band Settings → Members.
-              </div>
+              <p className={css.note}>No one on the roster yet. <Link href="/band/members">Add members</Link> first.</p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <ul className={css.list}>
                 {roster.map(member => {
                   const selected = personnelForm.find(p => p.personnel_id === member.id);
+                  const cb = `${fid('lp')}-${member.id}`;
                   return (
-                    <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}>
-                      <input
-                        type="checkbox"
-                        checked={!!selected}
+                    <li key={member.id} className={css.row}>
+                      <input id={cb} type="checkbox" checked={!!selected} style={{ width: 20, height: 20 }}
                         onChange={e => {
                           if (e.target.checked) {
                             const existing = loadedAssignments.find(a => a.personnel_id === member.id);
                             setPersonnelForm(prev => [...prev, {
-                              personnel_id:    member.id,
-                              name:            member.name,
-                              instrument_role: member.instrument_role || '',
-                              pay_amount:      existing ? String(existing.amount) : String(member.default_pay_amount ?? ''),
+                              personnel_id: member.id, name: member.name, instrument_role: member.instrument_role || '',
+                              pay_amount: existing ? String(existing.amount) : String(member.default_pay_amount ?? ''),
                             }]);
                           } else {
                             setPersonnelForm(prev => prev.filter(p => p.personnel_id !== member.id));
                           }
-                        }}
-                      />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '0.88rem', color: 'var(--text-primary)' }}>{member.name}</div>
-                        {member.instrument_role && (
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{member.instrument_role}</div>
-                        )}
-                      </div>
+                        }} />
+                      <label htmlFor={cb} className={css.rowText}>
+                        <span className={css.rowMain} style={{ display: 'block' }}>{member.name}</span>
+                        {member.instrument_role && <span className={css.rowSub} style={{ display: 'block' }}>{member.instrument_role}</span>}
+                      </label>
                       {selected && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
-                          <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>$</span>
-                          <input
-                            className="input"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            style={{ width: 88, padding: '0.3rem 0.5rem', fontSize: '0.86rem' }}
-                            value={selected.pay_amount}
-                            onChange={e => setPersonnelForm(prev => prev.map(p =>
-                              p.personnel_id === member.id ? { ...p, pay_amount: e.target.value } : p
-                            ))}
-                          />
-                        </div>
+                        <>
+                          <label className="sr-only" htmlFor={`${cb}-pay`}>Pay for {member.name}</label>
+                          <input id={`${cb}-pay`} className="input" inputMode="decimal" style={{ width: 96 }} value={selected.pay_amount}
+                            onChange={e => setPersonnelForm(prev => prev.map(p => (p.personnel_id === member.id ? { ...p, pay_amount: e.target.value } : p)))} />
+                        </>
                       )}
-                    </div>
+                    </li>
                   );
                 })}
-              </div>
+              </ul>
             )}
-            {personnelError && (
-              <div style={{ color: '#f87171', fontSize: '0.83rem', marginTop: '0.75rem' }}>{personnelError}</div>
-            )}
-            {personnelSuccess && (
-              <div style={{ color: '#34d399', fontSize: '0.83rem', marginTop: '0.75rem' }}>{personnelSuccess}</div>
-            )}
-            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
-              <button className="btn btn-secondary" onClick={() => setShowPersonnelModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={savePersonnel} disabled={savingPersonnel || roster.length === 0}>
-                {savingPersonnel ? 'Saving...' : 'Save Lineup'}
+            {personnelError && <p className={css.error} role="alert" style={{ marginTop: '0.75rem' }}>{personnelError}</p>}
+            <div className={css.formActions} style={{ marginTop: '1rem' }}>
+              <button type="button" className="btn btn-primary" onClick={savePersonnel} disabled={savingPersonnel || roster.length === 0}>
+                {savingPersonnel ? 'Saving…' : 'Save lineup'}
               </button>
+              <button type="button" className="btn btn-ghost" onClick={() => setShowPersonnelModal(false)}>Cancel</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Email Composer ── */}
       {showEmail && booking.act_id && (
         <EmailComposer
           bookingId={booking.id}
           actId={booking.act_id}
           venueId={booking.venue_id || undefined}
-          contactId={booking.contact?.id || undefined}
-          contactEmail={booking.contact?.email || undefined}
+          contactId={contact?.id || undefined}
+          contactEmail={contact?.email || venue?.email || undefined}
           defaultCategory={booking.email_stage || 'target'}
           onClose={() => setShowEmail(false)}
         />
