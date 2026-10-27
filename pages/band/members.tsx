@@ -1,51 +1,37 @@
-import { useState, useEffect } from 'react';
+// pages/band/members.tsx
+//
+// Members — the band's roster (players and crew, with default pay) and the
+// logins that go with it (band accounts, invites).
+//
+// Layout (Phase 3 redesign, Oct 2026 — matches the Tours page):
+//   1. Illustrated hero (the band's rig at a desert motel) with a status line
+//      and an "Add member" action.
+//   2. Metric trackers: roster, who can log in, admin seats, invites waiting.
+//   3. Left: roster cards. Right: invite someone, pending invites, accounts.
+//
+// Counting and labels live in lib/domain/members.ts (unit-tested). Writes are
+// unchanged: act_personnel / act_invitations under the admin's own session
+// (RLS is the boundary) and /api/members/invite for emails.
+
+import { useState, useEffect, useId } from 'react';
 import AppShell from '../../components/layout/AppShell';
+import PageHero from '../../components/layout/PageHero';
+import BandVanScene from '../../components/members/BandVanScene';
 import { supabase } from '../../lib/supabase';
-
-type Personnel = {
-  id: string;
-  name: string;
-  instrument_role: string | null;
-  default_pay_amount: number | null;
-  phone: string | null;
-  email: string | null;
-  linked_user_id: string | null;
-  is_active: boolean;
-};
-
-interface PendingInvite {
-  id: string;
-  email: string;
-  role: string;
-  created_at: string;
-  personnel_id: string | null;
-}
+import {
+  MAX_BAND_ADMINS, initialsOf, isInviteEmail, membersHeroLine, payLabel, sentAgo, summarizeMembers,
+  type BandAccount, type PendingInvite, type RosterPerson as Personnel,
+} from '../../lib/domain/members';
+import css from '../../styles/members.module.css';
 
 const ROLE_LABELS: Record<string, string> = {
   band_admin: 'Admin',
+  superadmin: 'Superadmin',
   member:     'Member',
 };
 
-const ROLE_COLOR: Record<string, string> = {
-  band_admin: 'var(--accent)',
-  member:     'var(--text-muted)',
-};
-
-function Initials({ name, email }: { name?: string | null; email?: string | null }) {
-  const src = name || email || '?';
-  const letters = src.split(/[\s@]/)[0].slice(0, 2).toUpperCase();
-  return (
-    <div style={{
-      width: 36, height: 36, flexShrink: 0,
-      background: 'rgba(224,120,32,0.12)',
-      border: '1px solid rgba(224,120,32,0.25)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'var(--font-display)', fontSize: '0.95rem', color: 'var(--accent)',
-      letterSpacing: '0.05em',
-    }}>
-      {letters}
-    </div>
-  );
+function Avatar({ name, email }: { name?: string | null; email?: string | null }) {
+  return <span className={css.avatar} aria-hidden="true">{initialsOf(name, email)}</span>;
 }
 
 const EMPTY_ADD = { name: '', instrument_role: '', default_pay_amount: '', phone: '', email: '' };
@@ -75,7 +61,7 @@ export default function BandMembers() {
   const [invitedIds, setInvitedIds]   = useState<Set<string>>(new Set());
 
   // Band accounts + invite form (existing)
-  const [members, setMembers]         = useState<any[]>([]);
+  const [members, setMembers]         = useState<BandAccount[]>([]);
   const [invites, setInvites]         = useState<PendingInvite[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole]   = useState<'band_admin' | 'member'>('member');
@@ -83,7 +69,10 @@ export default function BandMembers() {
   const [inviteError, setInviteError] = useState('');
   const [inviteSent, setInviteSent]   = useState(false);
 
-  useEffect(() => { load(); }, []);
+  const [loaded, setLoaded] = useState(false);
+  const [rowError, setRowError] = useState('');
+
+  useEffect(() => { load().finally(() => setLoaded(true)); }, []);
 
   const load = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -146,13 +135,13 @@ export default function BandMembers() {
       setWithHistory(new Set());
     }
 
-    const membersList: any[] = membersRes.data || [];
-    const existingIds = new Set(membersList.map((m: any) => m.id));
+    const membersList: BandAccount[] = (membersRes.data || []) as BandAccount[];
+    const existingIds = new Set(membersList.map(m => m.id));
     if (ownerId && !existingIds.has(ownerId)) {
       const { data: ownerProf } = await supabase
         .from('profiles').select('id, display_name, email, role, created_at')
         .eq('id', ownerId).maybeSingle();
-      if (ownerProf) membersList.push(ownerProf as any);
+      if (ownerProf) membersList.push(ownerProf as BandAccount);
     }
     setMembers(membersList);
     setInvites((invitesRes.data || []) as PendingInvite[]);
@@ -187,7 +176,7 @@ export default function BandMembers() {
   const handleDeactivate = async (id: string) => {
     setDeactivateSaving(true);
     const { error } = await supabase.from('act_personnel').update({ is_active: false }).eq('id', id);
-    if (error) { console.error('Deactivate failed:', error.message); setDeactivateSaving(false); return; }
+    if (error) { console.error('Deactivate failed:', error.message); setRowError(`Couldn’t deactivate: ${error.message}`); setDeactivateSaving(false); return; }
     setDeactivateId(null);
     setDeactivateSaving(false);
     await load();
@@ -195,7 +184,7 @@ export default function BandMembers() {
 
   const handleReactivate = async (id: string) => {
     const { error } = await supabase.from('act_personnel').update({ is_active: true }).eq('id', id);
-    if (error) { console.error('Reactivate failed:', error.message); return; }
+    if (error) { console.error('Reactivate failed:', error.message); setRowError(`Couldn’t reactivate: ${error.message}`); return; }
     await load();
   };
 
@@ -211,18 +200,23 @@ export default function BandMembers() {
     });
     if (res.ok) {
       setInvitedIds(prev => new Set([...prev, person.id]));
+      setRowError('');
       await load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setRowError(`Couldn’t invite ${person.name}: ${data.error || 'please try again.'}`);
     }
     setInvitingId(null);
   };
 
   // ── Send invite (existing flow) ────────────────────────────────────────────
-  const adminCount = members.filter(m => m.role === 'band_admin').length +
-    invites.filter(i => i.role === 'band_admin').length;
-  const adminLimitReached = adminCount >= 2;
+  const summary = summarizeMembers(roster, members, invites);
+  const adminCount = summary.admins;
+  const adminLimitReached = adminCount >= MAX_BAND_ADMINS;
 
   const sendInvite = async () => {
     if (!inviteEmail.trim() || !actId) return;
+    if (!isInviteEmail(inviteEmail)) { setInviteError('Enter a full email address, like name@example.com.'); return; }
     if (inviteRole === 'band_admin' && adminLimitReached) {
       setInviteError('Maximum of 2 admins allowed per band.');
       return;
@@ -245,376 +239,302 @@ export default function BandMembers() {
   };
 
   const revokeInvite = async (inviteId: string) => {
-    await supabase.from('act_invitations').update({ status: 'revoked' }).eq('id', inviteId);
+    const { error } = await supabase.from('act_invitations').update({ status: 'revoked' }).eq('id', inviteId);
+    if (error) { setRowError(`Couldn’t revoke the invite: ${error.message}`); return; }
     await load();
   };
 
-  return (
-    <AppShell requireRole="band_admin">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Band Members</h1>
-          <div className="page-sub">{actName}{roster.length > 0 ? ` · ${roster.length} on roster` : ''}</div>
+  const uid = useId();
+  const fid = (k: string) => `${uid}-${k}`;
+
+  const personCard = (person: Personnel, inactive = false) => (
+    <li
+      key={person.id}
+      className={`${css.person} ${person.linked_user_id ? css.personLinked : ''} ${inactive ? css.personInactive : ''}`}
+    >
+      <div className={css.personTop}>
+        <Avatar name={person.name} />
+        <div className={css.who}>
+          <p className={css.name}>{person.name}</p>
+          <p className={css.role}>{person.instrument_role || 'No role set'}</p>
         </div>
+        <span className={`${css.badge} ${person.linked_user_id ? css.badgeOn : ''}`}>
+          {person.linked_user_id ? 'Can log in' : invitedIds.has(person.id) ? 'Invited' : 'No login'}
+        </span>
       </div>
 
-      {/* ── BAND ROSTER ──────────────────────────────────────────────────────── */}
-      <div className="card mb-6" style={{ maxWidth: 640 }}>
-        <div className="card-header">
-          <span className="card-title">BAND ROSTER</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-            {roster.length} active
-          </span>
-        </div>
+      <div className={css.facts}>
+        <span className={css.pay}>{payLabel(person.default_pay_amount)}</span>
+        {person.phone && <a href={`tel:${person.phone.replace(/[^\d+]/g, '')}`}>{person.phone}</a>}
+        {person.email && <a href={`mailto:${person.email}`}>{person.email}</a>}
+      </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-          {roster.map(person => (
-            <div key={person.id} style={{
-              display: 'flex', alignItems: 'center', gap: '0.75rem',
-              padding: '0.55rem 0.75rem',
-              background: 'var(--bg-overlay)', border: '1px solid var(--border)',
-              borderLeft: `3px solid ${person.linked_user_id ? 'var(--accent)' : 'var(--border)'}`,
-            }}>
-              <Initials name={person.name} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {person.name}
-                </div>
-                {person.instrument_role && (
-                  <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
-                    {person.instrument_role}
-                  </div>
-                )}
-              </div>
-
-              {/* linked / no account badge */}
-              <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: '0.63rem', fontWeight: 700,
-                textTransform: 'uppercase', letterSpacing: '0.1em', flexShrink: 0,
-                color: person.linked_user_id ? 'var(--accent)' : 'var(--text-muted)',
-                background: person.linked_user_id ? 'rgba(200,146,26,0.1)' : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${person.linked_user_id ? 'rgba(200,146,26,0.3)' : 'rgba(255,255,255,0.1)'}`,
-                padding: '0.15rem 0.45rem',
-              }}>
-                {person.linked_user_id ? 'linked' : 'no account'}
-              </span>
-
-              {/* invite button — only when no linked account and email is known */}
-              {!person.linked_user_id && person.email && (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  style={{ fontSize: '0.72rem', flexShrink: 0 }}
-                  disabled={invitingId === person.id || invitedIds.has(person.id)}
-                  onClick={() => handleRosterInvite(person)}
-                >
-                  {invitedIds.has(person.id) ? '✓ Invited' : invitingId === person.id ? 'Sending…' : 'Invite to log in'}
-                </button>
-              )}
-
-              {/* deactivate with inline confirm */}
-              {deactivateId === person.id ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
-                    {withHistory.has(person.id) ? 'Has expense history — deactivate?' : 'Deactivate?'}
-                  </span>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    style={{ color: '#f87171', fontSize: '0.72rem' }}
-                    disabled={deactivateSaving}
-                    onClick={() => handleDeactivate(person.id)}
-                  >
-                    {deactivateSaving ? '…' : 'Yes'}
-                  </button>
-                  <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem' }} onClick={() => setDeactivateId(null)}>
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  style={{ color: 'var(--text-muted)', fontSize: '0.72rem', flexShrink: 0 }}
-                  onClick={() => setDeactivateId(person.id)}
-                >
-                  Deactivate
-                </button>
-              )}
-            </div>
-          ))}
-
-          {roster.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)', fontSize: '0.84rem' }}>
-              No active roster members — add one below.
-            </div>
-          )}
-        </div>
-
-        {/* ── Inactive members toggle ─────────────────────────────────────── */}
-        {inactiveRoster.length > 0 && (
-          <div style={{ marginTop: '0.75rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-            <button
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}
-              onClick={() => setShowInactive(v => !v)}
-            >
-              {showInactive ? '▲ Hide inactive' : `▼ Show inactive (${inactiveRoster.length})`}
-            </button>
-            {showInactive && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.5rem' }}>
-                {inactiveRoster.map(person => (
-                  <div key={person.id} style={{
-                    display: 'flex', alignItems: 'center', gap: '0.75rem',
-                    padding: '0.5rem 0.75rem', opacity: 0.6,
-                    background: 'var(--bg-overlay)', border: '1px solid var(--border)',
-                  }}>
-                    <Initials name={person.name} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ color: 'var(--text-muted)', fontWeight: 500, fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {person.name}
-                      </div>
-                      {person.instrument_role && (
-                        <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
-                          {person.instrument_role}
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ fontSize: '0.72rem', flexShrink: 0 }}
-                      onClick={() => handleReactivate(person.id)}
-                    >
-                      Reactivate
-                    </button>
-                  </div>
-                ))}
-              </div>
+      <div className={css.actions}>
+        {inactive ? (
+          <button type="button" className={`btn btn-ghost ${css.btnSmall}`} onClick={() => handleReactivate(person.id)}>
+            Reactivate
+          </button>
+        ) : (
+          <>
+            {!person.linked_user_id && person.email && (
+              <button
+                type="button"
+                className={`btn btn-secondary ${css.btnSmall}`}
+                disabled={invitingId === person.id || invitedIds.has(person.id)}
+                onClick={() => handleRosterInvite(person)}
+              >
+                {invitedIds.has(person.id) ? '✓ Invited' : invitingId === person.id ? 'Sending…' : 'Invite to log in'}
+              </button>
             )}
-          </div>
-        )}
-
-        {/* ── Add band member form ────────────────────────────────────────── */}
-        <div style={{ marginTop: '0.75rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-          {!showAddForm ? (
-            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.8rem' }} onClick={() => setShowAddForm(true)}>
-              + Add Band Member
-            </button>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
-                <div className="field">
-                  <label className="field-label">Name *</label>
-                  <input
-                    className="input"
-                    value={addForm.name}
-                    onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder="Full name"
-                    autoFocus
-                  />
-                </div>
-                <div className="field">
-                  <label className="field-label">Instrument / Role</label>
-                  <input
-                    className="input"
-                    value={addForm.instrument_role}
-                    onChange={e => setAddForm(f => ({ ...f, instrument_role: e.target.value }))}
-                    placeholder="e.g. Drums"
-                  />
-                </div>
-                <div className="field">
-                  <label className="field-label">Default Pay</label>
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.85rem', pointerEvents: 'none' }}>$</span>
-                    <input
-                      className="input"
-                      style={{ paddingLeft: '1.5rem' }}
-                      type="number" min="0" step="0.01"
-                      value={addForm.default_pay_amount}
-                      onChange={e => setAddForm(f => ({ ...f, default_pay_amount: e.target.value }))}
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-                <div className="field">
-                  <label className="field-label">Phone</label>
-                  <input
-                    className="input"
-                    value={addForm.phone}
-                    onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))}
-                    placeholder="Optional"
-                  />
-                </div>
-                <div className="field" style={{ gridColumn: '1 / -1' }}>
-                  <label className="field-label">
-                    Email
-                    <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.35rem' }}>(needed to invite them to log in)</span>
-                  </label>
-                  <input
-                    className="input"
-                    type="email"
-                    value={addForm.email}
-                    onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
-                    placeholder="Optional"
-                  />
-                </div>
-              </div>
-              {addError && <div style={{ color: '#f87171', fontSize: '0.83rem' }}>{addError}</div>}
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {deactivateId === person.id ? (
+              <span className={css.confirm} role="group" aria-label={`Deactivate ${person.name}?`}>
+                {withHistory.has(person.id) ? 'Has pay history (kept). Deactivate?' : 'Deactivate?'}
                 <button
-                  className="btn btn-primary"
-                  disabled={addSaving || !addForm.name.trim()}
-                  onClick={handleAddSave}
+                  type="button"
+                  className={`btn btn-ghost ${css.btnSmall} ${css.danger}`}
+                  disabled={deactivateSaving}
+                  onClick={() => handleDeactivate(person.id)}
                 >
-                  {addSaving ? 'Saving…' : 'Add Member'}
+                  {deactivateSaving ? 'Saving…' : 'Yes, deactivate'}
                 </button>
-                <button
-                  className="btn btn-ghost"
-                  onClick={() => { setShowAddForm(false); setAddForm(EMPTY_ADD); setAddError(''); }}
-                >
+                <button type="button" className={`btn btn-ghost ${css.btnSmall}`} onClick={() => setDeactivateId(null)}>
                   Cancel
                 </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── BAND ACCOUNTS ────────────────────────────────────────────────────── */}
-      <div className="card mb-6" style={{ maxWidth: 640 }}>
-        <div className="card-header">
-          <span className="card-title">BAND ACCOUNTS</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{members.length}</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-          {members.map(m => (
-            <div key={m.id} style={{
-              display: 'flex', alignItems: 'center', gap: '0.75rem',
-              padding: '0.55rem 0.75rem',
-              background: 'var(--bg-overlay)', border: '1px solid var(--border)',
-              borderLeft: `3px solid ${ROLE_COLOR[m.role] || 'var(--border)'}`,
-            }}>
-              <Initials name={m.display_name} email={m.email} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {m.display_name || m.email}
-                </div>
-                {m.display_name && (
-                  <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
-                    {m.email}
-                  </div>
-                )}
-              </div>
-              <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: '0.66rem', fontWeight: 700,
-                textTransform: 'uppercase', letterSpacing: '0.12em',
-                color: ROLE_COLOR[m.role] || 'var(--text-muted)',
-                background: `${ROLE_COLOR[m.role] || 'var(--border)'}18`,
-                border: `1px solid ${ROLE_COLOR[m.role] || 'var(--border)'}40`,
-                padding: '0.18rem 0.55rem', flexShrink: 0,
-              }}>
-                {ROLE_LABELS[m.role] || m.role}
               </span>
-            </div>
-          ))}
-          {members.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '1.75rem', color: 'var(--text-muted)', fontSize: '0.84rem' }}>
-              No members yet. Send an invite below to get started.
-            </div>
-          )}
-        </div>
+            ) : (
+              <button
+                type="button"
+                className={`btn btn-ghost ${css.btnSmall}`}
+                aria-label={`Deactivate ${person.name}`}
+                onClick={() => setDeactivateId(person.id)}
+              >
+                Deactivate
+              </button>
+            )}
+          </>
+        )}
       </div>
+    </li>
+  );
 
-      {/* ── SEND INVITE ──────────────────────────────────────────────────────── */}
-      <div className="card mb-6" style={{ maxWidth: 640 }}>
-        <div className="card-header">
-          <span className="card-title">SEND INVITE</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: adminLimitReached ? '#f87171' : 'var(--text-muted)', letterSpacing: '0.08em' }}>
-            {adminCount}/2 admins
-          </span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px', gap: '0.75rem' }}>
-            <div className="field">
-              <label className="field-label">Email address</label>
-              <input
-                type="email" className="input" placeholder="email@example.com"
-                value={inviteEmail}
-                onChange={e => setInviteEmail(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && sendInvite()}
-              />
-            </div>
-            <div className="field">
-              <label className="field-label">Role</label>
-              <select className="input" value={inviteRole} onChange={e => setInviteRole(e.target.value as typeof inviteRole)}>
-                <option value="member">Member</option>
-                <option value="band_admin" disabled={adminLimitReached}>
-                  Admin{adminLimitReached ? ' (limit)' : ''}
-                </option>
-              </select>
-            </div>
-          </div>
-          {inviteRole === 'band_admin' && adminLimitReached && (
-            <div style={{ color: '#f87171', fontSize: '0.82rem' }}>
-              Maximum of 2 admins per band. Revoke a pending invite or remove a current admin first.
-            </div>
-          )}
-          {inviteError && <div style={{ color: '#f87171', fontSize: '0.83rem' }}>{inviteError}</div>}
-          {inviteSent && (
-            <div style={{ color: '#34d399', fontSize: '0.83rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              ✓ Invite sent — they&apos;ll receive an email with a join link.
-            </div>
-          )}
-          <div>
-            <button
-              className="btn btn-primary"
-              onClick={sendInvite}
-              disabled={sending || !inviteEmail.trim() || (inviteRole === 'band_admin' && adminLimitReached)}
-            >
-              {sending ? 'Sending…' : 'Send Invite'}
-            </button>
-          </div>
-        </div>
-      </div>
+  return (
+    <AppShell requireRole="band_admin">
+      <PageHero
+        title="Members"
+        subtitle={actName || 'Your band'}
+        summary={loaded ? membersHeroLine(summary) : undefined}
+        scene={<BandVanScene />}
+        actions={
+          <button type="button" className="btn btn-primary tours-new-btn" onClick={() => setShowAddForm(true)}>
+            + Add member
+          </button>
+        }
+      />
 
-      {/* ── PENDING INVITES ───────────────────────────────────────────────────── */}
-      <div className="card" style={{ maxWidth: 640 }}>
-        <div className="card-header">
-          <span className="card-title">PENDING INVITES</span>
-          {invites.length > 0 && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--accent)', background: 'rgba(224,120,32,0.1)', border: '1px solid rgba(224,120,32,0.25)', padding: '0.15rem 0.5rem' }}>
-              {invites.length}
+      <div className="tours-body">
+        <section className="tours-metrics" aria-label="Band at a glance">
+          <div className="tour-metric">
+            <span className="tour-metric-label">On the roster</span>
+            <span className="tour-metric-value"><strong>{summary.roster}</strong><span>active</span></span>
+            <span className="tour-metric-note">{inactiveRoster.length ? `${inactiveRoster.length} inactive` : 'Players and crew'}</span>
+          </div>
+          <div className="tour-metric">
+            <span className="tour-metric-label">Can log in</span>
+            <span className="tour-metric-value"><strong>{summary.withLogin}</strong><span>of {summary.roster}</span></span>
+            <div className="tour-meter" aria-hidden="true">
+              <div className="tour-meter-bar" style={{ width: `${summary.roster ? Math.round((summary.withLogin / summary.roster) * 100) : 0}%` }} />
+            </div>
+            <span className={`tour-metric-note ${summary.needInvite ? 'tour-metric-hot' : ''}`}>
+              {summary.needInvite ? `${summary.needInvite} ready to invite` : 'Everyone with an email is set'}
             </span>
-          )}
-        </div>
-        {invites.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)', fontSize: '0.84rem' }}>
-            No pending invites.
           </div>
+          <div className="tour-metric">
+            <span className="tour-metric-label">Admin seats</span>
+            <span className="tour-metric-value"><strong className={adminLimitReached ? 'tour-metric-hot' : ''}>{adminCount}</strong><span>of {MAX_BAND_ADMINS}</span></span>
+            <span className="tour-metric-note">{adminLimitReached ? 'Full — invite new people as members' : 'Admins can edit everything'}</span>
+          </div>
+          <div className="tour-metric">
+            <span className="tour-metric-label">Invites waiting</span>
+            <span className="tour-metric-value"><strong className={summary.pending ? 'tour-metric-hot' : ''}>{summary.pending}</strong></span>
+            <span className="tour-metric-note">{summary.pending ? 'Not accepted yet' : 'Nothing outstanding'}</span>
+          </div>
+        </section>
+
+        {rowError && <p className={css.error} role="alert">{rowError}</p>}
+
+        {!loaded ? (
+          <div className={`skeleton ${css.skeleton}`} aria-busy="true"><span className="sr-only" role="status">Loading members…</span></div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            {invites.map(inv => (
-              <div key={inv.id} style={{
-                display: 'flex', alignItems: 'center', gap: '0.75rem',
-                padding: '0.55rem 0.75rem',
-                background: 'var(--bg-overlay)', border: '1px solid var(--border)',
-                borderLeft: `3px solid ${ROLE_COLOR[inv.role] || 'var(--border)'}`,
-              }}>
-                <Initials email={inv.email} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: 'var(--text-primary)', fontSize: '0.88rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {inv.email}
+          <div className={css.layout}>
+            {/* ── Roster ─────────────────────────────────────────── */}
+            <div className={css.column}>
+              {showAddForm && (
+                <section className={css.panel} aria-labelledby={fid('add-title')}>
+                  <div className={css.panelHead}>
+                    <h2 className={css.panelTitle} id={fid('add-title')}>Add a member</h2>
                   </div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: ROLE_COLOR[inv.role] || 'var(--text-muted)', marginTop: '0.1rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    {ROLE_LABELS[inv.role] || inv.role} · Awaiting response
-                  </div>
+                  <form
+                    className={css.form}
+                    onSubmit={e => { e.preventDefault(); void handleAddSave(); }}
+                  >
+                    <div className={css.formGrid}>
+                      <div className="field">
+                        <label className="field-label" htmlFor={fid('name')}>Name *</label>
+                        <input id={fid('name')} className="input" required autoFocus value={addForm.name}
+                          onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} placeholder="Full name" />
+                      </div>
+                      <div className="field">
+                        <label className="field-label" htmlFor={fid('role')}>Instrument / role</label>
+                        <input id={fid('role')} className="input" value={addForm.instrument_role}
+                          onChange={e => setAddForm(f => ({ ...f, instrument_role: e.target.value }))} placeholder="e.g. Drums, Sound tech" />
+                      </div>
+                      <div className="field">
+                        <label className="field-label" htmlFor={fid('pay')}>Default pay per show</label>
+                        <div className={css.money}>
+                          <span className={css.moneySign} aria-hidden="true">$</span>
+                          <input id={fid('pay')} className={`input ${css.moneyInput}`} type="number" min="0" step="0.01" inputMode="decimal"
+                            value={addForm.default_pay_amount}
+                            onChange={e => setAddForm(f => ({ ...f, default_pay_amount: e.target.value }))} placeholder="0.00" />
+                        </div>
+                      </div>
+                      <div className="field">
+                        <label className="field-label" htmlFor={fid('phone')}>Phone</label>
+                        <input id={fid('phone')} className="input" type="tel" value={addForm.phone}
+                          onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))} placeholder="Optional" />
+                      </div>
+                      <div className={`field ${css.full}`}>
+                        <label className="field-label" htmlFor={fid('email')}>Email (needed to invite them to log in)</label>
+                        <input id={fid('email')} className="input" type="email" value={addForm.email}
+                          onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))} placeholder="Optional" />
+                      </div>
+                    </div>
+                    {addError && <p className={css.error} role="alert">{addError}</p>}
+                    <div className={css.formActions}>
+                      <button type="submit" className="btn btn-primary" disabled={addSaving || !addForm.name.trim()}>
+                        {addSaving ? 'Saving…' : 'Add member'}
+                      </button>
+                      <button type="button" className="btn btn-ghost"
+                        onClick={() => { setShowAddForm(false); setAddForm(EMPTY_ADD); setAddError(''); }}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              )}
+
+              <section className={css.panel} aria-labelledby={fid('roster-title')}>
+                <div className={css.panelHead}>
+                  <h2 className={css.panelTitle} id={fid('roster-title')}>Roster</h2>
+                  <span className={css.panelMeta}>{roster.length} active</span>
                 </div>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  style={{ color: '#f87171', flexShrink: 0 }}
-                  onClick={() => revokeInvite(inv.id)}
-                >
-                  Revoke
-                </button>
-              </div>
-            ))}
+                {roster.length === 0 ? (
+                  <div className={css.empty}>
+                    <p className={css.emptyTitle}>Nobody on the roster</p>
+                    <p className={css.emptyText}>Add your players and crew with their default pay. You can invite anyone with an email to log in and see their shows.</p>
+                    {!showAddForm && (
+                      <button type="button" className="btn btn-primary" onClick={() => setShowAddForm(true)}>+ Add member</button>
+                    )}
+                  </div>
+                ) : (
+                  <ul className={css.grid}>{roster.map(p => personCard(p))}</ul>
+                )}
+
+                {inactiveRoster.length > 0 && (
+                  <>
+                    <button type="button" className={css.toggle} aria-expanded={showInactive}
+                      onClick={() => setShowInactive(v => !v)}>
+                      {showInactive ? '▲ Hide inactive' : `▼ Show inactive (${inactiveRoster.length})`}
+                    </button>
+                    {showInactive && <ul className={css.grid}>{inactiveRoster.map(p => personCard(p, true))}</ul>}
+                  </>
+                )}
+              </section>
+            </div>
+
+            {/* ── Logins ─────────────────────────────────────────── */}
+            <div className={css.column}>
+              <section className={css.panel} aria-labelledby={fid('invite-title')}>
+                <div className={css.panelHead}>
+                  <h2 className={css.panelTitle} id={fid('invite-title')}>Invite someone</h2>
+                  <span className={`${css.panelMeta} ${adminLimitReached ? css.panelMetaWarn : ''}`}>{adminCount}/{MAX_BAND_ADMINS} admins</span>
+                </div>
+                <p className={css.note}>Members see their own shows, day sheets and pay. Admins can edit everything.</p>
+                <form className={css.form} onSubmit={e => { e.preventDefault(); void sendInvite(); }}>
+                  <div className={css.inviteRow}>
+                    <div className="field">
+                      <label className="field-label" htmlFor={fid('inv-email')}>Email address</label>
+                      <input id={fid('inv-email')} type="email" className="input" placeholder="name@example.com"
+                        value={inviteEmail} onChange={e => { setInviteEmail(e.target.value); setInviteSent(false); }} />
+                    </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor={fid('inv-role')}>Role</label>
+                      <select id={fid('inv-role')} className="input" value={inviteRole}
+                        onChange={e => setInviteRole(e.target.value as typeof inviteRole)}>
+                        <option value="member">Member</option>
+                        <option value="band_admin" disabled={adminLimitReached}>Admin{adminLimitReached ? ' (full)' : ''}</option>
+                      </select>
+                    </div>
+                  </div>
+                  {inviteError && <p className={css.error} role="alert">{inviteError}</p>}
+                  {inviteSent && <p className={css.ok} role="status">✓ Invite sent — they’ll get an email with a join link.</p>}
+                  <div className={css.formActions}>
+                    <button type="submit" className="btn btn-primary"
+                      disabled={sending || !inviteEmail.trim() || (inviteRole === 'band_admin' && adminLimitReached)}>
+                      {sending ? 'Sending…' : 'Send invite'}
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <section className={css.panel} aria-labelledby={fid('pending-title')}>
+                <div className={css.panelHead}>
+                  <h2 className={css.panelTitle} id={fid('pending-title')}>Waiting to join</h2>
+                  <span className={css.panelMeta}>{invites.length}</span>
+                </div>
+                {invites.length === 0 ? (
+                  <p className={css.note}>No invites waiting.</p>
+                ) : (
+                  <ul className={css.list}>
+                    {invites.map(inv => (
+                      <li key={inv.id} className={css.row}>
+                        <Avatar email={inv.email} />
+                        <div className={css.rowText}>
+                          <p className={css.rowMain}>{inv.email}</p>
+                          <p className={css.rowSub}>{ROLE_LABELS[inv.role] || inv.role} · {sentAgo(inv.created_at)}</p>
+                        </div>
+                        <button type="button" className={`btn btn-ghost ${css.btnSmall} ${css.danger}`}
+                          aria-label={`Revoke invite for ${inv.email}`} onClick={() => revokeInvite(inv.id)}>
+                          Revoke
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section className={css.panel} aria-labelledby={fid('accounts-title')}>
+                <div className={css.panelHead}>
+                  <h2 className={css.panelTitle} id={fid('accounts-title')}>Logins</h2>
+                  <span className={css.panelMeta}>{members.length}</span>
+                </div>
+                {members.length === 0 ? (
+                  <p className={css.note}>Nobody has logged in yet. Send an invite to get started.</p>
+                ) : (
+                  <ul className={css.list}>
+                    {members.map(m => (
+                      <li key={m.id} className={css.row}>
+                        <Avatar name={m.display_name} email={m.email} />
+                        <div className={css.rowText}>
+                          <p className={css.rowMain}>{m.display_name || m.email}</p>
+                          {m.display_name && <p className={css.rowSub}>{m.email}</p>}
+                        </div>
+                        <span className={`${css.badge} ${m.role !== 'member' ? css.badgeOn : ''}`}>{ROLE_LABELS[m.role] || m.role}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
           </div>
         )}
       </div>
