@@ -5,6 +5,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
+import AppShell from '../components/layout/AppShell';
+import PageHero from '../components/layout/PageHero';
+import CampfireScene from '../components/help/CampfireScene';
 
 interface Message {
   id: string;
@@ -343,29 +346,25 @@ export default function HelpPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   if (!user) {
     return (
-      <div style={styles.loadingScreen}>
-        <div style={styles.loadingText}>Loading…</div>
-      </div>
+      <AppShell>
+        <div style={styles.loadingScreen} aria-busy="true">
+          <span style={styles.loadingText} role="status">Loading…</span>
+        </div>
+      </AppShell>
     );
   }
 
   const hasMessages = messages.length > 0 || streamingContent;
 
   return (
+    <AppShell>
     <div style={styles.page}>
-      {/* ── Header ── */}
-      <header style={styles.header}>
-        <div style={styles.headerInner}>
-          <div style={styles.headerLeft}>
-            <a href="/band" style={styles.backLink}>← Dashboard</a>
-            <span style={styles.headerDivider} />
-            <span style={styles.headerTitle}>Help Center</span>
-          </div>
-          <div style={styles.headerRight}>
-            <span style={styles.headerEmail}>{user.email}</span>
-          </div>
-        </div>
-      </header>
+      <PageHero
+        title="Help"
+        subtitle="Ask anything about the platform"
+        summary={`Signed in as ${user.email}`}
+        scene={<CampfireScene />}
+      />
 
       {/* ── Main layout ── */}
       <div style={styles.main}>
@@ -375,7 +374,7 @@ export default function HelpPage() {
           {!hasMessages && (
             <div style={styles.welcome}>
               <div style={styles.welcomeIcon}>?</div>
-              <h1 style={styles.welcomeTitle}>How can we help?</h1>
+              <h2 style={styles.welcomeTitle}>How can we help?</h2>
               <p style={styles.welcomeSubtitle}>
                 Ask anything about Camel Ranch Booking — venues, bookings,
                 email setup, campaigns, financials, or anything else.
@@ -400,15 +399,15 @@ export default function HelpPage() {
                     disabled={isLoading || authError}
                     onMouseEnter={(e) => {
                       (e.currentTarget as HTMLButtonElement).style.borderColor =
-                        '#E8602A';
+                        'var(--accent)';
                       (e.currentTarget as HTMLButtonElement).style.background =
                         'rgba(232,96,42,0.08)';
                     }}
                     onMouseLeave={(e) => {
                       (e.currentTarget as HTMLButtonElement).style.borderColor =
-                        'rgba(255,255,255,0.1)';
+                        'var(--border)';
                       (e.currentTarget as HTMLButtonElement).style.background =
-                        'rgba(255,255,255,0.03)';
+                        'var(--surface)';
                     }}
                   >
                     {q}
@@ -776,6 +775,7 @@ export default function HelpPage() {
         </div>
       </div>
     </div>
+    </AppShell>
   );
 }
 
@@ -856,74 +856,23 @@ function renderInline(text: string): React.ReactNode {
 // ── Styles ────────────────────────────────────────────────────────────────
 const styles: Record<string, React.CSSProperties> = {
   page: {
-    minHeight: '100vh',
-    background: '#0E1628',
-    color: '#F5EDD9',
-    fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
+    minHeight: '60vh',
+    background: 'transparent',
+    color: 'var(--text)',
+    fontFamily: 'var(--font-body)',
     display: 'flex',
     flexDirection: 'column',
   },
   loadingScreen: {
-    minHeight: '100vh',
-    background: '#0E1628',
+    minHeight: '40vh',
+    background: 'transparent',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
   loadingText: {
-    color: '#F5EDD9',
+    color: 'var(--text)',
     fontSize: '1rem',
-  },
-
-  // Header
-  header: {
-    background: '#0E1628',
-    borderBottom: '1px solid rgba(255,255,255,0.08)',
-    padding: '0 2rem',
-    position: 'sticky',
-    top: 0,
-    zIndex: 50,
-    backdropFilter: 'blur(8px)',
-  },
-  headerInner: {
-    maxWidth: '900px',
-    margin: '0 auto',
-    height: '56px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-  },
-  backLink: {
-    color: '#6B8FB5',
-    textDecoration: 'none',
-    fontSize: '0.875rem',
-    fontWeight: 500,
-    transition: 'color 0.15s',
-  },
-  headerDivider: {
-    width: '1px',
-    height: '18px',
-    background: 'rgba(255,255,255,0.15)',
-  },
-  headerTitle: {
-    color: '#F5EDD9',
-    fontWeight: 700,
-    fontSize: '0.9375rem',
-    letterSpacing: '0.01em',
-  },
-  headerRight: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-  },
-  headerEmail: {
-    color: '#6B8FB5',
-    fontSize: '0.8125rem',
   },
 
   // Main
@@ -960,7 +909,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '50%',
     background: 'rgba(232,96,42,0.15)',
     border: '2px solid rgba(232,96,42,0.35)',
-    color: '#E8602A',
+    color: 'var(--accent)',
     fontSize: '1.5rem',
     fontWeight: 700,
     display: 'flex',
@@ -969,13 +918,16 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '1.5rem',
   },
   welcomeTitle: {
-    color: '#F5EDD9',
-    fontSize: '1.75rem',
-    fontWeight: 700,
-    margin: '0 0 0.75rem',
+    color: 'var(--text)',
+    fontFamily: 'var(--font-display)',
+    fontWeight: 400,
+    fontSize: '2.2rem',
+    lineHeight: 1,
+    letterSpacing: '0.03em',
+    margin: '0 0 0.5rem',
   },
   welcomeSubtitle: {
-    color: '#6B8FB5',
+    color: 'var(--text-muted)',
     fontSize: '0.9375rem',
     maxWidth: '480px',
     lineHeight: 1.6,
@@ -986,12 +938,12 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid rgba(232,96,42,0.4)',
     borderRadius: '8px',
     padding: '0.75rem 1.25rem',
-    color: '#F5EDD9',
+    color: 'var(--text)',
     fontSize: '0.875rem',
     marginBottom: '1.5rem',
   },
   authWarningLink: {
-    color: '#E8602A',
+    color: 'var(--accent)',
     fontWeight: 600,
     textDecoration: 'underline',
     textDecorationStyle: 'dotted' as const,
@@ -1005,10 +957,12 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: '680px',
   },
   suggestionBtn: {
-    background: 'rgba(255,255,255,0.03)',
-    border: '1px solid rgba(255,255,255,0.1)',
+    fontFamily: 'inherit',
+    minHeight: '44px',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: '10px',
-    color: '#F5EDD9',
+    color: 'var(--text)',
     fontSize: '0.8125rem',
     padding: '0.625rem 0.875rem',
     textAlign: 'left' as const,
@@ -1037,7 +991,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '50%',
     background: 'rgba(232,96,42,0.2)',
     border: '1px solid rgba(232,96,42,0.4)',
-    color: '#E8602A',
+    color: 'var(--accent)',
     fontSize: '0.6875rem',
     fontWeight: 700,
     display: 'flex',
@@ -1052,7 +1006,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '50%',
     background: 'rgba(107,143,181,0.25)',
     border: '1px solid rgba(107,143,181,0.4)',
-    color: '#6B8FB5',
+    color: 'var(--text-muted)',
     fontSize: '0.75rem',
     fontWeight: 700,
     display: 'flex',
@@ -1061,12 +1015,12 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   bubbleAssistant: {
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: '14px 14px 14px 4px',
     padding: '0.75rem 1rem',
     maxWidth: '85%',
-    color: '#F5EDD9',
+    color: 'var(--text)',
     wordBreak: 'break-word' as const,
   },
   bubbleUser: {
@@ -1075,7 +1029,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '14px 14px 4px 14px',
     padding: '0.75rem 1rem',
     maxWidth: '75%',
-    color: '#F5EDD9',
+    color: 'var(--text)',
     wordBreak: 'break-word' as const,
     fontSize: '0.9375rem',
     lineHeight: 1.55,
@@ -1084,7 +1038,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'inline-block',
     width: '2px',
     height: '1em',
-    background: '#E8602A',
+    background: 'var(--accent)',
     marginLeft: '2px',
     verticalAlign: 'text-bottom',
     animation: 'blink 0.9s step-end infinite',
@@ -1094,7 +1048,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '6px',
     height: '6px',
     borderRadius: '50%',
-    background: '#6B8FB5',
+    background: 'var(--text-muted)',
     margin: '0 2px',
     animation: 'bounce 1.2s ease-in-out infinite',
   },
@@ -1105,15 +1059,15 @@ const styles: Record<string, React.CSSProperties> = {
     paddingBottom: '1.25rem',
     position: 'sticky',
     bottom: 0,
-    background: '#0E1628',
-    borderTop: '1px solid rgba(255,255,255,0.06)',
+    background: 'var(--bg)',
+    borderTop: '1px solid var(--border)',
   },
   authBanner: {
     background: 'rgba(232,96,42,0.1)',
     border: '1px solid rgba(232,96,42,0.3)',
     borderRadius: '8px',
     padding: '0.5rem 0.875rem',
-    color: '#F5EDD9',
+    color: 'var(--text)',
     fontSize: '0.8125rem',
     marginBottom: '0.75rem',
   },
@@ -1121,8 +1075,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: '0.5rem',
     alignItems: 'flex-end',
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(255,255,255,0.12)',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: '14px',
     padding: '0.5rem 0.5rem 0.5rem 1rem',
     transition: 'border-color 0.15s',
@@ -1132,7 +1086,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'transparent',
     border: 'none',
     outline: 'none',
-    color: '#F5EDD9',
+    color: 'var(--text)',
     fontSize: '0.9375rem',
     lineHeight: 1.55,
     resize: 'none' as const,
@@ -1145,7 +1099,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '36px',
     height: '36px',
     borderRadius: '10px',
-    background: '#E8602A',
+    background: 'var(--accent)',
     border: 'none',
     color: 'white',
     fontSize: '1.1rem',
@@ -1162,7 +1116,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '10px',
     background: 'rgba(232,96,42,0.2)',
     border: '1px solid rgba(232,96,42,0.4)',
-    color: '#E8602A',
+    color: 'var(--accent)',
     fontSize: '0.75rem',
     display: 'flex',
     alignItems: 'center',
@@ -1171,7 +1125,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
   },
   inputHint: {
-    color: 'rgba(107,143,181,0.6)',
+    color: 'var(--text-muted)',
     fontSize: '0.75rem',
     textAlign: 'center' as const,
     marginTop: '0.5rem',
@@ -1188,7 +1142,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignSelf: 'flex-start',
   },
   stagedCardTitle: {
-    color: '#C8921A',
+    color: 'var(--accent)',
     fontWeight: 700,
     fontSize: '0.9375rem',
     marginBottom: '0.75rem',
@@ -1204,18 +1158,18 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: '0.5rem',
     fontSize: '0.875rem',
-    color: '#F5EDD9',
+    color: 'var(--text)',
     alignItems: 'flex-start',
   },
   stagedCardLabel: {
-    color: '#6B8FB5',
+    color: 'var(--text-muted)',
     minWidth: '72px',
     flexShrink: 0,
     fontWeight: 500,
   },
   stagedCardBadge: {
     background: 'rgba(200,146,26,0.2)',
-    color: '#C8921A',
+    color: 'var(--accent)',
     padding: '1px 8px',
     borderRadius: '999px',
     fontSize: '0.8125rem',
@@ -1227,7 +1181,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '8px',
     padding: '0.5rem 0.75rem',
     fontSize: '0.8125rem',
-    color: '#F5EDD9',
+    color: 'var(--text)',
     marginBottom: '0.75rem',
   },
   confirmError: {
@@ -1244,7 +1198,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '0.625rem',
   },
   confirmBtn: {
-    background: '#C8921A',
+    background: 'var(--accent)',
     border: 'none',
     borderRadius: '8px',
     color: '#0E0603',
@@ -1258,7 +1212,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'transparent',
     border: '1px solid rgba(255,255,255,0.15)',
     borderRadius: '8px',
-    color: '#6B8FB5',
+    color: 'var(--text-muted)',
     fontWeight: 500,
     fontSize: '0.875rem',
     padding: '0.5rem 1rem',
