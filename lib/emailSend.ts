@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import { getServiceClient } from './supabase';
 import { sendViaGmail } from './gmailSend';
+import { GmailReconnectError, isGmailAuthError } from './gmailAuthError';
 import type { ResolvedAttachment } from './server/emailAttachments';
 import type { AttachmentRef } from './emailAttachments';
 
@@ -106,7 +107,13 @@ export async function sendActEmail(params: {
   let actualFromAddress: string | null = null;
 
   if (gmailConnected) {
-    await sendViaGmail(params.actId, params.recipient, params.subject, htmlPayload, params.attachments ?? []);
+    try {
+      await sendViaGmail(params.actId, params.recipient, params.subject, htmlPayload, params.attachments ?? []);
+    } catch (err) {
+      // Expired/revoked connection: say so plainly instead of Google's "invalid_grant".
+      if (isGmailAuthError(err)) throw new GmailReconnectError(err);
+      throw err;
+    }
     actualFromAddress = gmailAddress;
   } else {
     if (!apiKey) {

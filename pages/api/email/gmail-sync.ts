@@ -9,6 +9,7 @@ import type {
   InboxSyncSuccessBody,
   InboxSyncTrigger,
 } from '../../../lib/inboxSync';
+import { isGmailAuthError } from '../../../lib/gmailAuthError';
 
 /**
  * Minimum gap between Gmail syncs for one act. Auto checks run every 2.5 min
@@ -81,10 +82,6 @@ async function claimSyncSlot(
   return { allowed: false, lastSyncedAt: (current?.gmail_last_sync_at as string | null) ?? null };
 }
 
-function isGmailAuthError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err ?? '');
-  return /invalid_grant|invalid_client|unauthorized_client|Invalid Credentials/i.test(msg);
-}
 
 function decodeBase64Url(data?: string | null): string {
   if (!data) return '';

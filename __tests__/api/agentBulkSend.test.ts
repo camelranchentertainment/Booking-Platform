@@ -18,6 +18,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import handler from '../../pages/api/agent-bulk-send';
 import { getServiceClient } from '../../lib/supabase';
 import { sendActEmail } from '../../lib/emailSend';
+import { GMAIL_RECONNECT_MESSAGE, GmailReconnectError } from '../../lib/gmailAuthError';
 
 const ACT = '5a5bbd78-b7e5-47c5-8a9a-d4ca5c454256';
 const TOUR = '8b2fdd9a-9c98-4833-914b-b4d1af1c710e';
@@ -160,6 +161,15 @@ describe('/api/agent-bulk-send', () => {
     const r = await send({ ...base, venues: [{ tourVenueId: TV1, name: 'A', email: 'a@a.com' }, { tourVenueId: TV2, name: 'B', email: 'b@b.com' }] });
     expect(r.status).toBe(500);
     expect(r.body.error).toMatch(/not configured/);
+    expect(sendActEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops after the first send when the Gmail connection has expired (Lone Star, Oct 26)', async () => {
+    setup({ tourVenues: [{ id: TV1, tour_id: TOUR, venue_id: V1 }, { id: TV2, tour_id: TOUR, venue_id: V2 }] });
+    (sendActEmail as jest.Mock).mockRejectedValueOnce(new GmailReconnectError(new Error('invalid_grant')));
+    const r = await send({ ...base, venues: [{ tourVenueId: TV1, name: 'A', email: 'a@a.com' }, { tourVenueId: TV2, name: 'B', email: 'b@b.com' }] });
+    expect(r.status).toBe(409);
+    expect(r.body).toEqual({ error: GMAIL_RECONNECT_MESSAGE, code: 'GMAIL_RECONNECT' });
     expect(sendActEmail).toHaveBeenCalledTimes(1);
   });
 
