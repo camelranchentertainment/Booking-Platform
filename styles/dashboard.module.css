@@ -160,3 +160,22 @@
   .metricLink, .showCard, .tile { transition: none; }
   .metricLink:hover, .showCard:hover, .tile:hover { transform: none; }
 }
+
+/* Placeholder where the agent chat sits while it's popped out into its own window. */
+.agentPopped {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem;
+  margin: 1.5rem 0;
+  padding: 1.1rem 1.25rem;
+  background: var(--surface);
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius-sm);
+}
+.agentPoppedTitle {
+  margin: 0;
+  font-family: var(--font-display); font-weight: 400;
+  font-size: 1.6rem; line-height: 1; letter-spacing: 0.03em;
+  color: var(--text);
+}
+.agentPoppedText { margin: 0.35rem 0 0; max-width: 34rem; font-size: 0.88rem; color: var(--text-muted); }
+.agentPoppedActions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.agentPopoutBlocked { margin: 1.5rem 0 -1rem; font-size: 0.85rem; color: var(--orange); }
