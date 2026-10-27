@@ -4,6 +4,7 @@ import { updateVenueStatus } from '../../../lib/statusSync';
 import { formatShowDate } from '../../../lib/formatDate';
 import Anthropic from '@anthropic-ai/sdk';
 import { Resend } from 'resend';
+import { showConfirmedHtml, showConfirmedSubject } from '../../../lib/server/showConfirmedEmail';
 
 type Platform = 'instagram' | 'facebook' | 'youtube' | 'tiktok' | 'discord';
 
@@ -501,22 +502,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           for (const member of members as any[]) {
             const profile = member;
             if (!profile?.email) continue;
+            const mail = {
+              memberName: profile.display_name ?? null,
+              actName: String((act as any).act_name ?? ''),
+              venueName: String((tv.venue as any).name ?? ''),
+              city: (tv.venue as any).city ?? null,
+              state: (tv.venue as any).state ?? null,
+              date: dateFormatted,
+            };
             await resend.emails.send({
               from,
               to: profile.email,
-              subject: `New Show Confirmed: ${(act as any).act_name} @ ${(tv.venue as any).name}`,
-              html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:1.5rem">
-                <h2 style="color:#c49a3c;margin-top:0">New Show Confirmed</h2>
-                <p>Hi ${profile.display_name || 'there'},</p>
-                <p>A new show has been confirmed for <strong>${(act as any).act_name}</strong>:</p>
-                <table style="background:#f8f8f8;border-radius:8px;padding:1rem;width:100%;border-collapse:collapse">
-                  <tr><td style="padding:0.3rem 0.5rem;font-weight:600">Venue</td><td>${(tv.venue as any).name}</td></tr>
-                  <tr><td style="padding:0.3rem 0.5rem;font-weight:600">Location</td><td>${(tv.venue as any).city}, ${(tv.venue as any).state}</td></tr>
-                  <tr><td style="padding:0.3rem 0.5rem;font-weight:600">Date</td><td>${dateFormatted}</td></tr>
-                  ${fee ? `<tr><td style="padding:0.3rem 0.5rem;font-weight:600">Fee</td><td>$${Number(fee).toLocaleString()}</td></tr>` : ''}
-                </table>
-                <p style="margin-top:1.5rem">Log in to Camel Ranch Booking for full details.</p>
-              </div>`,
+              subject: showConfirmedSubject(mail),
+              html: showConfirmedHtml(mail),
             });
             await service.from('email_log').insert({
               sent_by:    user.id,
@@ -524,7 +522,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               booking_id: (booking as any).id,
               venue_id:   (tv.venue as any).id,
               recipient:  profile.email,
-              subject:    `New Show Confirmed: ${(act as any).act_name} @ ${(tv.venue as any).name}`,
+              subject:    showConfirmedSubject(mail),
               direction:  'sent',
               category:   'confirmation',
               status:     'sent',
