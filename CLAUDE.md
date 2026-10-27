@@ -37,6 +37,7 @@ When Scott points you to a `RELAY_*.md` or `PAGE_REVIEW_PROCESS.md` at the repo 
 - **The band (`act_id`) always comes from the caller's profile**, never from the request body, query or URL.
 - **OAuth tokens and secrets live only in service-role tables** (`act_credentials`). Never select them into client code.
 - **Financial data is archived, never deleted.**
+- **New tables need explicit grants (Supabase change, Oct 30 2026).** Tables created in `public` no longer get Data API access automatically. In the same migration that creates a table, grant only what RLS is meant to gate — e.g. `grant select, insert, update, delete on public.<t> to authenticated;` and `grant all on public.<t> to service_role;` (add `anon` only for genuinely public data). Without it the API returns `permission denied`. Start new migrations from `supabase/migrations/_TEMPLATE.sql.example`; `__tests__/migrations/explicitGrants.test.ts` fails if a grant is missing (mark a deliberately service-role-only table with `-- grants: service_role only <table>`).
 
 ## Key platform rules
 - NEVER change a superadmin's role.
