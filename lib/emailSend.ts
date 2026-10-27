@@ -4,6 +4,7 @@ import { sendViaGmail } from './gmailSend';
 import { GmailReconnectError, isGmailAuthError } from './gmailAuthError';
 import type { ResolvedAttachment } from './server/emailAttachments';
 import type { AttachmentRef } from './emailAttachments';
+import { resolveEmailLinks } from './server/emailLinks';
 
 export function stripHtml(html: string): string {
   return html
@@ -73,9 +74,21 @@ export async function sendActEmail(params: {
    * senders turn it off and post one summary instead.
    */
   notify?: boolean;
-}): Promise<{ email_log_id: string }> {
+}): Promise<{ email_log_id: string | null }> {
   const service = getServiceClient();
   const { apiKey, baseFrom } = await getResendConfig(service);
+
+  // Keep only links to this band's own records. A bad id (e.g. one the agent
+  // made up) must not fail the log insert after the email has gone out.
+  const { links, dropped } = await resolveEmailLinks(service, params.actId, {
+    bookingId: params.bookingId,
+    venueId: params.venueId,
+    tourVenueId: params.tourVenueId,
+    contactId: params.contactId,
+  });
+  if (dropped.length) {
+    console.warn('[emailSend] filing email without links that are not this band\'s records', { actId: params.actId, dropped });
+  }
 
   const [{ data: act }, { data: creds }] = await Promise.all([
     service.from('acts').select('act_name, contact_email, gmail_address').eq('id', params.actId).single(),
@@ -145,10 +158,10 @@ export async function sendActEmail(params: {
 
   const { data: logRow, error: logErr } = await service.from('email_log').insert({
     sent_by: params.sentBy,
-    booking_id: params.bookingId || null,
-    tour_venue_id: params.tourVenueId || null,
-    venue_id: params.venueId || null,
-    contact_id: params.contactId || null,
+    booking_id: links.bookingId,
+    tour_venue_id: links.tourVenueId,
+    venue_id: links.venueId,
+    contact_id: links.contactId,
     act_id: params.actId,
     template_id: params.templateId || null,
     category: params.category || null,
@@ -163,46 +176,58 @@ export async function sendActEmail(params: {
     is_draft: false,
     attachments: params.attachmentRefs ?? [],
   }).select('id').single();
-  if (logErr) throw new Error(`email_log insert failed: ${logErr.message}`);
+  // The email has already been delivered to the provider. Throwing now would
+  // report "Failed" for a sent email and invite a duplicate resend, so record
+  // the problem and carry on; the caller gets a null log id.
+  const emailLogId: string | null = logRow?.id ?? null;
+  if (logErr || !emailLogId) {
+    console.error('[emailSend] email SENT but email_log insert failed', {
+      actId: params.actId,
+      recipient: params.recipient,
+      subject: params.subject,
+      code: logErr?.code,
+      message: logErr?.message,
+    });
+  }
 
-  if (params.tourVenueId) {
+  if (links.tourVenueId) {
     await service
       .from('tour_venues')
       .update({ last_contacted_at: now, updated_at: now })
-      .eq('id', params.tourVenueId);
+      .eq('id', links.tourVenueId);
     // The first email to a tour target marks it pitched (the tour card's
     // "Pitched" count reads this). Its outreach status is left to the user.
     const { error: pitchErr } = await service
       .from('tour_venues')
       .update({ pitched_at: now })
-      .eq('id', params.tourVenueId)
+      .eq('id', links.tourVenueId)
       .is('pitched_at', null);
-    if (pitchErr) console.error('[emailSend] could not mark target pitched', { tourVenueId: params.tourVenueId, code: pitchErr.code });
+    if (pitchErr) console.error('[emailSend] could not mark target pitched', { tourVenueId: links.tourVenueId, code: pitchErr.code });
   }
 
-  if (params.bookingId) {
+  if (links.bookingId) {
     await service
       .from('bookings')
       .update({ last_contact_date: now, updated_at: now })
-      .eq('id', params.bookingId)
+      .eq('id', links.bookingId)
       .eq('act_id', params.actId);
   }
 
-  if (params.notify === false) return { email_log_id: logRow.id };
+  if (params.notify === false) return { email_log_id: emailLogId };
 
   // Resolve venue name + tour id for notification
   let venueName = 'the venue';
   let tourId: string | null = null;
 
-  if (params.venueId) {
-    const { data: v } = await service.from('venues').select('name').eq('id', params.venueId).single();
+  if (links.venueId) {
+    const { data: v } = await service.from('venues').select('name').eq('id', links.venueId).single();
     if (v?.name) venueName = v.name;
   }
-  if (params.tourVenueId) {
+  if (links.tourVenueId) {
     const { data: tv } = await service
       .from('tour_venues')
       .select('tour_id, venue:venues(name)')
-      .eq('id', params.tourVenueId)
+      .eq('id', links.tourVenueId)
       .single();
     if (tv) {
       tourId = tv.tour_id || null;
@@ -217,14 +242,14 @@ export async function sendActEmail(params: {
     message: `Email sent to ${venueName}`,
     action_url: tourId
       ? `/tours/${tourId}`
-      : params.tourVenueId
+      : links.tourVenueId
       ? '/email'
-      : params.bookingId
-      ? `/bookings/${params.bookingId}`
+      : links.bookingId
+      ? `/bookings/${links.bookingId}`
       : '/email',
-    related_id: params.tourVenueId || params.bookingId || null,
+    related_id: links.tourVenueId || links.bookingId || null,
     read: false,
   });
 
-  return { email_log_id: logRow.id };
+  return { email_log_id: emailLogId };
 }
