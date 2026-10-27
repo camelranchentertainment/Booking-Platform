@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import { getServiceClient } from '../../lib/supabase';
 import { isBandAdminRole } from '../../lib/server/requireBandAdmin';
+import { GMAIL_RECONNECT_MESSAGE, GmailReconnectError } from '../../lib/gmailAuthError';
 import { sendActEmail } from '../../lib/emailSend';
 import { categoryForNextEmail } from '../../lib/domain/tourOutreach';
 
@@ -182,8 +183,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const message = err instanceof Error ? err.message : 'Send failed';
       console.error('[agent-bulk-send] send failed', { venue: v.name, message });
       results.push({ venue: v.name, status: 'error', error: message });
-      // Not configured at all: every remaining send would fail the same way.
-      if (/not configured/i.test(message)) break;
+      // Not configured, or the Gmail connection expired: every remaining send
+      // would fail the same way, so stop instead of failing once per venue.
+      if (/not configured/i.test(message) || err instanceof GmailReconnectError) break;
     }
   }
 
@@ -191,8 +193,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const noEmail = results.filter(r => r.status === 'no_email').length;
   const errors = results.filter(r => r.status === 'error').length;
 
-  if (sent === 0 && errors > 0 && /not configured/i.test(results.find(r => r.status === 'error')?.error ?? '')) {
-    return res.status(500).json({ error: results.find(r => r.status === 'error')?.error });
+  const firstError = results.find(r => r.status === 'error')?.error ?? '';
+  if (sent === 0 && errors > 0 && firstError === GMAIL_RECONNECT_MESSAGE) {
+    // 409: the request was fine; the band's Gmail connection needs action first.
+    return res.status(409).json({ error: GMAIL_RECONNECT_MESSAGE, code: 'GMAIL_RECONNECT' });
+  }
+  if (sent === 0 && errors > 0 && /not configured/i.test(firstError)) {
+    return res.status(500).json({ error: firstError });
   }
 
   const { error: notifyErr } = await service.from('notifications').insert({

@@ -6,6 +6,7 @@ import { attachmentListSchema, type AttachmentRef } from '../../../lib/emailAtta
 import { resolveAttachments, type ResolvedAttachment } from '../../../lib/server/emailAttachments';
 import { AppError } from '../../../lib/apiError';
 import { ownedVenueId, ownedContactId } from '../../../lib/server/actOwnership';
+import { GmailReconnectError } from '../../../lib/gmailAuthError';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -127,6 +128,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({ ok: true, email_log_id });
   } catch (err: any) {
+    if (err instanceof GmailReconnectError) {
+      console.warn('[email/send] Gmail needs reconnecting', { actId: effectiveActId });
+      return res.status(409).json({ error: err.message, code: err.code });
+    }
     console.error('[email/send] send failed:', err);
     return res.status(500).json({ error: err?.message || 'Email send failed' });
   }
