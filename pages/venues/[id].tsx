@@ -1,84 +1,159 @@
-import { useState, useEffect } from 'react';
+// pages/venues/[id].tsx
+//
+// Venue profile — everything the band knows about one venue: who to book
+// with, who's there on show night, the room, the band's history here, and
+// the contacts at the venue.
+//
+// Layout (Phase 3 redesign, Oct 2026 — matches the Tours page):
+//   1. Illustrated hero (main street) with the venue's town and a history line.
+//   2. Metric trackers: shows played, upcoming, booked total, collected.
+//   3. Left: the venue (people, details, notes) + edit form + website scan.
+//      Right: contacts at the venue and the band's show history here.
+//
+// Roll-ups live in lib/domain/venueDetail.ts (unit-tested). Reads and writes
+// go through the admin's own session; RLS is the boundary.
+
+import { useState, useEffect, useCallback, useId } from 'react';
 import { useRouter } from 'next/router';
-import AppShell from '../../components/layout/AppShell';
-import { supabase } from '../../lib/supabase';
-import { Venue, BOOKING_STATUS_LABELS } from '../../lib/types';
-import { formatShowDate } from '../../lib/formatDate';
-import { useLookup } from '../../lib/hooks/useLookup';
 import Link from 'next/link';
+import AppShell from '../../components/layout/AppShell';
+import PageHero from '../../components/layout/PageHero';
+import MainStreetScene from '../../components/venues/MainStreetScene';
 import EmailComposer from '../../components/email/EmailComposer';
 import ShowDayContactFields from '../../components/venues/ShowDayContactFields';
-import ShowDayPerson from '../../components/venues/ShowDayPerson';
+import { supabase } from '../../lib/supabase';
+import { Venue, BOOKING_STATUS_LABELS } from '../../lib/types';
+import { formatShowDate, localToday } from '../../lib/formatDate';
+import { useLookup } from '../../lib/hooks/useLookup';
 import { BLANK_SHOW_DAY_CONTACTS, contactsFromVenue, venueColumns, type ShowDayContacts } from '../../lib/showDayContacts';
+import { mapsLink } from '../../lib/domain/showDay';
+import {
+  dealTypeLabel, money, rebookLabel, summarizeVenueHistory, telLink, venueHeroLine, websiteHref, websiteLabel,
+  type VenueHistoryRow,
+} from '../../lib/domain/venueDetail';
+import css from '../../styles/detail.module.css';
 
 type Contact = {
-  id: string; first_name: string; last_name: string; title?: string | null;
+  id: string; first_name: string; last_name: string | null; title?: string | null;
   email?: string | null; phone?: string | null; notes?: string | null;
   status: string; last_contact?: string | null;
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  not_contacted: 'var(--text-muted)', pitched: '#818cf8', responded: '#fbbf24',
-  negotiate: '#f59e0b', booked: '#34d399', declined: '#f87171', do_not_contact: '#6b7280',
-};
-const STATUS_LABELS: Record<string, string> = {
-  not_contacted: 'Not Contacted', pitched: 'Pitched', responded: 'Responded',
-  negotiate: 'negotiate', booked: 'Booked', declined: 'Declined', do_not_contact: 'DNC',
+interface HistoryRow extends VenueHistoryRow {
+  deal_type: string | null;
+  post_show_notes: string | null;
+  act: { act_name: string } | { act_name: string }[] | null;
+}
+
+const CONTACT_STATUS: Record<string, string> = {
+  not_contacted: 'Not contacted', pitched: 'Pitched', responded: 'Responded',
+  negotiate: 'Negotiating', booked: 'Booked', declined: 'Declined', do_not_contact: 'Do not contact',
 };
 
 const BLANK_CONTACT = { first_name: '', last_name: '', title: '', email: '', phone: '', notes: '' };
 
+const actName = (b: HistoryRow): string => {
+  const a = Array.isArray(b.act) ? b.act[0] : b.act;
+  return a?.act_name ?? '';
+};
+
+function DateBlock({ date }: { date: string | null }) {
+  if (!date) return <span className={css.date}><span className={css.dateDay}>TBD</span></span>;
+  return (
+    <span className={css.date} aria-hidden="true">
+      <span className={css.dateMonth}>{formatShowDate(date, { month: 'short' }).toUpperCase()}</span>
+      <span className={css.dateDay}>{formatShowDate(date, { day: 'numeric' })}</span>
+      <span className={css.dateYear}>{formatShowDate(date, { year: 'numeric' })}</span>
+    </span>
+  );
+}
+
+function Person({ role, name, phone, email }: { role: string; name?: string | null; phone?: string | null; email?: string | null }) {
+  if (!name && !phone && !email) return null;
+  return (
+    <div className={css.person}>
+      <span className={css.personRole}>{role}</span>
+      <p className={css.personName}>{name || '—'}</p>
+      {phone && <p className={css.personLine}><a href={telLink(phone)}>{phone}</a></p>}
+      {email && <p className={css.personLine}><a href={`mailto:${email}`}>{email}</a></p>}
+    </div>
+  );
+}
+
 export default function VenueDetail() {
   const router = useRouter();
-  const { id } = router.query;
+  const id = typeof router.query.id === 'string' ? router.query.id : null;
+  const uid = useId();
+  const fid = (k: string) => `${uid}-${k}`;
   const { values: venueTypes } = useLookup('venue_type');
   const { values: statusValues } = useLookup('booking_status');
 
   const [venue, setVenue]       = useState<Venue | null>(null);
-  const [bookings, setBookings] = useState<any[]>([]);
+  const [missing, setMissing]   = useState(false);
+  const [bookings, setBookings] = useState<HistoryRow[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [edit, setEdit]         = useState(false);
   const [form, setForm]         = useState<Partial<Venue>>({});
   const [showDay, setShowDay]   = useState<ShowDayContacts>(BLANK_SHOW_DAY_CONTACTS);
   const [saving, setSaving]     = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [scraping, setScraping] = useState(false);
-  const [scrapeResult, setScrapeResult] = useState<any>(null);
+  const [scrapeResult, setScrapeResult] = useState<{ updated?: boolean; extracted?: Record<string, unknown> } | null>(null);
   const [scrapeErr, setScrapeErr]       = useState('');
   const [scanUrl, setScanUrl]           = useState('');
 
-  // Contact form
   const [showNewContact, setShowNewContact] = useState(false);
   const [contactForm, setContactForm]       = useState(BLANK_CONTACT);
   const [savingContact, setSavingContact]   = useState(false);
+  const [contactError, setContactError]     = useState('');
   const [showEmail, setShowEmail]           = useState(false);
   const [emailActId, setEmailActId]         = useState('');
-  const [agentActs, setAgentActs]           = useState<{id: string; act_name: string}[]>([]);
+  const [agentActs, setAgentActs]           = useState<{ id: string; act_name: string }[]>([]);
+  // Local calendar day; only used after the venue loads (client side).
+  const [today]                             = useState(() => localToday());
 
-  useEffect(() => { if (id) loadAll(); }, [id]);
-
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
+    if (!id) return;
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user ?? null;
     const [venueRes, bookingsRes, contactsRes, actsRes] = await Promise.all([
-      supabase.from('venues').select('*').eq('id', id).single(),
-      supabase.from('bookings').select('id, status, show_date, fee, agreed_amount, deal_type, actual_amount_received, payment_status, rebook_flag, post_show_notes, act:acts(act_name)')
+      supabase.from('venues').select('*').eq('id', id).maybeSingle(),
+      supabase.from('bookings')
+        .select('id, status, show_date, fee, agreed_amount, deal_type, actual_amount_received, payment_status, rebook_flag, post_show_notes, act:acts(act_name)')
         .eq('venue_id', id).order('show_date', { ascending: false }).limit(50),
       supabase.from('contacts').select('*').eq('venue_id', id).order('last_name'),
       user ? supabase.from('acts').select('id, act_name').eq('owner_id', user.id).eq('is_active', true).order('act_name') : Promise.resolve({ data: [] }),
     ]);
-    if (venueRes.data) { setVenue(venueRes.data); setForm(venueRes.data); setShowDay(contactsFromVenue(venueRes.data)); }
-    setBookings(bookingsRes.data || []);
-    setContacts(contactsRes.data || []);
-    setAgentActs(actsRes.data || []);
-  };
+    if (venueRes.data) {
+      setVenue(venueRes.data as Venue);
+      setForm(venueRes.data as Venue);
+      setShowDay(contactsFromVenue(venueRes.data));
+    } else {
+      setMissing(true);
+    }
+    setBookings((bookingsRes.data || []) as HistoryRow[]);
+    setContacts((contactsRes.data || []) as Contact[]);
+    setAgentActs((actsRes.data || []) as { id: string; act_name: string }[]);
+  }, [id]);
+
+  useEffect(() => {
+    // Fetch-on-mount: state is set from the promise, not synchronously here.
+    void loadAll();
+  }, [loadAll]);
 
   const saveEdit = async () => {
     if (!venue) return;
+    if (!form.name?.trim() || !form.city?.trim() || !form.state?.trim()) {
+      setSaveError('Name, city and state are required.');
+      return;
+    }
     setSaving(true);
-    await supabase.from('venues').update({
-      name:       form.name,
-      city:       form.city,
-      state:      form.state,
+    setSaveError('');
+    const capacity = form.capacity === null || form.capacity === undefined || String(form.capacity) === '' ? null : Number(form.capacity);
+    const { error } = await supabase.from('venues').update({
+      name:       form.name.trim(),
+      city:       form.city.trim(),
+      state:      form.state.trim().toUpperCase(),
       address:    form.address    || null,
       phone:      form.phone      || null,
       booking_contact: form.booking_contact || null,
@@ -86,10 +161,15 @@ export default function VenueDetail() {
       email:      form.email      || null,
       website:    form.website    || null,
       venue_type: form.venue_type || null,
-      capacity:   form.capacity   || null,
+      capacity:   capacity !== null && Number.isFinite(capacity) ? capacity : null,
       notes:      form.notes      || null,
       backline:   form.backline   || null,
     }).eq('id', venue.id);
+    if (error) {
+      setSaveError(`Couldn’t save: ${error.message}`);
+      setSaving(false);
+      return;
+    }
     await loadAll();
     setEdit(false);
     setSaving(false);
@@ -97,20 +177,25 @@ export default function VenueDetail() {
 
   const saveContact = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!venue) return;
     setSavingContact(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user ?? null;
-    const { data: vp } = await supabase.from('profiles').select('act_id').eq('id', user!.id).single();
-    await supabase.from('contacts').insert({
-      act_id:     vp?.act_id,
-      venue_id:   id,
-      first_name: contactForm.first_name,
-      last_name:  contactForm.last_name  || null,
-      title:      contactForm.title      || null,
-      email:      contactForm.email      || null,
-      phone:      contactForm.phone      || null,
-      notes:      contactForm.notes      || null,
+    setContactError('');
+    // The band always comes from the venue row (already scoped to the caller by RLS), never from input.
+    const { error } = await supabase.from('contacts').insert({
+      act_id:     venue.act_id ?? null,
+      venue_id:   venue.id,
+      first_name: contactForm.first_name.trim(),
+      last_name:  contactForm.last_name.trim()  || null,
+      title:      contactForm.title.trim()      || null,
+      email:      contactForm.email.trim()      || null,
+      phone:      contactForm.phone.trim()      || null,
+      notes:      contactForm.notes.trim()      || null,
     });
+    if (error) {
+      setContactError(`Couldn’t add the contact: ${error.message}`);
+      setSavingContact(false);
+      return;
+    }
     setContactForm(BLANK_CONTACT);
     setShowNewContact(false);
     await loadAll();
@@ -118,8 +203,10 @@ export default function VenueDetail() {
   };
 
   const updateContactStatus = async (contactId: string, status: string) => {
-    await supabase.from('contacts').update({ status, last_contact: new Date().toISOString() }).eq('id', contactId);
+    const before = contacts;
     setContacts(cs => cs.map(c => c.id === contactId ? { ...c, status } : c));
+    const { error } = await supabase.from('contacts').update({ status, last_contact: new Date().toISOString() }).eq('id', contactId);
+    if (error) setContacts(before);
   };
 
   const scrapeWebsite = async () => {
@@ -129,7 +216,6 @@ export default function VenueDetail() {
     setScrapeResult(null);
     setScrapeErr('');
     try {
-      // If we're using a manually entered URL and the venue has no website yet, save it first
       if (!venue?.website && scanUrl.trim() && venue?.id) {
         await supabase.from('venues').update({ website: scanUrl.trim() }).eq('id', venue.id);
       }
@@ -139,10 +225,12 @@ export default function VenueDetail() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ url, venueId: venue?.id }),
       });
-      const data = await res.json();
-      if (!res.ok) { setScrapeErr(data.error || 'Scrape failed'); return; }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setScrapeErr(data.error || 'The scan didn’t work. Check the address and try again.'); return; }
       setScrapeResult(data);
       await loadAll();
+    } catch {
+      setScrapeErr('The scan didn’t work. Check your connection and try again.');
     } finally {
       setScraping(false);
     }
@@ -150,335 +238,405 @@ export default function VenueDetail() {
 
   const set = (k: keyof Venue) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
-
   const setContact = (k: keyof typeof BLANK_CONTACT) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setContactForm(f => ({ ...f, [k]: e.target.value }));
-
   const bookingLabel = (status: string) =>
     statusValues.find(lv => lv.value === status)?.label ?? BOOKING_STATUS_LABELS[status as keyof typeof BOOKING_STATUS_LABELS] ?? status;
 
-  if (!venue) return <AppShell requireRole="band_admin"><div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Loading...</div></AppShell>;
+  if (missing) {
+    return (
+      <AppShell requireRole="band_admin">
+        <p className={css.empty}>That venue isn’t in your venue book. <Link href="/venues">Back to Venues</Link></p>
+      </AppShell>
+    );
+  }
+
+  if (!venue) {
+    return (
+      <AppShell requireRole="band_admin">
+        <div className={`skeleton ${css.skeleton}`} aria-busy="true"><span className="sr-only" role="status">Loading venue…</span></div>
+      </AppShell>
+    );
+  }
+
+  const history = summarizeVenueHistory(bookings, today || '0000-00-00');
+  const fmt = (d: string) => formatShowDate(d, { month: 'short', day: 'numeric', year: 'numeric' });
+  const place = [venue.city, venue.state].filter(Boolean).join(', ');
+  const site = websiteHref(venue.website);
+  const map = mapsLink({ name: venue.name, city: venue.city, state: venue.state, address: venue.address } as Parameters<typeof mapsLink>[0]);
+  const found = Object.entries({
+    'Booking email': scrapeResult?.extracted?.booking_email,
+    'General email': scrapeResult?.extracted?.general_email,
+    Phone:          scrapeResult?.extracted?.booking_phone,
+    Contact:        scrapeResult?.extracted?.booking_contact_name,
+    Title:          scrapeResult?.extracted?.booking_contact_title,
+    Capacity:       scrapeResult?.extracted?.capacity,
+    Type:           scrapeResult?.extracted?.venue_type,
+    Notes:          scrapeResult?.extracted?.notes,
+  }).filter(([, v]) => v);
+
+  const details: Array<[string, React.ReactNode]> = [
+    ['Address', venue.address ? (map ? <a href={map} target="_blank" rel="noopener noreferrer">{venue.address}</a> : venue.address) : null],
+    ['Website', site && venue.website ? <a href={site} target="_blank" rel="noopener noreferrer">{websiteLabel(venue.website)}</a> : null],
+    ['Capacity', venue.capacity ? `${Number(venue.capacity).toLocaleString('en-US')}` : null],
+    ['Type', venue.venue_type || null],
+    ['Backline', venue.backline || null],
+    ['Notes', venue.notes || null],
+  ];
+  const shownDetails = details.filter(([, v]) => v);
 
   return (
     <AppShell requireRole="band_admin">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">{venue.name}</h1>
-          <div className="page-sub">{venue.city}, {venue.state}{venue.venue_type ? ` · ${venue.venue_type}` : ''}</div>
-        </div>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          {venue.website ? (
-            <button className="btn btn-secondary" onClick={scrapeWebsite} disabled={scraping}>
-              {scraping ? '⟳ Scanning…' : '⟳ Scan Website'}
-            </button>
-          ) : (
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <input
-                type="url"
-                className="input"
-                placeholder="https://venue.com"
-                value={scanUrl}
-                onChange={e => setScanUrl(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && scanUrl.trim() && scrapeWebsite()}
-                style={{ width: 220, height: 36, fontSize: '0.84rem' }}
-              />
-              <button className="btn btn-secondary" onClick={scrapeWebsite} disabled={scraping || !scanUrl.trim()}>
-                {scraping ? '⟳ Scanning…' : '⟳ Scan'}
-              </button>
-            </div>
-          )}
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowEmail(true)}>✉ Email</button>
-          <button className="btn btn-secondary" onClick={() => setEdit(!edit)}>Edit</button>
-          <Link href={`/bookings/new?venue=${venue.id}`} className="btn btn-primary">+ Book Venue</Link>
-        </div>
-      </div>
+      <Link href="/venues" className={css.backLink}>← All venues</Link>
+      <PageHero
+        title={venue.name}
+        subtitle={[place, venue.venue_type].filter(Boolean).join(' · ') || 'Venue'}
+        summary={today ? venueHeroLine(history, fmt) : undefined}
+        scene={<MainStreetScene />}
+        actions={
+          <div className={css.heroActions}>
+            <Link href={`/bookings/new?venue=${venue.id}`} className="btn btn-primary tours-new-btn">+ Book this venue</Link>
+            <button type="button" className="btn btn-secondary tours-new-btn" onClick={() => setShowEmail(true)}>Email</button>
+          </div>
+        }
+      />
 
-      {/* Firecrawl scan results */}
-      {(scrapeErr || scrapeResult) && (
-        <div style={{ marginBottom: '1.25rem', border: scrapeErr ? '1px solid rgba(248,113,113,0.3)' : '1px solid var(--neon-border)', borderRadius: '4px', padding: '1rem', background: scrapeErr ? 'rgba(248,113,113,0.05)' : 'var(--accent-glow)' }}>
-          {scrapeErr ? (
-            <div style={{ color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>{scrapeErr}</div>
-          ) : scrapeResult && (
-            <div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.75rem' }}>
-                ◈ Website Scan Complete{scrapeResult.updated ? ' — venue record updated' : ''}
+      <div className="tours-body">
+        <section className="tours-metrics" aria-label="This venue at a glance">
+          <div className="tour-metric">
+            <span className="tour-metric-label">Shows played</span>
+            <span className="tour-metric-value"><strong>{history.played}</strong></span>
+            <span className="tour-metric-note">{history.lastPlayed ? `Last: ${fmt(history.lastPlayed)}` : 'Not yet'}</span>
+          </div>
+          <div className="tour-metric">
+            <span className="tour-metric-label">Coming up</span>
+            <span className="tour-metric-value"><strong className={history.upcoming ? 'tour-metric-hot' : ''}>{history.upcoming}</strong></span>
+            <span className="tour-metric-note">{history.nextShow ? `Next: ${fmt(history.nextShow)}` : 'Nothing booked'}</span>
+          </div>
+          <div className="tour-metric">
+            <span className="tour-metric-label">Booked here</span>
+            <span className="tour-metric-value"><strong>{money(history.booked)}</strong></span>
+            <span className="tour-metric-note">Agreed pay, all shows</span>
+          </div>
+          <div className="tour-metric">
+            <span className="tour-metric-label">Collected</span>
+            <span className="tour-metric-value"><strong>{money(history.collected)}</strong></span>
+            <span className="tour-metric-note">
+              {history.rebook.yes || history.rebook.no || history.rebook.maybe
+                ? `Rebook: ${history.rebook.yes} yes · ${history.rebook.maybe} maybe · ${history.rebook.no} no`
+                : 'Money actually received'}
+            </span>
+          </div>
+        </section>
+
+        <div className={css.layout}>
+          {/* ── The venue ─────────────────────────────────────── */}
+          <div className={css.column}>
+            <section className={css.panel} aria-labelledby={fid('venue-title')}>
+              <div className={css.panelHead}>
+                <h2 className={css.panelTitle} id={fid('venue-title')}>The venue</h2>
+                {!edit && (
+                  <button type="button" className={`btn btn-secondary ${css.btnSmall}`} onClick={() => { setEdit(true); setSaveError(''); }}>
+                    Edit
+                  </button>
+                )}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.5rem' }}>
-                {([
-                  ['Booking Email', scrapeResult.extracted?.booking_email],
-                  ['General Email', scrapeResult.extracted?.general_email],
-                  ['Phone',         scrapeResult.extracted?.booking_phone],
-                  ['Contact',       scrapeResult.extracted?.booking_contact_name],
-                  ['Title',         scrapeResult.extracted?.booking_contact_title],
-                  ['Capacity',      scrapeResult.extracted?.capacity],
-                  ['Type',          scrapeResult.extracted?.venue_type],
-                  ['Notes',         scrapeResult.extracted?.notes],
-                ] as [string, any][]).filter(([, v]) => v).map(([label, value]) => (
-                  <div key={label} style={{ background: 'var(--bg-overlay)', borderRadius: '3px', padding: '0.5rem 0.65rem' }}>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.2rem' }}>{label}</div>
-                    <div style={{ fontSize: '0.82rem', color: 'var(--text-primary)' }}>{String(value)}</div>
+
+              {edit ? (
+                <form className={css.form} onSubmit={e => { e.preventDefault(); void saveEdit(); }}>
+                  <div className={css.formGrid}>
+                    <div className={`field ${css.full}`}>
+                      <label className="field-label" htmlFor={fid('name')}>Name *</label>
+                      <input id={fid('name')} className="input" required value={form.name || ''} onChange={set('name')} />
+                    </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor={fid('city')}>City *</label>
+                      <input id={fid('city')} className="input" required value={form.city || ''} onChange={set('city')} />
+                    </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor={fid('state')}>State *</label>
+                      <input id={fid('state')} className="input" required value={form.state || ''} onChange={set('state')} maxLength={2} />
+                    </div>
+                    <div className={`field ${css.full}`}>
+                      <label className="field-label" htmlFor={fid('address')}>Address</label>
+                      <input id={fid('address')} className="input" value={form.address || ''} onChange={set('address')} />
+                    </div>
                   </div>
-                ))}
-              </div>
-              {!Object.values(scrapeResult.extracted || {}).some(Boolean) && (
-                <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>No contact info found on this page.</div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
-      <div className="grid-2" style={{ alignItems: 'start' }}>
-        {/* Venue Info */}
-        <div className="card">
-          <div className="card-header"><span className="card-title">VENUE INFO</span></div>
-          {edit ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div className="field"><label className="field-label">Name</label><input className="input" value={form.name || ''} onChange={set('name')} /></div>
-              <div className="grid-2">
-                <div className="field"><label className="field-label">City</label><input className="input" value={form.city || ''} onChange={set('city')} /></div>
-                <div className="field"><label className="field-label">State</label><input className="input" value={form.state || ''} onChange={set('state')} maxLength={2} /></div>
-              </div>
-              <div className="field"><label className="field-label">Address</label><input className="input" value={form.address || ''} onChange={set('address')} /></div>
-              <fieldset className="venues-fieldset">
-                <legend className="venues-section-title venues-legend">Venue Contact</legend>
-                <p className="venues-hint">The venue's talent buyer or booking manager — who you book the show with.</p>
-                <div className="field"><label className="field-label" htmlFor="venue-edit-contact">Contact name</label><input id="venue-edit-contact" className="input" value={form.booking_contact || ''} onChange={set('booking_contact')} placeholder="e.g. Jess Carter" /></div>
-                <div className="grid-2">
-                  <div className="field"><label className="field-label" htmlFor="venue-edit-email">Email</label><input id="venue-edit-email" className="input" type="email" value={form.email || ''} onChange={set('email')} /></div>
-                  <div className="field"><label className="field-label" htmlFor="venue-edit-phone">Phone</label><input id="venue-edit-phone" className="input" type="tel" value={form.phone || ''} onChange={set('phone')} /></div>
-                </div>
-              </fieldset>
-              <ShowDayContactFields
-                idPrefix="venue-edit"
-                value={showDay}
-                onChange={setShowDay}
-                disabled={saving}
-                hint="Who you deal with on show night. New shows here start with these filled in; changing them here doesn't change shows already booked."
-              />
-              <div className="grid-2">
-                <div className="field"><label className="field-label">Capacity</label><input className="input" type="number" value={form.capacity || ''} onChange={set('capacity')} /></div>
-                <div className="field">
-                  <label className="field-label">Venue Type</label>
-                  <select className="select" value={form.venue_type || ''} onChange={set('venue_type')}>
-                    <option value="">—</option>
-                    {venueTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="field"><label className="field-label">Website</label><input className="input" value={form.website || ''} onChange={set('website')} /></div>
-              <div className="field"><label className="field-label">Backline</label><textarea className="textarea" value={form.backline || ''} onChange={set('backline')} /></div>
-              <div className="field"><label className="field-label">Notes</label><textarea className="textarea" value={form.notes || ''} onChange={set('notes')} /></div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button className="btn btn-secondary" onClick={() => { setEdit(false); setShowDay(contactsFromVenue(venue)); }}>Cancel</button>
-                <button className="btn btn-primary" onClick={saveEdit} disabled={saving}>Save</button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.88rem' }}>
-              {([
-                ['Venue Contact', venue.booking_contact],
-                ['Day-of Contact', (venue.day_of_contact_name || venue.day_of_contact_phone)
-                  ? <ShowDayPerson name={venue.day_of_contact_name} phone={venue.day_of_contact_phone} /> : null],
-                ['Sound Engineer', (venue.sound_engineer_name || venue.sound_engineer_phone)
-                  ? <ShowDayPerson name={venue.sound_engineer_name} phone={venue.sound_engineer_phone} /> : null],
-                ['Address',  venue.address],
-                ['Phone',    venue.phone],
-                ['Email',    venue.email],
-                ['Website',  venue.website],
-                ['Capacity', venue.capacity ? `${venue.capacity.toLocaleString()} cap` : null],
-                ['Backline', venue.backline],
-                ['Notes',    venue.notes],
-              ] as [string, any][]).filter(([, v]) => v).map(([label, value]) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.4rem' }}>
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
-                  <span style={{ color: 'var(--text-secondary)', textAlign: 'right', maxWidth: '65%' }}>
-                    {label === 'Website' || label === 'Email'
-                      ? <a href={label === 'Email' ? `mailto:${value}` : String(value)} target="_blank" style={{ color: 'var(--accent)' }}>{value}</a>
-                      : value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {/* Contacts */}
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">CONTACTS ({contacts.length})</span>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowNewContact(true)}>+ Add</button>
-            </div>
-            {contacts.length === 0 ? (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>
-                No contacts yet. <button className="btn btn-ghost btn-sm" style={{ padding: '0', color: 'var(--accent)' }} onClick={() => setShowNewContact(true)}>Add one →</button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                {contacts.map(c => (
-                  <div key={c.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.65rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem' }}>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)' }}>{c.first_name} {c.last_name}</div>
-                        {c.title && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{c.title}</div>}
-                        <div style={{ marginTop: '0.2rem', fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                          {c.email && <a href={`mailto:${c.email}`} style={{ color: 'var(--accent)' }}>{c.email}</a>}
-                          {c.phone && <span>{c.phone}</span>}
-                        </div>
+                  <fieldset className="venues-fieldset">
+                    <legend className="venues-section-title venues-legend">Venue contact</legend>
+                    <p className="venues-hint">The venue’s talent buyer or booking manager — who you book the show with.</p>
+                    <div className="field">
+                      <label className="field-label" htmlFor={fid('contact')}>Contact name</label>
+                      <input id={fid('contact')} className="input" value={form.booking_contact || ''} onChange={set('booking_contact')} placeholder="e.g. Jess Carter" />
+                    </div>
+                    <div className={css.formGrid}>
+                      <div className="field">
+                        <label className="field-label" htmlFor={fid('email')}>Email</label>
+                        <input id={fid('email')} className="input" type="email" value={form.email || ''} onChange={set('email')} />
                       </div>
-                      <select
-                        style={{ background: 'transparent', border: 'none', color: STATUS_COLORS[c.status] || 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.8rem', letterSpacing: '0.06em', cursor: 'pointer', flexShrink: 0 }}
-                        value={c.status}
-                        onChange={e => updateContactStatus(c.id, e.target.value)}>
-                        {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      <div className="field">
+                        <label className="field-label" htmlFor={fid('phone')}>Phone</label>
+                        <input id={fid('phone')} className="input" type="tel" value={form.phone || ''} onChange={set('phone')} />
+                      </div>
+                    </div>
+                  </fieldset>
+
+                  <ShowDayContactFields
+                    idPrefix={fid('showday')}
+                    value={showDay}
+                    onChange={setShowDay}
+                    disabled={saving}
+                    hint="Who you deal with on show night. New shows here start with these filled in; changing them here doesn't change shows already booked."
+                  />
+
+                  <div className={css.formGrid}>
+                    <div className="field">
+                      <label className="field-label" htmlFor={fid('capacity')}>Capacity</label>
+                      <input id={fid('capacity')} className="input" type="number" min="0" inputMode="numeric" value={form.capacity ?? ''} onChange={set('capacity')} />
+                    </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor={fid('type')}>Venue type</label>
+                      <select id={fid('type')} className="select" value={form.venue_type || ''} onChange={set('venue_type')}>
+                        <option value="">—</option>
+                        {venueTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                       </select>
                     </div>
-                    {c.notes && <div style={{ marginTop: '0.3rem', fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>{c.notes}</div>}
+                    <div className={`field ${css.full}`}>
+                      <label className="field-label" htmlFor={fid('website')}>Website</label>
+                      <input id={fid('website')} className="input" value={form.website || ''} onChange={set('website')} placeholder="venue.com" />
+                    </div>
+                    <div className={`field ${css.full}`}>
+                      <label className="field-label" htmlFor={fid('backline')}>Backline</label>
+                      <textarea id={fid('backline')} className="textarea" value={form.backline || ''} onChange={set('backline')} />
+                    </div>
+                    <div className={`field ${css.full}`}>
+                      <label className="field-label" htmlFor={fid('notes')}>Notes</label>
+                      <textarea id={fid('notes')} className="textarea" value={form.notes || ''} onChange={set('notes')} />
+                    </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Booking History */}
-          <div className="card">
-            <div className="card-header"><span className="card-title">BOOKING HISTORY ({bookings.length})</span></div>
-            {bookings.length === 0 ? (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>No bookings at this venue</div>
-            ) : (() => {
-              const totalFee = bookings.reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
-              const totalPaid = bookings.reduce((s, b) => s + ((b as any).actual_amount_received ? Number((b as any).actual_amount_received) : 0), 0);
-              const completed = bookings.filter((b: any) => b.status === 'completed').length;
-              return (
+                  {saveError && <p className={css.error} role="alert">{saveError}</p>}
+                  <div className={css.formActions}>
+                    <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+                    <button type="button" className="btn btn-ghost" disabled={saving}
+                      onClick={() => { setEdit(false); setForm(venue); setShowDay(contactsFromVenue(venue)); setSaveError(''); }}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
                 <>
-                  {/* Summary stats */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '1rem' }}>
-                    {[
-                      { label: 'Shows', value: completed },
-                      { label: 'Total Booked', value: totalFee ? `$${totalFee.toLocaleString()}` : '—' },
-                      { label: 'Collected', value: totalPaid ? `$${totalPaid.toLocaleString()}` : '—' },
-                    ].map(s => (
-                      <div key={s.label} style={{ background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', padding: '0.5rem 0.65rem', textAlign: 'center' }}>
-                        <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--accent)', lineHeight: 1 }}>{s.value}</div>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{s.label}</div>
-                      </div>
-                    ))}
+                  <div className={css.people}>
+                    <Person role="Venue contact" name={venue.booking_contact} phone={venue.phone} email={venue.email} />
+                    <Person role="Day-of contact" name={venue.day_of_contact_name} phone={venue.day_of_contact_phone} />
+                    <Person role="Sound engineer" name={venue.sound_engineer_name} phone={venue.sound_engineer_phone} />
                   </div>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Act</th>
-                          <th>Date</th>
-                          <th>Fee</th>
-                          <th>Deal</th>
-                          <th>Paid</th>
-                          <th>Status</th>
-                          <th>Rebook</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {bookings.map((b: any) => (
-                          <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => router.push(`/bookings/${b.id}`)}>
-                            <td style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.85rem' }}>{b.act?.act_name || '—'}</td>
-                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                              {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
-                            </td>
-                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>{(b.agreed_amount ?? b.fee) ? `$${Number(b.agreed_amount ?? b.fee).toLocaleString()}` : '—'}</td>
-                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{b.deal_type || '—'}</td>
-                            <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: b.actual_amount_received ? '#34d399' : 'var(--text-muted)' }}>
-                              {b.actual_amount_received ? `$${Number(b.actual_amount_received).toLocaleString()}` : '—'}
-                            </td>
-                            <td><span className={`badge badge-${b.status}`} style={{ fontSize: '0.7rem' }}>{bookingLabel(b.status)}</span></td>
-                            <td>
-                              {b.rebook_flag === true && <span style={{ color: '#34d399', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>✓</span>}
-                              {b.rebook_flag === false && <span style={{ color: '#f87171', fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>✕</span>}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {bookings.some((b: any) => b.post_show_notes) && (
-                    <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Post-Show Notes</div>
-                      {bookings.filter((b: any) => b.post_show_notes).map((b: any) => (
-                        <div key={b.id} style={{ background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', padding: '0.5rem 0.65rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                          <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', marginRight: '0.5rem' }}>
-                            {b.act?.act_name} · {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric', year: '2-digit' }) : ''}
-                          </span>
-                          {b.post_show_notes}
+                  {!venue.booking_contact && !venue.email && !venue.phone && (
+                    <p className={css.note}>No venue contact yet. Scan their website below, or tap Edit to add one.</p>
+                  )}
+                  {shownDetails.length > 0 && (
+                    <dl className={css.facts}>
+                      {shownDetails.map(([label, value]) => (
+                        <div key={label} className={css.fact}>
+                          <dt className={css.factLabel}>{label}</dt>
+                          <dd className={css.factValue}>{value}</dd>
                         </div>
                       ))}
-                    </div>
+                    </dl>
                   )}
                 </>
-              );
-            })()}
+              )}
+            </section>
+
+            <section className={css.panel} aria-labelledby={fid('scan-title')}>
+              <div className={css.panelHead}>
+                <h2 className={css.panelTitle} id={fid('scan-title')}>Find contact info</h2>
+              </div>
+              <p className={css.note}>Scans the venue’s website for a booking email, phone and contact, and fills in what’s missing.</p>
+              <div className={css.scanRow}>
+                {!venue.website && (
+                  <>
+                    <label className="sr-only" htmlFor={fid('scan')}>Venue website</label>
+                    <input id={fid('scan')} type="url" className="input" placeholder="https://venue.com"
+                      value={scanUrl} onChange={e => setScanUrl(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && scanUrl.trim()) void scrapeWebsite(); }} />
+                  </>
+                )}
+                <button type="button" className="btn btn-secondary" onClick={scrapeWebsite}
+                  disabled={scraping || (!venue.website && !scanUrl.trim())}>
+                  {scraping ? 'Scanning…' : venue.website ? `Scan ${websiteLabel(venue.website)}` : 'Scan'}
+                </button>
+              </div>
+              <div aria-live="polite">
+                {scrapeErr && <p className={css.error}>{scrapeErr}</p>}
+                {scrapeResult && (
+                  found.length ? (
+                    <>
+                      <p className={css.ok}>Scan complete{scrapeResult.updated ? ' — venue updated with what was missing.' : '.'}</p>
+                      <div className={css.found}>
+                        {found.map(([label, value]) => (
+                          <div key={label} className={css.foundItem}>
+                            <span className={css.foundLabel}>{label}</span>
+                            <span className={css.foundValue}>{String(value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className={css.note}>No contact info found on that page. Try their Contact or Booking page address.</p>
+                  )
+                )}
+              </div>
+            </section>
+          </div>
+
+          {/* ── People + history ──────────────────────────────── */}
+          <div className={css.column}>
+            <section className={css.panel} aria-labelledby={fid('contacts-title')}>
+              <div className={css.panelHead}>
+                <h2 className={css.panelTitle} id={fid('contacts-title')}>Contacts</h2>
+                <button type="button" className={`btn btn-secondary ${css.btnSmall}`} onClick={() => { setShowNewContact(true); setContactError(''); }}>+ Add</button>
+              </div>
+              {contacts.length === 0 ? (
+                <p className={css.note}>No other contacts here yet.</p>
+              ) : (
+                <ul className={css.list}>
+                  {contacts.map(c => (
+                    <li key={c.id} className={css.row}>
+                      <div className={css.rowText}>
+                        <p className={css.rowMain}>{[c.first_name, c.last_name].filter(Boolean).join(' ')}</p>
+                        {c.title && <p className={css.rowSub}>{c.title}</p>}
+                        <p className={css.rowSub}>
+                          {c.email && <a href={`mailto:${c.email}`}>{c.email}</a>}
+                          {c.email && c.phone && ' · '}
+                          {c.phone && <a href={telLink(c.phone)}>{c.phone}</a>}
+                        </p>
+                        {c.notes && <p className={css.rowSub}>{c.notes}</p>}
+                      </div>
+                      <label className="sr-only" htmlFor={`${fid('cs')}-${c.id}`}>Status for {c.first_name}</label>
+                      <select id={`${fid('cs')}-${c.id}`} className={css.select} value={c.status} onChange={e => updateContactStatus(c.id, e.target.value)}>
+                        {Object.entries(CONTACT_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      </select>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section className={css.panel} aria-labelledby={fid('history-title')}>
+              <div className={css.panelHead}>
+                <h2 className={css.panelTitle} id={fid('history-title')}>Shows here</h2>
+                <span className={css.panelMeta}>{bookings.length}</span>
+              </div>
+              {bookings.length === 0 ? (
+                <p className={css.note}>No shows at this venue yet.</p>
+              ) : (
+                <ul className={css.list}>
+                  {bookings.map(b => {
+                    const fee = Number(b.agreed_amount ?? b.fee) || 0;
+                    const paid = Number(b.actual_amount_received) || 0;
+                    const rebook = rebookLabel(b.rebook_flag);
+                    return (
+                      <li key={b.id}>
+                        <Link href={`/bookings/${b.id}`} className={`${css.row} ${css.rowLink}`}>
+                          <DateBlock date={b.show_date} />
+                          <span className={css.rowText}>
+                            <span className={css.rowMain} style={{ display: 'block' }}>{actName(b) || 'Show'}</span>
+                            <span className={css.rowSub} style={{ display: 'block' }}>
+                              {[dealTypeLabel(b.deal_type), rebook, b.post_show_notes].filter(Boolean).join(' · ') || bookingLabel(b.status)}
+                            </span>
+                          </span>
+                          <span className={css.rowRight}>
+                            <span className={`badge badge-${b.status}`}>{bookingLabel(b.status)}</span>
+                            <span className={css.amount}>{fee ? money(fee) : '—'}</span>
+                            {paid > 0 && <span className={css.paid}>Paid {money(paid)}</span>}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
           </div>
         </div>
       </div>
 
-      {/* Add Contact Modal */}
+      {/* Add contact */}
       {showNewContact && (
-        <div className="modal-backdrop">
-          <div className="modal">
+        <div className="modal-backdrop" onClick={() => !savingContact && setShowNewContact(false)}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby={fid('add-contact')} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">Add Contact</h3>
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowNewContact(false)}>✕</button>
+              <h3 className="modal-title" id={fid('add-contact')}>Add a contact at {venue.name}</h3>
+              <button type="button" className="btn btn-ghost btn-sm" aria-label="Close" onClick={() => setShowNewContact(false)}>✕</button>
             </div>
-            <form onSubmit={saveContact} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--accent)', letterSpacing: '0.08em' }}>
-                {venue.name}
+            <form onSubmit={saveContact} className={css.form}>
+              <div className={css.formGrid}>
+                <div className="field">
+                  <label className="field-label" htmlFor={fid('c-first')}>First name *</label>
+                  <input id={fid('c-first')} className="input" value={contactForm.first_name} onChange={setContact('first_name')} required autoFocus />
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor={fid('c-last')}>Last name</label>
+                  <input id={fid('c-last')} className="input" value={contactForm.last_name} onChange={setContact('last_name')} />
+                </div>
+                <div className={`field ${css.full}`}>
+                  <label className="field-label" htmlFor={fid('c-title')}>Title / role</label>
+                  <input id={fid('c-title')} className="input" value={contactForm.title} onChange={setContact('title')} placeholder="Talent buyer, Owner…" />
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor={fid('c-email')}>Email</label>
+                  <input id={fid('c-email')} className="input" type="email" value={contactForm.email} onChange={setContact('email')} />
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor={fid('c-phone')}>Phone</label>
+                  <input id={fid('c-phone')} className="input" type="tel" value={contactForm.phone} onChange={setContact('phone')} />
+                </div>
+                <div className={`field ${css.full}`}>
+                  <label className="field-label" htmlFor={fid('c-notes')}>Notes</label>
+                  <textarea id={fid('c-notes')} className="textarea" value={contactForm.notes} onChange={setContact('notes')} />
+                </div>
               </div>
-              <div className="grid-2">
-                <div className="field"><label className="field-label">First Name *</label><input className="input" value={contactForm.first_name} onChange={setContact('first_name')} required autoFocus /></div>
-                <div className="field"><label className="field-label">Last Name</label><input className="input" value={contactForm.last_name} onChange={setContact('last_name')} /></div>
-              </div>
-              <div className="field"><label className="field-label">Title / Role</label><input className="input" value={contactForm.title} onChange={setContact('title')} placeholder="Booking Manager, Owner..." /></div>
-              <div className="grid-2">
-                <div className="field"><label className="field-label">Email</label><input className="input" type="email" value={contactForm.email} onChange={setContact('email')} /></div>
-                <div className="field"><label className="field-label">Phone</label><input className="input" type="tel" value={contactForm.phone} onChange={setContact('phone')} /></div>
-              </div>
-              <div className="field"><label className="field-label">Notes</label><textarea className="textarea" value={contactForm.notes} onChange={setContact('notes')} /></div>
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowNewContact(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={savingContact}>{savingContact ? 'Saving...' : 'Add Contact'}</button>
+              {contactError && <p className={css.error} role="alert">{contactError}</p>}
+              <div className={css.formActions}>
+                <button type="submit" className="btn btn-primary" disabled={savingContact || !contactForm.first_name.trim()}>
+                  {savingContact ? 'Saving…' : 'Add contact'}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={() => setShowNewContact(false)}>Cancel</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Act picker → Email composer */}
+      {/* Email: pick the band when the account runs more than one, then compose */}
       {showEmail && (
-        emailActId ? (
+        emailActId || agentActs.length <= 1 ? (
           <EmailComposer
-            actId={emailActId}
+            // Owners pick among their bands; a co-admin (owns none) emails as the venue's band.
+            actId={emailActId || agentActs[0]?.id || venue.act_id || ''}
             venueId={venue.id}
             contactId={contacts[0]?.id || undefined}
-            contactEmail={contacts[0]?.email || venue.email || undefined}
+            contactEmail={venue.email || contacts[0]?.email || undefined}
             defaultCategory="target"
             onClose={() => { setShowEmail(false); setEmailActId(''); }}
           />
         ) : (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ background: '#f5f3ee', borderRadius: 'var(--radius)', padding: '2rem', width: 340, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', color: '#1a1a2e', marginBottom: '1rem' }}>Email about which act?</div>
+          <div className="modal-backdrop" onClick={() => setShowEmail(false)}>
+            <div className="modal" role="dialog" aria-modal="true" aria-labelledby={fid('pick-act')} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 className="modal-title" id={fid('pick-act')}>Email about which band?</h3>
+                <button type="button" className="btn btn-ghost btn-sm" aria-label="Close" onClick={() => setShowEmail(false)}>✕</button>
+              </div>
               {agentActs.length === 0 ? (
-                <div style={{ color: '#888', fontFamily: 'var(--font-body)', fontSize: '0.84rem', marginBottom: '1rem' }}>No active acts found.</div>
+                <p className={css.note}>No active bands found on your account.</p>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+                <ul className={css.pickList}>
                   {agentActs.map(a => (
-                    <button key={a.id} onClick={() => setEmailActId(a.id)}
-                      style={{ padding: '0.6rem 0.9rem', background: 'var(--bg-overlay)', border: '1px solid #ddd', borderRadius: '4px', textAlign: 'left', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#1a1a2e' }}>
-                      {a.act_name}
-                    </button>
+                    <li key={a.id}><button type="button" className={css.pickBtn} onClick={() => setEmailActId(a.id)}>{a.act_name}</button></li>
                   ))}
-                </div>
+                </ul>
               )}
-              <button onClick={() => setShowEmail(false)} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>Cancel</button>
             </div>
           </div>
         )
