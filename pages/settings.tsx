@@ -5,6 +5,9 @@ import { supabase } from '../lib/supabase';
 import { UserProfile } from '../lib/types';
 import PlatformSetup from '../components/settings/PlatformSetup';
 import BookingAgentSettings from '../components/band/BookingAgentSettings';
+import PageHero from '../components/layout/PageHero';
+import RanchOfficeScene from '../components/settings/RanchOfficeScene';
+import css from '../styles/settings.module.css';
 
 const TIER_LABELS: Record<string, string> = {
   band_admin: 'Band Admin — $18 / month',
@@ -518,34 +521,59 @@ export default function Settings() {
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
+  // Section heading style handed to BookingAgentSettings so its heading
+  // matches the Bebas section titles (css.h2) used on the rest of the page.
   const sectionLabelStyle: React.CSSProperties = {
-    fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.14em',
-    textTransform: 'uppercase', color: 'var(--text-muted)',
-    marginBottom: '0.75rem', paddingBottom: '0.4rem', borderBottom: '1px solid var(--border)',
+    fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: '1.9rem', lineHeight: 1,
+    letterSpacing: '0.03em', color: 'var(--text)',
+    marginBottom: '0.85rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)',
   };
+
+  const isAdminish = profile?.role === 'band_admin' || profile?.role === 'superadmin';
+  // Jump-to links; each entry mirrors the condition its section renders under.
+  const navItems: Array<{ id: string; label: string; danger?: boolean }> = [
+    ...(isSuperAdmin ? [{ id: 'settings-platform', label: 'Platform setup' }] : []),
+    ...(myAct && profile?.role !== 'member' ? [{ id: 'settings-band', label: 'Band profile' }] : []),
+    { id: 'settings-account', label: 'Account' },
+    ...(profile && profile.role !== 'superadmin' && profile.role !== 'member' ? [{ id: 'settings-billing', label: 'Plan & billing' }] : []),
+    ...(isAdminish && myAct ? [{ id: 'settings-calendar', label: 'Calendar feed' }] : []),
+    ...(isAdminish ? [{ id: 'settings-gcal', label: 'Google Calendar' }] : []),
+    ...(isAdminish && myAct ? [{ id: 'settings-gmail', label: 'Gmail' }] : []),
+    ...(isAdminish && myAct ? [{ id: 'settings-team', label: 'Team' }] : []),
+    ...(isAdminish && myAct ? [{ id: 'settings-agent', label: 'Booking agent' }] : []),
+    ...(profile && profile.role !== 'superadmin' ? [{ id: 'settings-notifications', label: 'Notifications' }] : []),
+    ...(profile?.role === 'band_admin' ? [{ id: 'settings-followups', label: 'Follow-ups' }] : []),
+    ...(profile && profile.role !== 'superadmin' ? [{ id: 'settings-danger', label: 'Delete account', danger: true }] : []),
+  ];
 
   return (
     <AppShell requireRole={['band_admin', 'superadmin', 'member']}>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Settings</h1>
-          <div className="page-sub">
-            {isSuperAdmin ? 'Platform configuration & profile'
-              : profile?.role === 'member' ? 'Account & password'
-              : 'Agent profile & preferences'}
-          </div>
-        </div>
-      </div>
+      <PageHero
+        title="Settings"
+        subtitle={isSuperAdmin ? 'Platform & profile'
+          : profile?.role === 'member' ? 'Your account'
+          : myAct?.act_name || 'Band & account'}
+        summary={profile ? `Signed in as ${profile.email ?? 'you'}` : undefined}
+        scene={<RanchOfficeScene />}
+      />
 
-      <div style={{ maxWidth: 560, display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      <div className={css.layout}>
+      <nav className={css.nav} aria-label="Settings sections">
+        <span className={css.navLabel}>Jump to</span>
+        {navItems.map(item => (
+          <a key={item.id} href={`#${item.id}`} className={`${css.navLink} ${item.danger ? css.navDanger : ''}`}>{item.label}</a>
+        ))}
+      </nav>
+
+      <div className={css.sections}>
 
         {/* Platform Setup — superadmin only */}
-        {isSuperAdmin && <PlatformSetup />}
+        {isSuperAdmin && <div id="settings-platform" className={css.anchor}><PlatformSetup /></div>}
 
         {/* ── BAND PROFILE ── */}
         {myAct && profile?.role !== 'member' && (
           <div>
-            <div style={sectionLabelStyle}>Band Profile</div>
+            <h2 id="settings-band" className={css.h2}>Band profile</h2>
             <form onSubmit={saveAct}>
               <div className="card">
                 <div className="card-header"><span className="card-title">ACT DETAILS</span></div>
@@ -714,7 +742,7 @@ export default function Settings() {
 
         {/* ── ACCOUNT ── */}
         <div>
-          <div style={sectionLabelStyle}>Account</div>
+          <h2 id="settings-account" className={css.h2}>Account</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
             {/* Profile */}
@@ -817,7 +845,7 @@ export default function Settings() {
         {/* ── PLAN & BILLING ── */}
         {profile && profile.role !== 'superadmin' && profile.role !== 'member' && (
           <div>
-            <div style={sectionLabelStyle}>Plan &amp; Billing</div>
+            <h2 id="settings-billing" className={css.h2}>Plan &amp; billing</h2>
             <div className="card">
               <div className="card-header"><span className="card-title">BILLING</span></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.88rem' }}>
@@ -857,7 +885,7 @@ export default function Settings() {
         {/* ── CALENDAR FEED ── */}
         {(profile?.role === 'band_admin' || profile?.role === 'superadmin') && myAct && (
           <div>
-            <div style={sectionLabelStyle}>Calendar</div>
+            <h2 id="settings-calendar" className={css.h2}>Calendar feed</h2>
             <div className="card">
               <div className="card-header"><span className="card-title">SUBSCRIBE FEED</span></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
@@ -904,7 +932,7 @@ export default function Settings() {
         {/* ── GOOGLE CALENDAR SYNC ── */}
         {(profile?.role === 'band_admin' || profile?.role === 'superadmin') && (
           <div>
-            <div style={sectionLabelStyle}>Google Calendar Sync</div>
+            <h2 id="settings-gcal" className={css.h2}>Google Calendar</h2>
             <div className="card">
               <div className="card-header"><span className="card-title">SYNC SHOWS TO GOOGLE CALENDAR</span></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
@@ -982,7 +1010,7 @@ export default function Settings() {
         {/* ── GMAIL SEND-AS ── */}
         {(profile?.role === 'band_admin' || profile?.role === 'superadmin') && myAct && (
           <div>
-            <div style={sectionLabelStyle}>Gmail Send-As</div>
+            <h2 id="settings-gmail" className={css.h2}>Gmail</h2>
             <div className="card">
               <div className="card-header"><span className="card-title">SEND OUTREACH FROM YOUR GMAIL</span></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
@@ -1055,7 +1083,7 @@ export default function Settings() {
         {/* ── TEAM MEMBERS ── */}
         {(profile?.role === 'band_admin' || profile?.role === 'superadmin') && myAct && (
           <div>
-            <div style={sectionLabelStyle}>Team Members</div>
+            <h2 id="settings-team" className={css.h2}>Team</h2>
             <div className="card">
               <div className="card-header"><span className="card-title">MEMBERS</span></div>
 
@@ -1144,12 +1172,14 @@ export default function Settings() {
         )}
 
         {/* ── BOOKING AGENT ── */}
-        {(profile?.role === 'band_admin' || profile?.role === 'superadmin') && myAct && <BookingAgentSettings labelStyle={sectionLabelStyle} />}
+        {(profile?.role === 'band_admin' || profile?.role === 'superadmin') && myAct && (
+          <div id="settings-agent" className={css.anchor}><BookingAgentSettings labelStyle={sectionLabelStyle} /></div>
+        )}
 
         {/* ── NOTIFICATION PREFERENCES ── */}
         {profile && profile.role !== 'superadmin' && (
           <div>
-            <div style={sectionLabelStyle}>Notifications</div>
+            <h2 id="settings-notifications" className={css.h2}>Notifications</h2>
             <div className="card">
               <div className="card-header"><span className="card-title">EMAIL NOTIFICATIONS</span></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -1191,7 +1221,7 @@ export default function Settings() {
         {/* ── FOLLOW-UP AUTOMATION ── */}
         {profile && profile.role === 'band_admin' && (
           <div>
-            <div style={sectionLabelStyle}>Follow-up Automation</div>
+            <h2 id="settings-followups" className={css.h2}>Follow-ups</h2>
             <div className="card">
               <div className="card-header"><span className="card-title">AUTOMATIC FOLLOW-UPS</span></div>
               <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1.1rem', lineHeight: 1.6 }}>
@@ -1262,7 +1292,7 @@ export default function Settings() {
         {/* ── DANGER ZONE ── */}
         {profile && profile.role !== 'superadmin' && (
           <div>
-            <div style={{ ...sectionLabelStyle, color: '#f87171' }}>Danger Zone</div>
+            <h2 id="settings-danger" className={`${css.h2} ${css.h2Danger}`}>Delete account</h2>
             <div className="card" style={{ border: '1px solid rgba(248,113,113,0.25)' }}>
               <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '0.5rem', fontWeight: 600 }}>
                 Delete my account
@@ -1296,6 +1326,7 @@ export default function Settings() {
           </div>
         )}
 
+      </div>
       </div>
     </AppShell>
   );
