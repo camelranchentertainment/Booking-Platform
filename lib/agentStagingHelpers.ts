@@ -445,3 +445,55 @@ export function describeDelete(p: DeleteCard): string {
   const notes = items.map(i => i.note).filter(Boolean).join(' ');
   return `${list || 'Delete'}${notes ? ` — ${notes}` : ''}`;
 }
+
+// ── Display fields for clients that don't render cards themselves ───────────
+
+/**
+ * Warning shown under a staged item when confirming has an effect outside the
+ * band's own records (an email goes out, something is deleted, a template is
+ * overwritten). Null when confirming only saves data.
+ */
+export function stagedItemCaution(kind: string, proposal: Record<string, unknown>): string | null {
+  switch (kind) {
+    case 'email_send':
+      return 'Confirming sends this email immediately to a real recipient.';
+    case 'record_delete':
+      return "Deleting can't be undone. Past shows and money records are never touched.";
+    case 'member_invite':
+      return `Confirming emails an invite link to ${String(proposal.email ?? 'this person')}.`;
+    case 'email_template_upsert':
+      return proposal.replaces_existing ? 'Confirming overwrites your saved template with this title. Nothing is sent.' : null;
+    default:
+      return null;
+  }
+}
+
+/** A staged item as returned by `/api/agent`, before display fields are added. */
+export interface StagedItemPayload {
+  kind: string;
+  staged_action_id?: string;
+  proposal?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
+ * Adds `summary` (one line) and `caution` (or null) to every staged item of a
+ * `stage_items` action, using the same wording the confirm message uses. The
+ * phone app renders these as-is, so it never needs its own copy of the
+ * per-kind describe logic. Other action types pass through unchanged.
+ */
+export function withStagedSummaries<T>(action: T): T {
+  if (!action || typeof action !== 'object') return action;
+  const a = action as { type?: unknown; staged?: unknown };
+  if (a.type !== 'stage_items' || !Array.isArray(a.staged)) return action;
+  const staged = (a.staged as StagedItemPayload[]).map(item => {
+    const proposal: Record<string, unknown> =
+      item.proposal && typeof item.proposal === 'object' ? { ...item.proposal } : {};
+    return {
+      ...item,
+      summary: formatItemLabel({ kind: item.kind, proposal }),
+      caution: stagedItemCaution(item.kind, proposal),
+    };
+  });
+  return { ...action, staged };
+}

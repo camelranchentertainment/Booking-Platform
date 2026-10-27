@@ -94,6 +94,7 @@ import {
   guardProposalReply,
   isStandaloneTourName,
   normaliseBookingStatus,
+  withStagedSummaries,
 } from '../../lib/agentStagingHelpers';
 
 export const config = { api: { bodyParser: { sizeLimit: '5mb' } } };
@@ -972,6 +973,19 @@ async function resolveStageItems(
 // ── Main handler ──────────────────────────────────────────────────────────────
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
+
+  // Every response that carries an approval card gets per-item display text
+  // (summary + caution) so the phone app can show the card without its own
+  // copy of the describe logic. Applied once here instead of at each of the
+  // many return sites below.
+  const sendJson = res.json.bind(res);
+  res.json = (body: unknown) => {
+    if (body && typeof body === 'object' && 'action' in body) {
+      const b = body as { action?: unknown };
+      return sendJson({ ...b, action: withStagedSummaries(b.action) });
+    }
+    return sendJson(body);
+  };
 
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
