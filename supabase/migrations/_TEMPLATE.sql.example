@@ -1,0 +1,33 @@
+-- YYYYMMDDHHMMSS_<short_name>.sql
+-- Copy to a new file named with the timestamp, delete what you don't need.
+-- Rollback goes in supabase/migrations/rollback/<same name>.down.sql
+--
+-- Why this change, who it affects, and what RLS gates it.
+
+begin;
+
+create table if not exists public.example_things (
+  id          uuid        primary key default gen_random_uuid(),
+  act_id      uuid        not null references public.acts(id) on delete cascade,
+  name        text        not null check (length(trim(name)) > 0),
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  deleted_at  timestamptz
+);
+
+create index if not exists example_things_act_id_idx on public.example_things (act_id);
+
+alter table public.example_things enable row level security;
+
+-- RLS: the band (act_id) always comes from the caller's profile.
+create policy example_things_band_read on public.example_things
+  for select to authenticated
+  using (act_id = (select p.act_id from public.profiles p where p.id = auth.uid()));
+
+-- REQUIRED since Supabase's Oct 30 2026 change: new public tables get no Data
+-- API grants by default. Grant only what the RLS policies above are meant to
+-- gate. Add anon only for genuinely public data.
+grant select, insert, update, delete on public.example_things to authenticated;
+grant all on public.example_things to service_role;
+
+commit;
