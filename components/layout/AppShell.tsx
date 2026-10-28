@@ -3,9 +3,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabase';
-import { fetchHasAgentWorkspace, isAgentShape } from '../../lib/accountSide';
-import { UserProfile } from '../../lib/types';
-import { useAuth } from '../../contexts/AuthContext';
+import { daysLeft, useShellAccess, type RequireRole } from '../../lib/hooks/useShellAccess';
 import Sidebar from './Sidebar';
 import BrandLogo from '../BrandLogo';
 import { INBOX_SYNCED_EVENT, startInboxAutoSync, stopInboxAutoSync, type InboxSyncedEventDetail } from '../../lib/inboxSync';
@@ -16,7 +14,7 @@ export type ShellBackdrop = 'desert';
 
 interface Props {
   children: React.ReactNode;
-  requireRole?: 'band_admin' | 'member' | 'superadmin' | ('band_admin' | 'member' | 'superadmin')[] | null;
+  requireRole?: RequireRole;
   /**
    * Photo backdrop behind the page. Defaults to the desert photo on every
    * page; pass `null` for a plain background. When set, the photo is fixed
@@ -25,20 +23,6 @@ interface Props {
    * styles/globals.css).
    */
   backdrop?: ShellBackdrop | null;
-}
-
-function daysLeft(trialEndsAt: string | null | undefined): number {
-  if (!trialEndsAt) return 0;
-  return Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86400000));
-}
-
-function needsSubscription(profile: UserProfile): boolean {
-  if (profile.role === 'superadmin' || profile.role === 'member') return false;
-  const status = profile.subscription_status;
-  if (!status) return false;  // no billing record yet — let them in
-  if (status === 'active') return false;
-  if (status === 'trialing' && daysLeft(profile.trial_ends_at) > 0) return false;
-  return true;
 }
 
 type SysNotif = {
@@ -366,47 +350,11 @@ function NotifBell({ userId, email, displayName }: { userId: string; email: stri
 
 export default function AppShell({ children, requireRole = null, backdrop = 'desert' }: Props) {
   const router = useRouter();
-  const { user, profile, loading: authLoading } = useAuth();
+  // Login, subscription, role and account-side redirects (shared with PopoutShell).
+  const { user, profile, authLoading } = useShellAccess(requireRole);
   const [actName, setActName] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
 
-
-  // Redirect to login when auth resolves with no session
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace('/login');
-    }
-  }, [authLoading, user]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Role-based and subscription redirects — re-run on every route change
-  useEffect(() => {
-    if (authLoading || !user || !profile) return;
-
-    if (needsSubscription(profile) && router.pathname !== '/pricing') {
-      router.replace('/pricing?trial=expired');
-      return;
-    }
-
-
-    const allowedRoles = Array.isArray(requireRole) ? requireRole : requireRole ? [requireRole] : null;
-    if (profile.role !== 'superadmin' && allowedRoles && !allowedRoles.includes(profile.role as any)) {
-      if (profile.role === 'band_admin') router.replace('/band');
-      else router.replace('/member/calendar');
-    }
-  }, [authLoading, user, profile, requireRole, router.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Each login belongs to one side (lib/accountSide.ts). An agent account that
-  // reaches a band page is sent to its own workspace. Only band-less non-member
-  // profiles are checked, so band accounts never pay for this lookup.
-  useEffect(() => {
-    if (authLoading || !user || !profile) return;
-    if (!isAgentShape(profile.role, profile.act_id)) return;
-    let cancelled = false;
-    void fetchHasAgentWorkspace(user.id).then(isAgent => {
-      if (!cancelled && isAgent) router.replace('/agent');
-    });
-    return () => { cancelled = true; };
-  }, [authLoading, user, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load act name once — non-blocking, does not gate rendering
   useEffect(() => {
