@@ -1,623 +1,353 @@
-import { useEffect, useState } from 'react';
+// pages/analytics.tsx
+//
+// Analytics — the band's year at a glance, in the Tours style: an illustrated
+// header, big numbers, then charts (shows per month, the outreach funnel, email
+// activity, where the shows were, best-paying venues), the money detail, tours,
+// and AI recommendations.
+//
+// Band admins only (AppShell requireRole + the API checks role server-side):
+// this page shows money, and members never see money.
+// Figures come from GET /api/analytics (lib/server/analytics.ts).
+
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import AppShell from '../components/layout/AppShell';
+import PageHero from '../components/layout/PageHero';
+import SoundboardScene from '../components/analytics/SoundboardScene';
+import { FunnelChart, MonthChart, RankBars, WeeksChart, money } from '../components/analytics/charts';
 import { useAuth } from '../contexts/AuthContext';
-import { useRequireAuth } from '../lib/hooks/useRequireAuth';
 import { supabase } from '../lib/supabase';
-
-type SortKey = 'state' | 'total' | 'confirmed' | 'conversionRate' | 'responseRate';
-
-const STAGE_ORDER = ['target', 'follow_up', 'confirmed', 'declined', 'thank_you'] as const;
-
-const STAGE_LABELS: Record<string, string> = {
-  target:    'Target',
-  follow_up: 'Follow Up',
-  confirmed: 'Confirm',
-  declined:  'Declined',
-  thank_you: 'Thank You',
-};
+import type { AnalyticsReport } from '../lib/server/analytics';
+import type { Recommendation } from '../lib/server/analyticsRecommendations';
+import styles from '../styles/analytics.module.css';
 
 const DEAL_LABELS: Record<string, string> = {
-  guarantee:   'Guarantee',
-  door_split:  'Door Split',
-  percentage:  'Percentage',
-  flat_fee:    'Flat Fee',
-  other:       'Other',
-  unspecified: 'Unspecified',
+  guarantee: 'Guarantee',
+  door_split: 'Door split',
+  percentage: 'Percentage',
+  flat_fee: 'Flat fee',
+  other: 'Other',
+  unspecified: 'Not set',
 };
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
-  return (
-    <div style={{
-      background: 'rgba(255,255,255,0.04)',
-      border: '1px solid rgba(255,255,255,0.08)',
-      borderRadius: 8,
-      padding: '1.1rem 1.25rem',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '0.3rem',
-    }}>
-      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-        {label}
-      </div>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: 'var(--text-primary)', lineHeight: 1 }}>
-        {value}
-      </div>
-      {sub && (
-        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          {sub}
-        </div>
-      )}
-    </div>
-  );
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+async function authHeader(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 }
 
-function EmptyState({ message }: { message: string }) {
+/** One big-number card. */
+function Big({ label, value, note, accent }: { label: string; value: string | number; note?: React.ReactNode; accent?: string }) {
   return (
-    <div style={{
-      padding: '2rem',
-      textAlign: 'center',
-      fontFamily: 'var(--font-body)',
-      fontSize: '0.85rem',
-      color: 'var(--text-muted)',
-      background: 'rgba(255,255,255,0.02)',
-      border: '1px solid rgba(255,255,255,0.06)',
-      borderRadius: 8,
-    }}>
-      {message}
+    <div className={styles.big} style={accent ? ({ '--big-accent': accent } as React.CSSProperties) : undefined}>
+      <span className={styles.bigLabel}>{label}</span>
+      <span className={styles.bigValue}>{value}</span>
+      {note && <span className={styles.bigNote}>{note}</span>}
     </div>
   );
 }
 
 export default function AnalyticsPage() {
-  const { profile, loading: authLoading } = useRequireAuth('band_admin');
+  const { profile } = useAuth();
+  const [year, setYear] = useState<number>(() => new Date().getFullYear());
+  const [data, setData] = useState<AnalyticsReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actName, setActName] = useState('');
 
-  const [data, setData]               = useState<any>(null);
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState<string | null>(null);
-  const [actName, setActName]         = useState<string>('');
-  const [sortKey, setSortKey]         = useState<SortKey>('confirmed');
-  const [sortDir, setSortDir]         = useState<'asc' | 'desc'>('desc');
-  const [recommendations, setRecommendations] = useState<any[]>([]);
-  const [loadingRecs, setLoadingRecs] = useState(false);
-  const [recsLoaded, setRecsLoaded]   = useState(false);
-  // Booking figures are reported one calendar year at a time (year-over-year, tax season).
-  const [year, setYear]               = useState<number>(() => new Date().getFullYear());
+  const [recs, setRecs] = useState<Recommendation[] | null>(null);
+  const [recsLoading, setRecsLoading] = useState(false);
+  const [recsError, setRecsError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!profile || authLoading) return;
-    loadAnalytics();
-    loadActName();
-  }, [profile, authLoading, year]);
-
-  const loadActName = async () => {
-    if (!profile?.act_id) return;
-    const { data: act } = await supabase.from('acts').select('act_name').eq('id', profile.act_id).maybeSingle();
-    if (act?.act_name) setActName(act.act_name);
-  };
-
-  const loadAnalytics = async () => {
+  const load = useCallback(async (y: number) => {
     setLoading(true);
     setError(null);
-    const timeout = setTimeout(() => setLoading(false), 5000);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch(`/api/analytics?year=${year}`, {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
-      });
-      if (!response.ok) throw new Error('Failed to load analytics');
-      setData(await response.json());
-    } catch (e: any) {
-      setError(e.message);
+      const res = await fetch(`/api/analytics?year=${y}`, { headers: await authHeader() });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Analytics could not be loaded.');
+      setData(json as AnalyticsReport);
+    } catch (e) {
+      console.error('[analytics] load failed', e);
+      setError(e instanceof Error ? e.message : 'Analytics could not be loaded.');
     } finally {
-      clearTimeout(timeout);
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadRecommendations = async () => {
-    if (!data || recsLoaded) return;
-    setLoadingRecs(true);
+  useEffect(() => {
+    if (!profile?.act_id) return;
+    void load(year);
+  }, [profile?.act_id, year, load]);
+
+  useEffect(() => {
+    if (!profile?.act_id) return;
+    let cancelled = false;
+    void supabase.from('acts').select('act_name').eq('id', profile.act_id).maybeSingle()
+      .then(({ data: act }) => { if (!cancelled && act?.act_name) setActName(act.act_name); });
+    return () => { cancelled = true; };
+  }, [profile?.act_id]);
+
+  const getRecommendations = async () => {
+    setRecsLoading(true);
+    setRecsError(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch('/api/analytics/recommendations', {
-        method:  'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          Authorization:   `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({ analyticsData: data, actName }),
+      const res = await fetch('/api/analytics/recommendations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+        body: JSON.stringify({ year }),
       });
-      const json = await response.json();
-      setRecommendations(json.recommendations ?? []);
-      setRecsLoaded(true);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : 'Recommendations could not be generated.');
+      setRecs(Array.isArray(json.recommendations) ? json.recommendations : []);
     } catch (e) {
-      console.error('Recommendations error:', e);
+      console.error('[analytics] recommendations failed', e);
+      setRecsError(e instanceof Error ? e.message : 'Recommendations could not be generated.');
     } finally {
-      setLoadingRecs(false);
+      setRecsLoading(false);
     }
   };
 
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortKey(key);
-      setSortDir('desc');
-    }
-  };
+  const f = data?.bookingFinancials;
+  const funnel = data?.funnel ?? [];
+  const pitched = funnel.find(s => s.key === 'pitched')?.count ?? 0;
+  const booked = funnel.find(s => s.key === 'booked')?.count ?? 0;
+  const now = new Date();
+  const currentMonth = year === now.getFullYear() ? now.getMonth() : null;
+  const years = f?.availableYears?.length ? f.availableYears : [year];
 
-  const sectionLabel: React.CSSProperties = {
-    fontFamily:    'var(--font-display)',
-    fontSize:      '1.1rem',
-    color:         'var(--text-primary)',
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase',
-    marginBottom:  '0.75rem',
-  };
-
-  const card: React.CSSProperties = {
-    background:   'rgba(255,255,255,0.04)',
-    border:       '1px solid rgba(255,255,255,0.08)',
-    borderRadius: 8,
-    padding:      '1.25rem',
-  };
-
-  const cardTitle: React.CSSProperties = {
-    fontFamily:    'var(--font-display)',
-    fontSize:      '0.78rem',
-    color:         'var(--text-muted)',
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-    marginBottom:  '1rem',
-  };
-
-  // Full-page loader only on the first load, so the year picker stays put while switching years.
-  if (authLoading || (loading && !data)) {
-    return (
-      <AppShell requireRole="band_admin">
-        <div style={{ padding: '2rem', fontFamily: 'var(--font-body)', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
-          Loading analytics…
-        </div>
-      </AppShell>
-    );
-  }
-
-  if (error) {
-    return (
-      <AppShell requireRole="band_admin">
-        <div style={{ padding: '2rem', fontFamily: 'var(--font-body)', color: '#f87171', fontSize: '0.88rem' }}>
-          {error}
-        </div>
-      </AppShell>
-    );
-  }
-
-  const pipeline          = data?.pipeline         ?? {};
-  const regional          = data?.regionalPerformance ?? [];
-  const emailPerf         = data?.emailPerformance  ?? {};
-  const financials        = data?.bookingFinancials ?? {};
-  const yearOptions: number[] = financials.availableYears ?? [year];
-  const tourStats         = data?.tourStats         ?? [];
-  const conversionRate    = data?.conversionRate    ?? 0;
-  const responseRate      = data?.responseRate      ?? 0;
-
-  const sortedRegional = [...regional].sort((a: any, b: any) => {
-    const av = a[sortKey] ?? 0;
-    const bv = b[sortKey] ?? 0;
-    const cmp = typeof av === 'string' ? av.localeCompare(bv) : av - bv;
-    return sortDir === 'asc' ? cmp : -cmp;
-  });
-
-  const maxConfirmed = Math.max(...regional.map((r: any) => r.confirmed), 1);
-
-  const thStyle: React.CSSProperties = {
-    fontFamily:    'var(--font-body)',
-    fontSize:      '0.72rem',
-    color:         'var(--text-muted)',
-    letterSpacing: '0.08em',
-    textTransform: 'uppercase',
-    padding:       '0.5rem 0.75rem',
-    textAlign:     'left',
-    borderBottom:  '1px solid rgba(255,255,255,0.08)',
-    cursor:        'pointer',
-    whiteSpace:    'nowrap',
-  };
-
-  const tdStyle: React.CSSProperties = {
-    fontFamily: 'var(--font-body)',
-    fontSize:   '0.85rem',
-    color:      'var(--text-secondary)',
-    padding:    '0.6rem 0.75rem',
-    borderBottom: '1px solid rgba(255,255,255,0.04)',
-  };
-
-  const sortArrow = (key: SortKey) =>
-    sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+  const summary = data && f
+    ? `${plural(f.totalCompleted, 'show')} played · ${money(f.totalEarned)} earned · ${f.futureConfirmedCount} more on the books.`
+    : undefined;
 
   return (
     <AppShell requireRole="band_admin">
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '1.5rem 1rem 3rem', display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-
-        {/* Page header — the shared Tours-style header (.page-header in globals.css) */}
-        <div className="page-header" style={{ marginBottom: 0 }}>
-          <div>
-            <h1 className="page-title">Analytics</h1>
-            <div className="page-sub">{actName ? `${actName} · ${year}` : `Pipeline & bookings · ${year}`}</div>
-          </div>
-          <label className="page-sub" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: 0 }}>
+      <PageHero
+        title="Analytics"
+        subtitle={actName ? `${actName} · ${year}` : `Your year in numbers · ${year}`}
+        summary={summary}
+        scene={<SoundboardScene />}
+        actions={
+          <label className={styles.yearPicker}>
             Year
             <select
               className="select"
-              style={{ width: 100 }}
               value={year}
-              onChange={e => {
-                setYear(Number(e.target.value));
-                // Recommendations are generated from the loaded year's data; drop the cached set.
-                setRecommendations([]);
-                setRecsLoaded(false);
-              }}
-              aria-label="Year for booking figures"
+              onChange={e => { setYear(Number(e.target.value)); setRecs(null); setRecsError(null); }}
+              aria-label="Year for the figures"
             >
-              {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </label>
-        </div>
+        }
+      />
 
-        {/* ── Section 1: Summary Bar ── */}
-        <div>
-          <div style={sectionLabel}>Overview</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
-            <StatCard
-              label="Total in Pipeline"
-              value={pipeline.total ?? 0}
-              sub="across all tours"
-            />
-            <StatCard
-              label="Conversion Rate"
-              value={`${conversionRate}%`}
-              sub="target → confirm / thank you"
-            />
-            <StatCard
-              label="Response Rate"
-              value={`${responseRate}%`}
-              sub="outreach receiving replies"
-            />
-            <StatCard
-              label="Confirmed Shows"
-              value={financials.futureConfirmedCount ?? 0}
-              sub={`upcoming booked shows in ${year}`}
-            />
-            <StatCard
-              label="Shows Performed"
-              value={financials.totalCompleted ?? 0}
-              sub={`completed shows in ${year}`}
-            />
-          </div>
-        </div>
+      <div className={styles.page}>
+        {error && (
+          <p role="alert" className={styles.error}>
+            {error}{' '}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => void load(year)}>Try again</button>
+          </p>
+        )}
 
-        {/* ── Section 2: Pipeline Funnel ── */}
-        <div>
-          <div style={sectionLabel}>Pipeline Funnel</div>
-          {pipeline.total === 0 ? (
-            <EmptyState message="No venues in pipeline yet — add venues to a tour to start tracking your outreach funnel." />
+        {/* ── Big numbers ── */}
+        <section className={styles.bigNumbers} aria-label={`${year} at a glance`} aria-busy={loading}>
+          {!data ? (
+            Array.from({ length: 5 }, (_, i) => <div key={i} className={`tour-skeleton ${styles.skeleton}`} />)
           ) : (
-            <div style={card}>
-              <div style={cardTitle}>Outreach Stages</div>
-
-              {/* Main funnel stages */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                {STAGE_ORDER.map((stage, i) => {
-                  const count    = pipeline[stage] ?? 0;
-                  const pct      = pipeline.total > 0 ? Math.round((count / pipeline.total) * 100) : 0;
-                  const isLast   = i === STAGE_ORDER.length - 1;
-                  const nextCount = !isLast ? (pipeline[STAGE_ORDER[i + 1]] ?? 0) : 0;
-                  const dropOff  = !isLast && count > 0 ? Math.round(((count - nextCount) / count) * 100) : null;
-
-                  return (
-                    <div key={stage} style={{ display: 'flex', alignItems: 'center' }}>
-                      <div style={{
-                        background:   stage === 'confirmed' ? 'rgba(232,96,42,0.15)' : 'rgba(107,143,181,0.12)',
-                        border:       `1px solid ${stage === 'confirmed' ? 'rgba(232,96,42,0.5)' : 'rgba(107,143,181,0.3)'}`,
-                        borderRadius: 6,
-                        padding:      '0.75rem 1rem',
-                        textAlign:    'center',
-                        minWidth:     90,
-                      }}>
-                        <div style={{
-                          fontFamily: 'var(--font-display)',
-                          fontSize:   '1.6rem',
-                          color:      stage === 'confirmed' ? '#E8602A' : '#6B8FB5',
-                          lineHeight: 1,
-                        }}>
-                          {count}
-                        </div>
-                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.25rem', letterSpacing: '0.06em' }}>
-                          {STAGE_LABELS[stage]}
-                        </div>
-                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: stage === 'confirmed' ? '#E8602A' : 'var(--text-muted)', marginTop: '0.15rem' }}>
-                          {pct}%
-                        </div>
-                      </div>
-
-                      {!isLast && (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 0.4rem' }}>
-                          <span style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>→</span>
-                          {dropOff !== null && (
-                            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: '#f87171', whiteSpace: 'nowrap' }}>
-                              -{dropOff}%
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <>
+              <Big label="Shows played" value={f!.totalCompleted} accent="#d9752d" note={<>in {year}</>} />
+              <Big label="Earned" value={money(f!.totalEarned)} accent="#34d399"
+                note={f!.avgPay > 0 ? <>avg <strong>{money(f!.avgPay)}</strong> a show</> : 'from completed shows'} />
+              <Big label="On the books" value={f!.futureConfirmedCount} accent="#4a90e2"
+                note={f!.totalPotential > 0 ? <><strong>{money(f!.totalPotential)}</strong> still to come</> : 'confirmed shows ahead'} />
+              <Big label="Pipeline" value={funnel[0]?.count ?? 0} accent="#a78bfa"
+                note={<><strong>{pitched}</strong> pitched · <strong>{booked}</strong> booked</>} />
+              <Big label="Wrote back" value={`${data.responseRate}%`} accent="#f5b041"
+                note={<>{data.emailPerformance.venuesReplied} of {plural(data.emailPerformance.venuesEmailed, 'venue')} emailed</>} />
+            </>
           )}
-        </div>
+        </section>
 
-        {/* ── Section 3: Regional Performance ── */}
-        <div>
-          <div style={sectionLabel}>Regional Performance</div>
-          {regional.length === 0 ? (
-            <EmptyState message="No regional data yet — venue city/state data will appear here as your pipeline grows." />
-          ) : (
-            <div style={card}>
-              <div style={cardTitle}>By State</div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      {([
-                        ['state',          'State'],
-                        ['total',          'Total'],
-                        ['responseRate',   'Response Rate'],
-                        ['confirmed',      'Confirmed'],
-                        ['conversionRate', 'Conversion'],
-                      ] as [SortKey, string][]).map(([key, label]) => (
-                        <th key={key} style={thStyle} onClick={() => handleSort(key)}>
-                          {label}{sortArrow(key)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedRegional.map((r: any) => (
-                      <tr key={r.state}>
-                        <td style={{ ...tdStyle, color: 'var(--text-primary)', fontWeight: 600 }}>{r.state}</td>
-                        <td style={tdStyle}>{r.total}</td>
-                        <td style={tdStyle}>{r.responseRate}%</td>
-                        <td style={{ ...tdStyle, color: r.confirmed > 0 ? '#E8602A' : 'var(--text-muted)' }}>{r.confirmed}</td>
-                        <td style={tdStyle}>{r.conversionRate}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+        {data && (
+          <>
+            {/* ── Year chart + funnel ── */}
+            <div className={styles.grid2}>
+              <section className={styles.panel} aria-labelledby="an-year">
+                <header className={styles.panelHead}>
+                  <h2 className={styles.panelTitle} id="an-year">Your {year}</h2>
+                  <span className={styles.panelMeta}>Shows per month</span>
+                </header>
+                <MonthChart months={data.months} year={year} currentMonth={currentMonth} />
+              </section>
 
-              {/* CSS bar chart — sorted by confirmed desc */}
-              <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
-                  Confirmed by State
-                </div>
-                {[...regional]
-                  .sort((a: any, b: any) => b.confirmed - a.confirmed)
-                  .filter((r: any) => r.confirmed > 0)
-                  .map((r: any) => (
-                    <div key={r.state} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <div style={{ width: 32, fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'right', flexShrink: 0 }}>
-                        {r.state}
-                      </div>
-                      <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: 3, height: 18, overflow: 'hidden' }}>
-                        <div style={{
-                          width:      `${Math.round((r.confirmed / maxConfirmed) * 100)}%`,
-                          height:     '100%',
-                          background: '#E8602A',
-                          borderRadius: 3,
-                          minWidth:   4,
-                        }} />
-                      </div>
-                      <div style={{ width: 24, fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#E8602A', flexShrink: 0 }}>
-                        {r.confirmed}
-                      </div>
+              <section className={styles.panel} aria-labelledby="an-funnel">
+                <header className={styles.panelHead}>
+                  <h2 className={styles.panelTitle} id="an-funnel">Outreach funnel</h2>
+                  <span className={styles.panelMeta}><strong>{data.conversionRate}%</strong> booked</span>
+                </header>
+                {funnel[0]?.count ? (
+                  <>
+                    <FunnelChart steps={funnel} />
+                    <div className={styles.statusChips} aria-label="Targets by outreach status">
+                      <span className={styles.chip}><strong>{data.pipeline.target}</strong> to pitch</span>
+                      <span className={styles.chip}><strong>{data.pipeline.follow_up}</strong> following up</span>
+                      <span className={styles.chip}><strong>{data.pipeline.declined}</strong> declined</span>
                     </div>
-                  ))}
-                {regional.every((r: any) => r.confirmed === 0) && (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    No confirmed shows yet in any region.
+                  </>
+                ) : (
+                  <p className={styles.empty}>No venues in the pipeline yet. Add venues to a tour to start tracking outreach.</p>
+                )}
+              </section>
+            </div>
+
+            {/* ── Email + where you played ── */}
+            <div className={styles.grid2even}>
+              <section className={styles.panel} aria-labelledby="an-email">
+                <header className={styles.panelHead}>
+                  <h2 className={styles.panelTitle} id="an-email">Email activity</h2>
+                  <span className={styles.panelMeta}>Last 12 weeks</span>
+                </header>
+                <WeeksChart weeks={data.emailPerformance.weeks} />
+                <div className={styles.statLine}>
+                  <div className={styles.stat}><strong>{data.emailPerformance.sent}</strong><span>Sent, all time</span></div>
+                  <div className={styles.stat}><strong>{data.emailPerformance.received}</strong><span>Replies, all time</span></div>
+                  <div className={styles.stat}><strong>{data.emailPerformance.venuesEmailed}</strong><span>Venues reached</span></div>
+                </div>
+              </section>
+
+              <section className={styles.panel} aria-labelledby="an-states">
+                <header className={styles.panelHead}>
+                  <h2 className={styles.panelTitle} id="an-states">Where you played</h2>
+                  <span className={styles.panelMeta}>Shows by state · {year}</span>
+                </header>
+                {data.states.length ? (
+                  <RankBars
+                    unit="shows"
+                    items={data.states.slice(0, 8).map(s => ({
+                      key: s.state,
+                      label: s.state,
+                      sub: s.earned > 0 ? `${money(s.earned)} earned` : undefined,
+                      value: s.shows,
+                      display: plural(s.shows, 'show'),
+                    }))}
+                  />
+                ) : (
+                  <p className={styles.empty}>No shows booked in {year} yet.</p>
+                )}
+              </section>
+            </div>
+
+            {/* ── Best venues + money ── */}
+            <div className={styles.grid2even}>
+              <section className={styles.panel} aria-labelledby="an-venues">
+                <header className={styles.panelHead}>
+                  <h2 className={styles.panelTitle} id="an-venues">Best-paying rooms</h2>
+                  <span className={styles.panelMeta}>Earned · {year}</span>
+                </header>
+                {data.topVenues.length ? (
+                  <RankBars
+                    unit="earned"
+                    items={data.topVenues.map(v => ({
+                      key: v.venueId,
+                      label: v.name,
+                      sub: [v.where, plural(v.shows, 'show')].filter(Boolean).join(' · '),
+                      value: v.earned,
+                      display: money(v.earned),
+                      href: `/venues/${v.venueId}`,
+                    }))}
+                  />
+                ) : (
+                  <p className={styles.empty}>No paid shows recorded in {year} yet. Mark shows paid to see your best rooms here.</p>
+                )}
+              </section>
+
+              <section className={styles.panel} aria-labelledby="an-money">
+                <header className={styles.panelHead}>
+                  <h2 className={styles.panelTitle} id="an-money">The money</h2>
+                  <span className={styles.panelMeta}>{year}</span>
+                </header>
+                <dl className={styles.moneyList}>
+                  <div className={styles.moneyRow}><dt>Earned (played and paid)</dt><dd>{money(f!.totalEarned)}</dd></div>
+                  <div className={styles.moneyRow}><dt>Still to come (confirmed shows ahead)</dt><dd>{money(f!.totalPotential)}</dd></div>
+                  <div className={styles.moneyRow}><dt>Average per paid show</dt><dd>{f!.avgPay > 0 ? money(f!.avgPay) : '—'}</dd></div>
+                  <div className={styles.moneyRow}><dt>Venues that would rebook</dt><dd>{f!.wouldReturnPct != null ? `${f!.wouldReturnPct}%` : '—'}</dd></div>
+                </dl>
+                {Object.keys(f!.dealTypeBreakdown).length > 0 && (
+                  <div className={styles.statusChips} aria-label="Deal types">
+                    {Object.entries(f!.dealTypeBreakdown).sort((a, b) => b[1] - a[1]).map(([type, n]) => (
+                      <span key={type} className={styles.chip}><strong>{n}</strong> {DEAL_LABELS[type] ?? type}</span>
+                    ))}
                   </div>
                 )}
-              </div>
+              </section>
             </div>
-          )}
-        </div>
 
-        {/* ── Section 4: Email & Booking Performance ── */}
-        <div>
-          <div style={sectionLabel}>Performance</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.75rem' }}>
-
-            {/* Email Performance */}
-            <div style={card}>
-              <div style={cardTitle}>Email Activity</div>
-              {emailPerf.sent === 0 ? (
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.83rem', color: 'var(--text-muted)' }}>
-                  No emails sent yet. Start a campaign to track outreach activity.
+            {/* ── Tours ── */}
+            <section className={styles.panel} aria-labelledby="an-tours">
+              <header className={styles.panelHead}>
+                <h2 className={styles.panelTitle} id="an-tours">Tours</h2>
+                <span className={styles.panelMeta}>Booked of targets</span>
+              </header>
+              {data.tourStats.length ? (
+                <div className={styles.tours}>
+                  {data.tourStats.map(t => {
+                    const share = t.total > 0 ? Math.round((t.confirmed / t.total) * 100) : 0;
+                    const active = t.status === 'active' || t.status === 'planning';
+                    return (
+                      <Link key={t.id} href={`/tours/${t.id}`} className={`${styles.tourCard} ${active ? styles.tourActive : ''}`}>
+                        <span className={styles.tourTop}>
+                          <span className={styles.tourName}>{t.name || 'Untitled tour'}</span>
+                          <span className={styles.tourStatus}>{t.status}</span>
+                        </span>
+                        <span className="tour-meter" aria-hidden="true"><span className="tour-meter-bar" style={{ width: `${share}%`, display: 'block' }} /></span>
+                        <span className={styles.tourNums}>
+                          <span><strong>{t.confirmed}</strong> booked of {t.total}</span>
+                          <span><strong>{t.contacted}</strong> pitched</span>
+                        </span>
+                      </Link>
+                    );
+                  })}
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                  {[
-                    ['Emails Sent',    emailPerf.sent],
-                    ['Delivery Rate',  `${emailPerf.deliveryRate}%`],
-                    ['Response Rate',  `${emailPerf.responseRate}%`],
-                  ].map(([label, val]) => (
-                    <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.83rem', color: 'var(--text-muted)' }}>{label}</span>
-                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--text-primary)' }}>{val}</span>
-                    </div>
+                <p className={styles.empty}>No tours yet. Create a tour and add venues to track how it books.</p>
+              )}
+            </section>
+
+            {/* ── AI recommendations ── */}
+            <section className={styles.panel} aria-labelledby="an-recs">
+              <header className={styles.panelHead}>
+                <h2 className={styles.panelTitle} id="an-recs">What to do next</h2>
+                <span className={styles.panelMeta}>AI booking advice</span>
+              </header>
+              {recs === null && (
+                <div className={styles.recIntro}>
+                  <p>Get three or four recommendations drawn from these numbers: where you&apos;re getting replies, which rooms pay, and which months are thin.</p>
+                  <button type="button" className="btn btn-primary" onClick={getRecommendations} disabled={recsLoading}>
+                    {recsLoading ? 'Reading your numbers…' : 'Get recommendations'}
+                  </button>
+                </div>
+              )}
+              {recsError && <p role="alert" className={styles.error}>{recsError}</p>}
+              {recs !== null && recs.length === 0 && (
+                <p className={styles.empty}>Not enough to go on yet. Book a few more shows and send more outreach, then try again.</p>
+              )}
+              {recs !== null && recs.length > 0 && (
+                <div className={styles.recs}>
+                  {recs.map((r, i) => (
+                    <article key={i} className={styles.rec}>
+                      <span className={styles.recNum}>0{i + 1}</span>
+                      <h3 className={styles.recTitle}>{r.title}</h3>
+                      <p className={styles.recInsight}>{r.insight}</p>
+                      <p className={styles.recAction}><b>Next</b>{r.action}</p>
+                    </article>
                   ))}
                 </div>
               )}
-            </div>
-
-            {/* Booking Financials */}
-            <div style={card}>
-              <div style={cardTitle}>Booking Financials · {year}</div>
-              {financials.totalConfirmed === 0 ? (
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.83rem', color: 'var(--text-muted)' }}>
-                  No confirmed or completed shows in {year}.
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                  {[
-                    ['Confirmed Shows',  financials.totalConfirmed],
-                    ['Completed Shows',  financials.totalCompleted],
-                    [`Total Earned (${year})`, financials.totalEarned > 0 ? `$${financials.totalEarned.toLocaleString()}` : '—'],
-                    ['Potential (future)', financials.totalPotential > 0 ? `$${financials.totalPotential.toLocaleString()}` : '—'],
-                    ['Avg Pay / Show',   financials.avgPay > 0 ? `$${financials.avgPay.toLocaleString()}` : '—'],
-                    ...(financials.wouldReturnPct !== null ? [['Would Rebook', `${financials.wouldReturnPct}%`]] : []),
-                  ].map(([label, val]) => (
-                    <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.83rem', color: 'var(--text-muted)' }}>{label}</span>
-                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--text-primary)' }}>{val}</span>
-                    </div>
-                  ))}
-
-                  {/* Deal type breakdown */}
-                  {Object.keys(financials.dealTypeBreakdown ?? {}).length > 0 && (
-                    <div>
-                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
-                        Deal Types
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                        {Object.entries(financials.dealTypeBreakdown).map(([type, count]: [string, any]) => (
-                          <span key={type} style={{
-                            fontFamily:   'var(--font-body)',
-                            fontSize:     '0.72rem',
-                            color:        '#6B8FB5',
-                            background:   'rgba(107,143,181,0.12)',
-                            border:       '1px solid rgba(107,143,181,0.25)',
-                            borderRadius: 99,
-                            padding:      '0.15rem 0.5rem',
-                          }}>
-                            {DEAL_LABELS[type] ?? type} ({count})
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ── Section 5: Tour Comparison ── */}
-        <div>
-          <div style={sectionLabel}>Tour Comparison</div>
-          {tourStats.length === 0 ? (
-            <EmptyState message="No tours yet — create a tour and add venues to start tracking campaign performance." />
-          ) : (
-            <div style={card}>
-              <div style={cardTitle}>All Tours</div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      {['Tour', 'Status', 'Total Venues', 'Contacted', 'Confirmed', 'Conversion'].map(h => (
-                        <th key={h} style={{ ...thStyle, cursor: 'default' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tourStats.map((t: any) => (
-                      <tr key={t.id}>
-                        <td style={{ ...tdStyle, color: 'var(--text-primary)', fontWeight: 600 }}>{t.name || 'Unnamed Tour'}</td>
-                        <td style={tdStyle}>
-                          <span style={{
-                            fontFamily:   'var(--font-body)',
-                            fontSize:     '0.7rem',
-                            letterSpacing: '0.08em',
-                            textTransform: 'uppercase',
-                            color:        t.status === 'active' ? '#4caf50' : 'var(--text-muted)',
-                          }}>
-                            {t.status}
-                          </span>
-                        </td>
-                        <td style={tdStyle}>{t.total}</td>
-                        <td style={tdStyle}>{t.contacted}</td>
-                        <td style={{ ...tdStyle, color: t.confirmed > 0 ? '#E8602A' : 'var(--text-muted)' }}>{t.confirmed}</td>
-                        <td style={tdStyle}>{t.conversionRate}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Section 6: AI Recommendations ── */}
-        <div>
-          <div style={sectionLabel}>AI Recommendations</div>
-          <div style={card}>
-            <div style={cardTitle}>Booking Strategy</div>
-
-            {!recsLoaded && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'flex-start' }}>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.83rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                  Get data-driven recommendations based on your pipeline, regional performance, and booking patterns.
-                </div>
-                <button
-                  className="btn btn-primary"
-                  onClick={loadRecommendations}
-                  disabled={loadingRecs || !data}
-                  style={{ minWidth: 180 }}
-                >
-                  {loadingRecs ? 'Generating…' : 'Get AI Recommendations'}
-                </button>
-              </div>
-            )}
-
-            {loadingRecs && (
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.83rem', color: 'var(--text-muted)', padding: '0.5rem 0' }}>
-                Analyzing your data…
-              </div>
-            )}
-
-            {recsLoaded && recommendations.length === 0 && (
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.83rem', color: 'var(--text-muted)' }}>
-                Not enough data to generate recommendations yet. Add more venues and send more outreach to build a pattern.
-              </div>
-            )}
-
-            {recommendations.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {recommendations.map((rec: any, i: number) => (
-                  <div key={i} style={{
-                    background:   'rgba(232,96,42,0.06)',
-                    border:       '1px solid rgba(232,96,42,0.2)',
-                    borderRadius: 6,
-                    padding:      '0.9rem 1rem',
-                  }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', color: '#E8602A', marginBottom: '0.4rem', letterSpacing: '0.04em' }}>
-                      {rec.title}
-                    </div>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', lineHeight: 1.6 }}>
-                      {rec.insight}
-                    </div>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: 1.6 }}>
-                      <strong style={{ color: 'var(--text-muted)', fontSize: '0.72rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Action: </strong>
-                      {rec.action}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
+            </section>
+          </>
+        )}
       </div>
     </AppShell>
   );
