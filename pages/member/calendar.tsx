@@ -1,15 +1,28 @@
-import { useState, useEffect } from 'react';
+// pages/member/calendar.tsx
+//
+// Member calendar — the member's own roster spots and RSVPs, in the Tours
+// style: an illustrated header, counts of shows to answer / confirmed /
+// declined, a month grid with each show coloured by RSVP, the picked day's
+// details, and the upcoming list. Each show opens /member/shows/[id], where
+// the member answers.
+//
+// Data: GET /api/member/shows (RLS-scoped to the member's own spots). The
+// calendar shows no money.
+
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import AppShell from '../../components/layout/AppShell';
+import PageHero from '../../components/layout/PageHero';
+import BackstageScene from '../../components/member/BackstageScene';
 import { supabase } from '../../lib/supabase';
-import { parseLocalDate, formatShowDate } from '../../lib/formatDate';
+import { formatShowDate, localToday } from '../../lib/formatDate';
+import { monthGrid, rsvpCounts, runOfShow, type Rsvp } from '../../lib/domain/memberShows';
+import styles from '../../styles/member.module.css';
 
 type Show = {
   id: string;
   booking_id: string | null;
-  status: 'pending' | 'confirmed' | 'declined';
-  notes: string | null;
-  responded_at: string | null;
+  status: Rsvp;
   show_date: string | null;
   booking_status: string | null;
   load_in_time: string | null;
@@ -17,242 +30,203 @@ type Show = {
   door_time: string | null;
   soundcheck_time: string | null;
   venue: { name: string | null; address: string | null; city: string | null; state: string | null } | null;
-  pay: { amount: number; source: 'confirmed' | 'estimated' } | null;
 };
 
-const DAYS   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-
-const RSVP_COLOR: Record<string, string> = {
-  pending:   '#fbbf24',
-  confirmed: '#34d399',
-  declined:  '#64748b',
-};
-const RSVP_LABEL: Record<string, string> = {
-  pending:   'Pending',
-  confirmed: 'Confirmed',
-  declined:  'Declined',
-};
-
-function fmt(t: string | null | undefined) {
-  if (!t) return null;
-  const [h, m] = t.split(':');
-  const hour = parseInt(h, 10);
-  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
-}
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const RSVP_LABEL: Record<Rsvp, string> = { pending: 'Needs answer', confirmed: "I'm in", declined: "Can't make it" };
+const RSVP_CLASS: Record<Rsvp, string> = { pending: styles.rsvpPending, confirmed: styles.rsvpConfirmed, declined: styles.rsvpDeclined };
+const rsvpOf = (s: string): Rsvp => (s === 'confirmed' || s === 'declined' ? s : 'pending');
 
 function RsvpBadge({ status }: { status: string }) {
-  const color = RSVP_COLOR[status] || '#64748b';
+  const r = rsvpOf(status);
+  return <span className={`${styles.rsvp} ${RSVP_CLASS[r]}`}>{RSVP_LABEL[r]}</span>;
+}
+
+function MiniDate({ date }: { date: string }) {
   return (
-    <span style={{
-      fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 600,
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-      color, background: `${color}20`, padding: '0.15rem 0.45rem',
-      borderRadius: '3px', flexShrink: 0, border: `1px solid ${color}40`,
-    }}>
-      {RSVP_LABEL[status] || status}
+    <span className={styles.dateBlock} aria-hidden="true">
+      <span className={styles.dateMonth}>{formatShowDate(date, { month: 'short' })}</span>
+      <span className={styles.dateDay}>{formatShowDate(date, { day: 'numeric' })}</span>
     </span>
   );
 }
 
 export default function MemberCalendar() {
-  const [shows, setShows]     = useState<Show[]>([]);
+  const today = localToday();
+  const [shows, setShows] = useState<Show[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
-  const [today]    = useState(new Date());
-  const [current, setCurrent] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
+  const [current, setCurrent] = useState(() => ({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) - 1 }));
   const [selected, setSelected] = useState<string | null>(null);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch('/api/member/shows', { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const json = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) { setFetchError(typeof json.error === 'string' ? json.error : "We couldn't load your shows."); return; }
+        // Cancelled shows aren't on anyone's calendar.
+        setShows(((json.shows ?? []) as Show[]).filter(s => s.booking_status !== 'cancelled'));
+      } catch (e) {
+        console.error('[member calendar] load failed', e);
+        if (!cancelled) setFetchError("We couldn't load your shows. Check your connection and refresh.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
-  const load = async () => {
-    setLoading(true);
-    setFetchError('');
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-      const res = await fetch('/api/member/shows', {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      const json = await res.json();
-      if (!res.ok) { setFetchError(json.error || 'Failed to load shows'); return; }
-      setShows(json.shows || []);
-    } catch {
-      setFetchError('Failed to load shows.');
-    } finally {
-      setLoading(false);
+  const byDate = useMemo(() => {
+    const m: Record<string, Show[]> = {};
+    for (const s of shows) {
+      const d = s.show_date?.slice(0, 10);
+      if (d) (m[d] ??= []).push(s);
     }
-  };
+    return m;
+  }, [shows]);
+  const counts = useMemo(() => rsvpCounts(shows, today), [shows, today]);
+  const upcoming = useMemo(() => shows.filter(s => s.show_date && s.show_date >= today).sort((a, b) => (a.show_date! < b.show_date! ? -1 : 1)), [shows, today]);
+  const cells = monthGrid(current.year, current.month);
+  const selectedShows = selected ? byDate[selected] ?? [] : [];
 
-  const prev = () => setCurrent(c => c.month === 0 ? { year: c.year - 1, month: 11 } : { ...c, month: c.month - 1 });
-  const next = () => setCurrent(c => c.month === 11 ? { year: c.year + 1, month: 0 } : { ...c, month: c.month + 1 });
+  const prev = () => setCurrent(c => (c.month === 0 ? { year: c.year - 1, month: 11 } : { ...c, month: c.month - 1 }));
+  const next = () => setCurrent(c => (c.month === 11 ? { year: c.year + 1, month: 0 } : { ...c, month: c.month + 1 }));
+  const thisMonth = () => { setCurrent({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) - 1 }); setSelected(null); };
 
-  const firstDay    = new Date(current.year, current.month, 1).getDay();
-  const daysInMonth = new Date(current.year, current.month + 1, 0).getDate();
-
-  const showsByDate = shows.reduce((acc: Record<string, Show[]>, s) => {
-    const d = s.show_date?.substring(0, 10);
-    if (d) { acc[d] = acc[d] || []; acc[d].push(s); }
-    return acc;
-  }, {});
-
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-  const selectedShows = selected ? (showsByDate[selected] || []) : [];
-  const upcoming = shows.filter(s => s.show_date && s.show_date >= todayStr);
+  const summary = loading ? undefined
+    : counts.pending ? `${counts.pending} ${counts.pending === 1 ? 'show needs' : 'shows need'} your answer.`
+    : upcoming.length ? "You've answered every show. Nice." : 'No shows on your calendar yet.';
 
   return (
     <AppShell requireRole="member">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">My Shows</h1>
-          <div className="page-sub">Roster assignments &amp; RSVPs</div>
-        </div>
-      </div>
+      <div className={styles.page}>
+        <PageHero title="Calendar" subtitle="Your roster spots & RSVPs" summary={summary} scene={<BackstageScene />} />
 
-      {fetchError && (
-        <div style={{ color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.85rem', marginBottom: '1rem' }}>
-          {fetchError}
-        </div>
-      )}
+        {fetchError && <p className={styles.alert} role="alert">{fetchError}</p>}
 
-      <div className="calendar-layout">
-        {/* ── Calendar grid ── */}
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
-            <button className="btn btn-ghost btn-sm" onClick={prev}>←</button>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', letterSpacing: '0.06em', color: 'var(--text-primary)' }}>
-              {MONTHS[current.month]} {current.year}
-            </div>
-            <button className="btn btn-ghost btn-sm" onClick={next}>→</button>
+        <section className={styles.bigNumbers} aria-label="Your RSVPs">
+          <div className={styles.big} style={{ '--big-accent': '#f0b43c' } as React.CSSProperties}>
+            <span className={styles.bigLabel}>Needs your answer</span>
+            <span className={styles.bigValue}>{loading ? '–' : counts.pending}</span>
+            <span className={styles.bigNote}>Open a show to say if you&apos;re in</span>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)' }}>
-            {DAYS.map(d => (
-              <div key={d} style={{ padding: '0.5rem', textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{d}</div>
-            ))}
+          <div className={styles.big} style={{ '--big-accent': 'var(--green)' } as React.CSSProperties}>
+            <span className={styles.bigLabel}>You&apos;re in</span>
+            <span className={styles.bigValue}>{loading ? '–' : counts.confirmed}</span>
+            <span className={styles.bigNote}>upcoming shows confirmed</span>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
-            {Array.from({ length: firstDay }).map((_, i) => (
-              <div key={`e${i}`} style={{ minHeight: 80, borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)' }} />
-            ))}
-            {Array.from({ length: daysInMonth }).map((_, i) => {
-              const day     = i + 1;
-              const dateStr = `${current.year}-${String(current.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-              const dayShows  = showsByDate[dateStr] || [];
-              const isToday    = dateStr === todayStr;
-              const isSelected = dateStr === selected;
-              return (
-                <div
-                  key={day}
-                  onClick={() => dayShows.length && setSelected(isSelected ? null : dateStr)}
-                  style={{
-                    minHeight: 80, padding: '0.4rem',
-                    cursor: dayShows.length ? 'pointer' : 'default',
-                    borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
-                    background: isSelected ? 'rgba(200,146,26,0.06)' : 'transparent',
-                  }}
-                >
-                  <div style={{
-                    fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: isToday ? 700 : 400,
-                    color: isToday ? 'var(--accent)' : 'var(--text-secondary)',
-                    width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    borderRadius: '50%', background: isToday ? 'rgba(200,146,26,0.15)' : 'transparent',
-                  }}>
-                    {day}
-                  </div>
-                  {dayShows.slice(0, 2).map(s => (
-                    <Link
-                      key={s.id}
-                      href={`/member/shows/${s.id}`}
-                      onClick={e => e.stopPropagation()}
-                      style={{
-                        display: 'block', marginTop: '0.2rem', fontSize: '0.72rem',
-                        padding: '0.1rem 0.3rem', borderRadius: '2px', textDecoration: 'none',
-                        background: `${RSVP_COLOR[s.status] || '#64748b'}22`,
-                        color: RSVP_COLOR[s.status] || '#64748b',
-                        fontFamily: 'var(--font-body)', fontWeight: 500,
-                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                      }}
-                    >
-                      {s.venue?.name || 'TBD'}
-                    </Link>
-                  ))}
-                </div>
-              );
-            })}
+          <div className={styles.big} style={{ '--big-accent': 'var(--border)' } as React.CSSProperties}>
+            <span className={styles.bigLabel}>Can&apos;t make it</span>
+            <span className={styles.bigValue}>{loading ? '–' : counts.declined}</span>
+            <span className={styles.bigNote}>upcoming shows declined</span>
           </div>
-        </div>
+        </section>
 
-        {/* ── Right panel ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {/* Selected-day detail */}
-          {selected && selectedShows.length > 0 && (
-            <div className="card">
-              <div className="card-header">
-                <span className="card-title">
-                  {formatShowDate(selected, { weekday: 'long', month: 'long', day: 'numeric' })}
-                </span>
+        <div className={styles.calLayout}>
+          <section className={styles.panel} aria-labelledby="cal-title">
+            <div className={styles.calHead}>
+              <h2 id="cal-title" className={styles.calTitle} aria-live="polite">{MONTHS[current.month]} {current.year}</h2>
+              <div className={styles.calNav}>
+                <button type="button" className="btn btn-secondary" onClick={prev} aria-label="Previous month">←</button>
+                <button type="button" className="btn btn-secondary" onClick={thisMonth}>Today</button>
+                <button type="button" className="btn btn-secondary" onClick={next} aria-label="Next month">→</button>
               </div>
-              {selectedShows.map(s => (
-                <Link key={s.id} href={`/member/shows/${s.id}`} style={{ textDecoration: 'none', display: 'block' }}>
-                  <div style={{ padding: '0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)', marginBottom: '0.5rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.35rem' }}>
-                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{s.venue?.name || 'TBD'}</div>
-                      <RsvpBadge status={s.status} />
-                    </div>
-                    {s.venue?.city && (
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontFamily: 'var(--font-body)' }}>
-                        {s.venue.city}, {s.venue.state}
-                      </div>
-                    )}
-                    {s.venue?.address && (
-                      <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', marginTop: '0.25rem' }}>{s.venue.address}</div>
-                    )}
-                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
-                      {s.door_time      && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Doors: <strong style={{ color: 'var(--text-primary)' }}>{fmt(s.door_time)}</strong></span>}
-                      {s.load_in_time   && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Load-in: <strong style={{ color: 'var(--text-primary)' }}>{fmt(s.load_in_time)}</strong></span>}
-                      {s.soundcheck_time && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Soundcheck: <strong style={{ color: 'var(--text-primary)' }}>{fmt(s.soundcheck_time)}</strong></span>}
-                      {s.set_time       && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Set: <strong style={{ color: 'var(--accent)' }}>{fmt(s.set_time)}</strong></span>}
-                    </div>
-                  </div>
-                </Link>
-              ))}
             </div>
-          )}
+            <div className={styles.calGrid}>
+              {DAYS.map(d => <div key={d} className={styles.calDow} aria-hidden="true">{d}</div>)}
+              {cells.map((c, i) => {
+                if (!c.date) return <div key={`b${i}`} className={`${styles.calCell} ${styles.calBlank}`} aria-hidden="true" />;
+                const day = byDate[c.date] ?? [];
+                const isToday = c.date === today;
+                const isSel = c.date === selected;
+                const cls = `${styles.calCell} ${isToday ? styles.calToday : ''} ${day.length ? styles.calHas : ''} ${isSel ? styles.calSel : ''}`;
+                const inner = (
+                  <>
+                    <span className={styles.calDay}>{c.day}</span>
+                    {day.slice(0, 2).map(s => (
+                      <span key={s.id} className={`${styles.calPill} ${RSVP_CLASS[rsvpOf(s.status)]}`}>{s.venue?.name || 'Show'}</span>
+                    ))}
+                    {day.length > 2 && <span className={styles.calMore}>+{day.length - 2} more</span>}
+                  </>
+                );
+                return day.length ? (
+                  <button
+                    key={c.date}
+                    type="button"
+                    className={cls}
+                    aria-pressed={isSel}
+                    aria-label={`${formatShowDate(c.date, { weekday: 'long', month: 'long', day: 'numeric' })}: ${day.map(s => `${s.venue?.name || 'show'}, ${RSVP_LABEL[rsvpOf(s.status)]}`).join('; ')}`}
+                    onClick={() => setSelected(isSel ? null : c.date)}
+                  >
+                    {inner}
+                  </button>
+                ) : (
+                  <div key={c.date} className={cls} aria-label={isToday ? 'Today' : undefined}>{inner}</div>
+                );
+              })}
+            </div>
+            <div className={styles.legend} aria-hidden="true">
+              <span className={styles.rsvpPending}><i />Needs answer</span>
+              <span className={styles.rsvpConfirmed}><i />I&apos;m in</span>
+              <span className={styles.rsvpDeclined}><i />Can&apos;t make it</span>
+            </div>
+          </section>
 
-          {/* Upcoming list */}
-          <div className="card">
-            <div className="card-header"><span className="card-title">UPCOMING SHOWS</span></div>
-            {loading && (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>Loading...</div>
+          <div className={styles.page} style={{ gap: '1rem' }}>
+            {selected && selectedShows.length > 0 && (
+              <section className={styles.panel} aria-labelledby="sel-day">
+                <h2 id="sel-day" className={styles.sectionTitle} style={{ fontSize: '1.5rem' }}>
+                  {formatShowDate(selected, { weekday: 'long', month: 'long', day: 'numeric' })}
+                </h2>
+                {selectedShows.map(s => (
+                  <Link key={s.id} href={`/member/shows/${s.id}`} className={styles.card} style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
+                    <span className={styles.cardBody}>
+                      <span className={styles.cardTop}><span className={styles.cardVenue}>{s.venue?.name || 'Venue TBA'}</span><RsvpBadge status={s.status} /></span>
+                      <span className={styles.cardPlace}>{[s.venue?.address, s.venue?.city, s.venue?.state].filter(Boolean).join(', ') || '—'}</span>
+                      {runOfShow(s).length > 0 && (
+                        <span className={styles.cardTimes}>{runOfShow(s).map(r => <span key={r.key}>{r.label} <b>{r.time}</b></span>)}</span>
+                      )}
+                      <span className={styles.cardWhen} style={{ color: 'var(--accent)' }}>Open show →</span>
+                    </span>
+                  </Link>
+                ))}
+              </section>
             )}
-            {!loading && upcoming.slice(0, 8).map(s => (
-              <Link key={s.id} href={`/member/shows/${s.id}`} style={{ textDecoration: 'none' }}>
-                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
-                  <div style={{ minWidth: 36, textAlign: 'center' }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--accent)', lineHeight: 1 }}>
-                      {parseLocalDate(s.show_date!).getDate()}
-                    </div>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                      {formatShowDate(s.show_date!, { month: 'short' })}
-                    </div>
-                  </div>
-                  <div style={{ flex: 1, overflow: 'hidden' }}>
-                    <div style={{ color: 'var(--text-primary)', fontSize: '0.82rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {s.venue?.name || 'TBD'}
-                    </div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--font-body)' }}>
-                      {s.set_time ? fmt(s.set_time) : (s.venue?.city || '')}
-                    </div>
-                  </div>
-                  <RsvpBadge status={s.status} />
-                </div>
-              </Link>
-            ))}
-            {!loading && upcoming.length === 0 && (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>No upcoming shows.</div>
-            )}
+
+            <section className={styles.panel} aria-labelledby="up-title">
+              <div className={styles.sectionHead}>
+                <h2 id="up-title" className={styles.sectionTitle} style={{ fontSize: '1.5rem' }}>Upcoming</h2>
+                <span className={styles.sectionMeta}>{upcoming.length}</span>
+              </div>
+              {loading ? <div className="tour-skeleton" style={{ minHeight: '8rem', borderRadius: 8 }} /> : upcoming.length === 0 ? (
+                <p className={styles.muted} style={{ margin: 0 }}>No upcoming shows. When your band admin puts you on a show, it lands here.</p>
+              ) : (
+                <ul className={styles.list}>
+                  {upcoming.slice(0, 10).map(s => {
+                    const set = runOfShow(s).find(r => r.key === 'set');
+                    return (
+                      <li key={s.id}>
+                        <Link href={`/member/shows/${s.id}`} className={styles.listRow}
+                          aria-label={`${s.venue?.name || 'Venue TBA'}, ${formatShowDate(s.show_date!, { weekday: 'long', month: 'long', day: 'numeric' })}, ${RSVP_LABEL[rsvpOf(s.status)]}`}>
+                          <MiniDate date={s.show_date!} />
+                          <span className={styles.listText}>
+                            <strong>{s.venue?.name || 'Venue TBA'}</strong>
+                            <span>{[set ? `Set ${set.time}` : null, s.venue?.city].filter(Boolean).join(' · ') || '—'}</span>
+                          </span>
+                          <RsvpBadge status={s.status} />
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
           </div>
         </div>
       </div>
