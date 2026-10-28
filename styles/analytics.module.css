@@ -1,0 +1,236 @@
+/* styles/analytics.module.css — Analytics page (pages/analytics.tsx) and its
+   charts (components/analytics/charts.tsx). Tours vocabulary: Bebas titles,
+   tracked uppercase labels, --surface panels, accent for what matters.
+
+   Chart colours were checked with the dataviz palette validator against the
+   dark surface (#1d3156): lightness band, chroma, CVD and contrast all pass. */
+
+.page {
+  --chart-played: #d9752d;
+  --chart-booked: #4a90e2;
+  display: flex; flex-direction: column; gap: 1.75rem;
+}
+
+/* ── Year picker in the hero ── */
+.yearPicker { display: flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+.yearPicker select { width: 6.5rem; }
+
+/* ── Big numbers ── */
+.bigNumbers {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+@media (max-width: 1100px) { .bigNumbers { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px)  { .bigNumbers { grid-template-columns: repeat(2, minmax(0, 1fr)); } .big:last-child { grid-column: 1 / -1; } }
+
+.big {
+  position: relative;
+  display: flex; flex-direction: column; gap: 0.35rem;
+  padding: 1.1rem 1.2rem 1.15rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--big-accent, var(--border));
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  min-width: 0;
+}
+.big::after {
+  /* faint glow in the card's accent colour, top right */
+  content: ''; position: absolute; right: -40px; top: -40px; width: 140px; height: 140px; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--big-accent, var(--accent)) 22%, transparent), transparent 70%);
+  pointer-events: none;
+}
+.bigLabel { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+.bigValue {
+  font-family: var(--font-display); font-weight: 400;
+  font-size: clamp(2.4rem, 4vw, 3.4rem); line-height: 0.95; letter-spacing: 0.01em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bigNote { font-size: 0.84rem; color: var(--text-muted); }
+.bigNote strong { color: var(--text); font-weight: 700; }
+
+/* ── Panels ── */
+.grid2 { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.grid2even { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; align-items: start; }
+@media (max-width: 1000px) { .grid2, .grid2even { grid-template-columns: minmax(0, 1fr); } }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1.15rem 1.3rem 1.3rem;
+  display: flex; flex-direction: column; gap: 1rem;
+  min-width: 0;
+}
+.panelHead { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+.panelTitle { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 1.75rem; line-height: 1; letter-spacing: 0.03em; color: var(--text); }
+.panelMeta { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+.panelMeta strong { color: var(--accent); }
+.empty { margin: 0; padding: 1.25rem; border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.9rem; text-align: center; }
+
+/* ── Shared chart bits ── */
+.chart { margin: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; font-size: 0.8rem; color: var(--text-muted); }
+.legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+.legend b { color: var(--text); }
+.swPlayed, .swBooked { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.swPlayed { background: var(--chart-played); }
+.swBooked { background: var(--chart-booked); }
+.chartEmpty { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+
+.tip {
+  position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translate(-50%, 4px);
+  display: flex; flex-direction: column; gap: 0.2rem;
+  min-width: 9.5rem; padding: 0.55rem 0.7rem;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; text-align: left;
+  opacity: 0; pointer-events: none; z-index: 5;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.tip strong { color: var(--text); font-size: 0.82rem; }
+.tip span { display: inline-flex; align-items: center; gap: 0.4rem; }
+.tipMoney { color: var(--text) !important; font-weight: 700; }
+
+/* ── Shows per month ── */
+.monthPlot {
+  position: relative;
+  display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0.45rem;
+  height: 15rem; padding-bottom: 1.6rem; /* room for month names */
+}
+.gridLines { position: absolute; inset: 0 0 1.6rem 0; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.gridLines span { border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent); }
+.gridLines span:last-child { border-top-color: var(--border); }
+.monthCol {
+  position: relative; display: flex; align-items: flex-end; justify-content: center; height: 100%;
+  border-radius: 4px; outline: none; cursor: default;
+}
+.monthCol:hover, .monthCol:focus-visible { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.monthCol:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.monthCol:hover .tip, .monthCol:focus-visible .tip { opacity: 1; transform: translate(-50%, 0); }
+.stack {
+  width: min(70%, 2.4rem);
+  display: flex; flex-direction: column-reverse; gap: 2px;
+  border-radius: 4px 4px 0 0; overflow: hidden;
+  transition: height 0.4s ease;
+}
+.segPlayed { background: var(--chart-played); min-height: 3px; }
+.segBooked { background: var(--chart-booked); min-height: 3px; }
+.peakLabel { position: absolute; left: 0; right: 0; text-align: center; font-family: var(--font-display); font-size: 1.15rem; color: var(--text); line-height: 1; }
+.monthName { position: absolute; bottom: -1.45rem; left: 0; right: 0; text-align: center; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+.monthNow .monthName { color: var(--accent); }
+.monthShort { display: none; }
+@media (max-width: 560px) {
+  /* Three-letter names don't fit 12 columns on a phone: J F M A … */
+  .monthLong { display: none; }
+  .monthShort { display: inline; }
+  .monthPlot { gap: 0.25rem; }
+}
+.monthNow::before { content: ''; position: absolute; bottom: -0.3rem; left: 30%; right: 30%; height: 2px; background: var(--accent); border-radius: 2px; }
+
+/* ── Funnel ── */
+.funnel { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.85rem; }
+.funnelRow {
+  display: grid; grid-template-columns: 7.5rem minmax(0, 1fr) 3rem; grid-template-areas: 'label track count' '. note note';
+  align-items: center; column-gap: 0.75rem; row-gap: 0.15rem;
+}
+.funnelLabel { grid-area: label; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+.funnelTrack { grid-area: track; height: 1.6rem; background: color-mix(in srgb, var(--text) 5%, transparent); border-radius: 4px; overflow: hidden; }
+.funnelBar {
+  display: block; height: 100%; border-radius: 0 4px 4px 0;
+  background: color-mix(in srgb, var(--chart-played) calc(55% + var(--step, 0) * 15%), var(--surface-2));
+  transition: width 0.5s ease;
+}
+.funnelBarHot { background: var(--chart-played); box-shadow: 0 0 18px color-mix(in srgb, var(--chart-played) 45%, transparent); }
+.funnelCount { grid-area: count; font-family: var(--font-display); font-size: 1.7rem; line-height: 1; color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+.funnelNote { grid-area: note; font-size: 0.8rem; color: var(--text-muted); }
+@media (max-width: 480px) { .funnelRow { grid-template-columns: 5.5rem minmax(0, 1fr) 2.5rem; } }
+
+.statusChips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.6rem; border: 1px solid var(--border); border-radius: 999px; font-size: 0.75rem; color: var(--text-muted); }
+.chip strong { color: var(--text); }
+
+/* ── Emails by week ── */
+.weekPlot { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0.3rem; height: 9rem; padding-bottom: 1.4rem; border-bottom: 1px solid var(--border); }
+.weekCol { position: relative; display: flex; align-items: flex-end; justify-content: center; height: 100%; border-radius: 4px; outline: none; }
+.weekCol:hover, .weekCol:focus-visible { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.weekCol:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.weekCol:hover .tip, .weekCol:focus-visible .tip { opacity: 1; transform: translate(-50%, 0); }
+.weekBars { display: flex; align-items: flex-end; gap: 2px; height: 100%; width: 80%; justify-content: center; }
+.barSent, .barReply { width: 45%; max-width: 0.9rem; border-radius: 4px 4px 0 0; min-height: 0; transition: height 0.4s ease; }
+.barSent { background: var(--chart-booked); }
+.barReply { background: var(--chart-played); }
+.weekName { position: absolute; bottom: -1.3rem; left: -50%; right: -50%; text-align: center; font-size: 0.68rem; color: var(--text-muted); white-space: nowrap; }
+
+.statLine { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+.stat { display: flex; flex-direction: column; gap: 0.1rem; }
+.stat strong { font-family: var(--font-display); font-weight: 400; font-size: 2rem; line-height: 1; color: var(--text); }
+.stat span { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); }
+
+/* ── Ranked bars ── */
+.rank { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.rankRow {
+  display: grid; grid-template-columns: 1.6rem minmax(0, 11rem) minmax(0, 1fr) auto; align-items: center; gap: 0.75rem;
+  padding: 0.45rem 0.55rem; border-radius: var(--radius-sm); color: var(--text); text-decoration: none;
+}
+a.rankRow:hover { background: color-mix(in srgb, var(--text) 5%, transparent); text-decoration: none; }
+a.rankRow:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rankPos { font-family: var(--font-display); font-size: 1.2rem; color: var(--text-muted); text-align: center; }
+.rankText { display: flex; flex-direction: column; min-width: 0; }
+.rankText strong { font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rankText span { font-size: 0.76rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rankTrack { height: 0.6rem; background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 4px; overflow: hidden; }
+.rankBar { display: block; height: 100%; background: var(--chart-played); border-radius: 0 4px 4px 0; transition: width 0.5s ease; }
+.rankValue { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); text-align: right; min-width: 3.5rem; }
+@media (max-width: 560px) { .rankRow { grid-template-columns: 1.4rem minmax(0, 1fr) auto; } .rankTrack { display: none; } }
+
+/* ── Money detail ── */
+.moneyList { display: flex; flex-direction: column; gap: 0.55rem; margin: 0; }
+.moneyRow { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding-bottom: 0.55rem; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+.moneyRow:last-child { border-bottom: 0; padding-bottom: 0; }
+.moneyRow dt { font-size: 0.85rem; color: var(--text-muted); }
+.moneyRow dd { margin: 0; font-family: var(--font-display); font-size: 1.45rem; line-height: 1; color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* ── Tours ── */
+.tours { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.75rem; }
+.tourCard {
+  display: flex; flex-direction: column; gap: 0.6rem; padding: 0.95rem 1rem;
+  background: var(--surface-2); border: 1px solid var(--border); border-left: 3px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text); text-decoration: none; min-width: 0;
+}
+.tourCard:hover { border-color: var(--accent); text-decoration: none; }
+.tourCard:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tourActive { border-left-color: var(--accent); }
+.tourTop { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+.tourName { font-family: var(--font-display); font-size: 1.35rem; line-height: 1; letter-spacing: 0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tourStatus { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); flex-shrink: 0; }
+.tourActive .tourStatus { color: var(--accent); }
+.tourNums { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); }
+.tourNums strong { color: var(--text); }
+
+/* ── AI recommendations ── */
+.recs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
+.rec {
+  display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem 1.1rem;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 12%, var(--surface-2)), var(--surface-2) 60%);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: var(--radius-sm);
+}
+.recNum { font-family: var(--font-display); font-size: 1rem; letter-spacing: 0.1em; color: var(--accent); }
+.recTitle { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 1.45rem; line-height: 1.05; color: var(--text); }
+.recInsight { margin: 0; font-size: 0.88rem; line-height: 1.55; color: var(--text-muted); }
+.recAction { margin: 0; font-size: 0.88rem; line-height: 1.5; color: var(--text); }
+.recAction b { font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-right: 0.35rem; }
+.recIntro { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.recIntro p { margin: 0; max-width: 38rem; font-size: 0.9rem; color: var(--text-muted); }
+.error { margin: 0; color: var(--red); font-size: 0.88rem; }
+
+.skeleton { min-height: 9rem; border-radius: var(--radius-sm); }
+
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stack, .funnelBar, .barSent, .barReply, .rankBar, .tip { transition: none; }
+}
