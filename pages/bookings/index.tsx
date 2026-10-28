@@ -12,6 +12,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import PageHero from '../../components/layout/PageHero';
 import MarqueeScene from '../../components/bookings/MarqueeScene';
@@ -98,6 +99,16 @@ export default function BookingsPage() {
       if (window.localStorage.getItem(LAYOUT_KEY) === 'list') setLayout('list');
     } catch { /* storage unavailable: default layout */ }
   }, []);
+
+  // Links such as the "Confirmed" pill (/bookings?filter=confirmed) open the
+  // page on one stage. Only known stages are honoured; anything else is ignored.
+  const router = useRouter();
+  const filterParam = router.isReady ? router.query.filter : undefined;
+  useEffect(() => {
+    const wanted = typeof filterParam === 'string' ? filterParam : null;
+    const match = BOOKING_STATUS_ORDER.find(s => s === wanted);
+    if (match) setStage(match);
+  }, [filterParam]);
   const pickLayout = (l: Layout) => {
     setLayout(l);
     try { window.localStorage.setItem(LAYOUT_KEY, l); } catch { /* storage unavailable: keep it for this visit only */ }
