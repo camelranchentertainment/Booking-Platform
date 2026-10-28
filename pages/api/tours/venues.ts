@@ -2,6 +2,8 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
 import { syncBooking } from '../../../lib/statusSync';
 import { ownedVenueId } from '../../../lib/server/actOwnership';
+import { canManageTour } from '../../../lib/server/tourAccess';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 async function getUser(req: NextApiRequest) {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -10,12 +12,20 @@ async function getUser(req: NextApiRequest) {
   return user;
 }
 
-async function canAccessTour(service: any, tourId: string, userId: string): Promise<boolean> {
-  const { data: tour } = await service.from('tours').select('id, act_id, created_by').eq('id', tourId).maybeSingle();
-  if (!tour) return false;
-  if (tour.created_by === userId) return true;
-  const { data: act } = await service.from('acts').select('id').eq('id', tour.act_id).eq('owner_id', userId).maybeSingle();
-  return !!act;
+/**
+ * Sends 403 (not an admin of the tour's band) or 500 (lookup failed) and
+ * returns false; returns true when the caller may work this tour.
+ */
+async function allowTour(res: NextApiResponse, service: SupabaseClient, tourId: string, userId: string): Promise<boolean> {
+  try {
+    if (await canManageTour(service, tourId, userId)) return true;
+    res.status(403).json({ error: "Only the band's admins can change this tour" });
+    return false;
+  } catch (e: unknown) {
+    console.error('[tour_venues] access check failed', { tourId, error: e instanceof Error ? e.message : String(e) });
+    res.status(500).json({ error: 'Could not check access to this tour' });
+    return false;
+  }
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -26,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'GET') {
     const { tour_id } = req.query;
     if (!tour_id) return res.status(400).json({ error: 'tour_id required' });
-    if (!await canAccessTour(service, tour_id as string, user.id)) return res.status(403).json({ error: 'Forbidden' });
+    if (!await allowTour(res, service, tour_id as string, user.id)) return;
 
     const { data, error } = await service
       .from('tour_venues')
@@ -41,7 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'POST') {
     const { tour_id, venue_id } = req.body;
     if (!tour_id || !venue_id) return res.status(400).json({ error: 'tour_id and venue_id required' });
-    if (!await canAccessTour(service, tour_id, user.id)) return res.status(403).json({ error: 'Forbidden' });
+    if (!await allowTour(res, service, tour_id, user.id)) return;
 
     // Service role bypasses RLS: the venue must belong to the tour's band, or a
     // caller could link (and then read, via the venue join) another band's venue.
@@ -86,7 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { data: tv } = await service.from('tour_venues').select('tour_id').eq('id', id).maybeSingle();
     if (!tv) return res.status(404).json({ error: 'Not found' });
-    if (!await canAccessTour(service, tv.tour_id, user.id)) return res.status(403).json({ error: 'Forbidden' });
+    if (!await allowTour(res, service, tv.tour_id, user.id)) return;
 
     const update: any = {};
     if (status !== undefined) update.status = status;
@@ -114,7 +124,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { data: tv } = await service.from('tour_venues').select('tour_id').eq('id', id as string).maybeSingle();
     if (!tv) return res.status(404).json({ error: 'Not found' });
-    if (!await canAccessTour(service, tv.tour_id, user.id)) return res.status(403).json({ error: 'Forbidden' });
+    if (!await allowTour(res, service, tv.tour_id, user.id)) return;
 
     const { error } = await service.from('tour_venues').delete().eq('id', id as string);
     if (error) return res.status(500).json({ error: error.message });

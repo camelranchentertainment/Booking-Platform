@@ -39,6 +39,7 @@ function setup(opts: { tour: Record<string, unknown> | null; venue: Record<strin
     from: jest.fn((table: string) => {
       if (table === 'tours') return chain({ data: opts.tour, error: null });
       if (table === 'acts') return chain({ data: null, error: null });
+      if (table === 'profiles') return chain({ data: { act_id: 'act-1', role: 'band_admin' }, error: null });
       if (table === 'venues') return chain({ data: opts.venue, error: null }, venueFilters);
       if (table === 'tour_venues') {
         return chain({ data: { id: 'tv-1', venue: opts.venue }, error: null }, [], (row) => inserts.push(row));
@@ -90,7 +91,46 @@ describe('POST /api/tours/venues venue ownership', () => {
     });
     const { run, status } = call({ tour_id: 't-1', venue_id: 'v' });
     await run();
-    expect(status).toHaveBeenCalledWith(409);
+    // No band means no band admin can be checked, so the access check refuses it first.
+    expect(status).toHaveBeenCalledWith(403);
     expect(inserts).toEqual([]);
+  });
+});
+
+describe('PATCH /api/tours/venues access', () => {
+  function patchAs(profile: Record<string, unknown>) {
+    const updates: unknown[] = [];
+    (getServiceClient as jest.Mock).mockReturnValue({
+      auth: { getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'u2' } }, error: null }) },
+      from: jest.fn((table: string) => {
+        if (table === 'tours') return chain({ data: { id: 't-1', act_id: 'act-1', created_by: 'someone-else' }, error: null });
+        if (table === 'acts') return chain({ data: null, error: null });
+        if (table === 'profiles') return chain({ data: profile, error: null });
+        if (table === 'tour_venues') {
+          const c = chain({ data: { id: 'tv-1', tour_id: 't-1' }, error: null });
+          (c as Record<string, unknown>).update = (row: unknown) => { updates.push(row); return c; };
+          return c;
+        }
+        throw new Error(`unexpected table ${table}`);
+      }),
+    });
+    const json = jest.fn();
+    const status = jest.fn().mockReturnValue({ json, end: jest.fn() });
+    const req = { method: 'PATCH', body: { id: 'tv-1', status: 'follow_up' }, headers: { authorization: 'Bearer tok' } } as unknown as NextApiRequest;
+    return { run: () => handler(req, { status } as unknown as NextApiResponse), status, updates };
+  }
+
+  it("lets a second band admin (not the tour's creator) move a target", async () => {
+    const { run, status, updates } = patchAs({ act_id: 'act-1', role: 'band_admin' });
+    await run();
+    expect(status).toHaveBeenCalledWith(200);
+    expect(updates).toEqual([{ status: 'follow_up' }]);
+  });
+
+  it('refuses a plain band member', async () => {
+    const { run, status, updates } = patchAs({ act_id: 'act-1', role: 'member' });
+    await run();
+    expect(status).toHaveBeenCalledWith(403);
+    expect(updates).toEqual([]);
   });
 });
