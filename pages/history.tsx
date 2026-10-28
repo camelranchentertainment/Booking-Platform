@@ -1,515 +1,305 @@
-import { useState, useEffect, useMemo } from 'react';
+// pages/history.tsx
+//
+// Show History — every show the band has played, in the Tours style: an
+// illustrated header, big numbers, a US tile map of where you've played (click
+// a state to filter), the best rooms, filters, and a timeline by year.
+//
+// Open to band admins, members and superadmin. Members never see money: deal
+// and pay fields are only requested for admins, so they never reach a member's
+// browser, and the CSV leaves them out. Only booked shows (contract →
+// completed) dated before today are listed — pitches with a past date are
+// venues we looked at, not shows we played. Rules: lib/domain/history.ts.
+
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import AppShell from '../components/layout/AppShell';
+import PageHero from '../components/layout/PageHero';
+import PosterWallScene from '../components/history/PosterWallScene';
+import StateTileMap from '../components/history/StateTileMap';
+import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { getActId } from '../lib/bookingQueries';
 import { formatShowDate, localToday } from '../lib/formatDate';
 import { BOOKED_SHOW_STATUSES } from '../lib/types';
+import {
+  DEAL_LABELS, EMPTY_FILTER, bestRooms, filterHistory, groupByYear, historyCsvRows, historyStats,
+  needsSettle, paidAmount, showsByState, toCsv, wouldReturn,
+  type HistoryFilter, type HistoryShow,
+} from '../lib/domain/history';
+import styles from '../styles/history.module.css';
 
-const DEAL_LABELS: Record<string, string> = {
-  guarantee:  'Guarantee',
-  door_split: 'Door Split',
-  percentage: 'Percentage',
-  flat_fee:   'Flat Fee',
-  other:      'Other',
-};
-const PAY_COLORS: Record<string, string> = {
-  pending:  '#f97316',
-  partial:  '#fbbf24',
-  received: '#34d399',
-  waived:   '#60a5fa',
-};
+const ADMIN_FIELDS = `id, show_date, status, deal_type, agreed_amount, fee, actual_amount_received, payment_status,
+  post_show_notes, rebook_flag, rating, attendance, would_return, venue_feedback, venue:venues(id, name, city, state)`;
+const MEMBER_FIELDS = `id, show_date, status, post_show_notes, rebook_flag, rating, attendance, would_return, venue_feedback,
+  venue:venues(id, name, city, state)`;
 
-function Stars({ value, onChange }: { value: number | null; onChange?: (n: number) => void }) {
-  const [hover, setHover] = useState(0);
+const isAdminRole = (role: string | null | undefined) => role === 'band_admin' || role === 'superadmin';
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+
+function Stars({ value }: { value: number | null | undefined }) {
+  const v = Math.round(value ?? 0);
   return (
-    <span style={{ display: 'inline-flex', gap: 2 }}>
-      {[1,2,3,4,5].map(n => (
-        <span
-          key={n}
-          style={{
-            cursor: onChange ? 'pointer' : 'default',
-            color: n <= (hover || value || 0) ? '#fbbf24' : 'var(--text-muted)',
-            fontSize: '1rem', lineHeight: 1,
-          }}
-          onMouseEnter={() => onChange && setHover(n)}
-          onMouseLeave={() => onChange && setHover(0)}
-          onClick={() => onChange && onChange(n)}
-        >★</span>
-      ))}
+    <span className={styles.stars} role="img" aria-label={v ? `${value} out of 5 stars` : 'Not rated'}>
+      {[1, 2, 3, 4, 5].map(n => <span key={n} className={n <= v ? styles.starOn : undefined} aria-hidden="true">★</span>)}
     </span>
   );
 }
 
-type EditState = {
-  bookingId: string;
-  attendance: string;
-  actual_amount_received: string;
-  rating: number | null;
-  would_return: boolean | null;
-  venue_feedback: string;
-  post_show_notes: string;
-  rebook_flag: string;
-};
-
-/** Admin roles may see deal and pay figures; members never do (CLAUDE.md). */
-const isAdminRole = (role: string): boolean => role === 'band_admin' || role === 'superadmin';
+function Big({ label, value, unit, note, accent }: { label: string; value: string | number; unit?: string; note?: string; accent?: string }) {
+  return (
+    <div className={styles.big} style={accent ? ({ '--big-accent': accent } as React.CSSProperties) : undefined}>
+      <span className={styles.bigLabel}>{label}</span>
+      <span className={styles.bigValue}>{value}{unit && <small>{unit}</small>}</span>
+      {note && <span className={styles.bigNote}>{note}</span>}
+    </div>
+  );
+}
 
 export default function HistoryPage() {
-  const [bookings, setBookings]       = useState<any[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [token, setToken]             = useState('');
-  const [role, setRole]               = useState('');
-  const [filterVenue, setFilterVenue] = useState('');
-  const [filterYear, setFilterYear]   = useState('');
-  const [filterState, setFilterState] = useState('');
-  const [filterRating, setFilterRating] = useState('');
-  const [filterReturn, setFilterReturn] = useState('');
-  const [editModal, setEditModal]     = useState<EditState | null>(null);
-  const [saving, setSaving]           = useState(false);
-  const [saveErr, setSaveErr]         = useState('');
+  const { profile } = useAuth();
+  const actId = profile?.act_id ?? null;
+  const admin = isAdminRole(profile?.role);
 
-  useEffect(() => { load(); }, []);
+  const [shows, setShows] = useState<HistoryShow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [filter, setFilter] = useState<HistoryFilter>(EMPTY_FILTER);
+  const set = <K extends keyof HistoryFilter>(k: K, v: HistoryFilter[K]) => setFilter(f => ({ ...f, [k]: v }));
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      setToken(session?.access_token || '');
-      if (!session?.user) return;
-      const { data: prof } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
-      const userRole = prof?.role || '';
-      setRole(userRole);
-      const actId = await getActId(supabase, session.user.id);
-      if (!actId) return;
-      // Local calendar day: toISOString() is the UTC date, which moved tonight's
-      // show into History every evening in the US.
-      const today = localToday();
-      // Members never see financial data, so deal and pay fields are only
-      // requested for admins — they never reach a member's browser.
-      const fields = isAdminRole(userRole)
-        ? `id, show_date, deal_type, agreed_amount, fee,
-          actual_amount_received, payment_status, status,
-          post_show_notes, rebook_flag,
-          rating, attendance, would_return, venue_feedback,
-          venue:venues(id, name, city, state)`
-        : `id, show_date, status,
-          post_show_notes, rebook_flag,
-          rating, attendance, would_return, venue_feedback,
-          venue:venues(id, name, city, state)`;
-      const { data, error } = await supabase
+  useEffect(() => {
+    if (!actId || !profile) return;
+    let cancelled = false;
+    void (async () => {
+      // Local calendar day: tonight's show stays off History until tomorrow.
+      const { data, error: err } = await supabase
         .from('bookings')
-        .select(fields)
+        .select(admin ? ADMIN_FIELDS : MEMBER_FIELDS)
         .eq('act_id', actId)
-        // Only shows that were actually booked. Pitches/targets with a past
-        // date are venues we looked at, not shows we played.
         .in('status', [...BOOKED_SHOW_STATUSES])
         .not('show_date', 'is', null)
-        .lt('show_date', today)
+        .lt('show_date', localToday())
         .order('show_date', { ascending: false });
-      if (error) console.error('History query error:', error);
-      setBookings((data || []) as any[]);
-    } catch (err) {
-      console.error('history load:', err);
-    } finally {
+      if (cancelled) return;
+      if (err) {
+        console.error('[history] load failed', err);
+        setError('Your show history could not be loaded.');
+      } else {
+        setShows((data ?? []) as unknown as HistoryShow[]);
+        setError(null);
+      }
       setLoading(false);
-    }
+    })();
+    return () => { cancelled = true; };
+  }, [actId, admin, profile, reloadKey]);
+
+  const filtered = useMemo(() => filterHistory(shows, filter), [shows, filter]);
+  const stats = useMemo(() => historyStats(filtered), [filtered]);
+  const allStats = useMemo(() => historyStats(shows), [shows]);
+  // The map and the best rooms use every show so a state filter doesn't empty them.
+  const stateCounts = useMemo(() => showsByState(filterHistory(shows, { ...filter, state: '' })), [shows, filter]);
+  const rooms = useMemo(() => bestRooms(filtered, 8), [filtered]);
+  const years = useMemo(() => [...new Set(shows.map(b => b.show_date.slice(0, 4)))].sort().reverse(), [shows]);
+  const states = useMemo(() => [...new Set(shows.map(b => (b.venue?.state ?? '').toUpperCase()).filter(Boolean))].sort(), [shows]);
+  const unsettled = admin ? filtered.filter(needsSettle).length : 0;
+  const isFiltered = JSON.stringify(filter) !== JSON.stringify(EMPTY_FILTER);
+
+  const exportCsv = () => {
+    const url = URL.createObjectURL(new Blob([toCsv(historyCsvRows(filtered, admin))], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'show-history.csv';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  const filtered = useMemo(() => {
-    let list = bookings;
-    if (filterVenue)  list = list.filter(b => b.venue?.name?.toLowerCase().includes(filterVenue.toLowerCase()));
-    if (filterState)  list = list.filter(b => b.venue?.state === filterState);
-    if (filterYear)   list = list.filter(b => b.show_date?.startsWith(filterYear));
-    if (filterRating) list = list.filter(b => (b.rating || 0) >= parseInt(filterRating, 10));
-    if (filterReturn === 'yes') list = list.filter(b => b.would_return === true || b.rebook_flag === 'yes');
-    if (filterReturn === 'no')  list = list.filter(b => b.would_return === false || b.rebook_flag === 'no');
-    return list;
-  }, [bookings, filterVenue, filterState, filterYear, filterRating, filterReturn]);
-
-  const years  = [...new Set(bookings.map(b => b.show_date?.slice(0, 4)).filter(Boolean))].sort().reverse();
-  const states = [...new Set(bookings.map(b => b.venue?.state).filter(Boolean))].sort();
-
-  const totalVenues   = new Set(filtered.map(b => b.venue?.id).filter(Boolean)).size;
-  const totalStates   = new Set(filtered.map(b => b.venue?.state).filter(Boolean)).size;
-  const ratedBookings = filtered.filter(b => b.rating);
-  const avgRating     = ratedBookings.length > 0
-    ? (ratedBookings.reduce((s: number, b: any) => s + b.rating, 0) / ratedBookings.length).toFixed(1)
-    : '—';
-  const wouldReturn   = filtered.filter(b => b.would_return === true || b.rebook_flag === 'yes').length;
-  const returnPct     = filtered.length > 0 ? Math.round((wouldReturn / filtered.length) * 100) : 0;
-
-  // Venue intelligence — rank by rating + would_return
-  const venueMap: Record<string, {
-    id: string; name: string; city: string; state: string;
-    shows: number; totalPay: number; ratings: number[]; returns: number;
-  }> = {};
-  for (const b of bookings) {
-    const key = b.venue?.id;
-    if (!key) continue;
-    if (!venueMap[key]) venueMap[key] = { id: key, name: b.venue.name, city: b.venue.city, state: b.venue.state, shows: 0, totalPay: 0, ratings: [], returns: 0 };
-    venueMap[key].shows++;
-    venueMap[key].totalPay += Number(b.actual_amount_received ?? b.agreed_amount ?? b.fee) || 0;
-    if (b.rating) venueMap[key].ratings.push(b.rating);
-    if (b.would_return === true || b.rebook_flag === 'yes') venueMap[key].returns++;
-  }
-  const venueIntel = Object.values(venueMap)
-    .map(v => ({
-      ...v,
-      avgPay:    v.shows > 0 ? Math.round(v.totalPay / v.shows) : 0,
-      avgRating: v.ratings.length > 0 ? v.ratings.reduce((s, r) => s + r, 0) / v.ratings.length : 0,
-      score:     v.ratings.length > 0
-        ? (v.ratings.reduce((s, r) => s + r, 0) / v.ratings.length) + (v.returns / v.shows) * 2
-        : v.shows,
-    }))
-    .filter(v => v.shows > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 10);
-
-  const openEdit = (b: any) => {
-    setEditModal({
-      bookingId:              b.id,
-      attendance:             b.attendance != null ? String(b.attendance) : '',
-      actual_amount_received: b.actual_amount_received != null ? String(b.actual_amount_received) : '',
-      rating:                 b.rating || null,
-      would_return:           b.would_return ?? (b.rebook_flag === 'yes' ? true : b.rebook_flag === 'no' ? false : null),
-      venue_feedback:         b.venue_feedback || '',
-      post_show_notes:        b.post_show_notes || '',
-      rebook_flag:            b.rebook_flag || '',
-    });
-    setSaveErr('');
-  };
-
-  const saveEdit = async () => {
-    if (!editModal || !token) return;
-    setSaving(true);
-    setSaveErr('');
-    const res = await fetch('/api/bookings/update-postgig', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        bookingId:              editModal.bookingId,
-        attendance:             editModal.attendance ? parseInt(editModal.attendance, 10) : null,
-        actual_amount_received: editModal.actual_amount_received ? parseFloat(editModal.actual_amount_received) : null,
-        rating:                 editModal.rating,
-        would_return:           editModal.would_return,
-        venue_feedback:         editModal.venue_feedback || null,
-        post_show_notes:        editModal.post_show_notes || null,
-        rebook_flag:            editModal.rebook_flag || null,
-      }),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      setSaveErr(err.error || 'Save failed');
-      setSaving(false);
-      return;
-    }
-    setSaving(false);
-    setEditModal(null);
-    await load();
-  };
-
-  const exportCSV = () => {
-    const showMoney = isAdminRole(role);
-    const headers = showMoney
-      ? ['Date', 'Venue', 'City', 'State', 'Deal', 'Agreed', 'Received', 'Payment', 'Rating', 'Would Return', 'Notes']
-      : ['Date', 'Venue', 'City', 'State', 'Rating', 'Would Return', 'Notes'];
-    const lines = filtered.map(b => [
-      b.show_date || '',
-      b.venue?.name || '',
-      b.venue?.city || '',
-      b.venue?.state || '',
-      ...(showMoney ? [
-        DEAL_LABELS[b.deal_type] || b.deal_type || '',
-        b.agreed_amount ?? b.fee ?? '',
-        b.actual_amount_received ?? '',
-        b.payment_status || '',
-      ] : []),
-      b.rating ?? '',
-      b.would_return != null ? (b.would_return ? 'Yes' : 'No') : (b.rebook_flag || ''),
-      (b.post_show_notes || '').replace(/,/g, ';'),
-    ]);
-    const csv = [headers, ...lines].map(r => r.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'show-history.csv'; a.click();
-    URL.revokeObjectURL(a.href);
-  };
+  const summary = loading ? undefined
+    : allStats.shows === 0 ? 'Shows land here the day after you play them.'
+    : `${plural(allStats.shows, 'show')} at ${plural(allStats.venues, 'venue')} across ${plural(allStats.states, 'state')}${allStats.firstYear ? ` since ${allStats.firstYear}` : ''}.`;
 
   return (
     <AppShell requireRole={['band_admin', 'member', 'superadmin']}>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Show History</h1>
-          <div className="page-sub">{filtered.length} past show{filtered.length !== 1 ? 's' : ''}</div>
-        </div>
-        <button className="btn btn-ghost btn-sm" onClick={exportCSV}>↓ Export CSV</button>
-      </div>
+      <div className={styles.page}>
+        <PageHero
+          title="Show History"
+          subtitle="Every show you've played"
+          summary={summary}
+          scene={<PosterWallScene />}
+          actions={<button type="button" className="btn btn-secondary" onClick={exportCsv} disabled={loading || filtered.length === 0}>↓ CSV</button>}
+        />
 
-      {/* Summary trackers — the Tours metric style */}
-      <section className="tours-metrics" aria-label="Show history at a glance" style={{ marginBottom: '1.25rem' }}>
-        {([
-          ['Shows played', filtered.length, filtered.length === 1 ? 'show' : 'shows'],
-          ['Venues', totalVenues, 'played'],
-          ['States', totalStates, 'covered'],
-          ['Avg rating', avgRating, 'out of 5'],
-          ['Would return', `${returnPct}%`, 'of shows played'],
-        ] as [string, string | number, string][]).map(([label, val, note]) => (
-          <div key={label} className="tour-metric">
-            <span className="tour-metric-label">{label}</span>
-            <div className="tour-metric-value"><strong>{val}</strong><span>{note}</span></div>
-          </div>
-        ))}
-      </section>
+        {error && (
+          <p role="alert">{error} <button type="button" className="btn btn-secondary" onClick={() => { setLoading(true); setReloadKey(k => k + 1); }}>Try again</button></p>
+        )}
 
-      {/* Filters */}
-      <div className="card mb-6" style={{ padding: '0.85rem 1.25rem' }}>
-        <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div className="field" style={{ margin: 0, minWidth: 150 }}>
-            <label className="field-label">Venue</label>
-            <input className="input" placeholder="Search venue…" value={filterVenue} onChange={e => setFilterVenue(e.target.value)} />
+        <section className={styles.bigNumbers} aria-label="History at a glance">
+          {loading ? Array.from({ length: 5 }, (_, i) => <div key={i} className={`tour-skeleton ${styles.skeleton}`} />) : (
+            <>
+              <Big label="Shows played" value={stats.shows} note={isFiltered ? 'matching your filters' : 'all time'} />
+              <Big label="Venues" value={stats.venues} note="different rooms" accent="#4a90e2" />
+              <Big label="States" value={stats.states} note="on the map" accent="#4a90e2" />
+              <Big label="Avg rating" value={stats.avgRating ?? '—'} unit={stats.avgRating != null ? '/ 5' : undefined}
+                note={stats.rated ? `from ${plural(stats.rated, 'rated show')}` : 'rate shows after you play'} accent="#f2c25a" />
+              <Big label="Would return" value={stats.returnPct != null ? `${stats.returnPct}%` : '—'}
+                note={stats.answered ? `of ${plural(stats.answered, 'show')} answered` : 'not answered yet'} accent="var(--green)" />
+            </>
+          )}
+        </section>
+
+        {unsettled > 0 && !loading && (
+          <div className={styles.notice} role="status">
+            <span><strong>{plural(unsettled, 'show', 'shows')} still need settling.</strong> Open each one to mark it played, record the pay and rate the night.</span>
           </div>
-          <div className="field" style={{ margin: 0, minWidth: 100 }}>
-            <label className="field-label">Year</label>
-            <select className="select" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
-              <option value="">All Years</option>
+        )}
+
+        {!loading && shows.length > 0 && (
+          <div className={styles.grid2}>
+            <section className={styles.panel} aria-labelledby="hist-map">
+              <div className={styles.panelHead}>
+                <h2 id="hist-map" className={styles.panelTitle}>Where you&apos;ve played</h2>
+                <span className={styles.panelMeta}>{filter.state ? `showing ${filter.state}` : 'tap a state to filter'}</span>
+              </div>
+              <StateTileMap counts={stateCounts} selected={filter.state} onSelect={s => set('state', s)} />
+            </section>
+
+            <section className={styles.panel} aria-labelledby="hist-rooms">
+              <div className={styles.panelHead}>
+                <h2 id="hist-rooms" className={styles.panelTitle}>Best rooms</h2>
+                <span className={styles.panelMeta}>rating + would return</span>
+              </div>
+              {rooms.length === 0 ? <p className={styles.bigNote}>No shows match.</p> : (
+                <ol className={styles.rooms}>
+                  {rooms.map((r, i) => (
+                    <li key={r.id} className={styles.room}>
+                      <span className={styles.roomPos}>{i + 1}</span>
+                      <span className={styles.roomText}><strong>{r.name}</strong><span>{r.place || '—'} · {plural(r.shows, 'show')}</span></span>
+                      <span className={styles.roomStats}>
+                        <Stars value={r.avgRating} />
+                        <span>{r.answered ? <><b>{r.returns}/{r.answered}</b> would return</> : 'return not set'}{admin && r.avgPay != null ? <> · avg <b>{money(r.avgPay)}</b></> : null}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className={styles.filters} role="search" aria-label="Filter show history">
+          <label className={`${styles.field} ${styles.fieldGrow}`}>Venue or city
+            <input type="search" className="input" value={filter.query} onChange={e => set('query', e.target.value)} />
+          </label>
+          <label className={styles.field}>Year
+            <select className="select" value={filter.year} onChange={e => set('year', e.target.value)}>
+              <option value="">All years</option>
               {years.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
-          </div>
-          <div className="field" style={{ margin: 0, minWidth: 110 }}>
-            <label className="field-label">State</label>
-            <select className="select" value={filterState} onChange={e => setFilterState(e.target.value)}>
-              <option value="">All States</option>
+          </label>
+          <label className={styles.field}>State
+            <select className="select" value={filter.state} onChange={e => set('state', e.target.value)}>
+              <option value="">All states</option>
               {states.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
-          </div>
-          <div className="field" style={{ margin: 0, minWidth: 120 }}>
-            <label className="field-label">Min Rating</label>
-            <select className="select" value={filterRating} onChange={e => setFilterRating(e.target.value)}>
-              <option value="">Any Rating</option>
-              <option value="4">4+ Stars</option>
-              <option value="3">3+ Stars</option>
-              <option value="2">2+ Stars</option>
+          </label>
+          <label className={styles.field}>Rating
+            <select className="select" value={filter.minRating} onChange={e => set('minRating', Number(e.target.value))}>
+              <option value={0}>Any rating</option>
+              <option value={4}>4+ stars</option>
+              <option value={3}>3+ stars</option>
+              <option value={2}>2+ stars</option>
             </select>
-          </div>
-          <div className="field" style={{ margin: 0, minWidth: 120 }}>
-            <label className="field-label">Would Return</label>
-            <select className="select" value={filterReturn} onChange={e => setFilterReturn(e.target.value)}>
-              <option value="">All</option>
+          </label>
+          <label className={styles.field}>Would return
+            <select className="select" value={filter.returns} onChange={e => set('returns', e.target.value as HistoryFilter['returns'])}>
+              <option value="">Any</option>
               <option value="yes">Yes</option>
               <option value="no">No</option>
             </select>
-          </div>
-          {(filterVenue || filterYear || filterState || filterRating || filterReturn) && (
-            <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-end' }}
-              onClick={() => { setFilterVenue(''); setFilterYear(''); setFilterState(''); setFilterRating(''); setFilterReturn(''); }}>
-              Clear
-            </button>
-          )}
+          </label>
         </div>
-      </div>
-
-      {/* Show cards */}
-      {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 90 }} />)}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.84rem' }}>
-          No past shows found. Shows appear here once their date has passed.
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginBottom: '2rem' }}>
-          {filtered.map(b => {
-            const amount = b.actual_amount_received ?? b.agreed_amount ?? b.fee;
-            const wouldRet = b.would_return != null ? b.would_return : (b.rebook_flag === 'yes' ? true : b.rebook_flag === 'no' ? false : null);
-            return (
-              <div key={b.id} className="card" style={{ padding: '1rem 1.25rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
-                  <div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem', color: 'var(--text-primary)', marginBottom: '0.15rem' }}>
-                      {b.venue?.name || '—'}
-                    </div>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      {b.venue?.city}{b.venue?.state ? `, ${b.venue.state}` : ''}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                    </div>
-                    {amount && isAdminRole(role) && (
-                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)', marginTop: '0.1rem' }}>
-                        {DEAL_LABELS[b.deal_type] || b.deal_type || ''} · ${Number(amount).toLocaleString()}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div style={{ borderTop: '1px solid var(--border)', marginTop: '0.65rem', paddingTop: '0.65rem', display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <Stars value={b.rating} />
-                  {b.attendance && (
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      👥 {b.attendance}
-                    </span>
-                  )}
-                  {wouldRet != null && (
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: wouldRet ? '#34d399' : '#f87171' }}>
-                      🔄 Would Return: {wouldRet ? 'Yes' : 'No'}
-                    </span>
-                  )}
-                  {b.payment_status && (
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: PAY_COLORS[b.payment_status] || 'var(--text-muted)' }}>
-                      {b.payment_status}
-                    </span>
-                  )}
-                  {b.status !== 'completed' && (
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#f97316', border: '1px solid #f97316', borderRadius: 4, padding: '0.1rem 0.4rem' }}>
-                      Needs Settle
-                    </span>
-                  )}
-                  {role === 'band_admin' && (
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ marginLeft: 'auto', fontSize: '0.74rem' }}
-                      onClick={() => window.location.href = `/bookings/${b.id}`}
-                    >
-                      {b.status === 'completed' ? 'Edit Post-Gig Data' : 'Settle Show →'}
-                    </button>
-                  )}
-                </div>
-
-                {(b.post_show_notes || b.venue_feedback) && (
-                  <div style={{ marginTop: '0.5rem', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                    {b.post_show_notes || b.venue_feedback}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Venue Intelligence */}
-      {venueIntel.length > 0 && (
-        <div style={{ marginBottom: '2rem' }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: 'var(--text-primary)', marginBottom: '0.75rem', letterSpacing: '0.05em' }}>
-            Venue Intelligence
-          </h2>
-          <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.85rem' }}>
-            Top-ranked venues by rating and would-return score.
+        {isFiltered && (
+          <p className={styles.filterNote} aria-live="polite">
+            {plural(filtered.length, 'show')} match.
+            <button type="button" className={styles.linkBtn} onClick={() => setFilter(EMPTY_FILTER)}>Clear filters</button>
           </p>
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Venue</th>
-                    <th>Location</th>
-                    <th>Shows</th>
-                    {isAdminRole(role) && <th>Avg Pay</th>}
-                    <th>Rating</th>
-                    <th>Would Return</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {venueIntel.map(v => (
-                    <tr key={v.id}>
-                      <td style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{v.name}</td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>{v.city}{v.state ? `, ${v.state}` : ''}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>{v.shows}</td>
-                      {isAdminRole(role) && (
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent)' }}>
-                          {v.avgPay > 0 ? `$${v.avgPay.toLocaleString()}` : '—'}
-                        </td>
-                      )}
-                      <td><Stars value={v.avgRating > 0 ? Math.round(v.avgRating) : null} /></td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: v.returns > 0 ? '#34d399' : 'var(--text-muted)' }}>
-                        {v.returns}/{v.shows}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        )}
+
+        {/* Timeline */}
+        {loading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            {[1, 2, 3].map(i => <div key={i} className={`tour-skeleton ${styles.skeleton}`} />)}
           </div>
-        </div>
-      )}
-
-      {/* Edit Post-Gig Modal */}
-      {editModal && (
-        <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
-          onClick={() => setEditModal(null)}
-        >
-          <div
-            style={{ background: 'var(--surface)', borderRadius: 12, padding: '1.75rem', width: 480, maxWidth: '96vw', maxHeight: '90vh', overflowY: 'auto' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', marginBottom: '1.25rem' }}>Edit Post-Gig Data</h2>
-
-            <label style={{ display: 'block', marginBottom: '0.85rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>ACTUAL ATTENDANCE</div>
-              <input type="number" className="input" style={{ width: '100%' }} placeholder="0"
-                value={editModal.attendance}
-                onChange={e => setEditModal(m => m && ({ ...m, attendance: e.target.value }))} />
-            </label>
-
-            <label style={{ display: 'block', marginBottom: '0.85rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>FINAL PAYMENT RECEIVED ($)</div>
-              <input type="number" className="input" style={{ width: '100%' }} placeholder="0.00" step="0.01"
-                value={editModal.actual_amount_received}
-                onChange={e => setEditModal(m => m && ({ ...m, actual_amount_received: e.target.value }))} />
-            </label>
-
-            <div style={{ marginBottom: '0.85rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.45rem' }}>PERFORMANCE RATING</div>
-              <Stars value={editModal.rating} onChange={n => setEditModal(m => m && ({ ...m, rating: n }))} />
-            </div>
-
-            <div style={{ marginBottom: '0.85rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.45rem' }}>WOULD RETURN?</div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                {(['yes', 'no', 'maybe'] as const).map(v => (
-                  <button
-                    key={v}
-                    className={`btn btn-sm ${editModal.rebook_flag === v ? 'btn-primary' : 'btn-ghost'}`}
-                    onClick={() => setEditModal(m => m && ({
-                      ...m,
-                      rebook_flag:  v,
-                      would_return: v === 'yes' ? true : v === 'no' ? false : null,
-                    }))}
-                    style={{ textTransform: 'capitalize' }}
-                  >
-                    {v}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <label style={{ display: 'block', marginBottom: '0.85rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>VENUE FEEDBACK</div>
-              <textarea className="input" style={{ width: '100%', minHeight: 70, resize: 'vertical' }} placeholder="Notes about venue, staff, etc."
-                value={editModal.venue_feedback}
-                onChange={e => setEditModal(m => m && ({ ...m, venue_feedback: e.target.value }))} />
-            </label>
-
-            <label style={{ display: 'block', marginBottom: '1.25rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>INTERNAL NOTES</div>
-              <textarea className="input" style={{ width: '100%', minHeight: 70, resize: 'vertical' }} placeholder="Internal notes"
-                value={editModal.post_show_notes}
-                onChange={e => setEditModal(m => m && ({ ...m, post_show_notes: e.target.value }))} />
-            </label>
-
-            {saveErr && <div style={{ color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.8rem', marginBottom: '0.75rem' }}>{saveErr}</div>}
-
-            <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setEditModal(null)}>Cancel</button>
-              <button className="btn btn-primary" disabled={saving} onClick={saveEdit}>
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
+        ) : filtered.length === 0 ? (
+          <div className={styles.empty}>
+            <h2>{shows.length === 0 ? 'No shows yet' : 'Nothing matches'}</h2>
+            <p>{shows.length === 0 ? 'Shows appear here the day after you play them.' : 'Try a different year, state or rating.'}</p>
+            {isFiltered && <button type="button" className="btn btn-secondary" onClick={() => setFilter(EMPTY_FILTER)}>Clear filters</button>}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className={styles.years}>
+            {groupByYear(filtered).map(g => (
+              <section key={g.year} className={styles.year} aria-labelledby={`y-${g.year}`}>
+                <div className={styles.yearHead}>
+                  <h2 id={`y-${g.year}`} className={styles.yearTitle}>{g.year}</h2>
+                  <span className={styles.yearMeta}>{plural(g.items.length, 'show')}</span>
+                </div>
+                <ul className={styles.shows}>
+                  {g.items.map(b => {
+                    const ret = wouldReturn(b);
+                    const settle = needsSettle(b);
+                    const paid = admin ? paidAmount(b) : null;
+                    const contracted = admin ? Number(b.agreed_amount ?? b.fee) || null : null;
+                    const notes = b.post_show_notes || b.venue_feedback;
+                    return (
+                      <li key={b.id}>
+                        <article className={`${styles.show} ${settle ? styles.showFlag : ret ? styles.showGood : ''}`}>
+                          <span className={styles.dateBlock} aria-hidden="true">
+                            <span className={styles.dateMonth}>{formatShowDate(b.show_date, { month: 'short' })}</span>
+                            <span className={styles.dateDay}>{formatShowDate(b.show_date, { day: 'numeric' })}</span>
+                            <span className={styles.dateDow}>{formatShowDate(b.show_date, { weekday: 'short' })}</span>
+                          </span>
+                          <div className={styles.showBody}>
+                            <div className={styles.showTop}>
+                              {admin
+                                ? <Link href={`/bookings/${b.id}`} className={styles.showVenue}>{b.venue?.name || 'Venue'}</Link>
+                                : <span className={styles.showVenue}>{b.venue?.name || 'Venue'}</span>}
+                              {admin && (paid != null || contracted != null) && (
+                                <span className={styles.showPay} title={paid != null ? 'Received' : 'Agreed'}>
+                                  {money(paid ?? contracted ?? 0)}{paid == null && <span className={styles.showPlace}> agreed</span>}
+                                </span>
+                              )}
+                            </div>
+                            <span className={styles.showPlace}>
+                              <span className="sr-only">{formatShowDate(b.show_date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} · </span>
+                              {[b.venue?.city, b.venue?.state].filter(Boolean).join(', ') || '—'}
+                              {admin && b.deal_type ? ` · ${DEAL_LABELS[b.deal_type] ?? b.deal_type}` : ''}
+                            </span>
+                            <div className={styles.showMeta}>
+                              <Stars value={b.rating} />
+                              {b.attendance ? <span>{b.attendance.toLocaleString('en-US')} in the room</span> : null}
+                              {ret !== null && <span className={`${styles.tag} ${ret ? styles.tagYes : styles.tagNo}`}>{ret ? 'Would return' : "Wouldn't return"}</span>}
+                              {settle && <span className={`${styles.tag} ${styles.tagWarn}`}>Needs settling</span>}
+                            </div>
+                            {notes && <p className={styles.notes}>{notes}</p>}
+                            {admin && (
+                              <div className={styles.showActions}>
+                                <Link href={`/bookings/${b.id}`} className={`btn ${settle ? 'btn-primary' : 'btn-secondary'}`}>
+                                  {settle ? 'Settle show →' : 'Post-gig notes'}
+                                </Link>
+                              </div>
+                            )}
+                          </div>
+                        </article>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+          </div>
+        )}
+      </div>
     </AppShell>
   );
 }
