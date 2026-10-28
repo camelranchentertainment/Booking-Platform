@@ -39,3 +39,37 @@ export async function ownedContactId(service: SupabaseClient, actId: string, con
   if (error) throw new Error(`contact ownership check failed: ${error.message}`);
   return (data as { id: string } | null)?.id ?? null;
 }
+
+/**
+ * Returns the tour id when the tour belongs to the act, otherwise null.
+ *
+ * @throws Error when the lookup itself fails
+ */
+export async function ownedTourId(service: SupabaseClient, actId: string, tourId: unknown): Promise<string | null> {
+  if (typeof tourId !== 'string' || !tourId) return null;
+  const { data, error } = await service
+    .from('tours')
+    .select('id')
+    .eq('id', tourId)
+    .eq('act_id', actId)
+    .maybeSingle();
+  if (error) throw new Error(`tour ownership check failed: ${error.message}`);
+  return (data as { id: string } | null)?.id ?? null;
+}
+
+/**
+ * Returns the booking id when the booking belongs to the act, otherwise null.
+ *
+ * @throws Error when the lookup itself fails
+ */
+export async function ownedBookingId(service: SupabaseClient, actId: string, bookingId: unknown): Promise<string | null> {
+  if (typeof bookingId !== 'string' || !bookingId) return null;
+  const { data, error } = await service
+    .from('bookings')
+    .select('id')
+    .eq('id', bookingId)
+    .eq('act_id', actId)
+    .maybeSingle();
+  if (error) throw new Error(`booking ownership check failed: ${error.message}`);
+  return (data as { id: string } | null)?.id ?? null;
+}

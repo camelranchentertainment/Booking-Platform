@@ -1,5 +1,19 @@
-﻿import type { NextApiRequest, NextApiResponse } from 'next';
+﻿// pages/api/expenses/index.ts
+//
+// GET  → the band's active expenses (any admin's, not only the caller's)
+// POST → add an expense to the band
+//
+// Service role (bypasses RLS), so every request is checked here:
+//   * band admins / superadmin only — members never see money (CLAUDE.md);
+//   * the band always comes from the caller's profile (requireBandAdmin),
+//     never from the request;
+//   * a tour or booking id from the body must belong to that band.
+// Archived expenses are kept for the record and never listed or totalled.
+import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '../../../lib/supabase';
+import { AppError, withHandler } from '../../../lib/apiError';
+import { requireBandAdmin } from '../../../lib/server/requireBandAdmin';
+import { ownedBookingId, ownedTourId } from '../../../lib/server/actOwnership';
 
 export type Expense = {
   id: string;
@@ -15,104 +29,95 @@ export type Expense = {
   updated_at: string;
 };
 
-export const EXPENSE_CATEGORIES = [
-  'Gas / Mileage',
-  'Hotel / Lodging',
-  'Band Member Payments',
-  'Food / Meals',
-  'Equipment',
-  'Other',
-] as const;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-async function getAuthedUser(req: NextApiRequest) {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return null;
-  const svc = getServiceClient();
-  const { data: { user } } = await svc.auth.getUser(token);
-  return user ?? null;
+/** A query-string value as one string, or undefined. */
+function one(v: string | string[] | undefined): string | undefined {
+  return typeof v === 'string' && v ? v : undefined;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const user = await getAuthedUser(req);
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-
+/**
+ * GET /api/expenses?tour_id&start_date&end_date&category
+ * POST /api/expenses { tour_id, booking_id?, expense_date, category, amount, notes? }
+ *
+ * @throws AppError 400 bad input, 401/403 auth, 404 tour/booking not in the band, 405 method
+ */
+export default withHandler(async function handler(req: NextApiRequest, res: NextApiResponse) {
   const svc = getServiceClient();
+  const { userId, actId } = await requireBandAdmin(req, svc);
 
-  const { data: profile } = await svc
-    .from('profiles')
-    .select('role, act_id')
-    .eq('id', user.id)
-    .maybeSingle();
-  if (!profile) return res.status(401).json({ error: 'Profile not found' });
-
-  let userActId: string | null = profile.act_id;
-  if (!userActId && (profile.role === 'band_admin' || profile.role === 'superadmin')) {
-    const { data: owned } = await svc
-      .from('acts')
-      .select('id')
-      .eq('owner_id', user.id)
-      .eq('is_active', true)
-      .limit(1)
-      .maybeSingle();
-    userActId = owned?.id ?? null;
-  }
-
-  // ── GET ──────────────────────────────────────────────────────────────────────
   if (req.method === 'GET') {
-    const { tour_id, start_date, end_date, category } = req.query;
+    const tourId = one(req.query.tour_id);
+    const category = one(req.query.category);
+    const start = one(req.query.start_date);
+    const end = one(req.query.end_date);
+    if ((start && !ISO_DATE.test(start)) || (end && !ISO_DATE.test(end))) {
+      throw new AppError(400, 'Dates must look like 2026-11-07');
+    }
 
-    let query: any = svc
+    let query = svc
       .from('expenses')
       .select('*')
-      .eq('user_id', user.id)
-      .is('archived_at', null) // archived expenses are kept for the record, not shown or totalled
+      .eq('act_id', actId)
+      .is('archived_at', null)
       .order('expense_date', { ascending: false });
-
-    if (tour_id)    query = query.eq('tour_id', tour_id as string);
-    if (category)   query = query.eq('category', category as string);
-    if (start_date) query = query.gte('expense_date', start_date as string);
-    if (end_date)   query = query.lte('expense_date', end_date as string);
+    if (tourId) query = query.eq('tour_id', tourId);
+    if (category) query = query.eq('category', category);
+    if (start) query = query.gte('expense_date', start);
+    if (end) query = query.lte('expense_date', end);
 
     const { data, error } = await query;
-    if (error) return res.status(500).json({ error: error.message });
-    return res.json({ expenses: data || [] });
+    if (error) {
+      console.error('[expenses GET] load failed', { actId, error: error.message });
+      throw new AppError(500, 'Expenses could not be loaded');
+    }
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.status(200).json({ expenses: data ?? [] });
+    return;
   }
 
-  // ── POST ─────────────────────────────────────────────────────────────────────
   if (req.method === 'POST') {
-    const { tour_id, booking_id, expense_date, category, amount, notes } = req.body as {
-      tour_id: string;
-      booking_id?: string | null;
-      expense_date: string;
-      category: string;
-      amount: number;
-      notes?: string | null;
-    };
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const amount = Number(body.amount);
+    const expenseDate = typeof body.expense_date === 'string' ? body.expense_date : '';
+    const category = typeof body.category === 'string' ? body.category.trim() : '';
+    const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null;
 
-    if (!tour_id)      return res.status(400).json({ error: 'tour_id required' });
-    if (!expense_date) return res.status(400).json({ error: 'expense_date required' });
-    if (!category)     return res.status(400).json({ error: 'category required' });
-    if (!amount || isNaN(Number(amount))) return res.status(400).json({ error: 'amount required' });
+    if (!body.tour_id) throw new AppError(400, 'tour_id required');
+    if (!ISO_DATE.test(expenseDate)) throw new AppError(400, 'expense_date required (YYYY-MM-DD)');
+    if (!category) throw new AppError(400, 'category required');
+    if (!Number.isFinite(amount) || amount <= 0) throw new AppError(400, 'amount required');
+
+    const tourId = await ownedTourId(svc, actId, body.tour_id);
+    if (!tourId) throw new AppError(404, "That tour wasn't found for this band");
+    let bookingId: string | null = null;
+    if (body.booking_id) {
+      bookingId = await ownedBookingId(svc, actId, body.booking_id);
+      if (!bookingId) throw new AppError(404, "That show wasn't found for this band");
+    }
 
     const { data, error } = await svc
       .from('expenses')
       .insert({
-        user_id:      user.id,
-        act_id:       userActId,
-        tour_id,
-        booking_id:   booking_id ?? null,
-        expense_date,
+        user_id: userId,
+        act_id: actId,
+        tour_id: tourId,
+        booking_id: bookingId,
+        expense_date: expenseDate,
         category,
-        amount:       Number(amount),
-        notes:        notes ?? null,
-        updated_at:   new Date().toISOString(),
+        amount,
+        notes,
+        updated_at: new Date().toISOString(),
       })
       .select()
       .single();
-
-    if (error) return res.status(500).json({ error: error.message });
-    return res.status(201).json({ expense: data });
+    if (error) {
+      console.error('[expenses POST] insert failed', { actId, error: error.message });
+      throw new AppError(500, 'The expense could not be saved');
+    }
+    res.status(201).json({ expense: data });
+    return;
   }
 
-  return res.status(405).end();
-}
+  throw new AppError(405, 'Method not allowed');
+});
