@@ -1,1029 +1,796 @@
-import { useState, useEffect } from 'react';
+// pages/financials.tsx
+//
+// Financials — the band's money for one year, in the Tours / Analytics style:
+// an illustrated header, big numbers, money by month, what's still owed, where
+// the money came from and went, then the working views (monthly, by venue, all
+// shows, expenses) and the accountant reports (income & expenses, tax summary,
+// contractors) with CSV and print.
+//
+// Band admins only (AppShell requireRole; members never see money). The money
+// rules live in lib/domain/financials.ts and match the mobile app:
+//   Earned       = actual_amount_received on completed shows marked received
+//   On the books = agreed (else fee) on confirmed shows dated today or later
+//   Still owed   = played shows not yet marked received
+// Expenses come from /api/expenses; "removing" one archives it (financial data
+// is archived, never deleted).
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import AppShell from '../components/layout/AppShell';
+import PageHero from '../components/layout/PageHero';
+import CoinStackScene from '../components/financials/CoinStackScene';
+import MoneyMonthChart from '../components/financials/MoneyMonthChart';
+import { RankBars, money } from '../components/analytics/charts';
+import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { getActId } from '../lib/bookingQueries';
-import { parseLocalDate, formatShowDate } from '../lib/formatDate';
-import { sumExpenses, yearExpenseTotal, monthExpenseTotal } from '../lib/financialSummary';
+import { formatShowDate } from '../lib/formatDate';
+import {
+  BAND_MEMBER_PAYMENTS, BAND_PAY, EXPENSE_CATEGORIES, NEC_THRESHOLD,
+  availableYears, categoryLabel, localToday, rangeReport, sumExpenses, summarizeYear, toCsv,
+  type FinancialBooking, type FinancialExpense, type ShowMoney, type ShowMoneyState,
+} from '../lib/domain/financials';
+import styles from '../styles/financials.module.css';
 
-type Booking = {
-  id: string;
-  show_date: string | null;
-  fee: number | null;
-  agreed_amount: number | null;
-  actual_amount_received: number | null;
-  final_payment_received: number | null;
-  payment_status: string | null;
-  status: string;
-  act: { act_name: string } | null;
-  venue: { name: string; city: string; state: string } | null;
-};
+type View = 'summary' | 'byVenue' | 'detail' | 'expenses' | 'incexp' | 'taxsummary' | 'contractors';
 
-type Expense = {
-  id: string;
-  tour_id: string | null;
-  booking_id: string | null;
-  expense_date: string;
-  category: string;
-  amount: number;
-  notes: string | null;
-  personnel_id: string | null;
-};
-
-function fmt(n: number) {
-  return '$' + Math.round(n).toLocaleString();
-}
-
-// Priority fallback: actual_amount_received → final_payment_received → agreed_amount → fee
-function bookingIncome(b: Booking): number {
-  return Number(b.actual_amount_received ?? b.final_payment_received ?? b.agreed_amount ?? b.fee) || 0;
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-const TAB_LABELS: Record<string, string> = {
-  summary:      'Monthly',
-  byAct:        'By Act',
-  byVenue:      'By Venue',
-  detail:       'All Bookings',
-  expenses:     'Expenses',
-  incexp:       'Income & Expenses',
-  taxsummary:   'Tax Summary',
-  contractors:  'Contractors',
-};
-
-type View = 'summary' | 'byAct' | 'byVenue' | 'detail' | 'expenses' | 'incexp' | 'taxsummary' | 'contractors';
+const TABS: Array<{ view: View; label: string }> = [
+  { view: 'summary', label: 'Monthly' },
+  { view: 'byVenue', label: 'By venue' },
+  { view: 'detail', label: 'All shows' },
+  { view: 'expenses', label: 'Expenses' },
+  { view: 'incexp', label: 'Income & expenses' },
+  { view: 'taxsummary', label: 'Tax summary' },
+  { view: 'contractors', label: 'Contractors' },
+];
 const REPORT_VIEWS: View[] = ['incexp', 'taxsummary', 'contractors'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-function printReport(title: string, htmlContent: string) {
+const STATE_LABEL: Record<ShowMoneyState, string> = { paid: 'Paid', owed: 'Owed', upcoming: 'Upcoming', other: 'Other' };
+const STATE_CLASS: Record<ShowMoneyState, string> = {
+  paid: styles.statePaid, owed: styles.stateOwed, upcoming: styles.stateUpcoming, other: styles.stateOther,
+};
+
+type Expense = FinancialExpense & { notes: string | null; tour_id: string | null };
+type ExpenseDraft = { id?: string; expense_date: string; tour_id: string; category: string; amount: string; notes: string };
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const shortDate = (iso: string) => formatShowDate(iso, { month: 'short', day: 'numeric' });
+
+/** Escapes text for the print window's HTML (venue, category and payee names are user-entered). */
+function esc(s: string): string {
+  return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+}
+
+/** Opens a print-ready report in a new window. `body` must already be escaped. */
+function printReport(title: string, body: string) {
   const w = window.open('', '_blank', 'width=820,height=700');
   if (!w) { alert('Allow pop-ups to print reports.'); return; }
-  w.document.write(`<!DOCTYPE html><html><head>
-    <title>${title}</title>
-    <style>
-      *{margin:0;padding:0;box-sizing:border-box}
-      body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:2.5rem;font-size:13px}
-      h1{font-size:1.3rem;margin-bottom:0.2rem}
-      .subtitle{color:#555;font-size:0.8rem;margin-bottom:1.5rem}
-      .section{margin-bottom:1.75rem}
-      .section-title{font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid #000;padding-bottom:0.25rem;margin-bottom:0.6rem}
-      table{width:100%;border-collapse:collapse}
-      th{text-align:left;padding:0.35rem 0.5rem;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;border-bottom:2px solid #000}
-      th.r,td.r{text-align:right}
-      td{padding:0.35rem 0.5rem;border-bottom:1px solid #eee}
-      tr.total td{font-weight:700;border-top:2px solid #000;border-bottom:none;padding-top:0.5rem}
-      tr.subtotal td{font-weight:600;background:#f9f9f9}
-      .flag{color:#92400e;font-size:0.72rem;margin-left:0.4rem}
-      .note{font-size:0.72rem;color:#666;margin-top:0.5rem;line-height:1.4}
-      @media print{.no-print{display:none}}
-    </style>
-  </head><body>${htmlContent}
-    <script>setTimeout(function(){window.print();},200);<\/script>
-  </body></html>`);
+  w.document.write(`<!DOCTYPE html><html><head><title>${esc(title)}</title><style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,Helvetica,sans-serif;color:#000;padding:2.5rem;font-size:13px}
+    h1{font-size:1.3rem;margin-bottom:0.2rem}
+    .subtitle{color:#555;font-size:0.8rem;margin-bottom:1.5rem}
+    .section{margin-bottom:1.75rem}
+    .section-title{font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid #000;padding-bottom:0.25rem;margin-bottom:0.6rem}
+    table{width:100%;border-collapse:collapse}
+    th{text-align:left;padding:0.35rem 0.5rem;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;border-bottom:2px solid #000}
+    th.r,td.r{text-align:right}
+    td{padding:0.35rem 0.5rem;border-bottom:1px solid #eee}
+    tr.total td{font-weight:700;border-top:2px solid #000;border-bottom:none;padding-top:0.5rem}
+    .flag{color:#92400e;font-size:0.72rem}
+    .note{font-size:0.72rem;color:#666;margin-top:0.5rem;line-height:1.4}
+  </style></head><body>${body}<script>setTimeout(function(){window.print();},200);<\/script></body></html>`);
   w.document.close();
 }
 
+/** Saves a CSV file in the browser. */
+function downloadCsv(filename: string, rows: ReadonlyArray<ReadonlyArray<string | number>>) {
+  const url = URL.createObjectURL(new Blob([toCsv(rows)], { type: 'text/csv' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** One big-number card. */
+function Big({ label, value, note, accent, negative }: { label: string; value: string; note?: React.ReactNode; accent: string; negative?: boolean }) {
+  return (
+    <div className={styles.big} style={{ '--big-accent': accent } as React.CSSProperties}>
+      <span className={styles.bigLabel}>{label}</span>
+      <span className={`${styles.bigValue} ${negative ? styles.negative : ''}`}>{value}</span>
+      {note && <span className={styles.bigNote}>{note}</span>}
+    </div>
+  );
+}
+
+function StatePill({ state }: { state: ShowMoneyState }) {
+  return <span className={`${styles.statePill} ${STATE_CLASS[state]}`}>{STATE_LABEL[state]}</span>;
+}
+
+async function authHeader(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+}
+
+/** GET /api/expenses with optional filters. */
+async function fetchExpenses(params: Record<string, string> = {}): Promise<Expense[]> {
+  const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v));
+  const res = await fetch(`/api/expenses${qs.toString() ? `?${qs}` : ''}`, { headers: await authHeader() });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : `Expenses could not be loaded (${res.status}).`);
+  return (json.expenses ?? []) as Expense[];
+}
+
 export default function Financials() {
-  const currentYear = new Date().getFullYear();
-  const [year, setYear]           = useState(currentYear);
-  const [bookings, setBookings]   = useState<Booking[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [view, setView]           = useState<View>('summary');
-  const [session, setSession]     = useState('');
+  const { profile } = useAuth();
+  const actId = profile?.act_id ?? null;
+  const thisYear = new Date().getFullYear();
+  const today = localToday();
 
-  // Expenses (Expenses tab — respects user filters)
-  const [expenses, setExpenses]         = useState<Expense[]>([]);
-  const [expLoading, setExpLoading]     = useState(false);
-  const [filterTour, setFilterTour]     = useState('');
-  const [filterCat, setFilterCat]       = useState('');
-  const [filterStart, setFilterStart]   = useState('');
-  const [filterEnd, setFilterEnd]       = useState('');
+  const [year, setYear] = useState(thisYear);
+  const [view, setView] = useState<View>('summary');
+  const [actName, setActName] = useState('');
 
-  // All expenses, no user filters — used by report tabs
-  const [allExpenses, setAllExpenses]   = useState<Expense[]>([]);
+  const [bookings, setBookings] = useState<FinancialBooking[]>([]);
+  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  type TourOption = { id: string; name: string };
-  const [tours, setTours]         = useState<TourOption[]>([]);
-  const [personnel, setPersonnel] = useState<{id: string; name: string}[]>([]);
+  const [tours, setTours] = useState<Array<{ id: string; name: string }>>([]);
+  const [personnel, setPersonnel] = useState<Array<{ id: string; name: string }>>([]);
 
-  // Date range for report tabs (default = current year)
-  const [rangeStart, setRangeStart] = useState(`${currentYear}-01-01`);
-  const [rangeEnd, setRangeEnd]     = useState(`${currentYear}-12-31`);
+  // Expenses tab filters (server-side, through /api/expenses).
+  const [filters, setFilters] = useState({ tour_id: '', category: '', start_date: '', end_date: '' });
+  const [listed, setListed] = useState<Expense[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
 
-  const [modal, setModal] = useState<{
-    open: boolean;
-    mode: 'add' | 'edit';
-    expense: Partial<Expense> | null;
-    saving: boolean;
-    error: string;
-  }>({ open: false, mode: 'add', expense: null, saving: false, error: '' });
+  // Report date range (follows the year picker).
+  const [rangeStart, setRangeStart] = useState(`${thisYear}-01-01`);
+  const [rangeEnd, setRangeEnd] = useState(`${thisYear}-12-31`);
+  const pickYear = (yr: number) => { setYear(yr); setRangeStart(`${yr}-01-01`); setRangeEnd(`${yr}-12-31`); };
 
-  useEffect(() => { init(); }, []);
-
-  // Sync year selector → date range
-  useEffect(() => {
-    setRangeStart(`${year}-01-01`);
-    setRangeEnd(`${year}-12-31`);
-  }, [year]);
-
-  const init = async () => {
-    const { data: { session: sess } } = await supabase.auth.getSession();
-    const token = sess?.access_token ?? '';
-    setSession(token);
-    if (!sess?.user) return;
-    await loadBookings(sess.user.id);
-    if (token) {
-      loadExpenses(token);
-      loadAllExpenses(token);
-    }
-    const actId = await getActId(supabase, sess.user.id);
-    if (actId) {
-      const [toursRes, personnelRes] = await Promise.all([
-        supabase.from('tours').select('id, name').eq('act_id', actId).neq('status', 'cancelled').order('name').limit(50),
-        supabase.from('act_personnel').select('id, name').eq('act_id', actId).eq('is_active', true).order('name'),
-      ]);
-      setTours((toursRes.data as TourOption[]) || []);
-      setPersonnel((personnelRes.data as {id: string; name: string}[]) || []);
-    }
-  };
-
-  const loadAllExpenses = async (token: string) => {
-    const res = await fetch('/api/expenses', { headers: { Authorization: `Bearer ${token}` } });
-    const json = await res.json();
-    setAllExpenses(json.expenses || []);
-  };
-
-  const loadExpenses = async (token: string, overrides?: {
-    tour?: string; cat?: string; start?: string; end?: string;
-  }) => {
-    setExpLoading(true);
-    const tour  = overrides?.tour  ?? filterTour;
-    const cat   = overrides?.cat   ?? filterCat;
-    const start = overrides?.start ?? filterStart;
-    const end   = overrides?.end   ?? filterEnd;
-
-    const params = new URLSearchParams();
-    if (tour)  params.set('tour_id',    tour);
-    if (cat)   params.set('category',   cat);
-    if (start) params.set('start_date', start);
-    if (end)   params.set('end_date',   end);
-
-    const res = await fetch(`/api/expenses?${params}`, { headers: { Authorization: `Bearer ${token}` } });
-    const json = await res.json();
-    setExpenses(json.expenses || []);
-    setExpLoading(false);
-  };
-
-  const loadBookings = async (userId: string) => {
+  // ── Loading ────────────────────────────────────────────────────────────────
+  const loadAll = useCallback(async (band: string) => {
     setLoading(true);
+    setLoadError(null);
     try {
-      const actId = await getActId(supabase, userId);
-      if (!actId) return;
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('id, show_date, fee, agreed_amount, actual_amount_received, final_payment_received, payment_status, status, act:acts(act_name), venue:venues(name, city, state)')
-        .eq('act_id', actId)
-        .in('status', ['confirmed', 'completed'])
-        .order('show_date', { ascending: true, nullsFirst: false });
-      if (error) console.error('loadBookings error:', error);
-      setBookings((data as any[]) || []);
-    } catch (err) {
-      console.error('loadBookings:', err);
+      const [bookingsRes, expenses, toursRes, peopleRes, actRes] = await Promise.all([
+        supabase
+          .from('bookings')
+          .select('id, show_date, status, fee, agreed_amount, actual_amount_received, payment_status, venue:venues(name, city, state)')
+          .eq('act_id', band)
+          .in('status', ['confirmed', 'completed'])
+          .order('show_date', { ascending: true, nullsFirst: false }),
+        fetchExpenses(),
+        supabase.from('tours').select('id, name').eq('act_id', band).neq('status', 'cancelled').order('name').limit(100),
+        supabase.from('act_personnel').select('id, name').eq('act_id', band).eq('is_active', true).order('name'),
+        supabase.from('acts').select('act_name').eq('id', band).maybeSingle(),
+      ]);
+      if (bookingsRes.error) throw new Error(bookingsRes.error.message);
+      setBookings((bookingsRes.data ?? []) as unknown as FinancialBooking[]);
+      setAllExpenses(expenses);
+      setTours((toursRes.data ?? []) as Array<{ id: string; name: string }>);
+      setPersonnel((peopleRes.data ?? []) as Array<{ id: string; name: string }>);
+      setActName((actRes.data as { act_name?: string } | null)?.act_name ?? '');
+    } catch (e) {
+      console.error('[financials] load failed', e);
+      setLoadError(e instanceof Error ? e.message : 'Financials could not be loaded.');
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => { if (actId) void loadAll(actId); }, [actId, loadAll]);
+
+  const loadListed = useCallback(async (f: typeof filters) => {
+    setListLoading(true);
+    setListError(null);
+    try {
+      setListed(await fetchExpenses(f));
+    } catch (e) {
+      console.error('[financials] expense list failed', e);
+      setListError(e instanceof Error ? e.message : 'Expenses could not be loaded.');
+    } finally {
+      setListLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { if (actId && view === 'expenses') void loadListed(filters); }, [actId, view, filters, loadListed]);
+
+  const refreshExpenses = useCallback(async () => {
+    try {
+      setAllExpenses(await fetchExpenses());
+    } catch (e) {
+      console.error('[financials] expense refresh failed', e);
+    }
+    if (view === 'expenses') await loadListed(filters);
+  }, [view, filters, loadListed]);
+
+  // ── Figures ────────────────────────────────────────────────────────────────
+  const y = useMemo(() => summarizeYear(year, bookings, allExpenses, today), [year, bookings, allExpenses, today]);
+  const report = useMemo(
+    () => rangeReport(rangeStart, rangeEnd, bookings, allExpenses, personnel, today),
+    [rangeStart, rangeEnd, bookings, allExpenses, personnel, today],
+  );
+  const years = useMemo(() => availableYears(bookings, allExpenses, thisYear), [bookings, allExpenses, thisYear]);
+  const currentMonth = year === thisYear ? new Date().getMonth() : null;
+  const tourName = useCallback((id: string | null | undefined) => tours.find(t => t.id === id)?.name ?? '', [tours]);
+
+  // ── Expense dialog ─────────────────────────────────────────────────────────
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [draft, setDraft] = useState<ExpenseDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  const openExpense = (e?: Expense) => {
+    setDraft(e
+      ? { id: e.id, expense_date: e.expense_date, tour_id: e.tour_id ?? '', category: e.category, amount: String(e.amount), notes: e.notes ?? '' }
+      : { expense_date: today, tour_id: tours[0]?.id ?? '', category: '', amount: '', notes: '' });
+    setSaveError('');
+    dialogRef.current?.showModal();
+  };
+  const closeExpense = () => { if (!saving) dialogRef.current?.close(); };
+
+  const saveExpense = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    if (!draft) return;
+    const amount = Number(draft.amount);
+    if (!draft.expense_date) return setSaveError('Pick the date.');
+    if (!draft.tour_id) return setSaveError('Pick the tour this expense belongs to.');
+    if (!draft.category) return setSaveError('Pick a category.');
+    if (!Number.isFinite(amount) || amount <= 0) return setSaveError('Enter an amount above $0.');
+    setSaving(true);
+    setSaveError('');
+    try {
+      const body = { expense_date: draft.expense_date, tour_id: draft.tour_id, category: draft.category, amount, notes: draft.notes.trim() || null };
+      const res = await fetch(draft.id ? `/api/expenses/${draft.id}` : '/api/expenses', {
+        method: draft.id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(typeof json.error === 'string' ? json.error : `Save failed (${res.status}).`);
+      }
+      dialogRef.current?.close();
+      await refreshExpenses();
+    } catch (e) {
+      console.error('[financials] expense save failed', e);
+      setSaveError(e instanceof Error ? e.message : 'Save failed.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const todayStr       = new Date().toISOString().split('T')[0];
-  const yearBookings   = bookings.filter(b => !b.show_date || b.show_date.startsWith(String(year)));
-  const totalFee       = yearBookings.reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
-  const totalPaid      = yearBookings.reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0);
-  // Summary cards and the monthly TOTAL are scoped to the selected year (matching `earned`),
-  // and use allExpenses so the Expenses-tab filters never change the headline numbers.
-  const totalExpenses  = yearExpenseTotal(allExpenses, year);
-  // The Expenses tab footer totals exactly the rows listed under that tab's filters.
-  const listedExpensesTotal = sumExpenses(expenses);
-  const potential     = yearBookings.filter(b => b.status === 'confirmed' && b.show_date && b.show_date >= todayStr)
-    .reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
-  const earned         = yearBookings.filter(b => b.status === 'completed' && b.payment_status === 'received')
-    .reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0);
-  const outstanding    = yearBookings.filter(b => b.status === 'confirmed' && b.payment_status !== 'received')
-    .reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0);
-  const netIncome      = earned - totalExpenses;
-  const showCount      = yearBookings.filter(b => ['confirmed', 'completed'].includes(b.status)).length;
-
-  // Monthly breakdown
-  const monthly = MONTHS.map((month, idx) => {
-    const mbs = yearBookings.filter(b => b.show_date && parseLocalDate(b.show_date).getMonth() === idx);
-    return {
-      month,
-      shows:    mbs.length,
-      fee:      mbs.reduce((s, b) => s + (Number(b.agreed_amount ?? b.fee) || 0), 0),
-      paid:     mbs.reduce((s, b) => s + (Number(b.actual_amount_received) || 0), 0),
-      expenses: monthExpenseTotal(allExpenses, year, idx),
-    };
-  });
-
-  // By act
-  const actMap: Record<string, { name: string; shows: number; fee: number; paid: number }> = {};
-  for (const b of yearBookings) {
-    const key = b.act?.act_name || 'Unknown';
-    if (!actMap[key]) actMap[key] = { name: key, shows: 0, fee: 0, paid: 0 };
-    actMap[key].shows++;
-    actMap[key].fee  += Number(b.agreed_amount ?? b.fee) || 0;
-    actMap[key].paid += Number(b.actual_amount_received) || 0;
-  }
-  const byAct = Object.values(actMap).sort((a, b) => b.fee - a.fee);
-
-  // By venue
-  const venueMap: Record<string, { name: string; city: string; state: string; shows: number; fee: number; paid: number }> = {};
-  for (const b of yearBookings) {
-    const key = b.venue?.name || 'Unknown';
-    if (!venueMap[key]) venueMap[key] = { name: key, city: b.venue?.city || '', state: b.venue?.state || '', shows: 0, fee: 0, paid: 0 };
-    venueMap[key].shows++;
-    venueMap[key].fee  += Number(b.agreed_amount ?? b.fee) || 0;
-    venueMap[key].paid += Number(b.actual_amount_received) || 0;
-  }
-  const byVenue = Object.values(venueMap).sort((a, b) => b.fee - a.fee);
-
-  // ── Report tab derived data ───────────────────────────────────────────────────
-  const rangeBookings  = bookings.filter(b => b.show_date && b.show_date >= rangeStart && b.show_date <= rangeEnd);
-  const rangeExpenses  = allExpenses.filter(e => e.expense_date >= rangeStart && e.expense_date <= rangeEnd);
-
-  const totalRangeIncome = rangeBookings.reduce((s, b) => s + bookingIncome(b), 0);
-
-  const expByCat: Record<string, number> = {};
-  for (const e of rangeExpenses) expByCat[e.category] = (expByCat[e.category] || 0) + Number(e.amount);
-
-  const bandPayTotal   = expByCat['band_pay'] || 0;
-  const otherExpLines  = Object.entries(expByCat).filter(([c]) => c !== 'band_pay').sort(([a], [b]) => a.localeCompare(b));
-  const otherExpTotal  = otherExpLines.reduce((s, [, v]) => s + v, 0);
-  const totalRangeExp  = bandPayTotal + otherExpTotal;
-  const rangeNet       = totalRangeIncome - totalRangeExp;
-
-  // Payee rollup
-  const payeeMap: Record<string, { name: string; total: number }> = {};
-  for (const e of rangeExpenses) {
-    if (e.category !== 'band_pay') continue;
-    const pid  = e.personnel_id ?? '__unknown__';
-    const pName = personnel.find(p => p.id === pid)?.name ?? 'Unknown';
-    if (!payeeMap[pid]) payeeMap[pid] = { name: pName, total: 0 };
-    payeeMap[pid].total += Number(e.amount);
-  }
-  const payees = Object.values(payeeMap).sort((a, b) => b.total - a.total);
-
-  // ── CSV download (additive) ────────────────────────────────────────────────
-  const downloadCSV = () => {
-    const sections: string[][] = [];
-
-    // Section 1 — Shows / income
-    sections.push(['SECTION: SHOWS & INCOME']);
-    sections.push(['Date', 'Act', 'Venue', 'City', 'State', 'Contracted', 'Collected', 'Outstanding', 'Status']);
-    for (const b of yearBookings) {
-      const contracted = Number(b.agreed_amount ?? b.fee) || 0;
-      const collected  = Number(b.actual_amount_received) || 0;
-      sections.push([b.show_date || '', b.act?.act_name || '', b.venue?.name || '', b.venue?.city || '', b.venue?.state || '', String(contracted), String(collected), String(contracted - collected), b.status]);
-    }
-
-    sections.push([]);
-
-    // Section 2 — Expense line items
-    sections.push(['SECTION: EXPENSE LINE ITEMS']);
-    sections.push(['Date', 'Category', 'Amount', 'Notes', 'Tour ID', 'Booking ID']);
-    const csvExpenses = allExpenses.filter(e => e.expense_date.startsWith(String(year)));
-    for (const e of csvExpenses) {
-      sections.push([e.expense_date, e.category, String(e.amount), e.notes || '', e.tour_id || '', e.booking_id || '']);
-    }
-
-    sections.push([]);
-
-    // Section 3 — Contractor payments (band_pay, current year)
-    sections.push(['SECTION: CONTRACTOR PAYMENTS (band_pay)']);
-    sections.push(['Name', 'Total Paid', 'Note']);
-    const csvBandPay = csvExpenses.filter(e => e.category === 'band_pay');
-    const csvPayeeMap: Record<string, { name: string; total: number }> = {};
-    for (const e of csvBandPay) {
-      const pid   = e.personnel_id ?? '__unknown__';
-      const pName = personnel.find(p => p.id === pid)?.name ?? 'Unknown';
-      if (!csvPayeeMap[pid]) csvPayeeMap[pid] = { name: pName, total: 0 };
-      csvPayeeMap[pid].total += Number(e.amount);
-    }
-    for (const { name, total } of Object.values(csvPayeeMap).sort((a, b) => b.total - a.total)) {
-      sections.push([name, String(total), total >= 600 ? 'At or above $600 — verify 1099-NEC filing requirement' : '']);
-    }
-
-    const csv = sections.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `financials-${year}.csv`; a.click();
+  const archiveExpense = async (e: Expense) => {
+    if (!confirm(`Archive this ${categoryLabel(e.category)} expense of ${money(Number(e.amount))}? It comes off your totals but stays on record.`)) return;
+    const res = await fetch(`/api/expenses/${e.id}`, { method: 'DELETE', headers: await authHeader() });
+    if (!res.ok) { alert('That expense could not be archived. Try again.'); return; }
+    await refreshExpenses();
   };
 
-  const downloadPayeeCSV = () => {
-    const rows = [
-      ['Name', 'Total Paid', 'Note'],
-      ...payees.map(p => [p.name, String(p.total), p.total >= 600 ? 'At or above $600 — verify 1099-NEC filing' : '']),
+  // ── Exports ────────────────────────────────────────────────────────────────
+  const downloadYearCsv = () => {
+    const rows: Array<Array<string | number>> = [
+      ['SHOWS & INCOME'],
+      ['Date', 'Venue', 'City/State', 'Status', 'Money', 'Contracted', 'Received', 'Still owed'],
+      ...y.shows.map(s => [s.date, s.venue, s.place, s.status, STATE_LABEL[s.state], s.contracted ?? '', s.received ?? '', s.owed || '']),
+      [],
+      ['EXPENSES'],
+      ['Date', 'Category', 'Amount', 'Tour', 'Notes'],
+      ...allExpenses.filter(e => e.expense_date.startsWith(`${year}-`))
+        .map(e => [e.expense_date, categoryLabel(e.category), Number(e.amount), tourName(e.tour_id), e.notes ?? '']),
+      [],
+      ['CONTRACTOR PAYMENTS (lineup band pay)'],
+      ['Name', 'Total paid', 'Note'],
+      ...rangeReport(`${year}-01-01`, `${year}-12-31`, bookings, allExpenses, personnel, today).payees
+        .map(p => [p.name, p.total, p.needs1099 ? `At or above $${NEC_THRESHOLD} — verify 1099-NEC filing` : '']),
     ];
-    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `contractor-payments-${rangeStart}-${rangeEnd}.csv`; a.click();
+    downloadCsv(`financials-${year}.csv`, rows);
   };
+
+  const downloadPayeeCsv = () => downloadCsv(`contractor-payments-${rangeStart}-${rangeEnd}.csv`, [
+    ['Name', 'Total paid', 'Note'],
+    ...report.payees.map(p => [p.name, p.total, p.needs1099 ? `At or above $${NEC_THRESHOLD} — verify 1099-NEC filing` : '']),
+  ]);
 
   const printTaxSummary = () => {
-    const dateLabel = `${rangeStart} – ${rangeEnd}`;
-    const otherRows = otherExpLines.map(([cat, total]) =>
-      `<tr><td>${cat}</td><td class="r">${fmt(total)}</td></tr>`
-    ).join('');
-    printReport(`Financial Summary ${dateLabel}`, `
+    const range = `${rangeStart} – ${rangeEnd}`;
+    const expRows = report.expenseLines.map(([c, t]) => `<tr><td>${esc(categoryLabel(c))}</td><td class="r">${money(t)}</td></tr>`).join('');
+    printReport(`Financial Summary ${range}`, `
       <h1>Financial Summary</h1>
-      <div class="subtitle">${dateLabel} &nbsp;·&nbsp; Prepared for accountant use</div>
-      <div class="section">
-        <div class="section-title">Income</div>
-        <table>
-          <thead><tr><th>Description</th><th class="r">Amount</th></tr></thead>
-          <tbody>
-            <tr><td>Total income (${rangeBookings.length} bookings)</td><td class="r">${fmt(totalRangeIncome)}</td></tr>
-            <tr class="total"><td>TOTAL INCOME</td><td class="r">${fmt(totalRangeIncome)}</td></tr>
-          </tbody>
-        </table>
+      <div class="subtitle">${esc(actName)} · ${range} · Prepared for accountant use</div>
+      <div class="section"><div class="section-title">Income received</div><table>
+        <thead><tr><th>Description</th><th class="r">Amount</th></tr></thead><tbody>
+        <tr><td>Show income received (${report.paidShows.length} shows)</td><td class="r">${money(report.income)}</td></tr>
+        <tr class="total"><td>TOTAL INCOME</td><td class="r">${money(report.income)}</td></tr>
+      </tbody></table>
+      ${report.owed > 0 ? `<div class="note">Not included: ${money(report.owed)} still owed on ${report.owedShows.length} played show(s) in this range.</div>` : ''}
       </div>
-      <div class="section">
-        <div class="section-title">Business Expenses</div>
-        <table>
-          <thead><tr><th>Category</th><th class="r">Amount</th></tr></thead>
-          <tbody>
-            ${otherRows || '<tr><td colspan="2" style="color:#666">No business expenses recorded</td></tr>'}
-            <tr class="total"><td>TOTAL BUSINESS EXPENSES</td><td class="r">${fmt(otherExpTotal)}</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="section">
-        <div class="section-title">Contractor Payments (band_pay)</div>
-        <table>
-          <thead><tr><th>Description</th><th class="r">Amount</th></tr></thead>
-          <tbody>
-            <tr><td>Payments to independent contractors</td><td class="r">${fmt(bandPayTotal)}</td></tr>
-            <tr class="total"><td>TOTAL CONTRACTOR PAYMENTS</td><td class="r">${fmt(bandPayTotal)}</td></tr>
-          </tbody>
-        </table>
-        <div class="note">Contractor payments are paid to independent contractors (not employees) and may require 1099-NEC filing. See Contractor Payments report for per-payee breakdown.</div>
-      </div>
-      <div class="section">
-        <div class="section-title">Summary</div>
-        <table>
-          <tbody>
-            <tr><td>Total Income</td><td class="r">${fmt(totalRangeIncome)}</td></tr>
-            <tr><td>Total Business Expenses</td><td class="r">(${fmt(otherExpTotal)})</td></tr>
-            <tr><td>Total Contractor Payments</td><td class="r">(${fmt(bandPayTotal)})</td></tr>
-            <tr class="total"><td>NET</td><td class="r">${fmt(rangeNet)}</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="note" style="margin-top:2rem">This document is a summary for accountant/tax preparer use. It is not a tax form. Verify all figures against source records before filing. State contractor payment thresholds may differ from the federal $600 threshold.</div>
-    `);
+      <div class="section"><div class="section-title">Business expenses</div><table>
+        <thead><tr><th>Category</th><th class="r">Amount</th></tr></thead><tbody>
+        ${expRows || '<tr><td colspan="2" style="color:#666">No business expenses recorded</td></tr>'}
+        <tr class="total"><td>TOTAL BUSINESS EXPENSES</td><td class="r">${money(report.businessExpenses)}</td></tr>
+      </tbody></table></div>
+      <div class="section"><div class="section-title">Contractor payments (band pay from show lineups)</div><table>
+        <tbody><tr><td>Payments to independent contractors (${report.payees.length} payees)</td><td class="r">${money(report.contractorPay)}</td></tr>
+        <tr class="total"><td>TOTAL CONTRACTOR PAYMENTS</td><td class="r">${money(report.contractorPay)}</td></tr></tbody></table>
+        <div class="note">May require 1099-NEC filing. See the Contractor Payments report for each payee.</div></div>
+      <div class="section"><div class="section-title">Summary</div><table><tbody>
+        <tr><td>Total income</td><td class="r">${money(report.income)}</td></tr>
+        <tr><td>Total business expenses</td><td class="r">(${money(report.businessExpenses)})</td></tr>
+        <tr><td>Total contractor payments</td><td class="r">(${money(report.contractorPay)})</td></tr>
+        <tr class="total"><td>NET</td><td class="r">${money(report.net)}</td></tr>
+      </tbody></table></div>
+      <div class="note">A summary for your accountant or tax preparer, not a tax form. Verify all figures against source records before filing. State contractor thresholds may differ from the federal $${NEC_THRESHOLD}.</div>`);
   };
 
   const printPayeeReport = () => {
-    const dateLabel = `${rangeStart} – ${rangeEnd}`;
-    const rows = payees.map(p => `
-      <tr>
-        <td>${p.name}</td>
-        <td class="r">${fmt(p.total)}</td>
-        <td>${p.total >= 600 ? '<span class="flag">⚑ At or above $600</span>' : ''}</td>
-      </tr>`).join('');
-    printReport(`Contractor Payments ${dateLabel}`, `
+    const range = `${rangeStart} – ${rangeEnd}`;
+    const rows = report.payees.map(p => `<tr><td>${esc(p.name)}</td><td class="r">${money(p.total)}</td><td>${p.needs1099 ? `<span class="flag">⚑ At or above $${NEC_THRESHOLD}</span>` : ''}</td></tr>`).join('');
+    printReport(`Contractor Payments ${range}`, `
       <h1>Contractor Payments</h1>
-      <div class="subtitle">${dateLabel} &nbsp;·&nbsp; Independent contractors (1099-NEC reference)</div>
-      <div class="section">
-        <table>
-          <thead><tr><th>Name</th><th class="r">Total Paid</th><th>Flag</th></tr></thead>
-          <tbody>
-            ${rows || '<tr><td colspan="3" style="color:#666">No contractor payments in this range</td></tr>'}
-            <tr class="total">
-              <td>TOTAL</td>
-              <td class="r">${fmt(payees.reduce((s, p) => s + p.total, 0))}</td>
-              <td></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="note">⚑ Persons at or above $600 may require a 1099-NEC for this period. State thresholds may be lower — confirm with your accountant. This report does not collect or display SSN/TIN; provide it to your 1099 filing service separately.</div>
-    `);
+      <div class="subtitle">${esc(actName)} · ${range} · Independent contractors (1099-NEC reference)</div>
+      <div class="section"><table>
+        <thead><tr><th>Name</th><th class="r">Total paid</th><th>Flag</th></tr></thead><tbody>
+        ${rows || '<tr><td colspan="3" style="color:#666">No contractor payments in this range</td></tr>'}
+        <tr class="total"><td>TOTAL</td><td class="r">${money(report.contractorPay)}</td><td></td></tr>
+      </tbody></table></div>
+      <div class="note">⚑ People at or above $${NEC_THRESHOLD} may need a 1099-NEC for this period; state thresholds may be lower. This report holds no SSN/TIN — give the payee list to your 1099 filing service to collect tax IDs.</div>`);
   };
 
-  const summaryCards = [
-    { label: 'Shows Booked',  value: showCount,          color: '#60a5fa',                                sub: `${year} season` },
-    { label: 'Potential',     value: fmt(potential),     color: 'var(--accent)',                          sub: 'projected income' },
-    { label: 'Earned',        value: fmt(earned),        color: '#34d399',                                sub: 'collected from played shows' },
-    { label: 'Outstanding',   value: fmt(outstanding),   color: outstanding > 0 ? '#fbbf24' : '#34d399', sub: 'total contracted minus collected' },
-    { label: 'Expenses',      value: fmt(totalExpenses), color: '#f87171',                                sub: 'recorded costs' },
-    { label: 'Net Income',    value: fmt(netIncome),     color: netIncome >= 0 ? '#34d399' : '#f87171',  sub: 'earned minus expenses' },
-  ];
+  // ── Render ─────────────────────────────────────────────────────────────────
+  const summary = loading
+    ? undefined
+    : `${plural(y.showCount, 'show')} in ${year} · ${money(y.earned)} earned · ${money(y.potential)} on the books${y.outstanding > 0 ? ` · ${money(y.outstanding)} still owed` : ''}.`;
 
-  const isReportView = REPORT_VIEWS.includes(view);
-  const isOldView    = !isReportView && view !== 'expenses';
+  const owedPreview = y.owedShows.slice().sort((a, b) => b.owed - a.owed).slice(0, 6);
+  const isReport = REPORT_VIEWS.includes(view);
 
   return (
     <AppShell requireRole="band_admin">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Financials</h1>
-          <div className="page-sub">{yearBookings.length} bookings in {year}</div>
-        </div>
-        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-          <select className="select" style={{ width: 100 }} value={year} onChange={e => setYear(Number(e.target.value))}>
-            {[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <button className="btn btn-secondary" onClick={downloadCSV}>↓ CSV</button>
-        </div>
-      </div>
+      <div className={styles.page}>
+        <PageHero
+          title="Financials"
+          subtitle={actName ? `${actName} · ${year}` : `The band's money · ${year}`}
+          summary={summary}
+          scene={<CoinStackScene />}
+          actions={
+            <div className={styles.heroActions}>
+              <label className={styles.yearPicker}>
+                Year
+                <select className="select" value={year} onChange={e => pickYear(Number(e.target.value))} aria-label="Year for the figures">
+                  {years.map(yr => <option key={yr} value={yr}>{yr}</option>)}
+                </select>
+              </label>
+              <button type="button" className="btn btn-secondary" onClick={downloadYearCsv} disabled={loading}>↓ CSV</button>
+              <button type="button" className="btn btn-primary" onClick={() => openExpense()} disabled={loading}>+ Add expense</button>
+            </div>
+          }
+        />
 
-      {/* Summary trackers — the Tours metric style. Figures come from the
-          calculations above unchanged (Earned / Potential rules in CLAUDE.md). */}
-      <section className="tours-metrics" aria-label={`${year} money at a glance`} style={{ marginBottom: '1.5rem' }}>
-        {summaryCards.map(c => (
-          <div key={c.label} className="tour-metric" style={{ borderTop: `3px solid ${c.color}` }}>
-            <span className="tour-metric-label">{c.label}</span>
-            <div className="tour-metric-value"><strong style={{ color: c.color }}>{c.value}</strong></div>
-            <span className="tour-metric-note">{c.sub}</span>
+        {loadError && (
+          <div className={styles.notice} role="alert">
+            <span><strong>Couldn&apos;t load your financials.</strong> {loadError}{' '}
+              <button type="button" className="btn btn-secondary" onClick={() => actId && loadAll(actId)}>Try again</button>
+            </span>
           </div>
-        ))}
-      </section>
+        )}
 
-      {/* View tabs — the Tours toggle */}
-      <div className="tours-toolbar" style={{ marginBottom: '1.25rem' }}>
-        <div className="tours-tabs" role="group" aria-label="Financial views">
-          {(Object.keys(TAB_LABELS) as View[]).map(v => (
-            <button
-              key={v}
-              type="button"
-              className={`tours-tab${view === v ? ' tours-tab--on' : ''}`}
-              aria-pressed={view === v}
-              onClick={() => setView(v)}
-            >
-              {TAB_LABELS[v]}
-            </button>
-          ))}
-        </div>
-      </div>
+        {/* ── Big numbers ── */}
+        <section className={styles.bigNumbers} aria-label={`${year} money at a glance`}>
+          {loading ? Array.from({ length: 5 }, (_, i) => <div key={i} className={`tour-skeleton ${styles.skeleton}`} />) : (
+            <>
+              <Big label="Earned" value={money(y.earned)} accent="var(--chart-earned)" note={`${plural(y.paidCount, 'show')} paid`} />
+              <Big label="On the books" value={money(y.potential)} accent="var(--chart-booked)" note={`${plural(y.upcomingCount, 'show')} still to play`} />
+              <Big label="Still owed" value={money(y.outstanding)} accent="var(--money-warn)"
+                note={y.owedShows.length ? `${plural(y.owedShows.length, 'played show')} not marked paid` : 'Everyone has paid'} />
+              <Big label="Expenses" value={money(y.expenses)} accent="var(--chart-expense)" note={`${y.categories.reduce((n, c) => n + c.count, 0)} entries`} />
+              <Big label="Net" value={money(y.net)} accent={y.net >= 0 ? 'var(--money-good)' : 'var(--money-bad)'} negative={y.net < 0} note="earned minus expenses" />
+            </>
+          )}
+        </section>
 
-      {/* ── Legacy views (Monthly / By Act / By Venue / All Bookings) ── */}
-      {loading && isOldView ? (
-        <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>Loading…</div>
-      ) : yearBookings.length === 0 && isOldView ? (
-        <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>
-          No bookings in {year}.
+        {!loading && y.paidMissingAmount.length > 0 && (
+          <div className={styles.notice} role="status">
+            <span>
+              <strong>{plural(y.paidMissingAmount.length, 'show is', 'shows are')} marked paid with no amount recorded</strong>, so they add $0 to Earned:{' '}
+              {y.paidMissingAmount.map((s, i) => (
+                <span key={s.id}>{i > 0 && ', '}<Link href={`/bookings/${s.id}`}>{s.venue} ({shortDate(s.date)})</Link></span>
+              ))}. Open each show and enter what you were paid.
+            </span>
+          </div>
+        )}
+
+        {/* ── Chart + still owed ── */}
+        <div className={styles.grid2}>
+          <section className={styles.panel} aria-labelledby="fin-months">
+            <div className={styles.panelHead}>
+              <h2 id="fin-months" className={styles.panelTitle}>Money by month</h2>
+              <span className={styles.panelMeta}>{year}</span>
+            </div>
+            {loading ? <div className={`tour-skeleton ${styles.skeleton}`} /> : <MoneyMonthChart months={y.months} year={year} currentMonth={currentMonth} />}
+          </section>
+
+          <section className={styles.panel} aria-labelledby="fin-owed">
+            <div className={styles.panelHead}>
+              <h2 id="fin-owed" className={styles.panelTitle}>Still owed</h2>
+              <span className={styles.panelMeta}>{money(y.outstanding)}</span>
+            </div>
+            {loading ? <div className={`tour-skeleton ${styles.skeleton}`} /> : owedPreview.length === 0 ? (
+              <p className={styles.allClear}>Every show you&apos;ve played in {year} is marked paid.</p>
+            ) : (
+              <>
+                <ul className={styles.owedList}>
+                  {owedPreview.map(s => (
+                    <li key={s.id}>
+                      <Link href={`/bookings/${s.id}`} className={styles.owedRow} aria-label={`${s.venue}, ${shortDate(s.date)}: ${money(s.owed)} owed. Open the show to mark it paid.`}>
+                        <span className={styles.owedDate}>{shortDate(s.date)}</span>
+                        <span className={styles.owedText}><strong>{s.venue}</strong><span>{s.place || '—'}{s.status === 'confirmed' ? ' · not marked played' : ''}</span></span>
+                        <span className={styles.owedAmount}>{s.contracted == null ? 'No fee set' : money(s.owed)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                {y.owedShows.length > owedPreview.length && (
+                  <p className={styles.owedMore}>
+                    And {plural(y.owedShows.length - owedPreview.length, 'more show')}.{' '}
+                    <button type="button" className="btn btn-secondary" onClick={() => setView('detail')}>See all shows</button>
+                  </p>
+                )}
+                <p className={styles.owedMore}>Open a show to record the payment.</p>
+              </>
+            )}
+          </section>
         </div>
-      ) : isOldView ? (
-        <>
-          {view === 'summary' && (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr><th>Month</th><th>Shows</th><th>Contracted</th><th>Collected</th><th>Expenses</th><th>Net</th></tr>
-                  </thead>
-                  <tbody>
-                    {monthly.filter(m => m.shows > 0).map(m => (
-                      <tr key={m.month}>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-primary)' }}>{m.month}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>{m.shows}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent)' }}>{m.fee ? fmt(m.fee) : '—'}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#34d399' }}>{m.paid ? fmt(m.paid) : '—'}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#f87171' }}>{m.expenses ? fmt(m.expenses) : '—'}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: (m.paid - m.expenses) >= 0 ? '#34d399' : '#f87171', fontWeight: 600 }}>
-                          {fmt(m.paid - m.expenses)}
-                        </td>
-                      </tr>
-                    ))}
-                    <tr style={{ borderTop: '2px solid var(--border)' }}>
-                      <td style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>TOTAL</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{showCount}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent)' }}>{fmt(totalFee)}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#34d399' }}>{fmt(totalPaid)}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#f87171' }}>{fmt(totalExpenses)}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: netIncome >= 0 ? '#34d399' : '#f87171' }}>{fmt(netIncome)}</td>
+
+        {/* ── Where it came from / went ── */}
+        <div className={styles.grid2even}>
+          <section className={styles.panel} aria-labelledby="fin-venues">
+            <div className={styles.panelHead}>
+              <h2 id="fin-venues" className={styles.panelTitle}>Best-paying venues</h2>
+              <span className={styles.panelMeta}>earned in {year}</span>
+            </div>
+            {loading ? <div className={`tour-skeleton ${styles.skeleton}`} /> : y.venues.some(v => v.earned > 0) ? (
+              <RankBars unit="earned" items={y.venues.filter(v => v.earned > 0).slice(0, 6).map(v => ({
+                key: v.key, label: v.name, sub: `${v.place}${v.place ? ' · ' : ''}${plural(v.shows, 'show')}`, value: v.earned, display: money(v.earned),
+              }))} />
+            ) : <p className={styles.empty}>No paid shows in {year} yet.</p>}
+          </section>
+
+          <section className={styles.panel} aria-labelledby="fin-cats">
+            <div className={styles.panelHead}>
+              <h2 id="fin-cats" className={styles.panelTitle}>Where it went</h2>
+              <span className={styles.panelMeta}>expenses in {year}</span>
+            </div>
+            {loading ? <div className={`tour-skeleton ${styles.skeleton}`} /> : y.categories.length ? (
+              <RankBars unit="spent" color="var(--chart-expense)" items={y.categories.map(c => ({
+                key: c.category, label: categoryLabel(c.category), sub: plural(c.count, 'entry', 'entries'), value: c.total, display: money(c.total),
+              }))} />
+            ) : (
+              <p className={styles.empty}>No expenses recorded for {year}. <button type="button" className="btn btn-secondary" onClick={() => openExpense()}>+ Add expense</button></p>
+            )}
+          </section>
+        </div>
+
+        {/* ── Working views & reports ── */}
+        <section className={styles.panel} aria-labelledby="fin-detail">
+          <h2 id="fin-detail" className="sr-only">Details and reports</h2>
+          <div className="tours-tabs" role="group" aria-label="Financial views">
+            {TABS.map(t => (
+              <button key={t.view} type="button" className={`tours-tab${view === t.view ? ' tours-tab--on' : ''}`} aria-pressed={view === t.view} onClick={() => setView(t.view)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {isReport && (
+            <div className={styles.toolbar}>
+              <label className={styles.field}>From<input type="date" className="input" value={rangeStart} max={rangeEnd} onChange={e => setRangeStart(e.target.value)} /></label>
+              <span className={styles.rangeDash} aria-hidden="true">–</span>
+              <label className={styles.field}>To<input type="date" className="input" value={rangeEnd} min={rangeStart} onChange={e => setRangeEnd(e.target.value)} /></label>
+              <div className={styles.toolbarEnd}>
+                {view === 'taxsummary' && <button type="button" className="btn btn-secondary" onClick={printTaxSummary}>↓ Print / save PDF</button>}
+                {view === 'contractors' && <>
+                  <button type="button" className="btn btn-secondary" onClick={downloadPayeeCsv}>↓ CSV</button>
+                  <button type="button" className="btn btn-secondary" onClick={printPayeeReport}>↓ Print / save PDF</button>
+                </>}
+              </div>
+            </div>
+          )}
+
+          {loading && <div className={`tour-skeleton ${styles.skeleton}`} />}
+
+          {/* Monthly */}
+          {!loading && view === 'summary' && (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead><tr><th>Month</th><th className={styles.num}>Shows</th><th className={styles.num}>Earned</th><th className={styles.num}>On the books</th><th className={styles.num}>Still owed</th><th className={styles.num}>Expenses</th><th className={styles.num}>Net</th></tr></thead>
+                <tbody>
+                  {y.months.filter(m => m.shows || m.expenses).map(m => (
+                    <tr key={m.month}>
+                      <td><strong>{MONTHS[m.month]}</strong></td>
+                      <td className={styles.num}>{m.shows || <span className={styles.dim}>—</span>}</td>
+                      <td className={styles.num}>{m.earned ? money(m.earned) : <span className={styles.dim}>—</span>}</td>
+                      <td className={styles.num}>{m.booked ? money(m.booked) : <span className={styles.dim}>—</span>}</td>
+                      <td className={`${styles.num} ${m.owed ? styles.warn : ''}`}>{m.owed ? money(m.owed) : <span className={styles.dim}>—</span>}</td>
+                      <td className={styles.num}>{m.expenses ? money(m.expenses) : <span className={styles.dim}>—</span>}</td>
+                      <td className={`${styles.num} ${m.net < 0 ? styles.bad : ''}`}>{money(m.net)}</td>
                     </tr>
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                  {!y.months.some(m => m.shows || m.expenses) && <tr><td colSpan={7} className={styles.dim}>Nothing in {year} yet.</td></tr>}
+                </tbody>
+                <tfoot><tr>
+                  <td>Total</td><td className={styles.num}>{y.showCount}</td><td className={styles.num}>{money(y.earned)}</td><td className={styles.num}>{money(y.potential)}</td>
+                  <td className={styles.num}>{money(y.outstanding)}</td><td className={styles.num}>{money(y.expenses)}</td><td className={`${styles.num} ${y.net < 0 ? styles.bad : ''}`}>{money(y.net)}</td>
+                </tr></tfoot>
+              </table>
             </div>
           )}
 
-          {view === 'byAct' && (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr><th>Act</th><th>Shows</th><th>Contracted</th><th>Collected</th><th>Outstanding</th></tr>
-                  </thead>
-                  <tbody>
-                    {byAct.map(a => (
-                      <tr key={a.name}>
-                        <td style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{a.name}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>{a.shows}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent)' }}>{a.fee ? fmt(a.fee) : '—'}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#34d399' }}>{a.paid ? fmt(a.paid) : '—'}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: (a.fee - a.paid) > 0 ? '#fbbf24' : 'var(--text-muted)' }}>
-                          {(a.fee - a.paid) > 0 ? fmt(a.fee - a.paid) : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          {/* By venue */}
+          {!loading && view === 'byVenue' && (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead><tr><th>Venue</th><th className={styles.num}>Shows</th><th className={styles.num}>Contracted</th><th className={styles.num}>Earned</th><th className={styles.num}>Still owed</th></tr></thead>
+                <tbody>
+                  {y.venues.map(v => (
+                    <tr key={v.key}>
+                      <td><strong>{v.name}</strong>{v.place && <span className={styles.sub}>{v.place}</span>}</td>
+                      <td className={styles.num}>{v.shows}</td>
+                      <td className={styles.num}>{v.contracted ? money(v.contracted) : <span className={styles.dim}>—</span>}</td>
+                      <td className={styles.num}>{v.earned ? money(v.earned) : <span className={styles.dim}>—</span>}</td>
+                      <td className={`${styles.num} ${v.owed ? styles.warn : ''}`}>{v.owed ? money(v.owed) : <span className={styles.dim}>—</span>}</td>
+                    </tr>
+                  ))}
+                  {y.venues.length === 0 && <tr><td colSpan={5} className={styles.dim}>No shows in {year}.</td></tr>}
+                </tbody>
+              </table>
             </div>
           )}
 
-          {view === 'byVenue' && (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr><th>Venue</th><th>Location</th><th>Shows</th><th>Contracted</th><th>Collected</th></tr>
-                  </thead>
-                  <tbody>
-                    {byVenue.map(v => (
-                      <tr key={v.name}>
-                        <td style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{v.name}</td>
-                        <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>{v.city}, {v.state}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>{v.shows}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent)' }}>{v.fee ? fmt(v.fee) : '—'}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#34d399' }}>{v.paid ? fmt(v.paid) : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          {/* All shows */}
+          {!loading && view === 'detail' && (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead><tr><th>Date</th><th>Venue</th><th>Money</th><th className={styles.num}>Contracted</th><th className={styles.num}>Received</th><th className={styles.num}>Still owed</th></tr></thead>
+                <tbody>
+                  {y.shows.map((s: ShowMoney) => (
+                    <tr key={s.id}>
+                      <td className={styles.date}>{shortDate(s.date)}</td>
+                      <td><Link href={`/bookings/${s.id}`}>{s.venue}</Link>{s.place && <span className={styles.sub}>{s.place}</span>}</td>
+                      <td><StatePill state={s.state} /></td>
+                      <td className={styles.num}>{s.contracted != null ? money(s.contracted) : <span className={styles.dim}>—</span>}</td>
+                      <td className={styles.num}>{s.received != null ? money(s.received) : <span className={styles.dim}>—</span>}</td>
+                      <td className={`${styles.num} ${s.owed ? styles.warn : ''}`}>{s.owed ? money(s.owed) : <span className={styles.dim}>—</span>}</td>
+                    </tr>
+                  ))}
+                  {y.shows.length === 0 && <tr><td colSpan={6} className={styles.dim}>No confirmed or completed shows in {year}.</td></tr>}
+                </tbody>
+              </table>
             </div>
           )}
 
-          {view === 'detail' && (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr><th>Date</th><th>Act</th><th>Venue</th><th>Contracted</th><th>Collected</th><th>Status</th></tr>
-                  </thead>
-                  <tbody>
-                    {yearBookings.map(b => {
-                      const collected  = b.actual_amount_received;
-                      const contracted = b.agreed_amount ?? b.fee;
-                      return (
-                        <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => window.location.href = `/bookings/${b.id}`}>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                            {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric' }) : '—'}
-                          </td>
-                          <td style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 500 }}>{b.act?.act_name || '—'}</td>
-                          <td style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                            {b.venue?.name || '—'}
-                            {b.venue?.city ? <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}> · {b.venue.city}</span> : ''}
-                          </td>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--accent)' }}>{contracted ? fmt(Number(contracted)) : '—'}</td>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: collected ? '#34d399' : 'var(--text-muted)' }}>
-                            {collected ? fmt(Number(collected)) : '—'}
-                          </td>
+          {/* Expenses */}
+          {!loading && view === 'expenses' && (
+            <>
+              <div className={styles.toolbar}>
+                <label className={styles.field}>Tour
+                  <select className="select" value={filters.tour_id} onChange={e => setFilters(f => ({ ...f, tour_id: e.target.value }))}>
+                    <option value="">All tours</option>
+                    {tours.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </label>
+                <label className={styles.field}>Category
+                  <select className="select" value={filters.category} onChange={e => setFilters(f => ({ ...f, category: e.target.value }))}>
+                    <option value="">All categories</option>
+                    {[...EXPENSE_CATEGORIES, BAND_PAY].map(c => <option key={c} value={c}>{categoryLabel(c)}</option>)}
+                  </select>
+                </label>
+                <label className={styles.field}>From<input type="date" className="input" value={filters.start_date} onChange={e => setFilters(f => ({ ...f, start_date: e.target.value }))} /></label>
+                <label className={styles.field}>To<input type="date" className="input" value={filters.end_date} onChange={e => setFilters(f => ({ ...f, end_date: e.target.value }))} /></label>
+                <div className={styles.toolbarEnd}>
+                  <button type="button" className="btn btn-primary" onClick={() => openExpense()}>+ Add expense</button>
+                </div>
+              </div>
+
+              {listed.length > 0 && (
+                <div className={styles.chips} aria-label="Totals by category">
+                  {Object.entries(listed.reduce<Record<string, number>>((m, e) => ({ ...m, [e.category]: (m[e.category] ?? 0) + (Number(e.amount) || 0) }), {}))
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([c, t]) => <span key={c} className={styles.chip}>{categoryLabel(c)} <strong>{money(t)}</strong></span>)}
+                </div>
+              )}
+
+              {listError ? <p className={styles.error} role="alert">{listError}</p> : listLoading ? <div className={`tour-skeleton ${styles.skeleton}`} /> : listed.length === 0 ? (
+                <p className={styles.empty}>No expenses match. Use <strong>+ Add expense</strong> to record one.</p>
+              ) : (
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead><tr><th>Date</th><th>Category</th><th>Tour</th><th>Notes</th><th className={styles.num}>Amount</th><th><span className="sr-only">Actions</span></th></tr></thead>
+                    <tbody>
+                      {listed.map(e => (
+                        <tr key={e.id}>
+                          <td className={styles.date}>{formatShowDate(e.expense_date, { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                          <td>{categoryLabel(e.category)}</td>
+                          <td className={styles.dim}>{tourName(e.tour_id) || '—'}</td>
+                          <td className={styles.dim}>{e.notes || '—'}</td>
+                          <td className={styles.num}>{money(Number(e.amount))}</td>
                           <td>
-                            <span className={`badge badge-${b.status}`} style={{ fontSize: '0.68rem' }}>{b.status}</span>
+                            <div className={styles.rowActions}>
+                              <button type="button" className="btn btn-secondary" onClick={() => openExpense(e)} aria-label={`Edit ${categoryLabel(e.category)} expense on ${e.expense_date}`}>Edit</button>
+                              <button type="button" className="btn btn-secondary" onClick={() => archiveExpense(e)} aria-label={`Archive ${categoryLabel(e.category)} expense on ${e.expense_date}`}>Archive</button>
+                            </div>
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                      ))}
+                    </tbody>
+                    <tfoot><tr><td colSpan={4}>Total</td><td className={styles.num}>{money(sumExpenses(listed))}</td><td /></tr></tfoot>
+                  </table>
+                </div>
+              )}
+            </>
           )}
-        </>
-      ) : null}
 
-      {/* ── Expenses tab ── */}
-      {view === 'expenses' && (
-        <>
-          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
-            <select className="select" style={{ width: 180 }}
-              value={filterTour}
-              onChange={e => { setFilterTour(e.target.value); loadExpenses(session, { tour: e.target.value }); }}>
-              <option value="">All Tours</option>
-              {tours.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-            <select className="select" style={{ width: 170 }}
-              value={filterCat}
-              onChange={e => { setFilterCat(e.target.value); loadExpenses(session, { cat: e.target.value }); }}>
-              <option value="">All Categories</option>
-              {['Gas / Mileage','Hotel / Lodging','Band Member Payments','Food / Meals','Equipment','Other','band_pay'].map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-            <input type="date" className="input" style={{ width: 145 }}
-              value={filterStart}
-              onChange={e => { setFilterStart(e.target.value); loadExpenses(session, { start: e.target.value }); }} />
-            <input type="date" className="input" style={{ width: 145 }}
-              value={filterEnd}
-              onChange={e => { setFilterEnd(e.target.value); loadExpenses(session, { end: e.target.value }); }} />
-            <button className="btn btn-primary" style={{ marginLeft: 'auto' }}
-              onClick={() => setModal({ open: true, mode: 'add', expense: { expense_date: new Date().toISOString().split('T')[0] }, saving: false, error: '' })}>
-              + Add Expense
-            </button>
-          </div>
-
-          {expenses.length > 0 && (() => {
-            const byCat: Record<string, number> = {};
-            for (const e of expenses) byCat[e.category] = (byCat[e.category] || 0) + Number(e.amount);
-            return (
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                {Object.entries(byCat).map(([cat, total]) => (
-                  <div key={cat} className="card" style={{ padding: '0.5rem 0.85rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{cat}</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#f87171', fontWeight: 600 }}>{fmt(total)}</span>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-
-          {expLoading ? (
-            <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>Loading…</div>
-          ) : expenses.length === 0 ? (
-            <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>
-              No expenses recorded yet. Use <strong>+ Add Expense</strong> to add one.
-            </div>
-          ) : (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr><th>Date</th><th>Category</th><th>Amount</th><th>Notes</th><th></th></tr>
-                  </thead>
+          {/* Income & expenses */}
+          {!loading && view === 'incexp' && (
+            <>
+              <p className={styles.sectionLabel}>Income received <span>— money paid to the band for shows in this range</span></p>
+              <div className={styles.tableWrap} style={{ marginBottom: 0 }}>
+                <table className={styles.table}>
+                  <thead><tr><th>Date</th><th>Venue</th><th className={styles.num}>Received</th></tr></thead>
                   <tbody>
-                    {expenses.map(e => (
-                      <tr key={e.id}>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                          {formatShowDate(e.expense_date, { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </td>
-                        <td style={{ fontSize: '0.85rem' }}>{e.category}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#f87171', fontWeight: 600 }}>
-                          {fmt(Number(e.amount))}
-                        </td>
-                        <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {e.notes || '—'}
-                        </td>
-                        <td style={{ whiteSpace: 'nowrap' }}>
-                          <button className="btn btn-secondary" style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem', marginRight: '0.3rem' }}
-                            onClick={() => setModal({ open: true, mode: 'edit', expense: e, saving: false, error: '' })}>
-                            Edit
-                          </button>
-                          <button className="btn btn-secondary" style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
-                            aria-label={`Archive expense ${e.category} on ${e.expense_date}`}
-                            onClick={async () => {
-                              if (!confirm('Archive this expense? It will be removed from your totals but kept on record.')) return;
-                              const res = await fetch(`/api/expenses/${e.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${session}` } });
-                              if (!res.ok) { alert('Could not archive that expense. Try again.'); return; }
-                              loadExpenses(session);
-                              loadAllExpenses(session);
-                            }}>
-                            Archive
-                          </button>
-                        </td>
+                    {report.paidShows.map(s => (
+                      <tr key={s.id}>
+                        <td className={styles.date}>{shortDate(s.date)}</td>
+                        <td><Link href={`/bookings/${s.id}`}>{s.venue}</Link>{s.place && <span className={styles.sub}>{s.place}</span>}</td>
+                        <td className={styles.num}>{s.received != null ? money(s.received) : <span className={styles.warn}>No amount</span>}</td>
                       </tr>
                     ))}
-                    <tr style={{ borderTop: '2px solid var(--border)' }}>
-                      <td colSpan={2} style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-primary)' }}>TOTAL</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#f87171' }}>{fmt(listedExpensesTotal)}</td>
-                      <td colSpan={2}></td>
-                    </tr>
+                    {report.paidShows.length === 0 && <tr><td colSpan={3} className={styles.dim}>No paid shows in this range.</td></tr>}
                   </tbody>
+                  <tfoot><tr><td colSpan={2}>Total income</td><td className={styles.num}>{money(report.income)}</td></tr></tfoot>
                 </table>
               </div>
-            </div>
-          )}
-        </>
-      )}
+              {report.owed > 0 && (
+                <p className={styles.fineprint}><strong>Not counted as income:</strong> {money(report.owed)} still owed on {plural(report.owedShows.length, 'played show')} in this range. It counts once the show is marked paid.</p>
+              )}
 
-      {/* ── Report tab: shared date range picker ── */}
-      {isReportView && (
-        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Date range</span>
-          <input type="date" className="input" style={{ width: 145 }} value={rangeStart} onChange={e => setRangeStart(e.target.value)} />
-          <span style={{ color: 'var(--text-muted)' }}>–</span>
-          <input type="date" className="input" style={{ width: 145 }} value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} />
-        </div>
-      )}
-
-      {/* ── Income & Expenses tab ── */}
-      {view === 'incexp' && (
-        <>
-          {/* Income section */}
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Income</div>
-          <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: '1.25rem' }}>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Date</th><th>Venue</th><th>Amount Used</th><th>Status</th></tr>
-                </thead>
-                <tbody>
-                  {rangeBookings.length === 0 ? (
-                    <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.5rem' }}>No bookings in range</td></tr>
-                  ) : rangeBookings.map(b => (
-                    <tr key={b.id}>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                        {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric' }) : '—'}
-                      </td>
-                      <td style={{ fontSize: '0.85rem' }}>
-                        {b.venue?.name || '—'}
-                        {b.venue?.city ? <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}> · {b.venue.city}</span> : ''}
-                      </td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#34d399' }}>{fmt(bookingIncome(b))}</td>
-                      <td><span className={`badge badge-${b.status}`} style={{ fontSize: '0.68rem' }}>{b.status}</span></td>
-                    </tr>
-                  ))}
-                  <tr style={{ borderTop: '2px solid var(--border)' }}>
-                    <td colSpan={2} style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>TOTAL INCOME</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#34d399' }}>{fmt(totalRangeIncome)}</td>
-                    <td></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Business expenses section */}
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Business Expenses</div>
-          <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: '1.25rem' }}>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Category</th><th>Total</th></tr>
-                </thead>
-                <tbody>
-                  {otherExpLines.length === 0 ? (
-                    <tr><td colSpan={2} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.5rem' }}>No business expenses in range</td></tr>
-                  ) : otherExpLines.map(([cat, total]) => (
-                    <tr key={cat}>
-                      <td style={{ fontSize: '0.85rem' }}>{cat}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#f87171' }}>{fmt(total)}</td>
-                    </tr>
-                  ))}
-                  <tr style={{ borderTop: '2px solid var(--border)' }}>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>TOTAL BUSINESS EXPENSES</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#f87171' }}>{fmt(otherExpTotal)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Contractor payments section */}
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-            Contractor Payments (band_pay)
-            <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: '0.5rem' }}>— separate from business expenses for Schedule C</span>
-          </div>
-          <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: '1.25rem' }}>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Description</th><th>Total</th></tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td style={{ fontSize: '0.85rem' }}>Payments to independent contractors</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: '#f87171' }}>{fmt(bandPayTotal)}</td>
-                  </tr>
-                  <tr style={{ borderTop: '2px solid var(--border)' }}>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>TOTAL CONTRACTOR PAYMENTS</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#f87171' }}>{fmt(bandPayTotal)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Net summary */}
-          <div className="card" style={{ padding: '1rem 1.25rem', borderTop: `3px solid ${rangeNet >= 0 ? '#34d399' : '#f87171'}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Net (income − all expenses)</span>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.65rem', color: rangeNet >= 0 ? '#34d399' : '#f87171' }}>{fmt(rangeNet)}</span>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* ── Tax Summary tab ── */}
-      {view === 'taxsummary' && (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-            <button className="btn btn-secondary" onClick={printTaxSummary}>↓ Print / Save PDF</button>
-          </div>
-
-          <div className="card" style={{ padding: '1.5rem' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', marginBottom: '0.25rem' }}>Financial Summary</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-              {rangeStart} – {rangeEnd} &nbsp;·&nbsp; Prepared for accountant/tax preparer use
-            </div>
-
-            <div style={{ marginBottom: '1.25rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem', marginBottom: '0.6rem' }}>Income</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.88rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Total income ({rangeBookings.length} bookings)</span>
-                <span style={{ fontFamily: 'var(--font-mono)', color: '#34d399' }}>{fmt(totalRangeIncome)}</span>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '1.25rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem', marginBottom: '0.6rem' }}>Business Expenses</div>
-              {otherExpLines.length === 0 ? (
-                <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>None recorded</div>
-              ) : otherExpLines.map(([cat, total]) => (
-                <div key={cat} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.88rem' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>{cat}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', color: '#f87171' }}>{fmt(total)}</span>
-                </div>
-              ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: '0.4rem', marginTop: '0.4rem', fontSize: '0.88rem', fontWeight: 600 }}>
-                <span>Subtotal</span>
-                <span style={{ fontFamily: 'var(--font-mono)', color: '#f87171' }}>{fmt(otherExpTotal)}</span>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '1.25rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem', marginBottom: '0.6rem' }}>
-                Contractor Payments (band_pay)
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.88rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Payments to independent contractors ({payees.length} payees)</span>
-                <span style={{ fontFamily: 'var(--font-mono)', color: '#f87171' }}>{fmt(bandPayTotal)}</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                See Contractors tab for per-payee breakdown. Schedule C treats contractor payments separately from ordinary business expenses.
-              </div>
-            </div>
-
-            <div style={{ borderTop: '2px solid var(--border)', paddingTop: '0.85rem' }}>
-              {[
-                { label: 'Total Income',               value: totalRangeIncome, color: '#34d399' },
-                { label: 'Total Business Expenses',    value: -otherExpTotal,   color: '#f87171' },
-                { label: 'Total Contractor Payments',  value: -bandPayTotal,    color: '#f87171' },
-              ].map(row => (
-                <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.88rem' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>{row.label}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', color: row.color }}>
-                    {row.value < 0 ? `(${fmt(Math.abs(row.value))})` : fmt(row.value)}
-                  </span>
-                </div>
-              ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: '0.5rem', marginTop: '0.4rem', fontWeight: 700, fontSize: '0.95rem' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Net</span>
-                <span style={{ fontFamily: 'var(--font-mono)', color: rangeNet >= 0 ? '#34d399' : '#f87171' }}>{fmt(rangeNet)}</span>
-              </div>
-            </div>
-
-            <div style={{ marginTop: '1.25rem', padding: '0.75rem', background: 'rgba(255,255,255,0.04)', borderRadius: 6, fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              This is a summary document for accountant/tax preparer use — not an official tax form. Verify all figures against source records before filing.
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* ── Contractors tab ── */}
-      {view === 'contractors' && (
-        <>
-          <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-            <button className="btn btn-secondary" onClick={downloadPayeeCSV}>↓ CSV</button>
-            <button className="btn btn-secondary" onClick={printPayeeReport}>↓ Print / Save PDF</button>
-          </div>
-
-          {payees.length === 0 ? (
-            <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>
-              No contractor payments (band_pay) in this date range.
-            </div>
-          ) : (
-            <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: '0.75rem' }}>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr><th>Name</th><th>Total Paid</th><th>1099-NEC Flag</th></tr>
-                  </thead>
+              <p className={styles.sectionLabel}>Business expenses</p>
+              <div className={styles.tableWrap} style={{ marginBottom: 0 }}>
+                <table className={styles.table}>
+                  <thead><tr><th>Category</th><th className={styles.num}>Total</th></tr></thead>
                   <tbody>
-                    {payees.map(p => (
-                      <tr key={p.name}>
-                        <td style={{ fontWeight: 600, fontSize: '0.88rem' }}>{p.name}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#34d399' }}>{fmt(p.total)}</td>
-                        <td>
-                          {p.total >= 600 && (
-                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: '#fbbf24', fontWeight: 600 }}>
-                              ⚑ At or above $600
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    <tr style={{ borderTop: '2px solid var(--border)' }}>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>TOTAL</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#34d399' }}>{fmt(payees.reduce((s, p) => s + p.total, 0))}</td>
-                      <td></td>
-                    </tr>
+                    {report.expenseLines.map(([c, t]) => <tr key={c}><td>{categoryLabel(c)}</td><td className={styles.num}>{money(t)}</td></tr>)}
+                    {report.expenseLines.length === 0 && <tr><td colSpan={2} className={styles.dim}>No business expenses in this range.</td></tr>}
                   </tbody>
+                  <tfoot><tr><td>Total business expenses</td><td className={styles.num}>{money(report.businessExpenses)}</td></tr></tfoot>
                 </table>
               </div>
+
+              <p className={styles.sectionLabel}>Contractor payments <span>— band pay from show lineups, kept apart from business expenses for Schedule C</span></p>
+              <div className={styles.tableWrap} style={{ marginBottom: 0 }}>
+                <table className={styles.table}>
+                  <tbody><tr><td>Payments to independent contractors ({plural(report.payees.length, 'payee')})</td><td className={styles.num}>{money(report.contractorPay)}</td></tr></tbody>
+                </table>
+              </div>
+              {report.unassignedBandPay > 0 && (
+                <p className={styles.fineprint}><strong>{money(report.unassignedBandPay)}</strong> was entered as &ldquo;{BAND_MEMBER_PAYMENTS}&rdquo; without a named band member, so it&apos;s counted as a business expense and not on anyone&apos;s 1099 total. Pay band members from each show&apos;s Lineup to track them by name.</p>
+              )}
+
+              <div className={styles.netBar} style={{ '--net-accent': report.net >= 0 ? 'var(--money-good)' : 'var(--money-bad)' } as React.CSSProperties}>
+                <span>Net (income − all expenses)</span>
+                <strong className={report.net < 0 ? styles.bad : ''}>{money(report.net)}</strong>
+              </div>
+            </>
+          )}
+
+          {/* Tax summary */}
+          {!loading && view === 'taxsummary' && (
+            <div className={styles.sheet}>
+              <p className={styles.dim} style={{ margin: 0 }}>{rangeStart} – {rangeEnd} · prepared for your accountant or tax preparer</p>
+              <div className={styles.sheetBlock}>
+                <h3>Income received</h3>
+                <div className={styles.line}><span>Show income received ({plural(report.paidShows.length, 'show')})</span><span>{money(report.income)}</span></div>
+                {report.owed > 0 && <div className={styles.line}><span>Not included: still owed on {plural(report.owedShows.length, 'show')}</span><span className={styles.dim}>{money(report.owed)}</span></div>}
+              </div>
+              <div className={styles.sheetBlock}>
+                <h3>Business expenses</h3>
+                {report.expenseLines.length === 0 ? <div className={styles.line}><span>None recorded</span><span>{money(0)}</span></div>
+                  : report.expenseLines.map(([c, t]) => <div key={c} className={styles.line}><span>{categoryLabel(c)}</span><span>{money(t)}</span></div>)}
+                <div className={`${styles.line} ${styles.lineTotal}`}><span>Subtotal</span><span>{money(report.businessExpenses)}</span></div>
+              </div>
+              <div className={styles.sheetBlock}>
+                <h3>Contractor payments</h3>
+                <div className={styles.line}><span>Band pay to independent contractors ({plural(report.payees.length, 'payee')})</span><span>{money(report.contractorPay)}</span></div>
+              </div>
+              <div className={styles.sheetBlock}>
+                <h3>Summary</h3>
+                <div className={styles.line}><span>Total income</span><span>{money(report.income)}</span></div>
+                <div className={styles.line}><span>Total business expenses</span><span>({money(report.businessExpenses)})</span></div>
+                <div className={styles.line}><span>Total contractor payments</span><span>({money(report.contractorPay)})</span></div>
+              </div>
+              <div className={styles.netBar} style={{ '--net-accent': report.net >= 0 ? 'var(--money-good)' : 'var(--money-bad)' } as React.CSSProperties}>
+                <span>Net</span><strong className={report.net < 0 ? styles.bad : ''}>{money(report.net)}</strong>
+              </div>
+              <p className={styles.fineprint}>A summary for your accountant, not a tax form. Verify every figure against your records before filing.</p>
             </div>
           )}
 
-          <div className="card" style={{ padding: '0.85rem 1rem', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-            <strong style={{ color: 'var(--text-secondary)' }}>About this report:</strong>{' '}
-            Band members are independent contractors. Persons at or above $600 in a calendar year may require a 1099-NEC filing under federal rules — state thresholds can be lower. Confirm requirements with your accountant.
-            This report does not collect SSNs or TINs. Provide the payee list to your 1099 filing service (e.g. Track1099) to collect tax IDs securely on their end.
-          </div>
-        </>
-      )}
+          {/* Contractors */}
+          {!loading && view === 'contractors' && (
+            <>
+              {report.payees.length === 0 ? (
+                <p className={styles.empty}>No band pay recorded on show lineups in this date range.</p>
+              ) : (
+                <div className={styles.tableWrap} style={{ marginBottom: 0 }}>
+                  <table className={styles.table}>
+                    <thead><tr><th>Name</th><th className={styles.num}>Total paid</th><th>1099-NEC</th></tr></thead>
+                    <tbody>
+                      {report.payees.map(p => (
+                        <tr key={p.key}>
+                          <td><strong>{p.name}</strong></td>
+                          <td className={styles.num}>{money(p.total)}</td>
+                          <td>{p.needs1099 ? <span className={styles.warn}>⚑ At or above ${NEC_THRESHOLD}</span> : <span className={styles.dim}>Below ${NEC_THRESHOLD}</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot><tr><td>Total</td><td className={styles.num}>{money(report.contractorPay)}</td><td /></tr></tfoot>
+                  </table>
+                </div>
+              )}
+              {report.unassignedBandPay > 0 && (
+                <p className={styles.fineprint}><strong>{money(report.unassignedBandPay)}</strong> in &ldquo;{BAND_MEMBER_PAYMENTS}&rdquo; has no band member named, so it isn&apos;t in these totals.</p>
+              )}
+              <p className={styles.fineprint}>
+                <strong>About this report:</strong> band members are paid as independent contractors. Anyone at or above ${NEC_THRESHOLD} in a calendar year may need a 1099-NEC (state thresholds can be lower); confirm with your accountant. No SSNs or TINs are stored here. Give this list to your 1099 filing service to collect tax IDs.
+              </p>
+            </>
+          )}
+        </section>
+      </div>
 
-      {/* Add / Edit Expense Modal */}
-      {modal.open && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onClick={() => setModal(m => ({ ...m, open: false }))}>
-          <div style={{ background: 'var(--surface)', borderRadius: 12, padding: '1.75rem', width: 420, maxWidth: '94vw' }}
-            onClick={e => e.stopPropagation()}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', marginBottom: '1.25rem' }}>
-              {modal.mode === 'add' ? 'Add Expense' : 'Edit Expense'}
-            </h2>
-
-            <label style={{ display: 'block', marginBottom: '0.85rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>DATE</div>
-              <input type="date" className="input" style={{ width: '100%' }}
-                value={modal.expense?.expense_date || ''}
-                onChange={e => setModal(m => ({ ...m, expense: { ...m.expense, expense_date: e.target.value } }))} />
+      {/* ── Add / edit expense ── */}
+      <dialog ref={dialogRef} className={styles.dialog} aria-labelledby="fin-exp-title" onCancel={e => { if (saving) e.preventDefault(); }}>
+        {draft && (
+          <form className={styles.dialogBody} onSubmit={saveExpense} noValidate>
+            <h2 id="fin-exp-title" className={styles.dialogTitle}>{draft.id ? 'Edit expense' : 'Add expense'}</h2>
+            <label><span>Date <span className={styles.req} aria-hidden="true">*</span></span>
+              <input type="date" className="input" required value={draft.expense_date} onChange={e => setDraft(d => d && { ...d, expense_date: e.target.value })} />
             </label>
-
-            <label style={{ display: 'block', marginBottom: '0.85rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>TOUR <span style={{ color: '#f87171' }}>*</span></div>
-              <select className="select" style={{ width: '100%' }}
-                value={modal.expense?.tour_id || ''}
-                onChange={e => setModal(m => ({ ...m, expense: { ...m.expense, tour_id: e.target.value } }))}>
+            <label><span>Tour <span className={styles.req} aria-hidden="true">*</span></span>
+              <select className="select" required value={draft.tour_id} onChange={e => setDraft(d => d && { ...d, tour_id: e.target.value })}>
                 <option value="">Select a tour…</option>
                 {tours.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </label>
-
-            <label style={{ display: 'block', marginBottom: '0.85rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>CATEGORY <span style={{ color: '#f87171' }}>*</span></div>
-              <select className="select" style={{ width: '100%' }}
-                value={modal.expense?.category || ''}
-                onChange={e => setModal(m => ({ ...m, expense: { ...m.expense, category: e.target.value } }))}>
+            {tours.length === 0 && <p className={styles.dialogHint}>Expenses belong to a tour. <Link href="/tours">Create a tour</Link> first.</p>}
+            <label><span>Category <span className={styles.req} aria-hidden="true">*</span></span>
+              <select className="select" required value={draft.category} onChange={e => setDraft(d => d && { ...d, category: e.target.value })}>
                 <option value="">Select a category…</option>
-                {['Gas / Mileage','Hotel / Lodging','Band Member Payments','Food / Meals','Equipment','Other'].map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
+                {(EXPENSE_CATEGORIES as readonly string[]).concat((EXPENSE_CATEGORIES as readonly string[]).includes(draft.category) || !draft.category ? [] : [draft.category])
+                  .map(c => <option key={c} value={c}>{categoryLabel(c)}</option>)}
               </select>
             </label>
-
-            <label style={{ display: 'block', marginBottom: '0.85rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>AMOUNT <span style={{ color: '#f87171' }}>*</span></div>
-              <input type="number" className="input" style={{ width: '100%' }} placeholder="0.00" min="0" step="0.01"
-                value={modal.expense?.amount ?? ''}
-                onChange={e => setModal(m => ({ ...m, expense: { ...m.expense, amount: Number(e.target.value) } }))} />
-            </label>
-
-            <label style={{ display: 'block', marginBottom: '1.25rem' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>NOTES</div>
-              <input type="text" className="input" style={{ width: '100%' }} placeholder="Optional note"
-                value={modal.expense?.notes || ''}
-                onChange={e => setModal(m => ({ ...m, expense: { ...m.expense, notes: e.target.value } }))} />
-            </label>
-
-            {modal.error && (
-              <div style={{ color: '#f87171', fontFamily: 'var(--font-mono)', fontSize: '0.8rem', marginBottom: '0.75rem' }}>{modal.error}</div>
+            {draft.category === BAND_MEMBER_PAYMENTS && (
+              <p className={styles.dialogHint}>To count toward a band member&apos;s 1099 total, pay them from the show&apos;s Lineup instead.</p>
             )}
-
-            <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setModal(m => ({ ...m, open: false }))}>Cancel</button>
-              <button className="btn btn-primary" disabled={modal.saving}
-                onClick={async () => {
-                  const exp = modal.expense;
-                  if (!exp?.tour_id)      return setModal(m => ({ ...m, error: 'Tour is required' }));
-                  if (!exp?.category)     return setModal(m => ({ ...m, error: 'Category is required' }));
-                  if (!exp?.amount)       return setModal(m => ({ ...m, error: 'Amount is required' }));
-                  if (!exp?.expense_date) return setModal(m => ({ ...m, error: 'Date is required' }));
-
-                  setModal(m => ({ ...m, saving: true, error: '' }));
-                  const method = modal.mode === 'add' ? 'POST' : 'PUT';
-                  const url    = modal.mode === 'add' ? '/api/expenses' : `/api/expenses/${exp.id}`;
-                  const res    = await fetch(url, {
-                    method,
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session}` },
-                    body: JSON.stringify(exp),
-                  });
-                  if (!res.ok) {
-                    const err = await res.json();
-                    return setModal(m => ({ ...m, saving: false, error: err.error || 'Save failed' }));
-                  }
-                  setModal(m => ({ ...m, open: false, saving: false }));
-                  loadExpenses(session);
-                  loadAllExpenses(session);
-                }}>
-                {modal.saving ? 'Saving…' : modal.mode === 'add' ? 'Add Expense' : 'Save Changes'}
-              </button>
+            <label><span>Amount <span className={styles.req} aria-hidden="true">*</span></span>
+              <input type="number" inputMode="decimal" className="input" required min="0.01" step="0.01" value={draft.amount} onChange={e => setDraft(d => d && { ...d, amount: e.target.value })} />
+            </label>
+            <label><span>Notes</span>
+              <input type="text" className="input" maxLength={500} value={draft.notes} onChange={e => setDraft(d => d && { ...d, notes: e.target.value })} />
+            </label>
+            {saveError && <p className={styles.dialogError} role="alert">{saveError}</p>}
+            <div className={styles.dialogActions}>
+              <button type="button" className="btn btn-secondary" onClick={closeExpense} disabled={saving}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : draft.id ? 'Save changes' : 'Add expense'}</button>
             </div>
-          </div>
-        </div>
-      )}
+          </form>
+        )}
+      </dialog>
     </AppShell>
   );
 }

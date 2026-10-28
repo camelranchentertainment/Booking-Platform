@@ -17,8 +17,8 @@ import type { FunnelStep, MonthShows, WeekActivity } from '../../lib/domain/anal
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** "$1,250" — whole dollars. */
-export const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+/** "$1,250" / "−$480" — whole dollars, minus sign before the dollar sign. */
+export const money = (n: number) => `${Math.round(n) < 0 ? '−' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -164,7 +164,8 @@ export interface RankItem {
   href?: string;
 }
 
-export function RankBars({ items, unit }: { items: RankItem[]; unit: string }) {
+/** `color` overrides the bar colour (a validated chart colour, e.g. expenses on Financials). */
+export function RankBars({ items, unit, color }: { items: RankItem[]; unit: string; color?: string }) {
   const max = Math.max(1, ...items.map(i => i.value));
   return (
     <ol className={styles.rank}>
@@ -177,7 +178,7 @@ export function RankBars({ items, unit }: { items: RankItem[]; unit: string }) {
               {it.sub && <span>{it.sub}</span>}
             </span>
             <span className={styles.rankTrack} aria-hidden="true">
-              <span className={styles.rankBar} style={{ width: `${Math.max(4, (it.value / max) * 100)}%` }} />
+              <span className={styles.rankBar} style={{ width: `${Math.max(4, (it.value / max) * 100)}%`, ...(color ? { background: color } : {}) }} />
             </span>
             <span className={styles.rankValue}>{it.display ?? it.value}<span className={styles.srOnly}> {unit}</span></span>
           </>
