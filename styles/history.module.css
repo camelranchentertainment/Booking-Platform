@@ -1,0 +1,128 @@
+/* styles/history.module.css — Show History (pages/history.tsx) and the state
+   tile map (components/history/StateTileMap.tsx). Tours vocabulary. */
+
+.page { display: flex; flex-direction: column; gap: 1.5rem; }
+
+/* ── Big numbers ── */
+.bigNumbers { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.75rem; }
+@media (max-width: 1100px) { .bigNumbers { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px)  { .bigNumbers { grid-template-columns: repeat(2, minmax(0, 1fr)); } .big:last-child { grid-column: 1 / -1; } }
+.big {
+  position: relative; display: flex; flex-direction: column; gap: 0.35rem; padding: 1.1rem 1.2rem;
+  background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--big-accent, var(--accent));
+  border-radius: var(--radius-sm); overflow: hidden; min-width: 0;
+}
+.bigLabel { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+.bigValue { font-family: var(--font-display); font-size: clamp(2.2rem, 3.6vw, 3.2rem); line-height: 0.95; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bigValue small { font-family: var(--font-body); font-size: 0.95rem; color: var(--text-muted); margin-left: 0.25rem; }
+.bigNote { font-size: 0.84rem; color: var(--text-muted); }
+
+/* ── Panels ── */
+.grid2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+@media (max-width: 1000px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.15rem 1.3rem 1.3rem; display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.panelHead { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+.panelTitle { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 1.75rem; line-height: 1; letter-spacing: 0.03em; color: var(--text); }
+.panelMeta { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+
+/* ── State tile map ── */
+.mapFigure { margin: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.map { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(8, auto); gap: 4px; }
+.tile {
+  aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  border-radius: 5px; background: color-mix(in srgb, var(--text) 5%, transparent); border: 1px solid transparent;
+  color: color-mix(in srgb, var(--text-muted) 60%, transparent); font-family: var(--font-body); padding: 0; min-width: 0;
+}
+.tileCode { font-size: clamp(0.5rem, 1.1vw, 0.72rem); font-weight: 800; letter-spacing: 0.04em; line-height: 1; }
+.tileCount { font-family: var(--font-display); font-size: clamp(0.7rem, 1.5vw, 1.05rem); line-height: 1; }
+.tilePlayed { cursor: pointer; color: var(--text); transition: transform 0.12s ease, box-shadow 0.12s ease; }
+.tilePlayed:hover { transform: scale(1.08); z-index: 1; }
+.tilePlayed:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; z-index: 1; }
+.tileOn { box-shadow: 0 0 0 2px var(--text); }
+.heat1 { background: color-mix(in srgb, var(--accent) 28%, var(--surface)); }
+.heat2 { background: color-mix(in srgb, var(--accent) 48%, var(--surface)); }
+.heat3 { background: color-mix(in srgb, var(--accent) 72%, var(--surface)); }
+.heat4 { background: var(--accent); color: #16243f; }
+.mapLegend { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-muted); }
+.legendSwatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; }
+.mapNote { margin-left: auto; }
+@media (max-width: 480px) { .map { gap: 2px; } .tileCount { display: none; } .tilePlayed .tileCode { color: inherit; } }
+
+/* ── Best rooms ── */
+.rooms { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.room { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr) auto; gap: 0.75rem; align-items: center; padding: 0.55rem 0.6rem; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--text) 3%, transparent); }
+.roomPos { font-family: var(--font-display); font-size: 1.3rem; color: var(--text-muted); text-align: center; }
+.roomText { display: flex; flex-direction: column; min-width: 0; }
+.roomText strong { font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roomText span { font-size: 0.76rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roomStats { display: flex; flex-direction: column; align-items: flex-end; gap: 0.15rem; font-size: 0.76rem; color: var(--text-muted); white-space: nowrap; }
+.roomStats b { color: var(--text); }
+
+.stars { display: inline-flex; gap: 1px; color: color-mix(in srgb, var(--text-muted) 55%, transparent); font-size: 0.95rem; line-height: 1; letter-spacing: 0; }
+.starOn { color: #f2c25a; }
+
+/* ── Filters ── */
+.filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.6rem; padding-bottom: 0.85rem; border-bottom: 1px solid var(--border); }
+.field { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); }
+.field :global(.input), .field :global(.select) { min-height: 44px; min-width: 8rem; }
+.fieldGrow { flex: 1 1 14rem; }
+.fieldGrow :global(.input) { width: 100%; }
+.filterNote { margin: 0; font-size: 0.85rem; color: var(--text-muted); display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.linkBtn { background: none; border: 0; padding: 0.25rem; color: var(--accent); font-weight: 700; cursor: pointer; font-family: var(--font-body); font-size: 0.85rem; text-decoration: underline; }
+
+/* ── Timeline ── */
+.years { display: flex; flex-direction: column; gap: 1.75rem; }
+.year { display: flex; flex-direction: column; gap: 0.65rem; }
+.yearHead { display: flex; align-items: baseline; gap: 0.75rem; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border); }
+.yearTitle { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 2.4rem; line-height: 1; color: var(--text); }
+.yearMeta { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+.shows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 0.6rem; }
+
+.show {
+  display: grid; grid-template-columns: 3.2rem minmax(0, 1fr); gap: 0.85rem; align-items: start;
+  padding: 0.85rem 0.95rem; background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--border); border-radius: var(--radius-sm); min-width: 0; height: 100%;
+}
+.showFlag { border-left-color: #f0b43c; }
+.showGood { border-left-color: var(--green); }
+.dateBlock { display: flex; flex-direction: column; align-items: center; gap: 0.1rem; padding: 0.35rem 0; border-radius: 6px; background: var(--surface-2); line-height: 1; }
+.dateMonth { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.dateDay { font-family: var(--font-display); font-size: 1.65rem; color: var(--text); }
+.dateDow { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+
+.showBody { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
+.showTop { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; }
+.showVenue { font-weight: 800; font-size: 1rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.showVenue:hover { color: var(--accent); }
+.showPay { font-weight: 800; font-size: 0.86rem; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.showPlace { font-size: 0.78rem; color: var(--text-muted); }
+.showMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.75rem; font-size: 0.78rem; color: var(--text-muted); }
+.tag { display: inline-flex; align-items: center; padding: 0.08rem 0.5rem; border-radius: 999px; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid var(--border); }
+.tagYes { border-color: var(--green); color: var(--green); }
+.tagNo { border-color: var(--red); color: var(--red); }
+.tagWarn { border-color: #f0b43c; color: #f0b43c; }
+.notes { margin: 0; font-size: 0.84rem; line-height: 1.5; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.showActions { display: flex; gap: 0.4rem; margin-top: 0.15rem; }
+.showActions :global(.btn) { font-size: 0.74rem; padding: 0.35rem 0.7rem; min-height: 36px; }
+
+.notice {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.85rem 1rem;
+  background: color-mix(in srgb, #f0b43c 10%, var(--surface)); border: 1px solid color-mix(in srgb, #f0b43c 45%, var(--border));
+  border-radius: var(--radius-sm); font-size: 0.92rem; color: var(--text);
+}
+.notice strong { color: #f0b43c; }
+
+.empty { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; padding: 2.5rem 1.25rem; border: 1px dashed var(--border); border-radius: var(--radius-sm); text-align: center; color: var(--text-muted); }
+.empty h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 1.8rem; color: var(--text); }
+.empty p { margin: 0; max-width: 32rem; }
+.skeleton { min-height: 6rem; border-radius: var(--radius-sm); }
+
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+@media (prefers-reduced-motion: reduce) { .tilePlayed { transition: none; } .tilePlayed:hover { transform: none; } }
+
+/* Phones: room stats drop under the name so the name isn't cut short. */
+@media (max-width: 560px) {
+  .room { grid-template-columns: 1.6rem minmax(0, 1fr); }
+  .roomStats { grid-column: 2; align-items: flex-start; }
+}
