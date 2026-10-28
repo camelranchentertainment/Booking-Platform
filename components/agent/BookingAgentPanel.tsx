@@ -69,6 +69,28 @@ const QUICK_CHIPS: { label: string; href?: string; prompt?: string }[] = [
   { label: 'How do I set up email?', prompt: 'How do I set up email sending for outreach?' },
 ];
 
+// ── Docked card height (drag the corner to resize) ────────────────────────────
+const AGENT_HEIGHT_KEY = 'crb.agentPanelHeight';
+/** Below this viewport width the card is the mobile layout and isn't resizable. */
+const AGENT_RESIZE_MIN_VIEWPORT = 768;
+const AGENT_MIN_HEIGHT = 320;
+const AGENT_MAX_HEIGHT = 2000;
+
+/** The height the user last dragged the card to, or null. Storage can be unavailable; that's fine. */
+function readSavedPanelHeight(): number | null {
+  try {
+    const n = Number(window.localStorage.getItem(AGENT_HEIGHT_KEY));
+    return Number.isFinite(n) && n >= AGENT_MIN_HEIGHT && n <= AGENT_MAX_HEIGHT ? Math.round(n) : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePanelHeight(px: number): void {
+  const n = Math.round(Math.min(AGENT_MAX_HEIGHT, Math.max(AGENT_MIN_HEIGHT, px)));
+  try { window.localStorage.setItem(AGENT_HEIGHT_KEY, String(n)); } catch { /* private mode etc. */ }
+}
+
 export interface BookingAgentPanelProps {
   /** The caller's band. Only used for display and the send payload; the server re-checks it. */
   act: { id: string; act_name: string | null };
@@ -151,6 +173,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
   const [sendResult, setSendResult]               = useState<{ sent: number; noEmail: number; errors: number } | null>(null);
 
   const threadRef   = useRef<HTMLDivElement>(null);
+  const panelRef    = useRef<HTMLDivElement>(null);
   const agentInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -286,6 +309,27 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
       setMessages([{ role: 'assistant' as const, content: buildGreeting() }]);
     }
   }, [greetingSent, conversationLoaded, greetingStats]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Docked on a desktop, the chat card can be dragged taller or shorter by its
+  // bottom-right corner (CSS resize). Remember the chosen height in this
+  // browser so it sticks between visits; it's a per-viewer convenience only.
+  useEffect(() => {
+    if (isPopout) return; // the pop-out fills its window; resize the window instead
+    const el = panelRef.current;
+    if (!el || window.innerWidth < AGENT_RESIZE_MIN_VIEWPORT) return;
+    const saved = readSavedPanelHeight();
+    if (saved) el.style.height = `${saved}px`;
+    if (typeof ResizeObserver === 'undefined') return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const observer = new ResizeObserver(() => {
+      // Only a drag sets an inline height; layout changes from the stylesheet don't.
+      if (!el.style.height) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => savePanelHeight(el.getBoundingClientRect().height), 300);
+    });
+    observer.observe(el);
+    return () => { observer.disconnect(); if (timer) clearTimeout(timer); };
+  }, [isPopout]);
 
   // Focus the agent input once the panel is on screen.
   useEffect(() => {
@@ -547,11 +591,20 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
         textarea.dash-agent-input { flex:1 1 auto; min-width:0; width:auto; font-size:16px; line-height:1.5; resize:none; overflow-y:auto; max-height:8.5rem; }
         .dash-agent-btn         { flex:0 0 auto; min-width:44px; min-height:44px; justify-content:center; }
         .dash-agent-hdr-actions { display:flex; flex-wrap:wrap; gap:0.5rem; }
-        .dash-agent--popout     { margin:0; height:100vh; height:100dvh; border:0; border-radius:0; }
+        /* Doubled class so the pop-out fills its window even past the 768px rule below. */
+        .dash-agent.dash-agent--popout { margin:0; height:100vh; height:100dvh; border:0; border-radius:0; }
+        /* Conversation scrollbar: wide enough to grab (the site-wide one is 5px). */
+        .dash-agent-thread      { scrollbar-width:auto; scrollbar-color:var(--border-light) transparent; }
+        .dash-agent-thread::-webkit-scrollbar       { width:12px; }
+        .dash-agent-thread::-webkit-scrollbar-track { background:transparent; }
+        .dash-agent-thread::-webkit-scrollbar-thumb { background:var(--border-light); border-radius:6px; border:2px solid var(--surface); }
+        .dash-agent-thread::-webkit-scrollbar-thumb:hover { background:var(--accent); }
+        .dash-agent-thread:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
         /* The pop-out is a narrow side window: keep the header buttons on one row. */
         .dash-agent--popout .dash-agent-hdr-actions { gap:0.15rem; }
         .dash-agent--popout .dash-agent-hdr-actions .btn { padding-left:0.45rem; padding-right:0.45rem; letter-spacing:0.06em; }
         .dash-agent-popout-btn  { display:none; }
+        .dash-agent-grip        { display:none; }
         .dash-sr-only           { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
         @media(min-width:768px){
           .dash-agent             { flex-direction:row; height:min(450px, 70vh); overflow:hidden; }
@@ -559,6 +612,12 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
           .dash-agent-hdr-avatar,
           .dash-agent-hdr-status  { display:none; }
           .dash-agent-popout-btn  { display:inline-flex; }
+          /* Drag the bottom-right corner to make the docked chat taller or shorter. */
+          .dash-agent--docked     { resize:vertical; position:relative; min-height:${AGENT_MIN_HEIGHT}px; max-height:${AGENT_MAX_HEIGHT}px; }
+          /* Visible grip over the browser's resize corner (which is near-invisible on this dark card).
+             pointer-events:none so the drag still reaches the real handle underneath. */
+          .dash-agent-grip        { display:block; position:absolute; right:2px; bottom:2px; width:14px; height:14px; pointer-events:none;
+                                    background:linear-gradient(135deg, transparent 0 45%, var(--text-muted) 45% 52%, transparent 52% 65%, var(--text-muted) 65% 72%, transparent 72% 85%, var(--text-muted) 85% 92%, transparent 92%); opacity:0.8; }
           .dash-agent-chips       { flex-wrap:wrap; overflow-x:visible; padding:0.6rem 1.25rem 0; scroll-snap-type:none; }
           .dash-agent-chip        { min-height:0; }
           .dash-agent-form        { padding:0.5rem 1.25rem 0.75rem; align-items:stretch; }
@@ -574,7 +633,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
         }
       `}</style>
 
-          <div className={isPopout ? 'dash-agent dash-agent--popout' : 'dash-agent'}>
+          <div ref={panelRef} className={isPopout ? 'dash-agent dash-agent--popout' : 'dash-agent dash-agent--docked'}>
 
             {/* Left — mascot column (hidden below 768px; a small avatar shows in the header instead) */}
             <div className="dash-agent-mascot" style={{ width: 220, flexShrink: 0, background: 'var(--bg-overlay)', borderRight: '1px solid var(--border)', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16 }}>
@@ -656,8 +715,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
               aria-live="polite"
               aria-label={historyView === null ? 'Agent conversation' : historyView === 'list' ? 'Past assistant chats' : 'Saved assistant chat'}
               tabIndex={0}
-              onFocus={e => { e.currentTarget.style.outline = '2px solid var(--accent)'; e.currentTarget.style.outlineOffset = '-2px'; }}
-              onBlur={e => { e.currentTarget.style.outline = ''; e.currentTarget.style.outlineOffset = ''; }}
+              className="dash-agent-thread"
               style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.65rem', minHeight: 0 }}
             >
               {historyView === 'list' && (
@@ -1012,6 +1070,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
             </div>
             </>)}
             </div>{/* end right column */}
+            {!isPopout && <span className="dash-agent-grip" aria-hidden="true" />}
           </div>{/* end agent panel */}
     </>
   );
