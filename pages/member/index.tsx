@@ -1,166 +1,232 @@
-import { useState, useEffect } from 'react';
-import ShowDayPerson from '../../components/venues/ShowDayPerson';
+// pages/member/index.tsx
+//
+// Member dashboard — "My Shows": the band's booked shows, in the Tours style.
+// The next show gets a feature card with the run of show (load-in → set →
+// end), what's provided, the address with a maps link and the day-of
+// contacts; the rest of the upcoming shows follow as cards, and past shows
+// fold away underneath.
+//
+// Members never see money: the query asks for no deal, fee or pay fields.
+// Bookings are read with the member's session, so RLS limits them to the band.
+
+import { useEffect, useMemo, useState } from 'react';
 import AppShell from '../../components/layout/AppShell';
+import PageHero from '../../components/layout/PageHero';
+import BackstageScene from '../../components/member/BackstageScene';
+import ShowDayPerson from '../../components/venues/ShowDayPerson';
+import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { BOOKING_STATUS_LABELS } from '../../lib/types';
-import { parseLocalDate, formatShowDate } from '../../lib/formatDate';
+import { formatShowDate, localToday } from '../../lib/formatDate';
+import { mapsUrl, runOfShow, whenLabel } from '../../lib/domain/memberShows';
+import styles from '../../styles/member.module.css';
 
-export default function MemberView() {
-  const [shows, setShows]   = useState<any[]>([]);
-  const [actName, setActName] = useState('');
-  const [loading, setLoading] = useState(true);
+interface MemberBooking {
+  id: string;
+  status: string;
+  show_date: string | null;
+  set_time: string | null;
+  set_length_min: number | null;
+  load_in_time: string | null;
+  door_time: string | null;
+  soundcheck_time: string | null;
+  end_time: string | null;
+  meals_provided: boolean | null;
+  drinks_provided: boolean | null;
+  hotel_booked: boolean | null;
+  sound_system: string | null;
+  special_requirements: string | null;
+  venue_contact_name: string | null;
+  day_of_contact_phone: string | null;
+  sound_engineer_name: string | null;
+  sound_engineer_phone: string | null;
+  venue: { name: string | null; city: string | null; state: string | null; address: string | null; phone: string | null } | null;
+}
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user ?? null;
-        if (!user) return;
-        const { data: profile } = await supabase.from('profiles').select('act_id').eq('id', user.id).maybeSingle();
-        if (!profile?.act_id) return;
+const FIELDS = `id, status, show_date, set_time, set_length_min, load_in_time, door_time,
+  soundcheck_time, end_time, meals_provided, drinks_provided, hotel_booked, sound_system,
+  special_requirements, venue_contact_name, day_of_contact_phone,
+  sound_engineer_name, sound_engineer_phone,
+  venue:venues(name, city, state, address, phone)`;
 
-        const { data: act } = await supabase.from('acts').select('act_name').eq('id', profile.act_id).maybeSingle();
-        if (act) setActName(act.act_name);
+const SOUND_LABEL: Record<string, string> = { house: 'House sound', band: 'Band brings sound', none: 'No sound system' };
 
-        const { data: bookings } = await supabase.from('bookings')
-          .select(`id, status, show_date, set_time, set_length_min, load_in_time, door_time,
-            soundcheck_time, end_time, meals_provided, drinks_provided, hotel_booked, sound_system,
-            special_requirements, venue_contact_name, day_of_contact_phone,
-            sound_engineer_name, sound_engineer_phone,
-            venue:venues(name, city, state, address, phone)`)
-          .eq('act_id', profile.act_id)
-          .in('status', ['confirmed', 'advancing', 'completed'])
-          .order('show_date', { ascending: true });
-
-        setShows(bookings || []);
-      } catch (err) {
-        console.error('member load:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
-
-  const _td = new Date();
-  const today = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,'0')}-${String(_td.getDate()).padStart(2,'0')}`;
-  const upcoming = shows.filter(s => s.show_date && s.show_date >= today);
-  const past     = shows.filter(s => s.show_date && s.show_date < today);
-
+function DateBlock({ date, big }: { date: string; big?: boolean }) {
   return (
-    <AppShell requireRole="member">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">My Shows</h1>
-          <div className="page-sub">{actName}</div>
-        </div>
-      </div>
-
-      {upcoming.length > 0 && (
-        <div style={{ marginBottom: '2rem' }}>
-          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Upcoming</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {upcoming.map((b: any) => <ShowCard key={b.id} booking={b} />)}
-          </div>
-        </div>
-      )}
-
-      {upcoming.length === 0 && !loading && (
-        <div className="card" style={{ textAlign: 'center', padding: '3rem', marginBottom: '2rem' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', color: 'var(--text-muted)' }}>NO UPCOMING SHOWS</div>
-        </div>
-      )}
-
-      {past.length > 0 && (
-        <div>
-          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Past Shows</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {past.map((b: any) => (
-              <div key={b.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.75rem', background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', opacity: 0.7 }}>
-                <div>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{b.venue?.name || 'TBD'}</span>
-                  <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.82rem', marginLeft: '0.75rem' }}>
-                    {b.show_date ? formatShowDate(b.show_date, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                  </span>
-                </div>
-                <span className={`badge badge-${b.status}`}>{BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </AppShell>
+    <span className={`${styles.dateBlock} ${big ? styles.dateBig : ''}`} aria-hidden="true">
+      <span className={styles.dateMonth}>{formatShowDate(date, { month: 'short' })}</span>
+      <span className={styles.dateDay}>{formatShowDate(date, { day: 'numeric' })}</span>
+      <span className={styles.dateDow}>{formatShowDate(date, { weekday: 'short' })}</span>
+    </span>
   );
 }
 
-function ShowCard({ booking: b }: { booking: any }) {
+function Provided({ b }: { b: MemberBooking }) {
+  const chips = [
+    b.meals_provided && <span key="m" className={`${styles.chip} ${styles.chipGood}`}>Meals provided</span>,
+    b.drinks_provided && <span key="d" className={`${styles.chip} ${styles.chipGood}`}>Drinks provided</span>,
+    b.hotel_booked && <span key="h" className={`${styles.chip} ${styles.chipBlue}`}>Hotel booked</span>,
+    b.sound_system && <span key="s" className={styles.chip}>{SOUND_LABEL[b.sound_system] ?? `Sound: ${b.sound_system}`}</span>,
+  ].filter(Boolean);
+  return chips.length ? <div className={styles.chips}>{chips}</div> : null;
+}
+
+/** The next show, with everything needed on the day. */
+function NextShow({ b, today }: { b: MemberBooking; today: string }) {
+  const steps = runOfShow(b);
+  const map = mapsUrl(b.venue);
+  const where = [b.venue?.city, b.venue?.state].filter(Boolean).join(', ');
   return (
-    <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius)', padding: '1rem 1.25rem' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <div style={{ minWidth: 52, textAlign: 'center' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', color: 'var(--accent)', lineHeight: 1 }}>
-              {b.show_date ? parseLocalDate(b.show_date).getDate() : '?'}
-            </div>
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.76rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              {b.show_date ? formatShowDate(b.show_date, { month: 'short', year: 'numeric' }) : ''}
-            </div>
+    <section className={styles.next} aria-labelledby="next-venue">
+      <DateBlock date={b.show_date!} big />
+      <div className={styles.nextBody}>
+        <span className={styles.nextKicker}>Next show · {whenLabel(b.show_date!, today)}</span>
+        <h2 id="next-venue" className={styles.nextVenue}>{b.venue?.name || 'Venue TBA'}</h2>
+        <span className={styles.nextPlace}>
+          <span className={styles.srOnly}>{formatShowDate(b.show_date!, { weekday: 'long', month: 'long', day: 'numeric' })}. </span>
+          {b.venue?.address ? `${b.venue.address}, ` : ''}{where}
+          {map && <> · <a href={map} target="_blank" rel="noopener noreferrer">Directions</a></>}
+        </span>
+
+        {steps.length > 0 ? (
+          <ol className={styles.run} aria-label="Run of show">
+            {steps.map(s => (
+              <li key={s.key} className={`${styles.runStep} ${s.key === 'set' ? styles.runSet : ''}`}>
+                <span className={styles.runLabel}>{s.label}</span>
+                <span className={styles.runTime}>{s.time}</span>
+                {s.note && <span className={styles.runNote}>{s.note}</span>}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className={styles.muted} style={{ margin: 0 }}>Times aren&apos;t set yet. Your band admin will add them.</p>
+        )}
+
+        <Provided b={b} />
+
+        {(b.venue_contact_name || b.day_of_contact_phone || b.sound_engineer_name || b.sound_engineer_phone || b.venue?.phone) && (
+          <div className={styles.contacts}>
+            {(b.venue_contact_name || b.day_of_contact_phone) && <span><b>Day-of contact</b><ShowDayPerson name={b.venue_contact_name} phone={b.day_of_contact_phone} /></span>}
+            {(b.sound_engineer_name || b.sound_engineer_phone) && <span><b>Sound</b><ShowDayPerson name={b.sound_engineer_name} phone={b.sound_engineer_phone} /></span>}
+            {b.venue?.phone && <span><b>Venue</b><ShowDayPerson phone={b.venue.phone} /></span>}
           </div>
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', letterSpacing: '0.03em', color: 'var(--text-primary)' }}>{b.venue?.name || 'TBD'}</div>
-            {b.venue?.city && <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.1rem' }}>{b.venue.city}, {b.venue.state}</div>}
-          </div>
-        </div>
-        <span className={`badge badge-${b.status}`}>{BOOKING_STATUS_LABELS[b.status as keyof typeof BOOKING_STATUS_LABELS]}</span>
+        )}
+        {b.special_requirements && <p className={styles.note}>{b.special_requirements}</p>}
       </div>
+    </section>
+  );
+}
 
-      {/* Times */}
-      {(b.load_in_time || b.soundcheck_time || b.set_time || b.door_time || b.end_time) && (
-        <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.6rem', padding: '0.5rem 0.75rem', background: 'var(--bg-overlay)', borderRadius: 'var(--radius-sm)' }}>
-          {b.door_time      && <span>DOORS: <span style={{ color: 'var(--text-primary)' }}>{b.door_time}</span></span>}
-          {b.load_in_time   && <span>LOAD-IN: <span style={{ color: 'var(--text-primary)' }}>{b.load_in_time}</span></span>}
-          {b.soundcheck_time && <span>SOUNDCHECK: <span style={{ color: 'var(--text-primary)' }}>{b.soundcheck_time}</span></span>}
-          {b.set_time       && <span>SET: <span style={{ color: 'var(--accent)' }}>{b.set_time}</span>{b.set_length_min ? ` (${b.set_length_min}min)` : ''}</span>}
-          {b.end_time       && <span>END: <span style={{ color: 'var(--text-primary)' }}>{b.end_time}</span></span>}
+/** A later show, compact. */
+function ShowCard({ b, today }: { b: MemberBooking; today: string }) {
+  const steps = runOfShow(b).filter(s => s.key === 'load_in' || s.key === 'set');
+  const where = [b.venue?.city, b.venue?.state].filter(Boolean).join(', ');
+  return (
+    <article className={styles.card} aria-label={`${b.venue?.name || 'Venue TBA'}, ${formatShowDate(b.show_date!, { weekday: 'long', month: 'long', day: 'numeric' })}`}>
+      <DateBlock date={b.show_date!} />
+      <div className={styles.cardBody}>
+        <div className={styles.cardTop}>
+          <span className={styles.cardVenue}>{b.venue?.name || 'Venue TBA'}</span>
+          <span className={styles.cardWhen}>{whenLabel(b.show_date!, today)}</span>
         </div>
-      )}
+        <span className={styles.cardPlace}>{where || '—'}</span>
+        {steps.length > 0 && (
+          <span className={styles.cardTimes}>{steps.map(s => <span key={s.key}>{s.label} <b>{s.time}</b></span>)}</span>
+        )}
+        <Provided b={b} />
+        {b.special_requirements && <p className={styles.note}>{b.special_requirements}</p>}
+      </div>
+    </article>
+  );
+}
 
-      {/* Logistics badges */}
-      {(b.meals_provided || b.drinks_provided || b.hotel_booked || b.sound_system) && (
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-          {b.meals_provided  && <span style={{ fontSize: '0.72rem', background: '#34d39922', color: '#34d399', padding: '0.15rem 0.5rem', borderRadius: '3px' }}>Meals Provided</span>}
-          {b.drinks_provided && <span style={{ fontSize: '0.72rem', background: '#34d39922', color: '#34d399', padding: '0.15rem 0.5rem', borderRadius: '3px' }}>Drinks Provided</span>}
-          {b.hotel_booked    && <span style={{ fontSize: '0.72rem', background: '#60a5fa22', color: '#60a5fa', padding: '0.15rem 0.5rem', borderRadius: '3px' }}>Hotel Booked</span>}
-          {b.sound_system    && <span style={{ fontSize: '0.72rem', background: 'var(--bg-overlay)', color: 'var(--text-muted)', padding: '0.15rem 0.5rem', borderRadius: '3px', textTransform: 'uppercase', fontFamily: 'var(--font-body)' }}>Sound: {b.sound_system}</span>}
-        </div>
-      )}
+export default function MemberView() {
+  const { profile } = useAuth();
+  const actId = profile?.act_id ?? null;
+  const today = localToday();
 
-      {b.venue?.address && (
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
-          📍 {b.venue.address}
-        </div>
-      )}
-      {b.venue?.phone && (
-        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
-          📞 {b.venue.phone}
-        </div>
-      )}
-      {(b.venue_contact_name || b.day_of_contact_phone) && (
-        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
-          Day-of contact: <ShowDayPerson name={b.venue_contact_name} phone={b.day_of_contact_phone} />
-        </div>
-      )}
-      {(b.sound_engineer_name || b.sound_engineer_phone) && (
-        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
-          Sound engineer: <ShowDayPerson name={b.sound_engineer_name} phone={b.sound_engineer_phone} />
-        </div>
-      )}
-      {b.special_requirements && (
-        <div style={{ marginBottom: '0.4rem', fontSize: '0.8rem', color: '#f59e0b' }}>
-          ⚠ {b.special_requirements}
-        </div>
-      )}
-    </div>
+  const [shows, setShows] = useState<MemberBooking[]>([]);
+  const [actName, setActName] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!actId) return;
+    let cancelled = false;
+    void (async () => {
+      const [actRes, bookingsRes] = await Promise.all([
+        supabase.from('acts').select('act_name').eq('id', actId).maybeSingle(),
+        supabase.from('bookings').select(FIELDS)
+          .eq('act_id', actId)
+          .in('status', ['confirmed', 'advancing', 'completed'])
+          .not('show_date', 'is', null)
+          .order('show_date', { ascending: true }),
+      ]);
+      if (cancelled) return;
+      if (actRes.data?.act_name) setActName(actRes.data.act_name);
+      if (bookingsRes.error) {
+        console.error('[member] shows load failed', bookingsRes.error);
+        setError("We couldn't load your shows. Refresh the page to try again.");
+      } else {
+        setShows((bookingsRes.data ?? []) as unknown as MemberBooking[]);
+      }
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [actId]);
+
+  const upcoming = useMemo(() => shows.filter(s => s.show_date! >= today), [shows, today]);
+  const past = useMemo(() => shows.filter(s => s.show_date! < today).reverse(), [shows, today]);
+  const [next, ...later] = upcoming;
+  const thisMonth = upcoming.filter(s => s.show_date!.slice(0, 7) === today.slice(0, 7)).length;
+
+  const summary = loading ? undefined
+    : next ? `Next up ${formatShowDate(next.show_date!, { weekday: 'short', month: 'short', day: 'numeric' })} at ${next.venue?.name || 'a venue TBA'} · ${upcoming.length} on the calendar${thisMonth ? `, ${thisMonth} this month` : ''}.`
+    : 'No shows on the calendar yet.';
+
+  return (
+    <AppShell requireRole="member">
+      <div className={styles.page}>
+        <PageHero title="My Shows" subtitle={actName || 'Your band'} summary={summary} scene={<BackstageScene />} />
+
+        {error && <p className={styles.alert} role="alert">{error}</p>}
+
+        {loading ? (
+          <div className="tour-skeleton" style={{ minHeight: '14rem', borderRadius: 'var(--radius-sm)' }} />
+        ) : next ? (
+          <NextShow b={next} today={today} />
+        ) : !error && (
+          <div className={styles.empty}>
+            <h2>No upcoming shows</h2>
+            <p>When your band books a show, it shows up here with the times, the address and who to call on the day.</p>
+          </div>
+        )}
+
+        {later.length > 0 && (
+          <section aria-labelledby="coming-up" className={styles.page} style={{ gap: '0.75rem' }}>
+            <div className={styles.sectionHead}>
+              <h2 id="coming-up" className={styles.sectionTitle}>Coming up</h2>
+              <span className={styles.sectionMeta}>{later.length} more</span>
+            </div>
+            <ul className={styles.cards}>
+              {later.map(b => <li key={b.id}><ShowCard b={b} today={today} /></li>)}
+            </ul>
+          </section>
+        )}
+
+        {past.length > 0 && (
+          <details className={styles.details}>
+            <summary>Past shows ({past.length})</summary>
+            <ul className={styles.past}>
+              {past.map(b => (
+                <li key={b.id} className={styles.pastRow}>
+                  <span>{b.venue?.name || 'Venue'}{b.venue?.city ? ` · ${b.venue.city}` : ''}</span>
+                  <span>{formatShowDate(b.show_date!, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    </AppShell>
   );
 }

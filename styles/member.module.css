@@ -1,0 +1,156 @@
+/* styles/member.module.css — member pages (pages/member/index, calendar, pay).
+   Tours vocabulary: Bebas titles, tracked uppercase labels, --surface panels. */
+
+.page { display: flex; flex-direction: column; gap: 1.5rem; }
+.sectionTitle { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 1.9rem; line-height: 1; letter-spacing: 0.03em; color: var(--text); }
+.sectionHead { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+.sectionMeta { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+.muted { color: var(--text-muted); }
+.alert { margin: 0; color: var(--red); font-weight: 700; }
+
+/* ── Date block ── */
+.dateBlock { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.1rem; padding: 0.4rem 0; border-radius: 8px; background: var(--surface-2); line-height: 1; min-width: 3.4rem; }
+.dateMonth { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.dateDay { font-family: var(--font-display); font-size: 1.9rem; color: var(--text); }
+.dateDow { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+.dateBig { min-width: 5.5rem; padding: 0.7rem 0; }
+.dateBig .dateDay { font-size: 3.4rem; }
+.dateBig .dateMonth { font-size: 0.8rem; }
+.dateBig .dateDow { font-size: 0.72rem; }
+
+/* ── Next show (feature) ── */
+.next {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1.25rem; padding: 1.35rem 1.5rem;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), var(--surface) 55%);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); border-radius: var(--radius-sm);
+}
+@media (max-width: 560px) { .next { grid-template-columns: minmax(0, 1fr); } .next .dateBlock { flex-direction: row; gap: 0.6rem; justify-content: flex-start; padding: 0.6rem 0.8rem; } .next .dateBig .dateDay { font-size: 2.4rem; } }
+.next > .dateBlock { align-self: start; }
+.nextBody { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+.nextKicker { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
+.nextVenue { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: clamp(2rem, 4vw, 2.8rem); line-height: 0.95; letter-spacing: 0.02em; color: var(--text); overflow-wrap: anywhere; }
+.nextPlace { font-size: 0.92rem; color: var(--text-muted); }
+.nextPlace a { color: var(--text); }
+
+/* run of show */
+.run { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.runStep { flex: 1 1 7rem; display: flex; flex-direction: column; gap: 0.15rem; padding: 0.6rem 0.85rem; border-right: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 35%, transparent); }
+.runStep:last-child { border-right: 0; }
+.runLabel { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+.runTime { font-family: var(--font-display); font-size: 1.5rem; line-height: 1; color: var(--text); }
+.runNote { font-size: 0.74rem; color: var(--text-muted); }
+.runSet { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.runSet .runTime { color: var(--accent); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.74rem; font-weight: 700; border: 1px solid var(--border); color: var(--text-muted); }
+.chipGood { border-color: color-mix(in srgb, var(--green) 60%, transparent); color: var(--green); }
+.chipBlue { border-color: color-mix(in srgb, #4a90e2 60%, transparent); color: #7fb2ee; }
+.chipWarn { border-color: #f0b43c; color: #f0b43c; }
+
+.contacts { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.4rem 1rem; font-size: 0.86rem; color: var(--text-muted); }
+.contacts b { color: var(--text); font-weight: 700; margin-right: 0.35rem; }
+.note { margin: 0; padding: 0.6rem 0.8rem; border-radius: 6px; border-left: 3px solid #f0b43c; background: color-mix(in srgb, #f0b43c 8%, transparent); font-size: 0.86rem; color: var(--text); }
+
+/* ── Show cards ── */
+.cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap: 0.75rem; }
+.card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.85rem; padding: 0.9rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); height: 100%; color: var(--text); text-decoration: none; }
+a.card:hover { border-color: var(--accent); text-decoration: none; }
+a.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cardBody { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
+.cardTop { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+.cardVenue { font-weight: 800; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cardWhen { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); white-space: nowrap; }
+.cardPlace { font-size: 0.8rem; color: var(--text-muted); }
+.cardTimes { display: flex; flex-wrap: wrap; gap: 0.2rem 0.8rem; font-size: 0.78rem; color: var(--text-muted); }
+.cardTimes b { color: var(--text); font-weight: 700; }
+
+.past { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.pastRow { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.55rem 0.8rem; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--text) 3%, transparent); font-size: 0.88rem; }
+.pastRow span:last-child { color: var(--text-muted); font-size: 0.8rem; white-space: nowrap; }
+.details summary { cursor: pointer; font-size: 0.86rem; font-weight: 700; color: var(--text-muted); padding: 0.4rem 0; }
+.details summary:hover { color: var(--text); }
+
+.empty { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 2.5rem 1.25rem; border: 1px dashed var(--border); border-radius: var(--radius-sm); text-align: center; color: var(--text-muted); }
+.empty h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 1.8rem; color: var(--text); }
+.empty p { margin: 0; max-width: 30rem; }
+
+/* ── RSVP ── */
+.rsvp { display: inline-flex; align-items: center; padding: 0.12rem 0.55rem; border-radius: 999px; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid currentColor; white-space: nowrap; }
+.rsvpPending { color: #f0b43c; }
+.rsvpConfirmed { color: var(--green); }
+.rsvpDeclined { color: var(--text-muted); }
+
+/* ── Big numbers (calendar / pay) ── */
+.bigNumbers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+@media (max-width: 640px) { .bigNumbers { grid-template-columns: minmax(0, 1fr); } }
+.big { display: flex; flex-direction: column; gap: 0.35rem; padding: 1.05rem 1.2rem; background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--big-accent, var(--accent)); border-radius: var(--radius-sm); }
+.bigLabel { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+.bigValue { font-family: var(--font-display); font-size: clamp(2.2rem, 3.6vw, 3rem); line-height: 0.95; color: var(--text); font-variant-numeric: tabular-nums; }
+.bigNote { font-size: 0.84rem; color: var(--text-muted); }
+
+/* ── Calendar ── */
+.calLayout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+@media (max-width: 1000px) { .calLayout { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.1rem 1.2rem; display: flex; flex-direction: column; gap: 0.85rem; min-width: 0; }
+.calHead { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.calTitle { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 1.9rem; line-height: 1; letter-spacing: 0.04em; color: var(--text); }
+.calNav { display: flex; gap: 0.4rem; }
+.calNav :global(.btn) { min-width: 44px; min-height: 44px; }
+.calGrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.calDow { padding: 0.25rem 0; text-align: center; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+.calCell { min-height: 5.2rem; padding: 0.35rem; border-radius: 6px; background: color-mix(in srgb, var(--text) 3%, transparent); display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.calBlank { background: transparent; }
+.calDay { width: 1.7rem; height: 1.7rem; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.8rem; font-weight: 700; color: var(--text-muted); }
+.calToday .calDay { background: var(--accent); color: #16243f; }
+.calHas { cursor: pointer; border: 1px solid transparent; font: inherit; text-align: left; color: inherit; }
+.calHas:hover { border-color: var(--accent); }
+.calHas:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.calSel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.calPill { display: block; padding: 0.12rem 0.35rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 3px solid currentColor; background: color-mix(in srgb, currentColor 14%, transparent); }
+.calMore { font-size: 0.68rem; color: var(--text-muted); }
+@media (max-width: 560px) {
+  .calCell { min-height: 3.2rem; padding: 0.2rem; align-items: center; }
+  .calPill { width: 0.5rem; height: 0.5rem; padding: 0; border: 0; border-radius: 50%; background: currentColor; font-size: 0; }
+  .calMore { display: none; }
+}
+.legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: 0.78rem; color: var(--text-muted); }
+.legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; background: currentColor; display: inline-block; }
+
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.listRow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.75rem; align-items: center; padding: 0.5rem 0.6rem; border-radius: var(--radius-sm); color: var(--text); text-decoration: none; background: color-mix(in srgb, var(--text) 3%, transparent); }
+.listRow:hover { background: color-mix(in srgb, var(--text) 7%, transparent); text-decoration: none; }
+.listRow:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.listRow .dateBlock { min-width: 2.8rem; padding: 0.25rem 0; }
+.listRow .dateDay { font-size: 1.35rem; }
+.listText { display: flex; flex-direction: column; min-width: 0; }
+.listText strong { font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.listText span { font-size: 0.76rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Pay ── */
+.payHead { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; justify-content: flex-end; }
+.payHead label { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted); }
+.payHead { flex-wrap: nowrap; }
+.payHead :global(.select) { width: 7rem; min-width: 7rem; min-height: 44px; }
+@media (max-width: 560px) { .payHead { flex-wrap: wrap; justify-content: flex-start; } }
+.months { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0.35rem; align-items: end; height: 9rem; padding-bottom: 1.4rem; position: relative; }
+.monthCol { position: relative; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 2px; }
+.monthBar { width: min(70%, 2rem); border-radius: 3px 3px 0 0; }
+.barPlayed { background: #d9752d; }
+.barUpcoming { background: #4a90e2; }
+.monthName { position: absolute; bottom: -1.35rem; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); }
+.payLegend { display: flex; gap: 1rem; font-size: 0.8rem; color: var(--text-muted); }
+.payLegend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.payLegend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.table th { text-align: left; padding: 0.6rem 1rem; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+.table td { padding: 0.6rem 1rem; border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent); color: var(--text); }
+.table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.monthRow th { padding-top: 1.1rem; font-family: var(--font-display); font-size: 1.3rem; letter-spacing: 0.04em; text-transform: none; color: var(--text); font-weight: 400; border-bottom: 0; }
+.subRow td { font-weight: 800; background: color-mix(in srgb, var(--surface-2) 40%, transparent); }
+.tableWrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.est { color: var(--text-muted); font-size: 0.8rem; }
+.fineprint { margin: 0; font-size: 0.82rem; color: var(--text-muted); line-height: 1.6; }
+
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

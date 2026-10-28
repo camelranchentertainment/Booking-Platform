@@ -9,19 +9,17 @@
 // fee or anyone else's pay.
 import { useEffect, useMemo, useState } from 'react';
 import AppShell from '../../components/layout/AppShell';
+import PageHero from '../../components/layout/PageHero';
+import BackstageScene from '../../components/member/BackstageScene';
 import { supabase } from '../../lib/supabase';
 import { formatShowDate, localToday } from '../../lib/formatDate';
-import { buildPayStatement, payYears, type MemberShowRow, type PayLine } from '../../lib/memberPay';
+import { buildPayStatement, payYears, type MemberShowRow } from '../../lib/memberPay';
+import styles from '../../styles/member.module.css';
 
+const SHORT = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
-
-/** Pay cell text: "$225.00", "$150.00 est." or "Not set". */
-function payText(line: PayLine): string {
-  if (line.amount === null) return 'Not set';
-  return `${money.format(line.amount)}${line.estimated ? ' est.' : ''}`;
-}
 
 export default function MemberPay() {
   const [rows, setRows] = useState<MemberShowRow[]>([]);
@@ -81,35 +79,30 @@ export default function MemberPay() {
   const statement = useMemo(() => buildPayStatement(rows, year, localToday()), [rows, year]);
   const generated = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
+  const maxMonth = Math.max(1, ...statement.months.map(m => m.played + m.upcoming));
+  const monthTotals = Array.from({ length: 12 }, (_, i) => statement.months.find(m => m.month === i) ?? { month: i, played: 0, upcoming: 0, lines: [] });
+
   return (
     <AppShell requireRole="member">
-      <div className="pay-statement">
-        <div className="page-header pay-no-print">
-          <div>
-            <h1 className="page-title">My Pay</h1>
-            <div className="page-sub">{bandName || 'Your pay by show'}</div>
-          </div>
-          <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <label htmlFor="pay-year" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 700 }}>Year</label>
-            <select
-              id="pay-year"
-              className="select"
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              style={{ minWidth: 110, minHeight: 44 }}
-            >
-              {years.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ minHeight: 44 }}
-              onClick={() => window.print()}
-              disabled={loading || !!error}
-            >
-              Print statement
-            </button>
-          </div>
+      <div className={`pay-statement ${styles.page}`}>
+        <div className="pay-no-print">
+          <PageHero
+            title="My Pay"
+            subtitle={bandName || 'Your pay by show'}
+            summary={loading || error ? undefined : `${money.format(statement.played)} earned in ${year} · ${money.format(statement.upcoming)} coming up.`}
+            scene={<BackstageScene />}
+            actions={
+              <div className={styles.payHead}>
+                <label htmlFor="pay-year">Year</label>
+                <select id="pay-year" className="select" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+                  {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <button type="button" className="btn btn-secondary" style={{ minHeight: 44 }} onClick={() => window.print()} disabled={loading || !!error}>
+                  Print statement
+                </button>
+              </div>
+            }
+          />
         </div>
 
         {/* Shown only on paper */}
@@ -120,40 +113,59 @@ export default function MemberPay() {
           </p>
         </div>
 
-        {loading && <p role="status" style={{ color: 'var(--text-muted)' }}>Loading your pay…</p>}
-        {error && <p role="alert" style={{ color: '#f87171', fontWeight: 700 }}>{error}</p>}
+        {loading && <div className="tour-skeleton pay-no-print" style={{ minHeight: '8rem', borderRadius: 'var(--radius-sm)' }} role="status" aria-label="Loading your pay" />}
+        {error && <p role="alert" className={styles.alert}>{error}</p>}
 
         {!loading && !error && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-              <div className="card pay-total">
-                <div className="stat-value">{money.format(statement.played)}</div>
-                <div className="stat-label">Earned in {year}</div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                  {statement.playedCount} {statement.playedCount === 1 ? 'show' : 'shows'} played
+            <section className={styles.bigNumbers} aria-label={`${year} pay at a glance`}>
+              <div className={`${styles.big} pay-total`} style={{ '--big-accent': '#d9752d' } as React.CSSProperties}>
+                <span className={styles.bigLabel}>Earned in {year}</span>
+                <span className={styles.bigValue}>{money.format(statement.played)}</span>
+                <span className={styles.bigNote}>{statement.playedCount} {statement.playedCount === 1 ? 'show' : 'shows'} played</span>
+              </div>
+              <div className={`${styles.big} pay-total`} style={{ '--big-accent': '#4a90e2' } as React.CSSProperties}>
+                <span className={styles.bigLabel}>Coming up</span>
+                <span className={styles.bigValue}>{money.format(statement.upcoming)}</span>
+                <span className={styles.bigNote}>{statement.upcomingCount} {statement.upcomingCount === 1 ? 'show' : 'shows'} booked</span>
+              </div>
+              <div className={`${styles.big} pay-total`} style={{ '--big-accent': 'var(--green)' } as React.CSSProperties}>
+                <span className={styles.bigLabel}>{year} total</span>
+                <span className={styles.bigValue}>{money.format(statement.played + statement.upcoming)}</span>
+                <span className={styles.bigNote}>Played + coming up</span>
+              </div>
+            </section>
+
+            {statement.months.length > 0 && (
+              <section className={`${styles.panel} pay-no-print`} aria-labelledby="pay-months">
+                <div className={styles.sectionHead}>
+                  <h2 id="pay-months" className={styles.sectionTitle} style={{ fontSize: '1.5rem' }}>By month</h2>
+                  <div className={styles.payLegend} aria-hidden="true">
+                    <span><i style={{ background: '#d9752d' }} />Played</span>
+                    <span><i style={{ background: '#4a90e2' }} />Coming up</span>
+                  </div>
                 </div>
-              </div>
-              <div className="card pay-total">
-                <div className="stat-value">{money.format(statement.upcoming)}</div>
-                <div className="stat-label">Upcoming</div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                  {statement.upcomingCount} {statement.upcomingCount === 1 ? 'show' : 'shows'} booked
+                <div className={styles.months} aria-hidden="true">
+                  {monthTotals.map(m => (
+                    <div key={m.month} className={styles.monthCol} title={`${MONTHS[m.month]}: ${money.format(m.played)} played, ${money.format(m.upcoming)} coming up`}>
+                      {m.upcoming > 0 && <span className={`${styles.monthBar} ${styles.barUpcoming}`} style={{ height: `${(m.upcoming / maxMonth) * 100}%` }} />}
+                      {m.played > 0 && <span className={`${styles.monthBar} ${styles.barPlayed}`} style={{ height: `${(m.played / maxMonth) * 100}%`, borderRadius: m.upcoming > 0 ? 0 : undefined }} />}
+                      <span className={styles.monthName}>{SHORT[m.month]}</span>
+                    </div>
+                  ))}
                 </div>
-              </div>
-              <div className="card pay-total">
-                <div className="stat-value">{money.format(statement.played + statement.upcoming)}</div>
-                <div className="stat-label">{year} total</div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>Played + upcoming</div>
-              </div>
-            </div>
+                <p className={styles.srOnly}>Monthly totals are listed in the table below.</p>
+              </section>
+            )}
 
             {statement.months.length === 0 ? (
-              <div className="card table-empty">
-                No shows with pay in {year}. When your band admin adds you to a show, it shows up here.
+              <div className={styles.empty}>
+                <h2>No pay in {year} yet</h2>
+                <p>When your band admin adds you to a show, it shows up here.</p>
               </div>
             ) : (
-              <div className="card table-wrap" style={{ padding: 0 }}>
-                <table>
+              <div className={`${styles.tableWrap} table-wrap`}>
+                <table className={styles.table}>
                   <caption className="pay-sr-only">Pay by show for {year}, grouped by month</caption>
                   <thead>
                     <tr>
@@ -161,40 +173,40 @@ export default function MemberPay() {
                       <th scope="col">Venue</th>
                       <th scope="col">City</th>
                       <th scope="col">Status</th>
-                      <th scope="col" style={{ textAlign: 'right' }}>Pay</th>
+                      <th scope="col" className={styles.num}>Pay</th>
                     </tr>
                   </thead>
                   {statement.months.map((m) => (
                     <tbody key={m.month}>
-                      <tr className="pay-month-row">
-                        <th scope="rowgroup" colSpan={5} style={{ paddingTop: '1rem' }}>{MONTHS[m.month]}</th>
+                      <tr className={`pay-month-row ${styles.monthRow}`}>
+                        <th scope="rowgroup" colSpan={5}>{MONTHS[m.month]}</th>
                       </tr>
                       {m.lines.map((line) => (
                         <tr key={line.id}>
                           <td style={{ whiteSpace: 'nowrap' }}>{formatShowDate(line.date, { weekday: 'short', month: 'short', day: 'numeric' })}</td>
                           <td>{line.venue}</td>
                           <td>{line.place}</td>
-                          <td>{line.kind === 'played' ? 'Played' : line.rsvp === 'pending' ? 'Upcoming · not confirmed' : 'Upcoming'}</td>
-                          <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{payText(line)}</td>
+                          <td>{line.kind === 'played' ? 'Played' : line.rsvp === 'pending' ? 'Coming up · not confirmed' : 'Coming up'}</td>
+                          <td className={styles.num}>{line.amount === null ? <span className={styles.est}>Not set</span> : <>{money.format(line.amount)}{line.estimated && <span className={styles.est}> est.</span>}</>}</td>
                         </tr>
                       ))}
-                      <tr className="pay-subtotal-row">
+                      <tr className={`pay-subtotal-row ${styles.subRow}`}>
                         <td colSpan={4} style={{ textAlign: 'right' }}>{MONTHS[m.month]} total</td>
-                        <td style={{ textAlign: 'right' }}>{money.format(m.played + m.upcoming)}</td>
+                        <td className={styles.num}>{money.format(m.played + m.upcoming)}</td>
                       </tr>
                     </tbody>
                   ))}
                   <tfoot>
-                    <tr className="pay-subtotal-row">
-                      <td colSpan={4} style={{ textAlign: 'right' }}>{year} total ({money.format(statement.played)} earned, {money.format(statement.upcoming)} upcoming)</td>
-                      <td style={{ textAlign: 'right' }}>{money.format(statement.played + statement.upcoming)}</td>
+                    <tr className={`pay-subtotal-row ${styles.subRow}`}>
+                      <td colSpan={4} style={{ textAlign: 'right' }}>{year} total ({money.format(statement.played)} earned, {money.format(statement.upcoming)} coming up)</td>
+                      <td className={styles.num}>{money.format(statement.played + statement.upcoming)}</td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
             )}
 
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '1rem', lineHeight: 1.6 }}>
+            <p className={styles.fineprint}>
               {statement.estimatedCount > 0 && <>“est.” means your band admin hasn’t set pay for that show yet, so your usual rate is shown. </>}
               {statement.unpricedCount > 0 && <>“Not set” shows aren’t counted in the totals. </>}
               This statement is for your records and isn’t a tax document.
