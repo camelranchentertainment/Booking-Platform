@@ -350,6 +350,18 @@ function electric(p: PosterParams) {
   );
 }
 
+/**
+ * Four-point sparkle ornament drawn as SVG. Playfair Display has no "✦"
+ * glyph, so the character rendered as an empty box on the Western poster.
+ */
+function Sparkle({ size, color }: { size: number; color: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ display: 'flex' }}>
+      <path d="M12 0 C12.9 7.2 16.8 11.1 24 12 C16.8 12.9 12.9 16.8 12 24 C11.1 16.8 7.2 12.9 0 12 C7.2 11.1 11.1 7.2 12 0 Z" fill={color} />
+    </svg>
+  );
+}
+
 // ─── WESTERN ─────────────────────────────────────────────────────────────────
 // Desaturated warm photo, ornate nested border, Playfair Display serif type
 function western(p: PosterParams) {
@@ -389,9 +401,13 @@ function western(p: PosterParams) {
         >
           {/* Act name */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '24px' }}>
-            <span style={{ fontFamily: 'Playfair', fontSize: 28, color: '#8B6914', letterSpacing: '0.3em', fontWeight: 400 }}>
-              ✦ LIVE IN CONCERT ✦
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+              <Sparkle size={20} color="#8B6914" />
+              <span style={{ fontFamily: 'Playfair', fontSize: 28, color: '#8B6914', letterSpacing: '0.3em', fontWeight: 400 }}>
+                LIVE IN CONCERT
+              </span>
+              <Sparkle size={20} color="#8B6914" />
+            </div>
             <span
               style={{
                 fontFamily: 'Bebas',
@@ -410,7 +426,7 @@ function western(p: PosterParams) {
           {/* Ornamental divider */}
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
             <div style={{ display: 'flex', flex: 1, height: '1px', backgroundColor: '#8B6914' }} />
-            <span style={{ fontFamily: 'Playfair', fontSize: 20, color: '#C8921A', fontWeight: 400 }}>✦</span>
+            <Sparkle size={18} color="#C8921A" />
             <div style={{ display: 'flex', flex: 1, height: '1px', backgroundColor: '#8B6914' }} />
           </div>
 
@@ -463,7 +479,7 @@ function western(p: PosterParams) {
           {/* Ornamental divider */}
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
             <div style={{ display: 'flex', flex: 1, height: '1px', backgroundColor: '#8B6914' }} />
-            <span style={{ fontFamily: 'Playfair', fontSize: 20, color: '#C8921A', fontWeight: 400 }}>✦</span>
+            <Sparkle size={18} color="#C8921A" />
             <div style={{ display: 'flex', flex: 1, height: '1px', backgroundColor: '#8B6914' }} />
           </div>
 
