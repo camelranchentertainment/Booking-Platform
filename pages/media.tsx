@@ -1,8 +1,21 @@
+// pages/media.tsx
+//
+// Media — the band's photos and files, the documents venues ask for, and show
+// posters, in the Tours style: an illustrated header, a "ready to send" strip
+// (photos, documents on file, posters), then one section at a time.
+//
+// Band admins only. media_library rows are read with the caller's session
+// (RLS scopes them to the band); files sit in private buckets and are shown
+// through short-lived signed URLs from /api/media/signed-url.
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import AppShell from '../components/layout/AppShell';
+import PageHero from '../components/layout/PageHero';
+import FilmStripScene from '../components/media/FilmStripScene';
 import { supabase } from '../lib/supabase';
 import { useRequireAuth } from '../lib/hooks/useRequireAuth';
-import { parseLocalDate } from '../lib/formatDate';
+import { localToday, parseLocalDate } from '../lib/formatDate';
+import styles from '../styles/media.module.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,7 +80,16 @@ const FILE_TYPE_LABELS: Record<string, string> = {
   document: 'Document',
   audio:    'Audio',
   video:    'Video',
+  poster:   'Poster',
 };
+
+type Section = 'library' | 'documents' | 'posters';
+
+const POSTER_STYLES: Array<{ key: 'americana' | 'electric' | 'western'; label: string; note: string; swatch: string }> = [
+  { key: 'americana', label: 'Americana', note: 'Deep sepia tones · gold frame · Bebas Neue headline', swatch: 'swAmericana' },
+  { key: 'electric',  label: 'Electric',  note: 'Full-bleed photo · dark/orange gradient · high contrast', swatch: 'swElectric' },
+  { key: 'western',   label: 'Western',   note: 'Nested border frame · desaturated photo · Playfair serif', swatch: 'swWestern' },
+];
 
 function formatBytes(b: number) {
   if (b < 1024) return `${b} B`;
@@ -209,11 +231,13 @@ function MediaCard({ item, signedUrl, urlLoading, urlFailed, onDelete, onToggleF
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
 
   const isImage = item.mime_type.startsWith('image/');
 
   const handleDelete = async () => {
     setDeleting(true);
+    setDeleteError(false);
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { setDeleting(false); return; }
     const res = await fetch(`/api/media/${item.id}`, {
@@ -225,140 +249,63 @@ function MediaCard({ item, signedUrl, urlLoading, urlFailed, onDelete, onToggleF
     } else {
       setDeleting(false);
       setConfirmDelete(false);
+      setDeleteError(true);
     }
   };
 
   return (
-    <div style={{
-      background: 'rgba(255,255,255,0.04)',
-      border: '1px solid rgba(255,255,255,0.08)',
-      borderRadius: 8,
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
-      <div style={{ width: '100%', paddingBottom: '66%', position: 'relative', background: 'rgba(0,0,0,0.3)' }}>
+    <article className={styles.card}>
+      <div className={`${styles.thumb} ${item.file_type === 'poster' ? styles.thumbPoster : ''}`}>
         {isImage ? (
           urlLoading ? (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Loading…</span>
-            </div>
+            <div className={`${styles.thumbState} tour-skeleton`}><span>Loading…</span></div>
           ) : urlFailed ? (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}>
-              <span style={{ fontSize: '1.2rem', opacity: 0.5 }}>⚠</span>
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.62rem', color: '#f87171', letterSpacing: '0.04em' }}>Unavailable</span>
-            </div>
+            <div className={`${styles.thumbState} ${styles.thumbFail}`}><span aria-hidden="true">⚠</span><span>Preview unavailable</span></div>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={signedUrl}
-              alt={item.alt_text || item.file_name}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-            />
+            <img src={signedUrl} alt={item.alt_text || item.file_name} loading="lazy" />
           )
         ) : (
-          <div style={{
-            position: 'absolute', inset: 0, display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            fontFamily: 'var(--font-display)', fontSize: '2.5rem', color: 'var(--text-muted)',
-          }}>
-            {item.file_type === 'document' ? 'PDF'
-              : item.file_type === 'audio' ? '♫'
-              : item.file_type === 'video' ? '▶'
-              : '?'}
+          <div className={styles.thumbIcon} aria-hidden="true">
+            {item.file_type === 'document' ? 'PDF' : item.file_type === 'audio' ? '♫' : item.file_type === 'video' ? '▶' : '?'}
           </div>
         )}
-        {item.is_primary_logo && (
-          <div style={{
-            position: 'absolute', top: 6, left: 6,
-            background: 'var(--accent)', color: '#000',
-            fontSize: '0.6rem', fontFamily: 'var(--font-body)',
-            fontWeight: 700, letterSpacing: '0.08em',
-            padding: '2px 6px', borderRadius: 3, textTransform: 'uppercase',
-          }}>
-            Logo
-          </div>
-        )}
+        {item.is_primary_logo && <span className={styles.badge}>Logo</span>}
         <button
+          type="button"
+          className={`${styles.star} ${item.is_featured ? styles.starOn : ''}`}
           onClick={() => onToggleFeatured(item.id, !item.is_featured)}
-          title={item.is_featured ? 'Remove from EPK' : 'Mark as EPK feature'}
-          style={{
-            position: 'absolute', top: 6, right: 6,
-            background: item.is_featured ? 'var(--accent)' : 'rgba(0,0,0,0.55)',
-            border: 'none', borderRadius: '50%',
-            width: 26, height: 26,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', fontSize: '0.85rem', lineHeight: 1,
-            transition: 'background 0.15s',
-            color: item.is_featured ? '#000' : 'rgba(255,255,255,0.7)',
-          }}
+          aria-pressed={item.is_featured}
+          aria-label={item.is_featured ? `Remove ${item.file_name} from your press kit` : `Feature ${item.file_name} in your press kit`}
+          title={item.is_featured ? 'Featured in your press kit' : 'Feature in your press kit'}
         >
-          {item.is_featured ? '★' : '☆'}
+          <span aria-hidden="true">{item.is_featured ? '★' : '☆'}</span>
         </button>
       </div>
 
-      <div style={{ padding: '0.65rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.3rem', flex: 1 }}>
-        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {item.file_name}
-        </div>
-        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', gap: '0.5rem' }}>
-          <span>{FILE_TYPE_LABELS[item.file_type] || item.file_type}</span>
-          <span>·</span>
-          <span>{formatBytes(item.file_size_bytes)}</span>
-        </div>
-
-        <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.35rem', flexWrap: 'wrap' }}>
+      <div className={styles.cardBody}>
+        <span className={styles.cardName} title={item.file_name}>{item.file_name}</span>
+        <span className={styles.cardMeta}>{FILE_TYPE_LABELS[item.file_type] || item.file_type} · {formatBytes(item.file_size_bytes)}</span>
+        {deleteError && <span className={styles.alert} role="alert">Couldn&apos;t delete. Try again.</span>}
+        <div className={styles.cardActions}>
           {signedUrl ? (
-            <a
-              href={signedUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', textDecoration: 'none' }}
-            >
-              View
-            </a>
+            <a href={signedUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary">View</a>
           ) : (
-            <span
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', opacity: 0.35, cursor: urlFailed ? 'not-allowed' : 'wait' }}
-              title={urlFailed ? 'URL unavailable' : 'Loading…'}
-            >
-              View
-            </span>
+            <span className="btn btn-secondary" aria-disabled="true" style={{ opacity: 0.4 }}>View</span>
           )}
-
           {!confirmDelete ? (
-            <button
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', color: '#f87171' }}
-              onClick={() => setConfirmDelete(true)}
-            >
-              Delete
-            </button>
+            <button type="button" className={`btn btn-secondary ${styles.danger}`} onClick={() => setConfirmDelete(true)}>Delete</button>
           ) : (
             <>
-              <button
-                className="btn btn-sm"
-                style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', background: '#f87171', color: '#000', border: 'none' }}
-                onClick={handleDelete}
-                disabled={deleting}
-              >
-                {deleting ? 'Deleting…' : 'Confirm'}
+              <button type="button" className={`btn ${styles.dangerFill}`} onClick={handleDelete} disabled={deleting}>
+                {deleting ? 'Deleting…' : 'Delete it'}
               </button>
-              <button
-                className="btn btn-ghost btn-sm"
-                style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
-                onClick={() => setConfirmDelete(false)}
-                disabled={deleting}
-              >
-                Cancel
-              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setConfirmDelete(false)} disabled={deleting}>Keep</button>
             </>
           )}
         </div>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -511,8 +458,10 @@ export default function MediaLibraryPage() {
       .from('bookings')
       .select('id, show_date, status, venue:venues(name, city, state)')
       .eq('act_id', actId)
-      .not('status', 'in', '("cancelled")')
-      .not('show_date', 'is', null)
+      // Posters are for shows that are on the books and still to come —
+      // not pitches, holds or shows already played.
+      .in('status', ['contract', 'confirmed', 'advancing'])
+      .gte('show_date', localToday())
       .order('show_date', { ascending: true });
     setBookings((bookingRows || []) as unknown as Booking[]);
 
@@ -656,7 +605,8 @@ export default function MediaLibraryPage() {
       });
       if (posterErr) throw new Error(`generated_posters insert: ${posterErr.message}`);
 
-      setSaveMsg('Saved to library ✓');
+      setSaveMsg('Saved to your library ✓');
+      void load();
     } catch (err: any) {
       setSaveMsg(`Error: ${err.message}`);
     } finally {
@@ -856,640 +806,368 @@ export default function MediaLibraryPage() {
   const typeCounts: Record<string, number> = { all: items.length };
   items.forEach(i => { typeCounts[i.file_type] = (typeCounts[i.file_type] || 0) + 1; });
 
-  const filterTabs = ['all', 'image', 'logo', 'document', 'audio', 'video'].filter(
+  const filterTabs = ['all', 'image', 'poster', 'logo', 'document', 'audio', 'video'].filter(
     t => t === 'all' || (typeCounts[t] || 0) > 0
   );
 
-  const photoCount = items.filter(i => i.mime_type?.startsWith('image/')).length;
+  const photoCount = items.filter(i => i.mime_type?.startsWith('image/') && i.file_type !== 'poster').length;
+  const posterCount = items.filter(i => i.file_type === 'poster').length;
+  const featuredCount = items.filter(i => i.is_featured).length;
+  const docsOnFile = DOC_CATEGORIES.filter(c => docSlots[c.key]).length;
+
+  // ── Upload dialog (native <dialog>: focus trap, Esc, backdrop) ───────────
+  const uploadDialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const d = uploadDialogRef.current;
+    if (!d) return;
+    if (showUploadModal && !d.open) d.showModal();
+    if (!showUploadModal && d.open) d.close();
+  }, [showUploadModal]);
+  const closeUpload = () => {
+    if (uploadState === 'uploading') return;
+    setShowUploadModal(false);
+    setPendingFile(null);
+    setPendingDocCategory(null);
+  };
+
+  const [section, setSection] = useState<Section>('library');
+  const posterStyleInfo = POSTER_STYLES.find(p => p.key === posterStyle);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <AppShell requireRole="band_admin">
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem' }}>
+      <div className={styles.page}>
+        <PageHero
+          title="Media"
+          subtitle="Photos, documents & show posters"
+          summary={loading ? undefined : `${photoCount} ${photoCount === 1 ? 'photo' : 'photos'} · ${docsOnFile} of ${DOC_CATEGORIES.length} documents on file · ${posterCount} ${posterCount === 1 ? 'poster' : 'posters'}.`}
+          scene={<FilmStripScene />}
+          actions={<button type="button" className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>+ Upload</button>}
+        />
+        <input ref={fileInputRef} type="file" accept="image/*,.pdf,audio/*,video/*" onChange={handleFilePick} hidden />
+        <input ref={docFileInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" onChange={handleDocFilePick} hidden />
 
-        {/* ── Media Library ──────────────────────────────────────────────── */}
-        {/* Page header — the shared Tours-style header (.page-header in globals.css) */}
-        <div id="section-media" className="page-header">
-          <div>
-            <h1 className="page-title">Media Library</h1>
-            <div className="page-sub">
-              {items.length} file{items.length !== 1 ? 's' : ''}{photoCount > 0 ? ` · ${photoCount} photo${photoCount !== 1 ? 's' : ''}` : ''}
-            </div>
-          </div>
-          <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>
-            + Upload
+        {/* Ready-to-send strip — doubles as the section switcher */}
+        <div className={styles.ready} role="group" aria-label="Media sections">
+          <button type="button" className={styles.readyCard} aria-pressed={section === 'library'} onClick={() => setSection('library')}
+            style={section === 'library' ? { borderColor: 'var(--accent)' } : undefined}>
+            <span className={styles.readyLabel}>Photos &amp; files</span>
+            <span className={styles.readyValue}>{loading ? '–' : items.length}<small>{featuredCount ? `${featuredCount} ★ featured` : 'files'}</small></span>
+            <span className={styles.readyNote}>Press photos, logos, audio and video</span>
           </button>
-          <input ref={fileInputRef} type="file" accept="image/*,.pdf,audio/*,video/*" onChange={handleFilePick} style={{ display: 'none' }} />
-          <input ref={docFileInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" onChange={handleDocFilePick} style={{ display: 'none' }} />
+          <button type="button" className={styles.readyCard} aria-pressed={section === 'documents'} onClick={() => setSection('documents')}
+            style={section === 'documents' ? { borderColor: 'var(--accent)' } : undefined}>
+            <span className={styles.readyLabel}>Documents</span>
+            <span className={styles.readyValue}>{docsLoading ? '–' : docsOnFile}<small>of {DOC_CATEGORIES.length} on file</small></span>
+            <div className="tour-meter" aria-hidden="true"><div className={`tour-meter-bar${docsOnFile === DOC_CATEGORIES.length ? ' tour-meter-bar--done' : ''}`} style={{ width: `${(docsOnFile / DOC_CATEGORIES.length) * 100}%` }} /></div>
+          </button>
+          <button type="button" className={styles.readyCard} aria-pressed={section === 'posters'} onClick={() => setSection('posters')}
+            style={section === 'posters' ? { borderColor: 'var(--accent)' } : undefined}>
+            <span className={styles.readyLabel}>Show posters</span>
+            <span className={styles.readyValue}>{bookings.length}<small>{bookings.length === 1 ? 'show' : 'shows'} to promote</small></span>
+            <span className={styles.readyNote}>Make a 1080 × 1512 poster in one click</span>
+          </button>
         </div>
 
-        {filterTabs.length > 1 && (
-          <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-            {filterTabs.map(t => (
-              <button
-                key={t}
-                onClick={() => setFilter(t)}
-                className={`btn btn-sm ${filter === t ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem', textTransform: 'capitalize' }}
-              >
-                {t === 'all' ? 'All' : (FILE_TYPE_LABELS[t] || t)}
-                {' '}
-                <span style={{ opacity: 0.6 }}>({typeCounts[t] || 0})</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          style={{
-            minHeight: 200,
-            border: dragOver ? '2px dashed var(--accent)' : '2px dashed transparent',
-            borderRadius: 10,
-            transition: 'border-color 0.15s',
-            padding: dragOver ? '0.5rem' : 0,
-          }}
-        >
-          {loading ? (
-            <div style={{ padding: '3rem', textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Loading…
-            </div>
-          ) : filtered.length === 0 ? (
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                padding: '4rem 2rem', textAlign: 'center',
-                border: '2px dashed rgba(255,255,255,0.1)',
-                borderRadius: 10, cursor: 'pointer', transition: 'border-color 0.15s',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)')}
-            >
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '3rem', color: 'var(--text-muted)', lineHeight: 1, marginBottom: '0.75rem' }}>+</div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                {filter !== 'all' ? `No ${FILE_TYPE_LABELS[filter] || filter} files yet.` : 'Drop files here or click to upload.'}
+        {/* ── Photos & files ── */}
+        {section === 'library' && (
+          <section id="section-media" aria-labelledby="media-lib" className={styles.page} style={{ gap: '1rem' }}>
+            <div className={styles.sectionHead}>
+              <div>
+                <h2 id="media-lib" className={styles.sectionTitle}>Photos &amp; files</h2>
+                <p className={styles.sectionSub}>Star the photos you want in your press kit and on posters. Drag files anywhere here to upload.</p>
               </div>
-            </div>
-          ) : (
-            <>
-              {featuredError && (
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#f87171', marginBottom: '0.6rem' }}>
-                  {featuredError}
-                </div>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
-                {filtered.map(item => (
-                  <MediaCard
-                    key={item.id}
-                    item={item}
-                    signedUrl={signedUrls[item.id]}
-                    urlLoading={loading || (!signedUrls[item.id] && !failedUrlIds.has(item.id))}
-                    urlFailed={failedUrlIds.has(item.id)}
-                    onDelete={handleDelete}
-                    onToggleFeatured={handleToggleFeatured}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* ══════════════════════════════════════════════════════════════════
-            DOCUMENTS
-        ══════════════════════════════════════════════════════════════════ */}
-        <div style={{ marginTop: '3.5rem', paddingTop: '2.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.9rem', color: 'var(--text-primary)', margin: '0 0 0.25rem', lineHeight: 1 }}>
-              DOCUMENTS
-            </h2>
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Riders, legal docs, and press materials — stored privately
-            </div>
-          </div>
-
-          {docViewError && (
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#f87171', marginBottom: '0.75rem' }}>
-              ⚠ {docViewError}
-            </div>
-          )}
-          {docDeleteError && (
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#f87171', marginBottom: '0.75rem' }}>
-              ⚠ {docDeleteError}
-            </div>
-          )}
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
-
-            {DOC_CATEGORIES.map(cat => {
-              const slot = docSlots[cat.key] ?? null;
-              const history = docHistory[cat.key] ?? [];
-              const historyOpen = !!docHistoryOpen[cat.key];
-
-              return (
-                <div key={cat.key} style={{
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: 8,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: '1rem',
-                  gap: '0.5rem',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem' }}>
-                    <div style={{ flexShrink: 0, marginTop: '0.1rem' }}>
-                      <DocCategoryIcon categoryKey={cat.key} />
-                    </div>
-                    <div style={{
-                      fontFamily: 'var(--font-display)', fontSize: '0.78rem',
-                      letterSpacing: '0.1em', color: 'var(--accent)',
-                      textTransform: 'uppercase', lineHeight: 1.3,
-                    }}>
-                      {cat.label}
-                    </div>
-                  </div>
-
-                  {docsLoading ? (
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>Loading…</div>
-                  ) : slot ? (
-                    <>
-                      <div style={{ flex: 1 }}>
-                        <div style={{
-                          fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-primary)',
-                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        }} title={slot.file_name}>
-                          {slot.file_name}
-                        </div>
-                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                          {formatDate(slot.created_at)} · {formatBytes(slot.file_size_bytes)}
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
-                          onClick={() => fetchDocSignedUrl(slot.id)}
-                          disabled={docFetchingUrl === slot.id}
-                        >
-                          {docFetchingUrl === slot.id ? 'Loading…' : 'View'}
-                        </button>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
-                          onClick={() => openDocUpload(cat.key)}
-                          disabled={docConfirmDeleteId === slot.id}
-                        >
-                          Replace
-                        </button>
-                        {docConfirmDeleteId !== slot.id ? (
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', color: '#f87171' }}
-                            onClick={() => setDocConfirmDeleteId(slot.id)}
-                          >
-                            Delete
-                          </button>
-                        ) : (
-                          <>
-                            <button
-                              className="btn btn-sm"
-                              style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', background: '#f87171', color: '#000', border: 'none' }}
-                              onClick={() => handleDocDelete(slot.id, cat.key)}
-                              disabled={docDeletingId === slot.id}
-                            >
-                              {docDeletingId === slot.id ? 'Deleting…' : 'Confirm'}
-                            </button>
-                            <button
-                              className="btn btn-ghost btn-sm"
-                              style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
-                              onClick={() => setDocConfirmDeleteId(null)}
-                              disabled={docDeletingId === slot.id}
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        )}
-                      </div>
-
-                      {history.length > 0 && (
-                        <div>
-                          <button
-                            onClick={() => toggleDocHistory(cat.key)}
-                            style={{
-                              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                              fontFamily: 'var(--font-body)', fontSize: '0.68rem',
-                              color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem',
-                            }}
-                          >
-                            {historyOpen ? '▲' : '▼'} {history.length} older version{history.length !== 1 ? 's' : ''}
-                          </button>
-                          {historyOpen && (
-                            <div style={{ marginTop: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                              {history.map(h => (
-                                <div key={h.id} style={{
-                                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                  padding: '0.3rem 0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 4, gap: '0.4rem',
-                                }}>
-                                  <span style={{
-                                    fontFamily: 'var(--font-body)', fontSize: '0.67rem', color: 'var(--text-muted)',
-                                    flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                  }}>
-                                    {formatDate(h.created_at)}
-                                  </span>
-                                  <button
-                                    className="btn btn-ghost btn-sm"
-                                    style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', flexShrink: 0 }}
-                                    onClick={() => fetchDocSignedUrl(h.id)}
-                                    disabled={docFetchingUrl === h.id}
-                                  >
-                                    {docFetchingUrl === h.id ? '…' : 'View'}
-                                  </button>
-                                  {docConfirmDeleteId !== h.id ? (
-                                    <button
-                                      className="btn btn-ghost btn-sm"
-                                      style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', flexShrink: 0, color: '#f87171' }}
-                                      onClick={() => setDocConfirmDeleteId(h.id)}
-                                    >
-                                      Delete
-                                    </button>
-                                  ) : (
-                                    <>
-                                      <button
-                                        className="btn btn-sm"
-                                        style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', flexShrink: 0, background: '#f87171', color: '#000', border: 'none' }}
-                                        onClick={() => handleDocDelete(h.id, cat.key)}
-                                        disabled={docDeletingId === h.id}
-                                      >
-                                        {docDeletingId === h.id ? '…' : 'Confirm'}
-                                      </button>
-                                      <button
-                                        className="btn btn-ghost btn-sm"
-                                        style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', flexShrink: 0 }}
-                                        onClick={() => setDocConfirmDeleteId(null)}
-                                        disabled={docDeletingId === h.id}
-                                      >
-                                        ✕
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <div style={{ flex: 1, fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.5 }}>
-                        No {cat.label.toLowerCase()} uploaded yet
-                      </div>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        style={{ fontSize: '0.72rem', padding: '0.25rem 0.6rem', alignSelf: 'flex-start' }}
-                        onClick={() => openDocUpload(cat.key)}
-                      >
-                        + Upload
-                      </button>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Press Photos shortcut */}
-            <div style={{
-              background: 'rgba(255,255,255,0.02)',
-              border: '1px dashed rgba(255,255,255,0.12)',
-              borderRadius: 8, display: 'flex', flexDirection: 'column', padding: '1rem', gap: '0.5rem',
-            }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.78rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', lineHeight: 1.2 }}>
-                Press Photos
-              </div>
-              <div style={{ flex: 1, fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                {loading ? 'Loading…' : photoCount > 0
-                  ? `${photoCount} photo${photoCount !== 1 ? 's' : ''} in Media Library`
-                  : 'No photos uploaded yet'}
-              </div>
-              <a href="#section-media" style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--accent)', textDecoration: 'none', alignSelf: 'flex-start' }}>
-                ↑ Go to Media Library
-              </a>
-            </div>
-
-            {/* Show Posters shortcut */}
-            <div style={{
-              background: 'rgba(255,255,255,0.02)',
-              border: '1px dashed rgba(255,255,255,0.12)',
-              borderRadius: 8, display: 'flex', flexDirection: 'column', padding: '1rem', gap: '0.5rem',
-            }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.78rem', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', lineHeight: 1.2 }}>
-                Show Posters
-              </div>
-              <div style={{ flex: 1, fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                Generate 1080 × 1512 px show posters
-              </div>
-              <a href="#section-posters" style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--accent)', textDecoration: 'none', alignSelf: 'flex-start' }}>
-                ↑ Go to Posters
-              </a>
-            </div>
-
-          </div>
-        </div>
-
-        {/* ══════════════════════════════════════════════════════════════════
-            SHOW POSTERS
-        ══════════════════════════════════════════════════════════════════ */}
-        <div id="section-posters" style={{ marginTop: '3.5rem', paddingTop: '2.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.9rem', color: 'var(--text-primary)', margin: '0 0 0.25rem', lineHeight: 1 }}>
-              SHOW POSTERS
-            </h2>
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Generate 1080 × 1512 px PNG posters for your shows
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-
-            <div style={{ flex: '1 1 360px', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-
-              <div className="field">
-                <label className="field-label">Show</label>
-                <select
-                  className="input"
-                  value={posterBookingId}
-                  onChange={e => { setPosterBookingId(e.target.value); setSaveMsg(''); }}
-                >
-                  <option value="">— Select a show —</option>
-                  {bookings.map(b => {
-                    const venue = b.venue as any;
-                    const label = [venue?.name, venue?.city].filter(Boolean).join(', ');
-                    return (
-                      <option key={b.id} value={b.id}>
-                        {label || 'Unnamed venue'} · {formatShowDate(b.show_date)}
-                      </option>
-                    );
-                  })}
-                </select>
-                {bookings.length === 0 && (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-                    No upcoming shows found. Add shows on the Bookings page.
-                  </div>
-                )}
-              </div>
-
-              <div className="field">
-                <label className="field-label">Style</label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  {(['americana', 'electric', 'western'] as const).map(s => (
-                    <button
-                      key={s}
-                      className={`btn btn-sm ${posterStyle === s ? 'btn-primary' : 'btn-ghost'}`}
-                      onClick={() => setPosterStyle(s)}
-                      style={{ flex: 1, textTransform: 'capitalize' }}
-                    >
-                      {s.charAt(0).toUpperCase() + s.slice(1)}
+              {filterTabs.length > 1 && (
+                <div className={styles.chips} role="group" aria-label="Filter by type">
+                  {filterTabs.map(t => (
+                    <button key={t} type="button" className={`${styles.chip} ${filter === t ? styles.chipOn : ''}`} aria-pressed={filter === t} onClick={() => setFilter(t)}>
+                      {t === 'all' ? 'All' : (FILE_TYPE_LABELS[t] || t)} <span>{typeCounts[t] || 0}</span>
                     </button>
                   ))}
                 </div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                  {posterStyle === 'americana' && 'Deep sepia tones · gold frame · Bebas Neue headline'}
-                  {posterStyle === 'electric'  && 'Full-bleed photo · dark/orange gradient · high contrast'}
-                  {posterStyle === 'western'   && 'Nested border frame · desaturated photo · Playfair serif'}
+              )}
+            </div>
+
+            {featuredError && <p className={styles.alert} role="alert">{featuredError}</p>}
+
+            <div className={`${styles.drop} ${dragOver ? styles.dropOver : ''}`} onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}>
+              {loading ? (
+                <div className={styles.grid}>{Array.from({ length: 4 }, (_, i) => <div key={i} className="tour-skeleton" style={{ aspectRatio: '3 / 2.4', borderRadius: 'var(--radius-sm)' }} />)}</div>
+              ) : filtered.length === 0 ? (
+                <button type="button" className={styles.emptyDrop} onClick={() => fileInputRef.current?.click()}>
+                  <span className={styles.emptyPlus} aria-hidden="true">+</span>
+                  {filter !== 'all' ? `No ${(FILE_TYPE_LABELS[filter] || filter).toLowerCase()} files yet.` : 'Drop photos here, or click to upload your first one.'}
+                </button>
+              ) : (
+                <div className={styles.grid}>
+                  {filtered.map(item => (
+                    <MediaCard
+                      key={item.id}
+                      item={item}
+                      signedUrl={signedUrls[item.id]}
+                      urlLoading={loading || (!signedUrls[item.id] && !failedUrlIds.has(item.id))}
+                      urlFailed={failedUrlIds.has(item.id)}
+                      onDelete={handleDelete}
+                      onToggleFeatured={handleToggleFeatured}
+                    />
+                  ))}
                 </div>
-              </div>
+              )}
+            </div>
+          </section>
+        )}
 
-              <div className="field">
-                <label className="field-label">
-                  Photo
-                  <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.4rem' }}>(all photos · ★ starred first)</span>
-                </label>
-                {epkPhotos.length === 0 ? (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.5 }}>
-                    No photos yet — upload photos in the Media Assets section above.
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-                      {epkPhotos.map(photo => (
-                        <button
-                          key={photo.id}
-                          onClick={() => setSelectedPhotoId(photo.id)}
-                          title={photo.file_name}
-                          style={{
-                            position: 'relative', flexShrink: 0, width: 76, height: 76, padding: 0,
-                            border: selectedPhotoId === photo.id ? '2px solid var(--accent)' : '2px solid rgba(255,255,255,0.12)',
-                            borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
-                            background: 'rgba(0,0,0,0.3)', transition: 'border-color 0.15s',
-                            outline: selectedPhotoId === photo.id ? '2px solid rgba(200,146,26,0.4)' : 'none',
-                            outlineOffset: 1,
-                          }}
-                        >
-                          {photo.thumbnailUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={photo.thumbnailUrl} alt={photo.file_name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                          ) : (
-                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.65rem', fontFamily: 'var(--font-body)' }}>img</div>
-                          )}
-                          {photo.is_featured && (
-                            <span style={{ position: 'absolute', top: 3, right: 4, fontSize: '0.65rem', color: '#C8921A', lineHeight: 1, pointerEvents: 'none' }}>★</span>
-                          )}
-                        </button>
-                      ))}
+        {/* ── Documents ── */}
+        {section === 'documents' && (
+          <section aria-labelledby="media-docs" className={styles.page} style={{ gap: '1rem' }}>
+            <div className={styles.sectionHead}>
+              <div>
+                <h2 id="media-docs" className={styles.sectionTitle}>Documents</h2>
+                <p className={styles.sectionSub}>The paperwork venues ask for: riders, W-9, insurance and your one-sheet. Stored privately.</p>
+              </div>
+              <div className={styles.docMeter}>
+                <strong>{docsOnFile} of {DOC_CATEGORIES.length}</strong> ready
+                <div className="tour-meter" aria-hidden="true"><div className={`tour-meter-bar${docsOnFile === DOC_CATEGORIES.length ? ' tour-meter-bar--done' : ''}`} style={{ width: `${(docsOnFile / DOC_CATEGORIES.length) * 100}%` }} /></div>
+              </div>
+            </div>
+
+            {docViewError && <p className={styles.alert} role="alert">{docViewError}</p>}
+            {docDeleteError && <p className={styles.alert} role="alert">{docDeleteError}</p>}
+
+            <div className={styles.docs}>
+              {DOC_CATEGORIES.map(cat => {
+                const slot = docSlots[cat.key] ?? null;
+                const history = docHistory[cat.key] ?? [];
+                const historyOpen = !!docHistoryOpen[cat.key];
+                return (
+                  <article key={cat.key} className={`${styles.doc} ${docsLoading ? '' : slot ? styles.docReady : styles.docMissing}`} aria-labelledby={`doc-${cat.key}`}>
+                    <div className={styles.docHead}>
+                      <DocCategoryIcon categoryKey={cat.key} />
+                      <h3 id={`doc-${cat.key}`} className={styles.docTitle}>{cat.label}</h3>
+                      {!docsLoading && (
+                        <span className={`${styles.docStatus} ${slot ? styles.docStatusOk : styles.docStatusMissing}`}>{slot ? 'On file' : 'Missing'}</span>
+                      )}
                     </div>
-                    {selectedPhotoId && (
-                      <button className="btn btn-ghost btn-sm" onClick={() => setSelectedPhotoId(null)} style={{ fontSize: '0.7rem', alignSelf: 'flex-start', padding: '0.15rem 0.5rem' }}>
-                        Use no photo
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
 
-              <div className="field">
-                <label className="field-label">Optional fields</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {docsLoading ? (
+                      <div className="tour-skeleton" style={{ height: '3rem', borderRadius: 6 }} />
+                    ) : slot ? (
+                      <>
+                        <div>
+                          <div className={styles.docFile} title={slot.file_name}>{slot.file_name}</div>
+                          <div className={styles.docMeta}>{formatDate(slot.created_at)} · {formatBytes(slot.file_size_bytes)}</div>
+                        </div>
+                        <div className={styles.docActions}>
+                          <button type="button" className="btn btn-secondary" onClick={() => fetchDocSignedUrl(slot.id)} disabled={docFetchingUrl === slot.id}>
+                            {docFetchingUrl === slot.id ? 'Opening…' : 'View'}
+                          </button>
+                          <button type="button" className="btn btn-secondary" onClick={() => openDocUpload(cat.key)} disabled={docConfirmDeleteId === slot.id}>Replace</button>
+                          {docConfirmDeleteId !== slot.id ? (
+                            <button type="button" className={`btn btn-secondary ${styles.danger}`} onClick={() => setDocConfirmDeleteId(slot.id)}>Delete</button>
+                          ) : (
+                            <>
+                              <button type="button" className={`btn ${styles.dangerFill}`} onClick={() => handleDocDelete(slot.id, cat.key)} disabled={docDeletingId === slot.id}>
+                                {docDeletingId === slot.id ? 'Deleting…' : 'Delete it'}
+                              </button>
+                              <button type="button" className="btn btn-secondary" onClick={() => setDocConfirmDeleteId(null)} disabled={docDeletingId === slot.id}>Keep</button>
+                            </>
+                          )}
+                        </div>
+                        {history.length > 0 && (
+                          <div>
+                            <button type="button" className={styles.historyToggle} aria-expanded={historyOpen} onClick={() => toggleDocHistory(cat.key)}>
+                              {historyOpen ? '▲' : '▼'} {history.length} older version{history.length !== 1 ? 's' : ''}
+                            </button>
+                            {historyOpen && (
+                              <ul className={styles.historyList}>
+                                {history.map(h => (
+                                  <li key={h.id} className={styles.historyRow}>
+                                    <span>{formatDate(h.created_at)}</span>
+                                    <button type="button" className="btn btn-secondary" onClick={() => fetchDocSignedUrl(h.id)} disabled={docFetchingUrl === h.id}>
+                                      {docFetchingUrl === h.id ? '…' : 'View'}
+                                    </button>
+                                    {docConfirmDeleteId !== h.id ? (
+                                      <button type="button" className={`btn btn-secondary ${styles.danger}`} onClick={() => setDocConfirmDeleteId(h.id)} aria-label={`Delete version from ${formatDate(h.created_at)}`}>Delete</button>
+                                    ) : (
+                                      <>
+                                        <button type="button" className={`btn ${styles.dangerFill}`} onClick={() => handleDocDelete(h.id, cat.key)} disabled={docDeletingId === h.id}>
+                                          {docDeletingId === h.id ? '…' : 'Delete it'}
+                                        </button>
+                                        <button type="button" className="btn btn-secondary" onClick={() => setDocConfirmDeleteId(null)} disabled={docDeletingId === h.id} aria-label="Keep this version">Keep</button>
+                                      </>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className={styles.docEmpty}>Not uploaded yet.</p>
+                        <div className={styles.docActions}>
+                          <button type="button" className="btn btn-primary" onClick={() => openDocUpload(cat.key)}>+ Upload</button>
+                        </div>
+                      </>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* ── Show posters ── */}
+        {section === 'posters' && (
+          <section id="section-posters" aria-labelledby="media-posters" className={styles.page} style={{ gap: '1rem' }}>
+            <div className={styles.sectionHead}>
+              <div>
+                <h2 id="media-posters" className={styles.sectionTitle}>Show posters</h2>
+                <p className={styles.sectionSub}>Pick a show, a style and a photo. You get a 1080 × 1512 PNG ready for Instagram and the venue&apos;s socials.</p>
+              </div>
+            </div>
+
+            <div className={styles.posterGrid}>
+              <div className={styles.panel}>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>Show</span>
+                  <select className="select" value={posterBookingId} onChange={e => { setPosterBookingId(e.target.value); setSaveMsg(''); }}>
+                    <option value="">Select a show…</option>
+                    {bookings.map(b => {
+                      const label = [b.venue?.name, b.venue?.city].filter(Boolean).join(', ');
+                      return <option key={b.id} value={b.id}>{label || 'Unnamed venue'} · {formatShowDate(b.show_date)}</option>;
+                    })}
+                  </select>
+                  {bookings.length === 0 && <p className={styles.fieldHint}>No upcoming shows on the books yet. Confirmed shows show up here.</p>}
+                </label>
+
+                <fieldset className={styles.field} style={{ border: 0, padding: 0, margin: 0 }}>
+                  <legend className={styles.fieldLabel} style={{ marginBottom: '0.4rem' }}>Style</legend>
+                  <div className={styles.styles3}>
+                    {POSTER_STYLES.map(p => (
+                      <button key={p.key} type="button" className={`${styles.styleBtn} ${posterStyle === p.key ? styles.styleOn : ''}`} aria-pressed={posterStyle === p.key} onClick={() => setPosterStyle(p.key)}>
+                        <span className={`${styles.styleSwatch} ${styles[p.swatch]}`} aria-hidden="true" />
+                        <span className={styles.styleName}>{p.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {posterStyleInfo && <p className={styles.fieldHint}>{posterStyleInfo.note}</p>}
+                </fieldset>
+
+                <div className={styles.field}>
+                  <span className={styles.fieldLabel} id="poster-photo">Photo<span>(★ starred first)</span></span>
+                  {epkPhotos.length === 0 ? (
+                    <p className={styles.fieldHint}>No photos yet. <button type="button" className="btn btn-secondary" onClick={() => setSection('library')}>Upload photos</button></p>
+                  ) : (
+                    <>
+                      <div className={styles.photos} role="group" aria-labelledby="poster-photo">
+                        {epkPhotos.map(photo => (
+                          <button key={photo.id} type="button" className={`${styles.photoBtn} ${selectedPhotoId === photo.id ? styles.photoOn : ''}`}
+                            onClick={() => setSelectedPhotoId(photo.id)} aria-pressed={selectedPhotoId === photo.id} aria-label={photo.file_name} title={photo.file_name}>
+                            {photo.thumbnailUrl
+                              // eslint-disable-next-line @next/next/no-img-element
+                              ? <img src={photo.thumbnailUrl} alt="" loading="lazy" />
+                              : <span className={styles.photoNone}>img</span>}
+                            {photo.is_featured && <span className={styles.photoStar} aria-hidden="true">★</span>}
+                          </button>
+                        ))}
+                      </div>
+                      {selectedPhotoId && (
+                        <button type="button" className="btn btn-secondary" style={{ alignSelf: 'flex-start' }} onClick={() => setSelectedPhotoId(null)}>Use no photo</button>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <fieldset className={styles.field} style={{ border: 0, padding: 0, margin: 0 }}>
+                  <legend className={styles.fieldLabel} style={{ marginBottom: '0.4rem' }}>Add to the poster</legend>
                   {[
                     { show: showTicketPrice, setShow: setShowTicketPrice, label: 'Ticket price / door cover', value: ticketPrice, setValue: setTicketPrice, placeholder: 'e.g. $15 advance · $20 door', type: 'text' },
                     { show: showOpener, setShow: setShowOpener, label: 'Opener / support act', value: openerName, setValue: setOpenerName, placeholder: 'e.g. The Desert Sons', type: 'text' },
                     { show: showAgeRestriction, setShow: setShowAgeRestriction, label: 'Age restriction', value: ageRestriction, setValue: setAgeRestriction, placeholder: 'e.g. 21+ · All ages', type: 'text' },
+                    { show: showTicketUrl, setShow: setShowTicketUrl, label: 'Ticket link (adds a QR code)', value: ticketUrl, setValue: setTicketUrl, placeholder: 'https://…', type: 'url' },
                   ].map(({ show, setShow, label, value, setValue, placeholder, type }) => (
-                    <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={show} onChange={e => setShow(e.target.checked)} />
-                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>{label}</span>
-                      </label>
-                      {show && <input className="input" type={type} placeholder={placeholder} value={value} onChange={e => setValue(e.target.value)} style={{ marginLeft: '1.4rem' }} />}
+                    <div key={label} className={styles.option}>
+                      <label><input type="checkbox" checked={show} onChange={e => setShow(e.target.checked)} />{label}</label>
+                      {show && <input className="input" type={type} placeholder={placeholder} value={value} aria-label={label} onChange={e => setValue(e.target.value)} />}
                     </div>
                   ))}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={showTicketUrl} onChange={e => setShowTicketUrl(e.target.checked)} />
-                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-                        Ticket link{' '}<span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>(generates QR code)</span>
-                      </span>
-                    </label>
-                    {showTicketUrl && <input className="input" type="url" placeholder="https://..." value={ticketUrl} onChange={e => setTicketUrl(e.target.value)} style={{ marginLeft: '1.4rem' }} />}
-                  </div>
-                </div>
+                </fieldset>
+
+                {generateError && <p className={styles.alert} role="alert">{generateError}</p>}
+                <button type="button" className="btn btn-primary" onClick={handleGenerate} disabled={!posterBookingId || generating}>
+                  {generating ? 'Making your poster…' : 'Make poster'}
+                </button>
               </div>
 
-              {generateError && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#f87171' }}>{generateError}</div>}
-
-              <button className="btn btn-primary" onClick={handleGenerate} disabled={!posterBookingId || generating}>
-                {generating ? 'Generating…' : 'Generate Poster'}
-              </button>
-            </div>
-
-            <div style={{ flex: '1 1 280px', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div style={{
-                position: 'relative', width: '100%', paddingBottom: `${(1512 / 1080) * 100}%`,
-                border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8,
-                overflow: 'hidden', background: 'rgba(0,0,0,0.25)',
-              }}>
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className={styles.panel}>
+                <div className={styles.preview} aria-live="polite" aria-busy={generating}>
                   {generating ? (
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>Generating…</div>
+                    <div className={`${styles.previewEmpty} tour-skeleton`}><strong>Printing…</strong>This takes a few seconds.</div>
                   ) : generatedUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={generatedUrl} alt="Generated poster preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    <img src={generatedUrl} alt="Your poster preview" />
                   ) : (
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem', lineHeight: 1.6 }}>
-                      Select a show and click<br />Generate Poster
-                    </div>
+                    <div className={styles.previewEmpty}><strong>Your poster</strong>Pick a show and press Make poster.</div>
                   )}
                 </div>
+                {generatedUrl && (
+                  <div className={styles.previewActions}>
+                    <button type="button" className="btn btn-secondary" onClick={handleDownload}>↓ Download PNG</button>
+                    <button type="button" className="btn btn-primary" onClick={handleSaveToLibrary} disabled={savingToLibrary}>
+                      {savingToLibrary ? 'Saving…' : 'Save to library'}
+                    </button>
+                    {saveMsg && <span className={saveMsg.startsWith('Error') ? styles.alert : styles.ok} role="status">{saveMsg}</span>}
+                  </div>
+                )}
               </div>
-
-              {generatedUrl && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
-                  <button className="btn btn-ghost btn-sm" onClick={handleDownload} style={{ fontSize: '0.78rem' }}>↓ Download PNG</button>
-                  <button
-                    className="btn btn-sm" onClick={handleSaveToLibrary} disabled={savingToLibrary}
-                    style={{ fontSize: '0.78rem', background: 'var(--accent)', color: '#000', border: 'none', opacity: savingToLibrary ? 0.6 : 1 }}
-                  >
-                    {savingToLibrary ? 'Saving…' : 'Save to Library'}
-                  </button>
-                  {saveMsg && (
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.73rem', color: saveMsg.startsWith('Error') ? '#f87171' : '#4ade80' }}>
-                      {saveMsg}
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
-
-          </div>
-        </div>
-
+          </section>
+        )}
       </div>
 
-      {/* ── Upload Modal ───────────────────────────────────────────────────── */}
-      {showUploadModal && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000, padding: '1rem',
-        }}>
-          <div style={{
-            background: 'var(--bg-card, #1a1208)',
-            border: '1px solid var(--border)',
-            borderRadius: 10, padding: '1.5rem',
-            width: '100%', maxWidth: 440,
-            display: 'flex', flexDirection: 'column', gap: '1rem',
-          }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--text-primary)', lineHeight: 1 }}>
-              {pendingDocCategory ? 'UPLOAD DOCUMENT' : 'UPLOAD FILE'}
-            </div>
+      {/* ── Upload dialog ── */}
+      <dialog ref={uploadDialogRef} className={styles.dialog} aria-labelledby="upload-title"
+        onCancel={e => { e.preventDefault(); closeUpload(); }}>
+        <div className={styles.dialogBody}>
+          <h2 id="upload-title" className={styles.dialogTitle}>{pendingDocCategory ? 'Upload document' : 'Upload file'}</h2>
 
-            {pendingDocCategory && (
-              <div style={{
-                fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)',
-                background: 'rgba(200,146,26,0.08)', border: '1px solid rgba(200,146,26,0.2)',
-                padding: '0.45rem 0.7rem', borderRadius: 5,
-              }}>
-                Category: <span style={{ color: 'var(--accent)' }}>
-                  {DOC_CATEGORIES.find(c => c.key === pendingDocCategory)?.label ?? pendingDocCategory}
-                </span>
-              </div>
-            )}
+          {pendingDocCategory && (
+            <div className={styles.dialogTag}>For: <strong>{DOC_CATEGORIES.find(c => c.key === pendingDocCategory)?.label ?? pendingDocCategory}</strong></div>
+          )}
 
-            {pendingFile && (
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', padding: '0.6rem 0.75rem', borderRadius: 6 }}>
-                <span style={{ color: 'var(--text-primary)' }}>{pendingFile.name}</span>
-                {' · '}
-                {formatBytes(pendingFile.size)}
-              </div>
-            )}
+          {pendingFile ? (
+            <div className={styles.dialogFile}><strong>{pendingFile.name}</strong> · {formatBytes(pendingFile.size)}</div>
+          ) : (
+            <button type="button" className={styles.dialogPick} onClick={() => fileInputRef.current?.click()}>Choose a file</button>
+          )}
 
-            {!pendingFile && (
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                style={{
-                  border: '2px dashed rgba(255,255,255,0.15)', borderRadius: 8,
-                  padding: '2rem', textAlign: 'center', cursor: 'pointer',
-                  fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)',
-                }}
-              >
-                Click to select a file
-              </div>
-            )}
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Description <span>(optional, read aloud by screen readers)</span></span>
+            <input className="input" value={altText} onChange={e => setAltText(e.target.value)} disabled={uploadState === 'uploading'} />
+          </label>
 
-            <div className="field">
-              <label className="field-label">Alt text (optional)</label>
-              <input
-                className="input"
-                placeholder="Describe the file for accessibility"
-                value={altText}
-                onChange={e => setAltText(e.target.value)}
-                disabled={uploadState === 'uploading'}
-              />
-            </div>
+          {!pendingDocCategory && (
+            <label className={styles.check}>
+              <input type="checkbox" checked={isPrimaryLogo} onChange={e => setIsPrimaryLogo(e.target.checked)} disabled={uploadState === 'uploading'} />
+              Use as the band&apos;s main logo
+            </label>
+          )}
 
-            {!pendingDocCategory && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-primary)' }}>
-                <input
-                  type="checkbox"
-                  checked={isPrimaryLogo}
-                  onChange={e => setIsPrimaryLogo(e.target.checked)}
-                  disabled={uploadState === 'uploading'}
-                />
-                Set as primary act logo
-              </label>
-            )}
+          {uploadState === 'error' && <p className={styles.alert} role="alert">{uploadError}</p>}
+          {uploadState === 'uploading' && <p className={styles.progress} role="status">{uploadProgress}</p>}
+          {uploadState === 'done' && <p className={styles.ok} role="status">Uploaded.</p>}
 
-            {uploadState === 'error' && (
-              <div style={{ color: '#f87171', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>{uploadError}</div>
-            )}
-            {uploadState === 'uploading' && (
-              <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>{uploadProgress}</div>
-            )}
-            {uploadState === 'done' && (
-              <div style={{ color: '#4ade80', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>Uploaded successfully.</div>
-            )}
-
-            <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
-              <button
-                className="btn btn-ghost"
-                onClick={() => { setShowUploadModal(false); setPendingFile(null); setPendingDocCategory(null); }}
-                disabled={uploadState === 'uploading'}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={upload}
-                disabled={!pendingFile || uploadState === 'uploading' || uploadState === 'done'}
-              >
-                {uploadState === 'uploading' ? 'Uploading…' : 'Upload'}
-              </button>
-            </div>
+          <div className={styles.dialogActions}>
+            <button type="button" className="btn btn-secondary" onClick={closeUpload} disabled={uploadState === 'uploading'}>Cancel</button>
+            <button type="button" className="btn btn-primary" onClick={upload} disabled={!pendingFile || uploadState === 'uploading' || uploadState === 'done'}>
+              {uploadState === 'uploading' ? 'Uploading…' : 'Upload'}
+            </button>
           </div>
         </div>
-      )}
+      </dialog>
     </AppShell>
   );
 }
