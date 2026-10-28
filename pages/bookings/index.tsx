@@ -12,6 +12,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import PageHero from '../../components/layout/PageHero';
 import MarqueeScene from '../../components/bookings/MarqueeScene';
@@ -88,7 +89,16 @@ export default function BookingsPage() {
   const [reloadKey, setReloadKey] = useState(0);
 
   const [tab, setTab] = useState<BookingsTab>('upcoming');
-  const [stage, setStage] = useState<BookingStatus | null>(null);
+  // Links such as the "Confirmed" pill (/bookings?filter=confirmed) open the
+  // page on one stage; only known stages are honoured. Until the user picks a
+  // stage themselves (undefined), the link's stage applies.
+  const router = useRouter();
+  const linkedStage = useMemo<BookingStatus | null>(() => {
+    const wanted = router.isReady ? router.query.filter : undefined;
+    return BOOKING_STATUS_ORDER.find(st => st === wanted) ?? null;
+  }, [router.isReady, router.query.filter]);
+  const [pickedStage, setStage] = useState<BookingStatus | null | undefined>(undefined);
+  const stage = pickedStage === undefined ? linkedStage : pickedStage;
   const [query, setQuery] = useState('');
   const [layout, setLayout] = useState<Layout>('board');
   // The saved layout is read after mount so the server render and the first
@@ -98,6 +108,8 @@ export default function BookingsPage() {
       if (window.localStorage.getItem(LAYOUT_KEY) === 'list') setLayout('list');
     } catch { /* storage unavailable: default layout */ }
   }, []);
+
+
   const pickLayout = (l: Layout) => {
     setLayout(l);
     try { window.localStorage.setItem(LAYOUT_KEY, l); } catch { /* storage unavailable: keep it for this visit only */ }
@@ -167,7 +179,7 @@ export default function BookingsPage() {
                 className={`${styles.stage} ${stage === c.status ? styles.stageOn : ''}`}
                 style={stageColor(c.status)}
                 aria-pressed={stage === c.status}
-                onClick={() => setStage(s => (s === c.status ? null : c.status))}
+                onClick={() => setStage(stage === c.status ? null : c.status)}
               >
                 <span className={styles.stageLabel}>{BOOKING_STATUS_LABELS[c.status]}</span>
                 <span className={styles.stageCount}>{loading ? '–' : c.count}</span>
