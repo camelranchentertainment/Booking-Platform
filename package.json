@@ -24,7 +24,14 @@
   "overrides": {
     "next": {
       "postcss": "^8.5.10"
-    }
+    },
+    "@mendable/firecrawl-js": {
+      "zod": "4.6.7"
+    },
+    "firecrawl": {
+      "zod": "4.6.7"
+    },
+    "fflate": "^0.8.2"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
@@ -32,7 +39,7 @@
     "@sentry/nextjs": "^10.51.0",
     "@supabase/supabase-js": "^2.90.1",
     "@types/qrcode": "^1.5.6",
-    "@vercel/og": "^0.11.1",
+    "@vercel/og": "^1.0.3",
     "autoprefixer": "^10.4.23",
     "axios": "^1.16.1",
     "cheerio": "^1.1.2",
@@ -52,8 +59,8 @@
     "stripe": "^14.0.0",
     "svix": "^1.95.2",
     "tailwindcss": "^4.1.18",
-    "xlsx": "^0.18.5",
-    "zod": "4.6.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.3",
