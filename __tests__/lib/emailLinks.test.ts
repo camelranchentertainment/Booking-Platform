@@ -1,4 +1,4 @@
-import { resolveEmailLinks } from '../../lib/server/emailLinks';
+import { findVenueTargets, resolveEmailLinks } from '../../lib/server/emailLinks';
 
 const ID = {
   booking: '11111111-1111-4111-8111-111111111111',
@@ -69,5 +69,35 @@ describe('resolveEmailLinks', () => {
     expect(r.links.bookingId).toBeNull();
     expect(r.links.venueId).toBeNull();
     expect(r.dropped.sort()).toEqual(['bookingId', 'venueId']);
+  });
+});
+
+describe('findVenueTargets', () => {
+  const VENUE = '22222222-2222-4222-8222-222222222222';
+  function listClient(result: { data?: unknown; error?: { message: string } | null } | 'throw') {
+    const filters: Array<[string, string, unknown]> = [];
+    const b: any = {
+      select: () => b,
+      eq: (col: string, v: unknown) => { filters.push(['eq', col, v]); return b; },
+      neq: (col: string, v: unknown) => { filters.push(['neq', col, v]); return b; },
+      then: (ok: (v: unknown) => unknown, bad: (e: unknown) => unknown) =>
+        (result === 'throw' ? Promise.reject(new Error('net')) : Promise.resolve(result)).then(ok, bad),
+    };
+    return { filters, from: () => b };
+  }
+  beforeEach(() => jest.spyOn(console, 'error').mockImplementation(() => {}));
+  afterEach(() => jest.restoreAllMocks());
+
+  it("returns the venue's targets on the band's non-cancelled tours", async () => {
+    const c = listClient({ data: [{ id: 'tv1' }, { id: 'tv2' }], error: null });
+    await expect(findVenueTargets(c, 'act-1', VENUE)).resolves.toEqual(['tv1', 'tv2']);
+    expect(c.filters).toEqual(expect.arrayContaining([
+      ['eq', 'venue_id', VENUE], ['eq', 'tour.act_id', 'act-1'], ['neq', 'tour.status', 'cancelled'],
+    ]));
+  });
+
+  it('returns [] on an error or a throw', async () => {
+    await expect(findVenueTargets(listClient({ data: null, error: { message: 'boom' } }), 'act-1', VENUE)).resolves.toEqual([]);
+    await expect(findVenueTargets(listClient('throw'), 'act-1', VENUE)).resolves.toEqual([]);
   });
 });

@@ -4,7 +4,7 @@ import { sendViaGmail } from './gmailSend';
 import { GmailReconnectError, isGmailAuthError } from './gmailAuthError';
 import type { ResolvedAttachment } from './server/emailAttachments';
 import type { AttachmentRef } from './emailAttachments';
-import { resolveEmailLinks } from './server/emailLinks';
+import { findVenueTargets, resolveEmailLinks } from './server/emailLinks';
 
 export function stripHtml(html: string): string {
   return html
@@ -88,6 +88,15 @@ export async function sendActEmail(params: {
   });
   if (dropped.length) {
     console.warn('[emailSend] filing email without links that are not this band\'s records', { actId: params.actId, dropped });
+  }
+
+  // The tour targets this email counts as contact for. Replies and agent sends
+  // carry only the venue, so find its targets on the band's live tours; when
+  // there's exactly one, file the email against it too.
+  let contactedTargetIds: string[] = links.tourVenueId ? [links.tourVenueId] : [];
+  if (!links.tourVenueId && links.venueId) {
+    contactedTargetIds = await findVenueTargets(service, params.actId, links.venueId);
+    if (contactedTargetIds.length === 1) links.tourVenueId = contactedTargetIds[0];
   }
 
   const [{ data: act }, { data: creds }] = await Promise.all([
@@ -190,19 +199,20 @@ export async function sendActEmail(params: {
     });
   }
 
-  if (links.tourVenueId) {
-    await service
+  for (const tourVenueId of contactedTargetIds) {
+    const { error: touchErr } = await service
       .from('tour_venues')
       .update({ last_contacted_at: now, updated_at: now })
-      .eq('id', links.tourVenueId);
+      .eq('id', tourVenueId);
+    if (touchErr) console.error('[emailSend] could not record last contact', { tourVenueId, code: touchErr.code });
     // The first email to a tour target marks it pitched (the tour card's
     // "Pitched" count reads this). Its outreach status is left to the user.
     const { error: pitchErr } = await service
       .from('tour_venues')
       .update({ pitched_at: now })
-      .eq('id', links.tourVenueId)
+      .eq('id', tourVenueId)
       .is('pitched_at', null);
-    if (pitchErr) console.error('[emailSend] could not mark target pitched', { tourVenueId: links.tourVenueId, code: pitchErr.code });
+    if (pitchErr) console.error('[emailSend] could not mark target pitched', { tourVenueId, code: pitchErr.code });
   }
 
   if (links.bookingId) {
