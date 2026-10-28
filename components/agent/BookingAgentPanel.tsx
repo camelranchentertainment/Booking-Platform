@@ -546,7 +546,11 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
         .dash-agent-form        { display:flex; align-items:flex-end; gap:0.5rem; padding:0.5rem 0.75rem 0.75rem; }
         textarea.dash-agent-input { flex:1 1 auto; min-width:0; width:auto; font-size:16px; line-height:1.5; resize:none; overflow-y:auto; max-height:8.5rem; }
         .dash-agent-btn         { flex:0 0 auto; min-width:44px; min-height:44px; justify-content:center; }
+        .dash-agent-hdr-actions { display:flex; flex-wrap:wrap; gap:0.5rem; }
         .dash-agent--popout     { margin:0; height:100vh; height:100dvh; border:0; border-radius:0; }
+        /* The pop-out is a narrow side window: keep the header buttons on one row. */
+        .dash-agent--popout .dash-agent-hdr-actions { gap:0.15rem; }
+        .dash-agent--popout .dash-agent-hdr-actions .btn { padding-left:0.45rem; padding-right:0.45rem; letter-spacing:0.06em; }
         .dash-agent-popout-btn  { display:none; }
         .dash-sr-only           { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
         @media(min-width:768px){
@@ -598,7 +602,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
                   </span>
                 </div>
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div className="dash-agent-hdr-actions">
                 {historyView !== null ? (
                   <button type="button" onClick={closeHistory} className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>
                     ← Back to today
@@ -639,7 +643,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
                     disabled={popOutBlocked}
                     title={popOutBlocked ? 'Finish or cancel what the agent is working on first' : 'Close this window and put the agent back on the dashboard'}
                   >
-                    ↙ Back to dashboard
+                    ↙ Dock
                   </button>
                 )}
               </div>
