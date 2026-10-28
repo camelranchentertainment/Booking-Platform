@@ -83,3 +83,31 @@ export async function resolveEmailLinks(
   }
   return { links: resolved, dropped };
 }
+
+/**
+ * The band's tour targets for a venue on tours that aren't cancelled.
+ *
+ * An email to a venue is contact with it on every live tour it's targeted on,
+ * whether or not the sender knew the tour target id: replies from the inbox
+ * and emails the agent sends carry only the venue. Without this the outreach
+ * list's "days since last contact" never moved for those sends (Oct 27 2026,
+ * Rustic Pine and Dan's SilverLeaf). Lookup failures return [] (logged).
+ */
+export async function findVenueTargets(client: LinkClient, actId: string, venueId: string): Promise<string[]> {
+  try {
+    const { data, error } = await client
+      .from('tour_venues')
+      .select('id, tour:tours!inner(act_id, status)')
+      .eq('venue_id', venueId)
+      .eq('tour.act_id', actId)
+      .neq('tour.status', 'cancelled');
+    if (error) {
+      console.error('[emailLinks] tour target lookup failed', { venueId, message: error.message });
+      return [];
+    }
+    return ((data ?? []) as Array<{ id: string }>).map(r => r.id);
+  } catch (err) {
+    console.error('[emailLinks] tour target lookup threw', { venueId, err });
+    return [];
+  }
+}

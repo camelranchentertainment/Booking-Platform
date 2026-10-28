@@ -14,15 +14,17 @@ import { sendViaGmail } from '../../lib/gmailSend';
 const BOOKING = '9deff02b-188a-4c65-b83e-1ac1feaeb949';
 const VENUE = '6dc97e81-5cb0-42fc-8b0d-c1f7f6214e2d';
 
-function setup({ bookingExists, logInsertError }: { bookingExists: boolean; logInsertError?: { code: string; message: string } }) {
+function setup({ bookingExists, logInsertError, venueTargets = [] }: { bookingExists: boolean; logInsertError?: { code: string; message: string }; venueTargets?: string[] }) {
   const inserts: Array<{ table: string; row: Record<string, any> }> = [];
-  const updates: Array<{ table: string; values: Record<string, unknown> }> = [];
+  const updates: Array<{ table: string; values: Record<string, unknown>; id?: unknown }> = [];
   const from = jest.fn((table: string) => {
     let update: Record<string, unknown> | null = null;
+    let idFilter: unknown;
     const c: Record<string, any> = {};
     c.select = () => c;
     c.in = () => c;
-    c.eq = () => c;
+    c.eq = (col: string, v: unknown) => { if (col === 'id') idFilter = v; return c; };
+    c.neq = () => c;
     c.is = () => c;
     c.update = (v: Record<string, unknown>) => ((update = v), c);
     c.insert = (row: Record<string, unknown>) => {
@@ -47,7 +49,9 @@ function setup({ bookingExists, logInsertError }: { bookingExists: boolean; logI
       return Promise.resolve({ data: { email: 'jake@camelranchbooking.com' }, error: null });
     };
     c.then = (ok: (v: unknown) => unknown) => {
-      if (update) updates.push({ table, values: update });
+      if (update) updates.push({ table, values: update, id: idFilter });
+      // A select on tour_venues (no update) is the venue's tour-target lookup.
+      if (!update && table === 'tour_venues') return Promise.resolve({ data: venueTargets.map(id => ({ id })), error: null }).then(ok);
       return Promise.resolve({ error: null }).then(ok);
     };
     return c;
@@ -90,5 +94,24 @@ describe('sendActEmail logging', () => {
     await expect(sendActEmail(params)).resolves.toEqual({ email_log_id: null });
     expect(sendViaGmail).toHaveBeenCalledTimes(1);
     expect(console.error).toHaveBeenCalledWith('[emailSend] email SENT but email_log insert failed', expect.objectContaining({ code: '23503' }));
+  });
+
+  it("counts a venue-only email (reply or agent send) as contact on the venue's live tour target", async () => {
+    const TV = '7a7a7a7a-0000-4000-8000-000000000001';
+    const { inserts, updates } = setup({ bookingExists: false, venueTargets: [TV] });
+    await sendActEmail({ ...params, bookingId: undefined });
+    const touched = updates.filter(u => u.table === 'tour_venues' && 'last_contacted_at' in u.values);
+    expect(touched.map(u => u.id)).toEqual([TV]);
+    expect(inserts.find(i => i.table === 'email_log')!.row.tour_venue_id).toBe(TV);
+  });
+
+  it('touches every live tour target for the venue but files the log against none when there are several', async () => {
+    const A = '7a7a7a7a-0000-4000-8000-00000000000a';
+    const B = '7a7a7a7a-0000-4000-8000-00000000000b';
+    const { inserts, updates } = setup({ bookingExists: false, venueTargets: [A, B] });
+    await sendActEmail({ ...params, bookingId: undefined });
+    const touched = updates.filter(u => u.table === 'tour_venues' && 'last_contacted_at' in u.values).map(u => u.id);
+    expect(touched).toEqual([A, B]);
+    expect(inserts.find(i => i.table === 'email_log')!.row.tour_venue_id).toBeNull();
   });
 });
