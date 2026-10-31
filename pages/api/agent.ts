@@ -7,12 +7,7 @@ import { getSetting } from '../../lib/platformSettings';
 import { FEATURES } from '../../lib/featureFlags';
 import {
   execFindVenue,
-  execFindTour,
-  execStageBookingUpsert,
-  execStageTourNotesUpdate,
-  execStageExpense,
   execStageTourInsert,
-  execStageVenueAndBooking,
   execStagePaymentSettle,
   execStageEmail,
   execStageEmailTemplate,
@@ -56,32 +51,21 @@ import {
 } from '../../lib/server/agentWebSearch';
 import { normaliseLookupNames, stageVenueBatch } from '../../lib/server/agentVenueBatch';
 import { HELP_SYSTEM_PROMPT } from '../../lib/helpSystemPrompt';
-import { buildInboxContext, cleanEmailBody } from '../../lib/server/agentInboxContext';
+import { resolveTourOutreach } from '../../lib/server/agent/tourOutreach';
+import { resolveStageItems } from '../../lib/server/agent/stageItems';
+import { buildInboxContext } from '../../lib/server/agentInboxContext';
 import { buildOutreachContext } from '../../lib/server/agentOutreachContext';
-import { formatShowDate } from '../../lib/formatDate';
-import { buildVoiceSystemPrompt, relationshipFor } from '../../lib/emailVoice';
 import {
-  matchTour,
-  buildOutreachVenues,
   formatTargetLines,
   parseOutreachStage,
   parseAgreedDraft,
-  selectOutreachRows,
-  emptyOutreachMessage,
-  type AgreedDraft,
-  type OutreachStage,
-  type StageRow,
   type TargetRow,
-  type VenueContact,
 } from '../../lib/domain/tourOutreach';
 import { OPEN_TARGET_STATUSES } from '../../lib/domain/tourPlaceholders';
 import {
   BATCH_CAP,
-  StageItem,
   validateItems,
   applyBatchCap,
-  normalizeItemKey,
-  isDuplicateInRows,
   formatPendingContextSummary,
   describeTourUpdate,
   describeDelete,
@@ -92,8 +76,6 @@ import {
   describeOfficeAction,
   describeStagedItems,
   guardProposalReply,
-  isStandaloneTourName,
-  normaliseBookingStatus,
   withStagedSummaries,
 } from '../../lib/agentStagingHelpers';
 
@@ -606,157 +588,6 @@ async function buildContext(service: ReturnType<typeof getServiceClient>, actId:
   ].filter(s => s !== null).join('\n');
 }
 
-// ── Resolve tour outreach action — query venues + generate draft ───────────────
-/**
- * Builds the bulk-outreach card for one tour: the venues in the requested
- * stage (first pitch to Target, or follow-up to Follow up) and one shared
- * draft. A follow-up draft is written from the last email those venues got.
- */
-async function resolveTourOutreach(
-  service: ReturnType<typeof getServiceClient>,
-  actId: string,
-  tourName: string,
-  anthropicKey: string,
-  stage: OutreachStage,
-  overdueOnly: boolean,
-  agreedDraft: AgreedDraft | null,
-): Promise<{ tourId: string; tourName: string; stage: OutreachStage; venues: any[]; draft: { subject: string; body: string }; draftSource: 'agreed' | 'generated' } | { error: string }> {
-  // Find the tour the user named. No silent fallback to "some tour": emailing
-  // the wrong tour's venues is worse than asking.
-  const { data: tours, error: toursErr } = await service.from('tours')
-    .select('id, name, start_date, end_date, routing_notes')
-    .eq('act_id', actId).not('status', 'in', '(cancelled,completed)');
-  if (toursErr) {
-    console.error('[agent] tour outreach: tours load failed', { actId, message: toursErr.message });
-    return { error: 'I couldn’t load your tours just now. Please try again in a moment.' };
-  }
-
-  const tour = matchTour((tours || []) as Array<{ id: string; name: string; start_date: string | null; end_date: string | null; routing_notes: string | null }>, tourName);
-  if (!tour) return { error: `I couldn’t tell which tour you mean by "${tourName}". Your open tours: ${(tours || []).map((t: any) => t.name).join(', ') || 'none'}.` };
-
-  // Every venue on the tour, so an empty stage can say where the venues are.
-  // Contacts hang off the venue (not the target), so they are loaded below.
-  const { data: tvRows, error: tvErr } = await service
-    .from('tour_venues')
-    .select('id, tour_id, status, booking_date, last_contacted_at, pitched_at, updated_at, venue:venues(id, name, city, state, email)')
-    .eq('tour_id', tour.id)
-    .in('status', ['target', 'follow_up']);
-  if (tvErr) {
-    // Previously this error was swallowed and read as "no targets".
-    console.error('[agent] tour outreach: targets load failed', { actId, tourId: tour.id, message: tvErr.message });
-    return { error: `I couldn’t load the venues on "${tour.name}" just now. Please try again in a moment.` };
-  }
-
-  const allRows = ((tvRows || []) as unknown as (TargetRow & StageRow)[]).filter(r => r.venue);
-  const rows = selectOutreachRows(allRows, stage, overdueOnly);
-  if (!rows.length) return { error: emptyOutreachMessage(tour.name, allRows, stage, overdueOnly) };
-
-  // Saved contacts for those venues. Service role bypasses RLS, so act_id scopes
-  // this to the caller's band — another band's contacts at the same venue never leak.
-  const venueIds = rows.map(r => (r.venue as NonNullable<TargetRow['venue']>).id);
-  const { data: contactRows, error: contactErr } = await service.from('contacts')
-    .select('venue_id, first_name, last_name, email, status')
-    .eq('act_id', actId)
-    .in('venue_id', venueIds);
-  if (contactErr) {
-    // Not fatal: venue emails still work; the greeting just falls back to a generic one.
-    console.error('[agent] tour outreach: contacts load failed', { actId, tourId: tour.id, message: contactErr.message });
-  }
-  const venues = buildOutreachVenues(rows, (contactRows || []) as VenueContact[]);
-
-  // The last email these venues were sent — what a follow-up follows up on.
-  let lastSent: { subject: string | null; body: string | null; sent_at: string | null } | null = null;
-  if (stage === 'follow_up') {
-    const { data: prior, error: priorErr } = await service.from('email_log')
-      .select('subject, body, sent_at')
-      .eq('act_id', actId).eq('direction', 'sent')
-      .in('tour_venue_id', rows.map(r => r.id))
-      .order('sent_at', { ascending: false }).limit(1).maybeSingle();
-    if (priorErr) console.error('[agent] tour outreach: last email load failed', { actId, tourId: tour.id, message: priorErr.message });
-    lastSent = prior ?? null;
-  }
-
-  // Fetch act for draft
-  const { data: act } = await service.from('acts').select('act_name, genre, bio, website, spotify, instagram').eq('id', actId).single();
-
-  // Generate one shared draft email via AI
-  const fmt = (d: string) => formatShowDate(d, { month: 'long', day: 'numeric', year: 'numeric' });
-  const dateRange = tour.start_date
-    ? `${fmt(tour.start_date)}${tour.end_date ? ` through ${fmt(tour.end_date)}` : ''}`
-    : '[dates TBD]';
-
-  const facts = `Act: ${act?.act_name}
-Genre: ${act?.genre || 'N/A'}
-Bio: ${act?.bio || 'Solid regional act with a growing following'}
-Website: ${act?.website || ''}
-Tour: ${tour.name} — ${dateRange}
-Routing notes: ${tour.routing_notes || 'N/A'}`;
-
-  const fallback = stage === 'follow_up'
-    ? { subject: lastSent?.subject ? `Re: ${lastSent.subject}` : `Following up - ${act?.act_name}`, body: `{contact_name},\n\nFollowing up on my email about ${act?.act_name} at {venue_name} during our ${tour.name} run (${dateRange}). Do any of those dates work?\n\nThanks,` }
-    : { subject: `Booking - ${act?.act_name}`, body: `{contact_name},\n\nI'm looking to get ${act?.act_name} booked at {venue_name} during our ${tour.name} run (${dateRange}). Do you have any of those dates open?\n\nThanks,\nCamel Ranch Booking` };
-
-  // The user already approved this exact email in chat: send that, not a rewrite.
-  if (agreedDraft) {
-    return {
-      tourId: tour.id,
-      tourName: tour.name,
-      stage,
-      venues,
-      draft: { subject: agreedDraft.subject ?? fallback.subject, body: agreedDraft.body },
-      draftSource: 'agreed',
-    };
-  }
-
-  const draftPrompt = stage === 'follow_up'
-    ? `Write a short follow-up to a booking email these venues have not answered. Use {venue_name} and {contact_name} as placeholders that will be personalized per recipient.
-
-${facts}
-
-The email they were sent${lastSent?.sent_at ? ` on ${fmt(lastSent.sent_at.slice(0, 10))}` : ''}:
-Subject: ${lastSent?.subject || '(unknown)'}
-${cleanEmailBody(lastSent?.body, 1500) || '(the original text was not stored — write a follow-up that stands on its own)'}
-
-Refer back to that email in one line, restate the dates and the ask, and keep it to two or three sentences. Use "Re: " plus the original subject as the subject when there is one.
-
-Output ONLY valid JSON: { "subject": "...", "body": "..." }`
-    : `Write a cold pitch booking email for the following act. Use {venue_name} and {contact_name} as placeholders that will be personalized per recipient.
-
-${facts}
-
-Lead with the dates and the ask. Keep it to a few sentences.
-
-Output ONLY valid JSON: { "subject": "...", "body": "..." }`;
-
-  const client = new Anthropic({ apiKey: anthropicKey });
-  const msg = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 600,
-    system: buildVoiceSystemPrompt({
-      task: stage === 'follow_up'
-        ? `You draft one short follow-up booking email, sent to many venues that haven't answered a pitch, for a working band's booking team. Write as a person from the band's side, not a booking firm.`
-        : `You draft one cold pitch booking email, sent to many venues, for a working band's booking team. Write as a person from the band's side, not a booking firm.`,
-      relationship: relationshipFor(stage === 'follow_up' ? 'follow_up_1' : 'target', false),
-      outputSpec: 'Output ONLY valid JSON: { "subject": "...", "body": "..." }',
-    }),
-    messages: [{ role: 'user', content: draftPrompt }],
-  });
-  const raw = msg.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text ?? '';
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  let draft = fallback;
-  if (jsonMatch) {
-    try { draft = JSON.parse(jsonMatch[0]); } catch { /* malformed draft: use the fallback text */ }
-  }
-
-  return {
-    tourId: tour.id,
-    tourName: tour.name,
-    stage,
-    venues,
-    draft,
-    draftSource: 'generated',
-  };
-}
 
 // ── Resolve city search action ────────────────────────────────────────────────
 async function resolveCitySearch(
@@ -794,187 +625,6 @@ async function resolveCitySearch(
   return { city, state, venues, activeTour };
 }
 
-// ── Resolve stage_items action — look up venue/tour by name, stage each item ───
-async function resolveStageItems(
-  actId: string,
-  userId: string,
-  tourName: string,
-  items: StageItem[],
-  service: ReturnType<typeof getServiceClient>,
-  dedupRows: { pending: any[]; recent: any[] },
-): Promise<{ staged: any[]; errors: string[] }> {
-  // A show doesn't have to belong to a tour. Standalone shows (no tourName)
-  // stage with no tour_id; tour notes and expenses still need a tour.
-  let tour: { id: string; name: string } | null = null;
-  if (!isStandaloneTourName(tourName)) {
-    const tours = await execFindTour(actId, tourName);
-    tour = tours[0] ?? null;
-    if (!tour) {
-      return { staged: [], errors: [`No tour found matching "${tourName}". Say "standalone" to save it without a tour, or create the tour first.`] };
-    }
-  }
-
-  const staged: any[] = [];
-  const errors: string[] = [];
-  const batchKeys = new Set<string>(); // track keys staged in this batch to catch within-batch duplicates
-
-  for (const item of items) {
-    try {
-      if (item.kind === 'show' || item.kind === 'travel') {
-        let venue_id: string | undefined;
-        if (item.kind === 'show' && !item.booking_id) {
-          if (!item.venueName) { errors.push('A show item is missing a venue name.'); continue; }
-          const venues = await execFindVenue(actId, { name: item.venueName, city: item.venueCity });
-          if (!venues.length) {
-            if (item.venueCity && item.venueState) {
-              const candidateKey = normalizeItemKey('venue_and_booking_upsert', {
-                venue_name: item.venueName, show_date: item.date ?? '',
-              });
-              if (batchKeys.has(candidateKey)) {
-                errors.push(`Already staged in this batch: ${item.venueName} on ${item.date}`);
-                continue;
-              }
-              const dup = isDuplicateInRows(dedupRows.pending, dedupRows.recent, 'venue_and_booking_upsert', {
-                venue_name: item.venueName, show_date: item.date ?? '',
-              });
-              if (dup.duplicate) {
-                errors.push(dup.reason === 'pending'
-                  ? `Already waiting for confirmation: ${item.venueName} on ${item.date}`
-                  : `Already saved recently: ${item.venueName} on ${item.date}`);
-                continue;
-              }
-              try {
-                const result = await execStageVenueAndBooking(actId, userId, {
-                  venue_name: item.venueName,
-                  venue_city: item.venueCity,
-                  venue_state: item.venueState,
-                  venue_address: item.venueAddress,
-                  venue_zip: item.venueZip,
-                  venue_phone: item.venuePhone,
-                  venue_email: item.venueEmail,
-                  venue_website: item.venueWebsite,
-                  show_date: item.date || '',
-                  entry_type: 'show',
-                  // The user's stated status was being dropped here, so a show
-                  // they called "confirmed" was saved as a hold.
-                  status: normaliseBookingStatus(item.status) ?? 'confirmed',
-                  set_time: item.setTime,
-                  load_in_time: item.loadInTime,
-                  soundcheck_time: item.soundcheckTime,
-                  end_time: item.endTime,
-                  notes: item.notes,
-                  ...(tour ? { tour_id: tour.id } : {}),
-                });
-                batchKeys.add(candidateKey);
-                staged.push({ kind: 'venue_and_booking', ...result });
-              } catch (e: any) {
-                errors.push(e.message || `Couldn't stage "${item.venueName}".`);
-              }
-              continue;
-            }
-            errors.push(`No venue found matching "${item.venueName}" — what city and state is it in? I can add it and the show together.`);
-            continue;
-          }
-          venue_id = venues[0].id;
-        }
-        if (!item.date && !item.booking_id) { errors.push('A date is required for every show/travel item.'); continue; }
-
-        const candidateKey = normalizeItemKey('booking_upsert', {
-          booking_id: item.booking_id ?? '', venue_id: venue_id ?? '', show_date: item.date ?? '',
-        });
-        if (batchKeys.has(candidateKey)) {
-          errors.push(`Already staged in this batch: ${item.date} at ${item.venueName ?? 'venue'}`);
-          continue;
-        }
-        const dup = isDuplicateInRows(dedupRows.pending, dedupRows.recent, 'booking_upsert', {
-          booking_id: item.booking_id ?? '', venue_id: venue_id ?? '', show_date: item.date ?? '',
-        });
-        if (dup.duplicate) {
-          errors.push(dup.reason === 'pending'
-            ? `Already waiting for confirmation: ${item.date} at ${item.venueName ?? 'venue'}`
-            : `Already saved recently: ${item.date} at ${item.venueName ?? 'venue'}`);
-          continue;
-        }
-
-        const result = await execStageBookingUpsert(actId, userId, {
-          booking_id: item.booking_id,
-          venue_id,
-          show_date: item.date || '',
-          // Don't default status on updates — only set it when explicitly provided or creating new
-          ...(normaliseBookingStatus(item.status)
-            ? { status: normaliseBookingStatus(item.status) }
-            : !item.booking_id ? { status: 'confirmed' } : {}),
-          entry_type: item.kind === 'travel' ? 'travel' : 'show',
-          load_in_time: item.loadInTime,
-          set_time: item.setTime,
-          soundcheck_time: item.soundcheckTime,
-          end_time: item.endTime,
-          notes: item.notes,
-          // Updating an existing show without naming a tour must not unlink it,
-          // so tour_id is only sent when a tour was named.
-          ...(tour ? { tour_id: tour.id } : {}),
-        });
-        batchKeys.add(candidateKey);
-        staged.push({ kind: item.kind, ...result });
-      } else if (item.kind === 'tour_notes') {
-        if (!tour) { errors.push('Tour notes need a tour — which tour should they go on?'); continue; }
-        if (!item.notes) { errors.push('Tour notes item has no text.'); continue; }
-        const candidateKey = normalizeItemKey('tour_notes_update', { tour_id: tour.id });
-        if (batchKeys.has(candidateKey)) {
-          errors.push('Tour notes already updated in this batch.');
-          continue;
-        }
-        const dup = isDuplicateInRows(dedupRows.pending, dedupRows.recent, 'tour_notes_update', { tour_id: tour.id });
-        if (dup.duplicate) {
-          errors.push(dup.reason === 'recent' ? 'Tour notes already saved recently.' : 'Tour notes update already waiting for confirmation.');
-          continue;
-        }
-        const result = await execStageTourNotesUpdate(actId, userId, { tour_id: tour.id, notes: item.notes });
-        batchKeys.add(candidateKey);
-        staged.push({ kind: 'tour_notes', ...result });
-      } else if (item.kind === 'expense') {
-        if (!tour) { errors.push('Expenses need a tour — which tour is this expense for?'); continue; }
-        if (!item.category || item.amount == null || !item.date) {
-          errors.push('An expense item is missing category, amount, or date.');
-          continue;
-        }
-        const candidateKey = normalizeItemKey('expense_insert', {
-          tour_id: tour.id, category: item.category, amount: item.amount, expense_date: item.date,
-        });
-        if (batchKeys.has(candidateKey)) {
-          errors.push(`Duplicate expense in this batch: ${item.category} $${item.amount}`);
-          continue;
-        }
-        const dup = isDuplicateInRows(dedupRows.pending, dedupRows.recent, 'expense_insert', {
-          tour_id: tour.id, category: item.category, amount: item.amount, expense_date: item.date,
-        });
-        if (dup.duplicate) {
-          errors.push(dup.reason === 'recent'
-            ? `Expense already saved recently: ${item.category} $${item.amount}`
-            : `Expense already waiting for confirmation: ${item.category} $${item.amount}`);
-          continue;
-        }
-        const result = await execStageExpense(actId, userId, {
-          tour_id: tour.id,
-          category: item.category,
-          amount: item.amount,
-          expense_date: item.date,
-          status: item.status ?? 'potential',
-          notes: item.notes,
-        });
-        batchKeys.add(candidateKey);
-        staged.push({ kind: 'expense', ...result });
-      } else {
-        // Unknown kind — report it rather than silently dropping
-        errors.push(`Unknown item kind "${(item as any).kind}" — item not staged.`);
-      }
-    } catch (e: any) {
-      errors.push(e.message || 'Failed to stage an item.');
-    }
-  }
-
-  return { staged, errors };
-}
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
