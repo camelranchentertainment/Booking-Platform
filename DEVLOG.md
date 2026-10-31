@@ -1,5 +1,15 @@
 # Dev Log
 
+## 2026-10-30 — Agent rebuild, steps 1–2: readable replies, then a tool-based engine (beta)
+
+**Branches:** `feat/agent-chat-readable-replies` (PR #194), `feat/agent-tool-engine` (PR #195, built on #194) · no migration
+
+- **Why:** the agent felt clunky. Replies collapsed behind "Show more" at 280 characters, it hit hard caps (one action per reply, 4 shows / 8 venues per batch, 4 lookups), and it answered from a fixed snapshot with no way to look anything up ("I don't have that in front of me"). Root cause is the single-shot prompted-JSON design locked in Sept 2026; this rebuild replaces it with native Anthropic tool use, in four PRs.
+- **Step 1 (#194):** replies are never collapsed; a long reply opens at its first line. Markdown rendering (lists, tables, headings, links, code) via a small parser that outputs React elements only (`lib/agent/agentMarkdown.ts`, `components/agent/AgentMessageBody.tsx`, 34 tests; links allow-listed to http/https/mailto). Reply text is weight 500 so bold stands out; orange bold (3.6:1) replaced with AA-passing colours.
+- **Step 2 (#195):** `/api/agent-stream` + `lib/server/agent/*`. Eight read-only tools, a 10-step loop with caps, streamed replies (SSE) with a status line and Stop. Opt-in per browser with the "New agent (beta)" switch (`FEATURES.agentToolEngine`); the classic `/api/agent` is unchanged and still the default. Model from platform setting `agent_model` (default `claude-sonnet-5-5`). Read-only: the beta can't save changes yet.
+- **Fix in #195:** the agent's notes context matched the caller's notes from *any* band; now `act_id`-scoped (affects the classic agent too).
+- **Next:** step 3, write actions as staged tools with one combined approval card (the execute route already takes a list of ids); step 4, switch the default and retire the classic prompt.
+
 ## 2026-10-13 — Venue edits show up in the list without a browser reload
 
 **Branch:** `fix/venue-save-refresh-list` · no migration
