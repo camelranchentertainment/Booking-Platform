@@ -9,7 +9,7 @@ export type AgentStreamEvent =
   | { type: 'text'; delta: string }
   | { type: 'reset' }
   | { type: 'status'; text: string }
-  | { type: 'done'; reply: string }
+  | { type: 'done'; reply: string; action?: Record<string, unknown> }
   | { type: 'error'; message: string };
 
 const EVENT_TYPES = new Set(['text', 'reset', 'status', 'done', 'error']);
@@ -22,7 +22,7 @@ export function isAgentStreamEvent(value: unknown): value is AgentStreamEvent {
   switch (v.type) {
     case 'text': return typeof v.delta === 'string';
     case 'status': return typeof v.text === 'string';
-    case 'done': return typeof v.reply === 'string';
+    case 'done': return typeof v.reply === 'string' && (v.action === undefined || (typeof v.action === 'object' && v.action !== null && !Array.isArray(v.action)));
     case 'error': return typeof v.message === 'string';
     default: return true;
   }
@@ -72,7 +72,7 @@ export class AgentStreamError extends Error {
  * @param accessToken - The user's Supabase access token.
  * @param onEvent - Called for each event, in order.
  * @param signal - Aborts the request (the Stop button).
- * @returns The final reply.
+ * @returns The final reply, and the approval card when the agent staged changes.
  * @throws AgentStreamError when the request is refused, the stream reports an
  *         error, or the connection ends before the reply is complete.
  */
@@ -81,7 +81,7 @@ export async function streamAgentTurn(
   accessToken: string | undefined,
   onEvent: (event: AgentStreamEvent) => void,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<{ reply: string; action?: Record<string, unknown> }> {
   const res = await fetch('/api/agent-stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', Authorization: `Bearer ${accessToken ?? ''}` },
@@ -99,6 +99,7 @@ export async function streamAgentTurn(
   const decoder = new TextDecoder();
   let buffer = '';
   let reply: string | null = null;
+  let action: Record<string, unknown> | undefined;
 
   for (;;) {
     const { value, done } = await reader.read();
@@ -109,11 +110,11 @@ export async function streamAgentTurn(
     for (const event of parsed.events) {
       onEvent(event);
       if (event.type === 'error') throw new AgentStreamError(event.message);
-      if (event.type === 'done') reply = event.reply;
+      if (event.type === 'done') { reply = event.reply; action = event.action; }
     }
     if (done) break;
   }
 
   if (reply === null) throw new AgentStreamError('The connection dropped before the answer finished. Try again.');
-  return reply;
+  return { reply, action };
 }

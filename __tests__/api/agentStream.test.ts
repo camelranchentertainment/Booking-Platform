@@ -9,12 +9,15 @@ const touchedTables: string[] = [];
 let mockModelScript: Array<{ text: string; stop: string; toolUse?: { id: string; name: string; input: unknown } }> = [];
 const modelRequests: Array<Record<string, unknown>> = [];
 let mockModelError: Error | null = null;
+let mockPendingRows: Array<Record<string, unknown>> = [];
+const updates: Array<{ table: string; values: unknown }> = [];
 
-function chain(result: unknown) {
+function chain(result: unknown, table = '') {
   const c: Record<string, unknown> = {};
   for (const m of ['select', 'eq', 'neq', 'in', 'gt', 'gte', 'lt', 'lte', 'not', 'or', 'order', 'limit', 'ilike', 'is', 'upsert']) {
     c[m] = () => c;
   }
+  c.update = (values: unknown) => { updates.push({ table, values }); return c; };
   c.single = () => Promise.resolve(result);
   c.maybeSingle = () => Promise.resolve(result);
   c.then = (f: (v: unknown) => unknown, r?: (e: unknown) => unknown) => Promise.resolve(result).then(f, r);
@@ -24,7 +27,8 @@ function chain(result: unknown) {
 const mockFrom = jest.fn((table: string) => {
   if (table === 'profiles') return chain({ data: mockProfile, error: null });
   touchedTables.push(table);
-  return chain({ data: [], error: null });
+  if (table === 'ai_staged_actions') return chain({ data: mockPendingRows, error: null }, table);
+  return chain({ data: [], error: null }, table);
 });
 
 jest.mock('../../lib/supabase', () => ({
@@ -34,6 +38,15 @@ jest.mock('../../lib/platformSettings', () => ({
   getSetting: jest.fn((key: string) => Promise.resolve(key === 'anthropic_api_key' ? 'test-key' : null)),
 }));
 jest.mock('@sentry/nextjs', () => ({ captureException: jest.fn() }));
+// The staging module opens its own service client at import; a full stand-in keeps this test offline.
+jest.mock('../../lib/aiAgentTools', () => ({
+  execFindVenue: jest.fn(), execFindTour: jest.fn(), execStageBookingUpsert: jest.fn(), execStageTourNotesUpdate: jest.fn(),
+  execStageExpense: jest.fn(), execStageVenueAndBooking: jest.fn(), execStagePaymentSettle: jest.fn(), execStageEmail: jest.fn(),
+  execStageEmailTemplate: jest.fn(), execStagePersonnelUpsert: jest.fn(), execStageCalendarSettingsUpdate: jest.fn(),
+  execStageTourInsert: jest.fn(async (_a: string, _u: string, args: { name: string }) => (
+    { action_type: 'tour_insert', staged_action_id: 'sa-1', proposal: { name: args.name }, requires_confirmation: true }
+  )),
+}));
 jest.mock('@anthropic-ai/sdk', () => {
   class APIError extends Error { status?: number; }
   class RateLimitError extends APIError {}
@@ -102,6 +115,8 @@ beforeEach(() => {
   mockProfile = { act_id: 'act-1', role: 'band_admin' };
   mockModelScript = [{ text: 'You have **2 shows** in November.', stop: 'end_turn' }];
   mockModelError = null;
+  mockPendingRows = [];
+  updates.length = 0;
   jest.spyOn(console, 'info').mockImplementation(() => undefined);
 });
 afterEach(() => jest.restoreAllMocks());
@@ -169,6 +184,40 @@ describe('/api/agent-stream', () => {
       { type: 'text', delta: 'No tours yet.' },
       { type: 'done', reply: 'No tours yet.' },
     ]);
+  });
+
+  it('offers the write tools and ends with one approval card for what was staged', async () => {
+    mockModelScript = [
+      { text: '', stop: 'tool_use', toolUse: { id: 't1', name: 'create_tour', input: { name: 'Fall Run' } } },
+      { text: 'Here\'s the new tour on the card — confirm to save it.', stop: 'end_turn' },
+    ];
+    const { r, events } = res();
+    await handler(req({ message: 'start a tour called Fall Run' }), r);
+    const sent = modelRequests[0] as { tools: Array<{ name: string }> };
+    expect(sent.tools.map(t => t.name)).toEqual(expect.arrayContaining(['stage_shows', 'record_payment', 'send_email', 'delete_records']));
+    expect(jest.requireMock('../../lib/aiAgentTools').execStageTourInsert).toHaveBeenCalledWith('act-1', 'u1', { name: 'Fall Run' });
+    const doneEvent = events().find(e => e.type === 'done');
+    expect(doneEvent).toBeDefined();
+    const done = doneEvent as unknown as { action: { type: string; staged: Array<{ kind: string; summary?: string }> } };
+    expect(done.action.type).toBe('stage_items');
+    expect(done.action.staged).toEqual([expect.objectContaining({ kind: 'tour_create', staged_action_id: 'sa-1' })]);
+    // Same per-item summary the classic agent adds for the phone app.
+    expect(typeof done.action.staged[0].summary).toBe('string');
+  });
+
+  it('sends no card when nothing was staged', async () => {
+    const { r, events } = res();
+    await handler(req({ message: 'what is in November?' }), r);
+    expect(events().find(e => e.type === 'done')).not.toHaveProperty('action');
+  });
+
+  it('clears a card left unconfirmed from the last message and tells the model about it', async () => {
+    mockPendingRows = [{ id: 'old', action_type: 'tour_insert', payload: { name: 'Spring Run' }, created_at: '2026-10-30T00:00:00Z' }];
+    const { r } = res();
+    await handler(req({ message: 'never mind that, what pays best?' }), r);
+    expect(updates).toContainEqual({ table: 'ai_staged_actions', values: { status: 'cancelled' } });
+    const sent = modelRequests[0] as { system: Array<{ text: string }> };
+    expect(sent.system[sent.system.length - 1].text).toMatch(/UNCONFIRMED FROM THE LAST MESSAGE/);
   });
 
   it('refuses off-limits requests without calling the model', async () => {

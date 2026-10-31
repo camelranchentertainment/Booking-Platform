@@ -81,6 +81,13 @@ type FindVenueAction = {
 };
 type AgentAction = TourOutreachAction | CitySearchAction | StageItemsAction | FindVenueAction;
 
+/** Minimal shape check on a card from the stream before it drives the UI. */
+function isAgentAction(value: Record<string, unknown>): value is AgentAction {
+  if (value.type === 'stage_items') return Array.isArray(value.staged);
+  if (value.type === 'tour_outreach') return Array.isArray(value.venues) && typeof value.draft === 'object' && value.draft !== null;
+  return false;
+}
+
 const QUICK_CHIPS: { label: string; href?: string; prompt?: string }[] = [
   { label: 'Show my targets',       href: '/tours' },
   { label: 'Show confirmed shows',  href: '/bookings?filter=confirmed' },
@@ -406,6 +413,18 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
     el.style.height = `${el.scrollHeight + 2}px`; // +2 for the 1px top/bottom border (box-sizing: border-box)
   }, [agentInput]);
 
+  /** Puts an approval card from either agent on screen, pre-selecting every venue on an outreach card. */
+  const showApprovalCard = (action: AgentAction) => {
+    setPendingAction(action);
+    if (action.type === 'tour_outreach') {
+      setDraftSubject(action.draft.subject);
+      setDraftBody(action.draft.body);
+      setSelectedVenueIds(new Set(action.venues.map(v => v.tourVenueId)));
+    } else if (action.type === 'city_search') {
+      setSelectedVenueIds(new Set(action.venues.map(v => v.id)));
+    }
+  };
+
   /**
    * Beta path: streams the reply from /api/agent-stream. Text appears as it's
    * written, a status line shows what the agent is looking up, and Stop
@@ -431,7 +450,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const history = next.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
-      const reply = await streamAgentTurn(
+      const { reply, action } = await streamAgentTurn(
         { message: fullMsg, history, saveNote },
         session?.access_token,
         event => {
@@ -444,6 +463,8 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
       const updated = [...next, { role: 'assistant' as const, content: reply }];
       setMessages(updated);
       saveConversationHistory(updated);
+      // The server builds this card in the same shape /api/agent uses, so the existing card UI renders it.
+      if (action && isAgentAction(action)) showApprovalCard(action);
       if (saveNote) setNoteSaved(true);
     } catch (err) {
       restoreInput();
@@ -496,17 +517,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
       setMessages(updated);
       saveConversationHistory(updated);
 
-      if (json.action) {
-        const action: AgentAction = json.action;
-        setPendingAction(action);
-        if (action.type === 'tour_outreach') {
-          setDraftSubject(action.draft.subject);
-          setDraftBody(action.draft.body);
-          setSelectedVenueIds(new Set(action.venues.map(v => v.tourVenueId)));
-        } else if (action.type === 'city_search') {
-          setSelectedVenueIds(new Set(action.venues.map(v => v.id)));
-        }
-      }
+      if (json.action) showApprovalCard(json.action as AgentAction);
 
       if (saveNote) setNoteSaved(true);
     } catch (err: any) {
@@ -793,8 +804,8 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
                     disabled={agentLoading}
                     className={`btn btn-ghost btn-sm dash-agent-beta${useBeta ? ' is-on' : ''}`}
                     title={useBeta
-                      ? 'Using the new agent: looks things up and streams answers. Read-only for now — switch off to save changes.'
-                      : 'Try the new agent: looks things up for you and streams its answers. Read-only while in beta.'}
+                      ? 'Using the new agent: looks things up, streams its answers, and puts every change on one card for you to confirm. Switch off for the classic agent.'
+                      : 'Try the new agent: looks things up for you, streams its answers, and puts every change on one card for you to confirm.'}
                   >
                     <span className="dash-agent-beta-track" aria-hidden="true"><span className="dash-agent-beta-knob" /></span>
                     New agent (beta)

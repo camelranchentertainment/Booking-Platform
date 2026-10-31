@@ -10,6 +10,12 @@ describe('isAgentStreamEvent', () => {
     expect(isAgentStreamEvent({ type: 'error', message: 'Busy' })).toBe(true);
   });
 
+  it('accepts a done event carrying an approval card, and rejects a malformed card', () => {
+    expect(isAgentStreamEvent({ type: 'done', reply: 'Here is the card', action: { type: 'stage_items', staged: [] } })).toBe(true);
+    expect(isAgentStreamEvent({ type: 'done', reply: 'x', action: 'stage_items' })).toBe(false);
+    expect(isAgentStreamEvent({ type: 'done', reply: 'x', action: [] })).toBe(false);
+  });
+
   it('rejects unknown types and missing fields', () => {
     expect(isAgentStreamEvent({ type: 'text' })).toBe(false);
     expect(isAgentStreamEvent({ type: 'done', reply: 5 })).toBe(false);
