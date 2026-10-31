@@ -20,6 +20,7 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
 import { formatShowDate, localToday } from '../../lib/formatDate';
 import AssistantHistoryList from '../dashboard/AssistantHistoryList';
+import AgentMessageBody from './AgentMessageBody';
 import type { ConversationDaySummary } from '../../lib/agentConversationDays';
 import { buildConfirmMessage, describeTourUpdate, describeVenueUpsert, describeContactUpsert, describeWrapup, describeExpenseUpdate, describeOfficeAction, describeDelete } from '../../lib/agentStagingHelpers';
 import { buildAgentGreeting } from '../../lib/agent/agentGreeting';
@@ -162,7 +163,6 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
   const [historyError, setHistoryError]       = useState('');
   const [attachedFile, setAttachedFile]   = useState<{ name: string; content: string } | null>(null);
   const [fileLoading, setFileLoading]     = useState(false);
-  const [expandedMsgs, setExpandedMsgs]   = useState<Set<number>>(new Set());
   const fileInputRef                      = useRef<HTMLInputElement>(null);
 
   // Approval
@@ -176,10 +176,22 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
   const panelRef    = useRef<HTMLDivElement>(null);
   const agentInputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Keeps the newest reply in view. A reply taller than the window opens at its
+  // first line instead of its last, so you read it top-down rather than
+  // scrolling back up to find the start; anything shorter scrolls to the bottom
+  // so an approval card under it stays visible.
   useEffect(() => {
     const el = threadRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
+    const latest = el.querySelector<HTMLElement>('[data-agent-latest="true"]');
+    const isLongReply = latest?.classList.contains('dash-msg-ai') && latest.offsetHeight > el.clientHeight * 0.8;
+    if (latest && isLongReply) {
+      // Measured on screen, so it's right whatever the thread's positioning context is.
+      const paddingTop = parseFloat(getComputedStyle(el).paddingTop) || 0;
+      el.scrollTop += latest.getBoundingClientRect().top - el.getBoundingClientRect().top - paddingTop;
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [messages, pendingAction]);
 
   // Load any previously saved conversation for this user+act before deciding whether
@@ -259,7 +271,6 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
   const openHistoryDay = async (day: string) => {
     setHistoryView(day);
     setHistoryMessages([]);
-    setExpandedMsgs(new Set());
     setHistoryError('');
     setHistoryLoading(true);
     try {
@@ -282,7 +293,6 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
     setHistoryView(null);
     setHistoryMessages([]);
     setHistoryError('');
-    setExpandedMsgs(new Set());
     setTimeout(() => agentInputRef.current?.focus(), 0);
   };
 
@@ -741,48 +751,32 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => openHistoryDay(historyView)}>Try again</button>
                 </div>
               )}
-              {(historyView === 'list' ? [] : historyView !== null ? historyMessages : messages).map((m, i) => {
-                const isLong     = m.content.length > 280;
-                const isExpanded = expandedMsgs.has(i);
-                const toggleExpand = () => setExpandedMsgs(prev => {
-                  const next = new Set(prev);
-                  next.has(i) ? next.delete(i) : next.add(i);
-                  return next;
-                });
+              {(historyView === 'list' ? [] : historyView !== null ? historyMessages : messages).map((m, i, all) => {
+                const isUser = m.role === 'user';
                 return (
-                  <div key={i} className={m.role === 'user' ? 'dash-msg-user' : 'dash-msg-ai'}
-                    style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <div key={i} className={isUser ? 'dash-msg-user' : 'dash-msg-ai'}
+                    // The newest reply is the scroll anchor: a long answer opens at its first line.
+                    data-agent-latest={i === all.length - 1 ? 'true' : undefined}
+                    style={{
+                      alignSelf: isUser ? 'flex-end' : 'flex-start',
+                      // Replies get the full width so lists and tables have room; your own messages stay compact.
+                      maxWidth: isUser ? '85%' : '100%',
+                      minWidth: 0,
+                      display: 'flex', flexDirection: 'column', gap: '0.3rem',
+                    }}>
                     <div style={{
                       padding: '0.6rem 0.85rem',
-                      background: m.role === 'user' ? 'rgba(224,120,32,0.14)' : 'var(--bg-overlay)',
-                      border: `1px solid ${m.role === 'user' ? 'rgba(224,120,32,0.3)' : 'var(--border)'}`,
+                      background: isUser ? 'rgba(224,120,32,0.14)' : 'var(--bg-overlay)',
+                      border: `1px solid ${isUser ? 'rgba(224,120,32,0.3)' : 'var(--border)'}`,
                       fontSize: 14,
                       lineHeight: 1.6,
                       color: 'var(--text-primary)',
-                      whiteSpace: 'pre-wrap',
-                      ...(isLong && !isExpanded ? { maxHeight: '7.5em', overflow: 'hidden' } : {}),
+                      minWidth: 0,
+                      // What you typed is shown exactly as typed; agent replies are formatted.
+                      ...(isUser ? { whiteSpace: 'pre-wrap' as const, overflowWrap: 'anywhere' as const } : {}),
                     }}>
-                      {m.content.split(/\*\*(.*?)\*\*/g).map((chunk, ci) =>
-                        ci % 2 === 1
-                          ? <strong key={ci} style={{ color: 'var(--accent)', fontWeight: 700 }}>{chunk}</strong>
-                          : chunk
-                      )}
+                      {isUser ? m.content : <AgentMessageBody content={m.content} />}
                     </div>
-                    {isLong && (
-                      <button
-                        onClick={toggleExpand}
-                        style={{
-                          alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          fontSize: 12, color: 'var(--accent)', fontWeight: 700,
-                          padding: '0 0.2rem', lineHeight: 1,
-                        }}
-                        onFocus={e => { e.currentTarget.style.outline = '2px solid var(--accent)'; e.currentTarget.style.outlineOffset = '2px'; }}
-                        onBlur={e => { e.currentTarget.style.outline = ''; }}
-                      >
-                        {isExpanded ? 'Show less ↑' : 'Show more ↓'}
-                      </button>
-                    )}
                   </div>
                 );
               })}
