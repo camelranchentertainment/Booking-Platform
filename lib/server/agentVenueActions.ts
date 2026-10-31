@@ -100,7 +100,9 @@ export async function buildVenueUpsertPayload(service: SupabaseClient, actId: st
     changes[k] = v;
     previous[k] = current[k] ?? null;
   }
-  if (Object.keys(changes).length === 0) throw new Error('Nothing would change on that venue.');
+  if (Object.keys(changes).length === 0) {
+    throw new Error(`${String(current.name ?? 'That venue')} already has exactly those details saved, so there's nothing to change.`);
+  }
   return { mode: 'update', venue_id: current.id, venue_name: String(current.name ?? ''), changes, previous };
 }
 

@@ -229,7 +229,9 @@ export const saveVenuesTool = defineTool({
   description:
     'Proposes adding or editing one or more saved venues. Edit: venue_id (from find_venues) plus ONLY the fields that change. '
     + 'New: name, city and state (plus anything else known). Put all changes for one venue in one entry. Use web_search to find '
-    + 'missing details first; never guess an email or phone. To add a show at a new venue, use stage_shows instead (it saves both).',
+    + 'missing details first; never guess an email or phone. To add a show at a new venue, use stage_shows instead (it saves both). '
+    + 'A field you send that already has that exact value is left off the card: it is already saved, not a failure, so say so '
+    + 'plainly ("already on file") and never tell the user it may not have saved.',
   schema: z.object({
     venues: z.array(venueUpsertSchema).min(1).max(MAX_VENUES_PER_CALL),
   }).strict(),
