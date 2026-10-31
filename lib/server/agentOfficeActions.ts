@@ -303,7 +303,10 @@ export async function buildOfficeContext(service: SupabaseClient, actId: string,
     const [nRes, sRes, mRes] = await Promise.all([
       service.from('daily_notes')
         .select('id, note_date, content, visibility, user_id')
-        .or(`user_id.eq.${userId},and(act_id.eq.${actId},visibility.in.(band_admin,all_members))`)
+        // This band only: the caller's own notes plus notes shared with the band. Without the
+        // act filter, someone who admins two bands saw their notes from the other band here.
+        .eq('act_id', actId)
+        .or(`user_id.eq.${userId},visibility.in.(band_admin,all_members)`)
         .gte('note_date', since).order('note_date', { ascending: false }).limit(20),
       service.from('social_announcements')
         .select('status, booking_id, booking:bookings(show_date, venue:venues(name)), posts:social_posts(platform, status, caption)')

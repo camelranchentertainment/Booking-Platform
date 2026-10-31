@@ -12,6 +12,13 @@ export const FEATURES = {
    * Hidden until the Socials feature is fixed.
    */
   socials: false,
+  /**
+   * The tool-based booking agent (/api/agent-stream) as an opt-in beta: band
+   * admins see a "New agent (beta)" switch in the agent panel. Off = the switch
+   * is hidden and the route returns 404; the classic agent is unaffected
+   * either way.
+   */
+  agentToolEngine: true,
 } as const;
 
 export type FeatureName = keyof typeof FEATURES;

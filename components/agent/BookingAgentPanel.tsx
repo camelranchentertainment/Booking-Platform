@@ -25,6 +25,27 @@ import type { ConversationDaySummary } from '../../lib/agentConversationDays';
 import { buildConfirmMessage, describeTourUpdate, describeVenueUpsert, describeContactUpsert, describeWrapup, describeExpenseUpdate, describeOfficeAction, describeDelete } from '../../lib/agentStagingHelpers';
 import { buildAgentGreeting } from '../../lib/agent/agentGreeting';
 import { openInMainWindow } from '../../lib/agent/agentWindow';
+import { FEATURES } from '../../lib/featureFlags';
+import { streamAgentTurn, AgentStreamError } from '../../lib/agent/agentStream';
+
+/** Browser-only remembered choice for the beta switch. Per viewer, per device; losing it just means the classic agent. */
+const AGENT_BETA_STORAGE_KEY = 'crb.agentToolEngineBeta';
+
+function readBetaPreference(): boolean {
+  try {
+    return window.localStorage.getItem(AGENT_BETA_STORAGE_KEY) === '1';
+  } catch {
+    return false; // private mode / blocked storage: default to the classic agent
+  }
+}
+
+function writeBetaPreference(on: boolean): void {
+  try {
+    window.localStorage.setItem(AGENT_BETA_STORAGE_KEY, on ? '1' : '0');
+  } catch {
+    // Not remembered across visits; the switch still works for this session.
+  }
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -152,6 +173,12 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
   const [pendingAction, setPendingAction] = useState<AgentAction | null>(null);
   const [greetingSent, setGreetingSent]   = useState(false);
   const [conversationLoaded, setConversationLoaded] = useState(false);
+  // New tool-based agent (beta). Off unless the feature is enabled AND the user switched it on.
+  const [useBeta, setUseBeta]             = useState(false);
+  // While a beta reply streams: the text so far, and what the agent is looking up.
+  const [streamText, setStreamText]       = useState('');
+  const [streamStatus, setStreamStatus]   = useState('');
+  const streamAbortRef                    = useRef<AbortController | null>(null);
   // The local day this chat is filed under. Set once on load so a chat that runs
   // past midnight keeps saving to the day it started; the next visit starts fresh.
   const chatDayRef                        = useRef<string>('');
@@ -346,6 +373,24 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
     agentInputRef.current?.focus();
   }, []);
 
+  // Restore the beta switch after mount (localStorage isn't available during server render).
+  useEffect(() => {
+    if (FEATURES.agentToolEngine && readBetaPreference()) setUseBeta(true); // eslint-disable-line react-hooks/set-state-in-effect
+  }, []);
+
+  // A stream still running when the panel unmounts (navigating away) is cancelled, so nothing keeps billing.
+  useEffect(() => () => streamAbortRef.current?.abort(), []);
+
+  const toggleBeta = () => {
+    setUseBeta(prev => {
+      writeBetaPreference(!prev);
+      return !prev;
+    });
+  };
+
+  /** Stop button: cancels the streaming reply; the message goes back into the box to edit or resend. */
+  const stopStreaming = () => streamAbortRef.current?.abort();
+
   // Refocus after agentLoading clears — covers post-send, post-error, post-response
   useEffect(() => {
     if (!agentLoading) agentInputRef.current?.focus();
@@ -360,6 +405,60 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight + 2}px`; // +2 for the 1px top/bottom border (box-sizing: border-box)
   }, [agentInput]);
+
+  /**
+   * Beta path: streams the reply from /api/agent-stream. Text appears as it's
+   * written, a status line shows what the agent is looking up, and Stop
+   * cancels. On a stop or failure the message goes back into the box (with
+   * any attached file) so nothing the user typed is lost.
+   */
+  const sendWithToolEngine = async (
+    typed: string,
+    fullMsg: string,
+    next: Message[],
+    saveNote: boolean,
+    file: { name: string; content: string } | null,
+  ) => {
+    const abort = new AbortController();
+    streamAbortRef.current = abort;
+    setStreamText('');
+    setStreamStatus('');
+    const restoreInput = () => {
+      setMessages(next.slice(0, -1));
+      setAgentInput(typed);
+      setAttachedFile(file);
+    };
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const history = next.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
+      const reply = await streamAgentTurn(
+        { message: fullMsg, history, saveNote },
+        session?.access_token,
+        event => {
+          if (event.type === 'text') { setStreamStatus(''); setStreamText(prev => prev + event.delta); }
+          else if (event.type === 'reset') setStreamText('');
+          else if (event.type === 'status') setStreamStatus(event.text);
+        },
+        abort.signal,
+      );
+      const updated = [...next, { role: 'assistant' as const, content: reply }];
+      setMessages(updated);
+      saveConversationHistory(updated);
+      if (saveNote) setNoteSaved(true);
+    } catch (err) {
+      restoreInput();
+      if (abort.signal.aborted) {
+        setAgentError('Stopped. Your message is back in the box.');
+      } else {
+        setAgentError(err instanceof AgentStreamError || err instanceof Error ? err.message : 'The agent couldn\'t answer. Try again.');
+      }
+    } finally {
+      streamAbortRef.current = null;
+      setStreamText('');
+      setStreamStatus('');
+      setAgentLoading(false);
+    }
+  };
 
   const sendMessage = async (msg: string, saveNote = false) => {
     const fullMsg = attachedFile
@@ -376,6 +475,11 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
     setNoteSaved(false);
     setPendingAction(null);
     setSendResult(null);
+
+    if (FEATURES.agentToolEngine && useBeta) {
+      await sendWithToolEngine(msg, fullMsg, next, saveNote, attachedFile);
+      return;
+    }
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -601,6 +705,14 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
         textarea.dash-agent-input { flex:1 1 auto; min-width:0; width:auto; font-size:16px; line-height:1.5; resize:none; overflow-y:auto; max-height:8.5rem; }
         .dash-agent-btn         { flex:0 0 auto; min-width:44px; min-height:44px; justify-content:center; }
         .dash-agent-hdr-actions { display:flex; flex-wrap:wrap; gap:0.5rem; }
+        .dash-agent-beta { display:inline-flex; align-items:center; gap:0.45rem; color:var(--text-muted); }
+        .dash-agent-beta.is-on { color:var(--text-primary); }
+        .dash-agent-beta:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+        .dash-agent-beta-track { position:relative; width:28px; height:16px; border-radius:999px; border:1px solid var(--border); background:var(--bg); flex-shrink:0; transition:background 0.15s, border-color 0.15s; }
+        .dash-agent-beta-knob { position:absolute; top:2px; left:2px; width:10px; height:10px; border-radius:50%; background:var(--text-muted); transition:transform 0.15s; }
+        .dash-agent-beta.is-on .dash-agent-beta-track { background:var(--accent); border-color:var(--accent); }
+        .dash-agent-beta.is-on .dash-agent-beta-knob { transform:translateX(12px); background:#fff; }
+        @media (prefers-reduced-motion: reduce) { .dash-agent-beta-track, .dash-agent-beta-knob { transition:none; } }
         /* Doubled class so the pop-out fills its window even past the 768px rule below. */
         .dash-agent.dash-agent--popout { margin:0; height:100vh; height:100dvh; border:0; border-radius:0; }
         /* Conversation scrollbar: wide enough to grab (the site-wide one is 5px). */
@@ -672,6 +784,22 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
                 </div>
               </div>
               <div className="dash-agent-hdr-actions">
+                {FEATURES.agentToolEngine && historyView === null && (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={useBeta}
+                    onClick={toggleBeta}
+                    disabled={agentLoading}
+                    className={`btn btn-ghost btn-sm dash-agent-beta${useBeta ? ' is-on' : ''}`}
+                    title={useBeta
+                      ? 'Using the new agent: looks things up and streams answers. Read-only for now — switch off to save changes.'
+                      : 'Try the new agent: looks things up for you and streams its answers. Read-only while in beta.'}
+                  >
+                    <span className="dash-agent-beta-track" aria-hidden="true"><span className="dash-agent-beta-knob" /></span>
+                    New agent (beta)
+                  </button>
+                )}
                 {historyView !== null ? (
                   <button type="button" onClick={closeHistory} className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>
                     ← Back to today
@@ -780,7 +908,19 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
                   </div>
                 );
               })}
-              {historyView === null && agentLoading && <div style={{ color: 'var(--text-muted)', fontSize: 13, fontFamily: 'var(--font-mono)', alignSelf: 'flex-start' }}>thinking…</div>}
+              {historyView === null && agentLoading && (streamText ? (
+                // The reply as it's being written. aria-busy keeps screen readers from reading every word as it lands;
+                // the finished message is announced once it joins the conversation log.
+                <div className="dash-msg-ai" aria-busy="true" style={{ alignSelf: 'flex-start', maxWidth: '100%', minWidth: 0 }}>
+                  <div style={{ padding: '0.6rem 0.85rem', background: 'var(--bg-overlay)', border: '1px solid var(--border)', fontSize: 14, lineHeight: 1.6, color: 'var(--text-primary)', minWidth: 0 }}>
+                    <AgentMessageBody content={streamText} />
+                  </div>
+                </div>
+              ) : (
+                <div role="status" className="dash-agent-working" style={{ color: 'var(--text-muted)', fontSize: 13, fontFamily: 'var(--font-mono)', alignSelf: 'flex-start' }}>
+                  {streamStatus || 'thinking…'}
+                </div>
+              ))}
 
               {/* Approval panel */}
               {historyView === null && pendingAction && pendingAction.type === 'stage_items' && (
@@ -1043,6 +1183,18 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
                     }
                   }}
                 />
+                {agentLoading && useBeta && FEATURES.agentToolEngine ? (
+                <button
+                  type="button"
+                  onClick={stopStreaming}
+                  className="btn dash-agent-btn"
+                  aria-label="Stop the reply"
+                  title="Stop"
+                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontWeight: 800, fontSize: 14 }}
+                >
+                  ■
+                </button>
+                ) : (
                 <button
                   type="submit"
                   className="btn dash-agent-btn"
@@ -1060,6 +1212,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
                 >
                   {agentLoading ? '…' : '→'}
                 </button>
+                )}
               </form>
             </div>
             </>)}
