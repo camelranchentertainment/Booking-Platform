@@ -64,6 +64,12 @@ describe('venues', () => {
     await expect(buildVenueUpsertPayload(svc({ venue: null }).s, ACT, { venue_id: VENUE, email: 'b@pub.com' })).rejects.toThrow(/wasn't found/);
   });
 
+  it('says plainly when every proposed detail is already saved', async () => {
+    const venue = { id: VENUE, name: "Kobi's Bar", city: 'Bonner Springs', state: 'KS', address: '113 Oak St', zip: '66012' };
+    await expect(buildVenueUpsertPayload(svc({ venue }).s, ACT, { venue_id: VENUE, address: '113 Oak St', zip: '66012' }))
+      .rejects.toThrow("Kobi's Bar already has exactly those details saved, so there's nothing to change.");
+  });
+
   it('executes create with the band and creator set, and update scoped to the band', async () => {
     const a = svc();
     await executeVenueUpsert(a.s, ACT, 'u-1', { mode: 'create', changes: { name: 'Wire Road', city: 'F', state: 'AR', act_id: 'evil' } });

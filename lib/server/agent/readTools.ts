@@ -222,7 +222,8 @@ export const getToursTool = defineTool({
 // ── find_venues ────────────────────────────────────────────────────────────────
 
 type VenueRow = {
-  id: string; name: string; city: string | null; state: string | null; email: string | null; secondary_emails: string[] | null;
+  id: string; name: string; city: string | null; state: string | null; address?: string | null; zip?: string | null;
+  email: string | null; secondary_emails: string[] | null;
   phone: string | null; website: string | null; venue_type: string | null; capacity: number | null; booking_contact: string | null;
   live_music: boolean | null; pay_notes: string | null; last_contacted_at: string | null; last_reply_at: string | null;
   contacts: Array<{ id: string; first_name: string | null; last_name: string | null; title: string | null; email: string | null; status: string | null; act_id?: string | null }> | null;
@@ -235,6 +236,8 @@ export function formatVenue(v: VenueRow): string {
     `${[c.first_name, c.last_name].filter(Boolean).join(' ') || 'unnamed'}${c.title ? ` (${c.title})` : ''}${c.email ? ` ${c.email}` : ''} contact_id=${c.id}${c.status ? ` [${c.status}]` : ''}`);
   return `- venue_id=${v.id} ${v.name}${v.city ? `, ${v.city}` : ''}${v.state ? ` ${v.state}` : ''}`
     + `\n    ${parts(
+      // Shown (or flagged missing) so the agent never "fills in" an address that's already saved.
+      v.address ? `address ${v.address}${v.zip ? ` ${v.zip}` : ' (no zip)'}` : 'no street address',
       v.email ? `email ${v.email}` : 'NO EMAIL ON FILE',
       Boolean(v.secondary_emails?.length) && `also ${(v.secondary_emails ?? []).join(', ')}`,
       v.phone && `phone ${v.phone}`,
@@ -253,7 +256,7 @@ export function formatVenue(v: VenueRow): string {
 export const findVenuesTool = defineTool({
   name: 'find_venues',
   description:
-    'Searches the band\'s saved venues by name, city and/or state. Returns venue_id, contact details (or NO EMAIL ON FILE), '
+    'Searches the band\'s saved venues by name, city and/or state. Returns venue_id, street address and zip, contact details (or NO EMAIL ON FILE), '
     + 'type, capacity, who books it, pay notes, last contact and reply dates, saved contacts with contact_id, and how many '
     + 'times the band has played there. Use partial names ("wire road"). For a venue that isn\'t saved, use web_search.',
   schema: z.object({
@@ -265,7 +268,7 @@ export const findVenuesTool = defineTool({
   status: i => (i.name ? `Looking up ${i.name}…` : `Looking up venues in ${i.city ?? i.state}…`),
   run: async (ctx, input) => {
     let q = ctx.service.from('venues')
-      .select(`id, name, city, state, email, secondary_emails, phone, website, venue_type, capacity, booking_contact, live_music,
+      .select(`id, name, city, state, address, zip, email, secondary_emails, phone, website, venue_type, capacity, booking_contact, live_music,
         pay_notes, last_contacted_at, last_reply_at,
         contacts(id, first_name, last_name, title, email, status, act_id), bookings(show_date, status, act_id)`)
       .eq('act_id', ctx.actId)

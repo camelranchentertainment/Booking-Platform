@@ -11,6 +11,7 @@ import {
   clip,
   findVenuesTool,
   formatShow,
+  formatVenue,
   getShowsTool,
   getVenueTool,
   money,
@@ -185,6 +186,17 @@ describe('formatting helpers', () => {
     expect(clip('a\n\n b', 10)).toBe('a b');
     expect(clip('x'.repeat(20), 10)).toBe(`${'x'.repeat(9)}…`);
     expect(clip(null)).toBe('');
+  });
+
+  it('shows a venue\'s saved address and zip, and flags a missing one', () => {
+    const base = {
+      id: 'v1', name: "Kobi's Bar", city: 'Bonner Springs', state: 'KS', email: null, secondary_emails: null, phone: '(913) 745-4242',
+      website: null, venue_type: null, capacity: null, booking_contact: null, live_music: null, pay_notes: null,
+      last_contacted_at: null, last_reply_at: null, contacts: [], bookings: [],
+    };
+    expect(formatVenue({ ...base, address: '113 Oak St', zip: '66012' })).toContain('address 113 Oak St 66012');
+    expect(formatVenue({ ...base, address: '113 Oak St', zip: null })).toContain('address 113 Oak St (no zip)');
+    expect(formatVenue({ ...base, address: null, zip: null })).toContain('no street address');
   });
 
   it('formats a show with times, money and ids', () => {
