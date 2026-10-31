@@ -130,11 +130,7 @@ export async function runAgentTurn(opts: RunTurnOptions): Promise<TurnResult> {
       messages.push({ role: 'assistant', content: message.content });
       const allowed = toolUses.slice(0, Math.max(0, MAX_TOOL_CALLS - toolCalls));
       toolCalls += allowed.length;
-      const results = await Promise.all(toolUses.map(use =>
-        allowed.includes(use)
-          ? runTool(use, toolsByName, opts)
-          : Promise.resolve(toolResult(use.id, 'Tool budget for this message is used up. Answer with what you have.', true)),
-      ));
+      const results = await runToolsForStep(toolUses, allowed, toolsByName, opts);
       messages.push({ role: 'user', content: results });
       continue;
     }
@@ -156,6 +152,31 @@ export async function runAgentTurn(opts: RunTurnOptions): Promise<TurnResult> {
     toolCalls,
     truncated: false,
   };
+}
+
+/**
+ * Runs a step's tool calls: reads in parallel, then writes one at a time in the
+ * order the model asked, so staged proposals can't race each other's duplicate
+ * checks. Results come back in the original order, as the API requires.
+ */
+async function runToolsForStep(
+  toolUses: Anthropic.ToolUseBlock[],
+  allowed: Anthropic.ToolUseBlock[],
+  toolsByName: Map<string, AgentTool>,
+  opts: RunTurnOptions,
+): Promise<Anthropic.ToolResultBlockParam[]> {
+  const results = new Map<string, Anthropic.ToolResultBlockParam>();
+  const overBudget = toolUses.filter(u => !allowed.includes(u));
+  for (const use of overBudget) results.set(use.id, toolResult(use.id, 'Tool budget for this message is used up. Answer with what you have.', true));
+
+  const isWrite = (u: Anthropic.ToolUseBlock) => toolsByName.get(u.name)?.kind === 'write';
+  const reads = allowed.filter(u => !isWrite(u));
+  const writes = allowed.filter(isWrite);
+  const readResults = await Promise.all(reads.map(use => runTool(use, toolsByName, opts)));
+  reads.forEach((use, i) => results.set(use.id, readResults[i]));
+  for (const use of writes) results.set(use.id, await runTool(use, toolsByName, opts));
+
+  return toolUses.map(use => results.get(use.id) as Anthropic.ToolResultBlockParam);
 }
 
 /**
