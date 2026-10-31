@@ -2156,3 +2156,135 @@ a.venues-muted:hover { color: var(--text); }
   body.print-pay-statement .pay-statement td { border-color: #bbb !important; }
   body.print-pay-statement .pay-statement tr { break-inside: avoid; }
 }
+
+/* ── Agent replies (components/agent/AgentMessageBody.tsx) ─────
+   Markdown from the booking agent. Bold is bright text, not orange: orange on
+   the reply bubble is 3.6:1, under WCAG AA's 4.5:1 for body text. Links use a
+   lighter tone that clears 5:1 on the bubble in both themes. */
+.agent-md {
+  --agent-md-link: #f6b07a;          /* 5.4:1 on --surface-2 */
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  overflow-wrap: anywhere;           /* long URLs and emails never widen the bubble */
+  /* The app's body weight is 800; replies read at 500 so **bold** actually stands out. */
+  font-weight: 500;
+}
+[data-theme="light"] .agent-md { --agent-md-link: var(--accent-dim); }  /* 6.8:1 on #ede0d0 */
+
+.agent-md > * { margin: 0; }
+.agent-md p { margin: 0; }
+
+.agent-md h3,
+.agent-md h4,
+.agent-md h5 {
+  margin: 0.35rem 0 0;
+  font-family: var(--font-body);
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+.agent-md h3 { font-size: 1rem; }
+.agent-md h4 { font-size: 0.95rem; }
+.agent-md h5 {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.agent-md > :first-child { margin-top: 0; }
+
+.agent-md ul,
+.agent-md ol {
+  margin: 0;
+  padding-left: 1.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.agent-md li > ul,
+.agent-md li > ol { margin-top: 0.25rem; }
+.agent-md li::marker { color: var(--text-muted); }
+
+.agent-md strong { font-weight: 800; color: var(--text-primary); }
+.agent-md em { font-style: italic; }
+
+.agent-md a {
+  color: var(--agent-md-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 700;
+}
+.agent-md a:hover { text-decoration-thickness: 2px; }
+.agent-md a:focus-visible {
+  outline: 2px solid var(--agent-md-link);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.agent-md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  padding: 0.05rem 0.3rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.agent-md pre {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  white-space: pre;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.agent-md pre code { padding: 0; border: 0; background: none; font-size: inherit; }
+
+.agent-md blockquote {
+  margin: 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--border);
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.agent-md hr { border: 0; border-top: 1px solid var(--border); margin: 0.2rem 0; }
+
+/* Tables override the app-wide table look (wide padding, tracked caps) to fit a chat bubble.
+   Cells wrap first; only a table that still can't fit scrolls sideways. */
+.agent-md-table { overflow-x: auto; max-width: 100%; }
+.agent-md-table:focus-visible { outline: 2px solid var(--agent-md-link); outline-offset: 2px; }
+.agent-md table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 0;                      /* the app's mobile rule forces tables to 480px; replies must fit the bubble */
+  font-size: 13px;
+}
+.agent-md th {
+  padding: 0.35rem 0.45rem;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  overflow-wrap: normal;
+}
+.agent-md td {
+  padding: 0.35rem 0.45rem;
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: normal;             /* wrap between words, never mid-word, inside cells */
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  transition: none;
+}
+.agent-md td:first-child { white-space: nowrap; }  /* lead column is usually a date — keep "Nov 14" whole */
+.agent-md tr:last-child td { border-bottom: none; }
+.agent-md tr:hover td { background: none; }
