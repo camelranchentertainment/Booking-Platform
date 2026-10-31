@@ -17,7 +17,10 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 
 const ACT = 'act-1';
 
-function setup(role = 'band_admin', ownedVenues: string[] = []) {
+/** Received emails in the fake database: id -> row. */
+type LogRow = { act_id: string; direction: string; message_id: string | null };
+
+function setup(role = 'band_admin', ownedVenues: string[] = [], emailLog: Record<string, LogRow> = {}) {
   const profile: any = { select: () => profile, eq: () => profile, single: () => Promise.resolve({ data: { act_id: ACT, role } }) };
   const venueChain = () => {
     const f: Record<string, unknown> = {};
@@ -31,9 +34,22 @@ function setup(role = 'band_admin', ownedVenues: string[] = []) {
     };
     return c;
   };
+  const emailChain = () => {
+    const f: Record<string, unknown> = {};
+    const c: any = {
+      select: () => c,
+      eq: (col: string, val: unknown) => { f[col] = val; return c; },
+      maybeSingle: () => {
+        const row = emailLog[f.id as string];
+        const match = row && row.act_id === f.act_id && row.direction === f.direction;
+        return Promise.resolve({ data: match ? { message_id: row.message_id } : null, error: null });
+      },
+    };
+    return c;
+  };
   (getServiceClient as jest.Mock).mockReturnValue({
     auth: { getUser: jest.fn().mockResolvedValue({ data: { user: { id: 'u-1' } } }) },
-    from: (t: string) => (t === 'venues' ? venueChain() : profile),
+    from: (t: string) => (t === 'venues' ? venueChain() : t === 'email_log' ? emailChain() : profile),
   });
 }
 function call(body: Record<string, unknown>) {
@@ -98,5 +114,38 @@ describe('/api/email/send', () => {
     await handler(req, r);
     expect(status).toHaveBeenCalledWith(200);
     expect((sendActEmail as jest.Mock).mock.calls[0][0].venueId).toBeUndefined();
+  });
+
+  describe('replies', () => {
+    const MINE = '6f1c1a2e-2b1e-4a5b-9a3c-1d2e3f4a5b6c';
+    const THEIRS = '7f1c1a2e-2b1e-4a5b-9a3c-1d2e3f4a5b6c';
+    const SENT = '8f1c1a2e-2b1e-4a5b-9a3c-1d2e3f4a5b6c';
+    const log: Record<string, LogRow> = {
+      [MINE]: { act_id: ACT, direction: 'received', message_id: '1a183b481807b346' },
+      [THEIRS]: { act_id: 'act-other', direction: 'received', message_id: 'ffff' },
+      [SENT]: { act_id: ACT, direction: 'sent', message_id: 'eeee' },
+    };
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    it('threads a reply onto an email this band received', async () => {
+      setup('band_admin', [], log);
+      const { req, r, status } = call({ ...base, replyToEmailId: MINE });
+      await handler(req, r);
+      expect(status).toHaveBeenCalledWith(200);
+      expect((sendActEmail as jest.Mock).mock.calls[0][0]).toMatchObject({ replyToGmailMessageId: '1a183b481807b346' });
+    });
+
+    it.each([
+      ['another band\'s email', THEIRS],
+      ['an email the band sent', SENT],
+      ['an unknown id', '9f1c1a2e-2b1e-4a5b-9a3c-1d2e3f4a5b6c'],
+      ['a non-uuid', 'not-an-id'],
+    ])('sends unthreaded for %s', async (_label, id) => {
+      setup('band_admin', [], log);
+      const { req, r, status } = call({ ...base, replyToEmailId: id });
+      await handler(req, r);
+      expect(status).toHaveBeenCalledWith(200);
+      expect((sendActEmail as jest.Mock).mock.calls[0][0].replyToGmailMessageId).toBeUndefined();
+    });
   });
 });
