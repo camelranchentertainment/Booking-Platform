@@ -70,6 +70,11 @@ export async function sendActEmail(params: {
   /** The references those files came from — stored on the email_log row. */
   attachmentRefs?: AttachmentRef[];
   /**
+   * Gmail id of the received email this answers (email_log.message_id, already
+   * checked to be this band's). Sent through Gmail, the reply joins that thread.
+   */
+  replyToGmailMessageId?: string;
+  /**
    * Post the per-email "Email sent to …" notification (default true). Batch
    * senders turn it off and post one summary instead.
    */
@@ -130,7 +135,7 @@ export async function sendActEmail(params: {
 
   if (gmailConnected) {
     try {
-      await sendViaGmail(params.actId, params.recipient, params.subject, htmlPayload, params.attachments ?? []);
+      await sendViaGmail(params.actId, params.recipient, params.subject, htmlPayload, params.attachments ?? [], params.replyToGmailMessageId);
     } catch (err) {
       // Expired/revoked connection: say so plainly instead of Google's "invalid_grant".
       if (isGmailAuthError(err)) throw new GmailReconnectError(err);

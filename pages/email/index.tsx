@@ -18,6 +18,7 @@ import PageHero from '../../components/layout/PageHero';
 import MailboxScene from '../../components/email/MailboxScene';
 import InboxSyncBar from '../../components/email/InboxSyncBar';
 import EmailComposer from '../../components/email/EmailComposer';
+import { quotedReplyBody, replyAddress, replySubject } from '../../lib/domain/emailReply';
 import VenueDrawer from '../../components/VenueDrawer';
 import { useModalKeys } from '../../components/venues/useModalKeys';
 import { INBOX_SYNCED_EVENT, type InboxSyncedEventDetail } from '../../lib/inboxSync';
@@ -289,6 +290,8 @@ export default function EmailPage() {
   const [composeTarget, setComposeTarget] = useState<TourTarget | null>(null);
   const [composeThread, setComposeThread] = useState<{ thread: ThreadRow; category: string } | null>(null);
   const [composeDraft, setComposeDraft] = useState<DraftItem | null>(null);
+  // A received email being answered.
+  const [composeReply, setComposeReply] = useState<MailItem | null>(null);
   const [drawerVenueId, setDrawerVenueId] = useState<string | null>(null);
   const deepLinked = useRef(false);
 
@@ -556,7 +559,11 @@ export default function EmailPage() {
                         unread={isNew}
                         open={openMsg === e.id}
                         onToggle={() => { setOpenMsg(o => (o === e.id ? null : e.id)); if (isNew) markRead(e.id); }}
-                        actions={<button type="button" className="btn btn-ghost btn-sm" disabled={busyId === e.id} onClick={() => void archiveMail(e.id)}>Archive</button>}
+                        actions={<>
+                          <button type="button" className="btn btn-ghost btn-sm venues-accent" onClick={() => setComposeReply(e)}
+                            aria-label={`Reply to ${e.venue?.name || e.from_address || 'sender'}`}>Reply</button>
+                          <button type="button" className="btn btn-ghost btn-sm" disabled={busyId === e.id} onClick={() => void archiveMail(e.id)}>Archive</button>
+                        </>}
                         meta={<>From {e.from_address} · {longDate(e.sent_at)}{e.venue?.name && e.venue_id && <> · <button type="button" className="venues-link-btn" onClick={() => setDrawerVenueId(e.venue_id)}>Open {e.venue.name} →</button></>}</>}
                       />
                     );
@@ -834,7 +841,13 @@ export default function EmailPage() {
                             open={openMsg === e.id}
                             onToggle={() => setOpenMsg(o => (o === e.id ? null : e.id))}
                             tag={<span className="tour-badge tour-badge--outline">{incoming ? 'Received' : 'Sent'}</span>}
-                            actions={<button type="button" className="btn btn-ghost btn-sm" disabled={busyId === e.id} onClick={() => void restoreMail(e.id)}>Restore</button>}
+                            actions={<>
+                              {incoming && (
+                                <button type="button" className="btn btn-ghost btn-sm venues-accent" onClick={() => setComposeReply(e)}
+                                  aria-label={`Reply to ${e.venue?.name || e.from_address || 'sender'}`}>Reply</button>
+                              )}
+                              <button type="button" className="btn btn-ghost btn-sm" disabled={busyId === e.id} onClick={() => void restoreMail(e.id)}>Restore</button>
+                            </>}
                             meta={<>{incoming ? `From ${e.from_address}` : `To ${e.recipient}`} · {longDate(e.sent_at)}</>}
                           />
                         );
@@ -878,6 +891,18 @@ export default function EmailPage() {
           contactEmail={composeThread.thread.contact?.email || composeThread.thread.venue?.email || ''}
           defaultCategory={composeThread.category}
           onClose={() => { setComposeThread(null); reload(); }}
+        />
+      )}
+      {composeReply && data?.actId && (
+        <EmailComposer
+          actId={data.actId}
+          venueId={composeReply.venue_id || undefined}
+          contactEmail={replyAddress(composeReply.from_address)}
+          defaultCategory="reply"
+          initialSubject={replySubject(composeReply.subject)}
+          initialBody={quotedReplyBody({ from: composeReply.from_address, sentAt: composeReply.sent_at, body: composeReply.body }, longDate)}
+          replyToEmailId={composeReply.id}
+          onClose={() => { setComposeReply(null); reload(); }}
         />
       )}
       {composeDraft && (

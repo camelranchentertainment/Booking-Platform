@@ -34,11 +34,17 @@ export function buildMimeMessage(opts: {
   html: string;
   attachments?: ResolvedAttachment[];
   boundary?: string;
+  /** Message-ID of the email being answered, so mail apps file the reply in the same thread. */
+  inReplyTo?: string;
+  /** The answered email's References chain plus its Message-ID. */
+  references?: string;
 }): string {
   const headers = [
     `From: ${headerSafe(opts.from)}`,
     `To: ${headerSafe(opts.to)}`,
     `Subject: ${encodeHeaderWord(opts.subject)}`,
+    ...(opts.inReplyTo ? [`In-Reply-To: ${headerSafe(opts.inReplyTo)}`] : []),
+    ...(opts.references ? [`References: ${headerSafe(opts.references)}`] : []),
     'MIME-Version: 1.0',
   ];
 
@@ -75,9 +81,57 @@ export function buildMimeMessage(opts: {
   return lines.join('\r\n');
 }
 
+/** What a reply needs from the email it answers, read from the band's Gmail. */
+export interface ReplyThread {
+  threadId?: string;
+  inReplyTo?: string;
+  references?: string;
+}
+
+type GmailHeader = { name?: string | null; value?: string | null };
+
+/**
+ * Threading details from the answered message's headers: its Message-ID becomes
+ * In-Reply-To, and is appended to its References chain (RFC 5322 §3.6.4).
+ *
+ * @param threadId - Gmail's thread id for the answered message.
+ * @param headers - That message's headers.
+ */
+export function replyThreadFromHeaders(threadId: string | null | undefined, headers: GmailHeader[]): ReplyThread {
+  const get = (name: string) => headers.find(h => (h.name ?? '').toLowerCase() === name)?.value?.trim() || undefined;
+  const messageId = get('message-id');
+  const prior = get('references');
+  return {
+    ...(threadId ? { threadId } : {}),
+    ...(messageId ? { inReplyTo: messageId, references: prior ? `${prior} ${messageId}` : messageId } : {}),
+  };
+}
+
+/**
+ * Looks up the email being answered in the band's Gmail so the reply joins its
+ * thread. Best effort: if the message is gone or Gmail refuses, the reply still
+ * sends, just as a new conversation.
+ */
+async function lookupReplyThread(
+  gmail: Awaited<ReturnType<typeof getGmailClient>>['gmail'],
+  gmailMessageId: string,
+): Promise<ReplyThread> {
+  try {
+    const { data } = await gmail.users.messages.get({
+      userId: 'me', id: gmailMessageId, format: 'metadata', metadataHeaders: ['Message-ID', 'References'],
+    });
+    return replyThreadFromHeaders(data.threadId, data.payload?.headers ?? []);
+  } catch (err) {
+    console.warn('[gmailSend] reply thread lookup failed; sending unthreaded', { message: err instanceof Error ? err.message : String(err) });
+    return {};
+  }
+}
+
 /**
  * Sends an HTML email from the act's connected Gmail account.
  *
+ * @param replyToGmailMessageId - Gmail id of a received email this answers; the
+ *   reply then lands in the same thread for both sides.
  * @throws Error when inputs are missing or Gmail rejects the message
  */
 export async function sendViaGmail(
@@ -86,12 +140,14 @@ export async function sendViaGmail(
   subject: string,
   body: string,
   attachments: ResolvedAttachment[] = [],
+  replyToGmailMessageId?: string,
 ): Promise<void> {
   if (!actId || !to || !subject || !body) {
     throw new Error('actId, to, subject, and body are all required');
   }
 
   const { gmail, gmailAddress } = await getGmailClient(actId);
+  const thread = replyToGmailMessageId ? await lookupReplyThread(gmail, replyToGmailMessageId) : {};
 
   const message = buildMimeMessage({
     from: gmailAddress || '',
@@ -99,6 +155,8 @@ export async function sendViaGmail(
     subject,
     html: body,
     attachments,
+    inReplyTo: thread.inReplyTo,
+    references: thread.references,
   });
 
   const raw = Buffer.from(message)
@@ -109,6 +167,6 @@ export async function sendViaGmail(
 
   await gmail.users.messages.send({
     userId: 'me',
-    requestBody: { raw },
+    requestBody: { raw, ...(thread.threadId ? { threadId: thread.threadId } : {}) },
   });
 }

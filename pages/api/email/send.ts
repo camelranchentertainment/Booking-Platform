@@ -8,6 +8,9 @@ import { AppError } from '../../../lib/apiError';
 import { ownedVenueId, ownedContactId } from '../../../lib/server/actOwnership';
 import { GmailReconnectError } from '../../../lib/gmailAuthError';
 
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -26,6 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     category,
     bodyPreview,
     attachments: rawAttachments,
+    replyToEmailId,
   } = req.body;
 
   if (!to || !subject || !html) {
@@ -99,6 +103,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
   if (venueId && !safeVenueId) console.warn('[email/send] dropped venueId not owned by caller act');
 
+  // Replying to a received email: thread the reply onto it in Gmail. Only an email this band
+  // received counts; anything else is ignored (the email still sends, unthreaded).
+  let replyToGmailMessageId: string | undefined;
+  if (typeof replyToEmailId === 'string' && UUID_RE.test(replyToEmailId)) {
+    const { data: original, error: originalErr } = await service.from('email_log')
+      .select('message_id').eq('id', replyToEmailId).eq('act_id', effectiveActId).eq('direction', 'received').maybeSingle();
+    if (originalErr) console.error('[email/send] reply lookup failed:', originalErr.message);
+    else if (original?.message_id) replyToGmailMessageId = original.message_id as string;
+    else console.warn('[email/send] replyToEmailId is not a received email of this band; sending unthreaded');
+  }
+
   let attachments: ResolvedAttachment[] = [];
   try {
     attachments = await resolveAttachments(service, effectiveActId, attachmentRefs);
@@ -124,6 +139,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       category: category || undefined,
       attachments,
       attachmentRefs,
+      replyToGmailMessageId,
     });
 
     return res.status(200).json({ ok: true, email_log_id });

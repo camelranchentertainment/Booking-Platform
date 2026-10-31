@@ -67,7 +67,8 @@ describe('sendActEmail', () => {
   it("sends from the band's Gmail when it is connected", async () => {
     setup({ gmail: true });
     await sendActEmail(params);
-    expect(sendViaGmail).toHaveBeenCalledWith('act-1', 'book@pond.com', 'Booking', expect.any(String), []);
+    // Sixth argument: the received email being answered; none for a new email.
+    expect(sendViaGmail).toHaveBeenCalledWith('act-1', 'book@pond.com', 'Booking', expect.any(String), [], undefined);
     expect((jest.requireMock('resend') as { __send: jest.Mock }).__send).not.toHaveBeenCalled();
   });
 

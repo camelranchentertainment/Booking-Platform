@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { composerTextToHtml } from '../../lib/domain/emailReply';
 import {
   EMAIL_UPLOAD_FOLDER,
   MAX_ATTACHMENTS,
@@ -37,6 +38,8 @@ interface Props {
   initialBody?:    string;
   initialAttachments?: AttachmentRef[];
   draftId?:        string;
+  /** A received email this answers; the send threads onto it in the band's Gmail. */
+  replyToEmailId?: string;
   onClose: (didSend?: boolean) => void;
 }
 
@@ -67,7 +70,7 @@ function bandFileLabel(f: BandFile): string {
 
 export default function EmailComposer({
   bookingId, tourVenueId, actId, venueId, contactId, contactEmail,
-  defaultCategory, agentName, initialSubject, initialBody, initialAttachments, draftId, onClose,
+  defaultCategory, agentName, initialSubject, initialBody, initialAttachments, draftId, replyToEmailId, onClose,
 }: Props) {
   const category = defaultCategory;
   const [stage, setStage]     = useState<Stage>('ready');
@@ -283,7 +286,8 @@ export default function EmailComposer({
     if (!body.trim()) { setError('The email is empty.'); return; }
     setStage('sending');
     setError('');
-    const html = body.replace(/\n/g, '<br>');
+    // Escaped first: typed or quoted text that looks like markup is sent as text, never live HTML.
+    const html = composerTextToHtml(body);
     const { ok, data } = await api('/api/email/send', {
       method: 'POST',
       body: JSON.stringify({
@@ -291,6 +295,7 @@ export default function EmailComposer({
         bookingId: bookingId || null, tourVenueId: tourVenueId || null,
         venueId: venueId || null, contactId: contactId || null,
         actId, category, bodyPreview: body, attachments,
+        ...(replyToEmailId ? { replyToEmailId } : {}),
       }),
     });
     if (!ok) { setError(data.error || 'Send failed.'); setStage('ready'); return; }
