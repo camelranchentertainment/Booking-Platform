@@ -435,13 +435,15 @@ export function describeStagedItems(
 }
 
 interface DeleteCard {
-  items?: Array<{ label?: string; mode?: 'delete' | 'retire'; note?: string }>;
+  target?: string;
+  items?: Array<{ label?: string; mode?: 'delete' | 'retire' | 'remove'; note?: string }>;
 }
 
 /** One-line description of a staged delete (shows, tours, members, notes, media). */
 export function describeDelete(p: DeleteCard): string {
   const items = p.items ?? [];
-  const list = items.map(i => `${i.mode === 'retire' ? 'Retire' : 'Delete'} ${i.label ?? 'item'}`).join('; ');
+  const verb = (mode?: string) => (mode === 'retire' ? 'Retire' : mode === 'remove' ? 'Remove' : 'Delete');
+  const list = items.map(i => `${verb(i.mode)} ${i.label ?? 'item'}`).join('; ');
   const notes = items.map(i => i.note).filter(Boolean).join(' ');
   return `${list || 'Delete'}${notes ? ` — ${notes}` : ''}`;
 }
@@ -458,7 +460,9 @@ export function stagedItemCaution(kind: string, proposal: Record<string, unknown
     case 'email_send':
       return 'Confirming sends this email immediately to a real recipient.';
     case 'record_delete':
-      return "Deleting can't be undone. Past shows and money records are never touched.";
+      return proposal.target === 'tour_target'
+        ? 'Takes these venues off the tour\'s outreach list. The venues, their contacts and email history stay saved.'
+        : "Deleting can't be undone. Past shows and money records are never touched.";
     case 'member_invite':
       return `Confirming emails an invite link to ${String(proposal.email ?? 'this person')}.`;
     case 'email_template_upsert':

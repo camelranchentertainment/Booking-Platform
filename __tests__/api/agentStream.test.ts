@@ -9,6 +9,7 @@ const touchedTables: string[] = [];
 let mockModelScript: Array<{ text: string; stop: string; toolUse?: { id: string; name: string; input: unknown } }> = [];
 const modelRequests: Array<Record<string, unknown>> = [];
 let mockModelError: Error | null = null;
+let mockSuggestionsText: string | null = null;
 let mockPendingRows: Array<Record<string, unknown>> = [];
 const updates: Array<{ table: string; values: unknown }> = [];
 
@@ -58,6 +59,11 @@ jest.mock('@anthropic-ai/sdk', () => {
     static AuthenticationError = AuthenticationError;
     static APIConnectionError = APIConnectionError;
     messages = {
+      // The follow-up suggestions call (small model, non-streaming).
+      create: async () => {
+        if (mockSuggestionsText === null) throw new Error('no suggestions in this test');
+        return { content: [{ type: 'text', text: mockSuggestionsText }] };
+      },
       stream: (params: Record<string, unknown>) => {
         modelRequests.push(params);
         const step = mockModelScript[Math.min(modelRequests.length - 1, mockModelScript.length - 1)];
@@ -115,6 +121,7 @@ beforeEach(() => {
   mockProfile = { act_id: 'act-1', role: 'band_admin' };
   mockModelScript = [{ text: 'You have **2 shows** in November.', stop: 'end_turn' }];
   mockModelError = null;
+  mockSuggestionsText = null;
   mockPendingRows = [];
   updates.length = 0;
   jest.spyOn(console, 'info').mockImplementation(() => undefined);
@@ -203,6 +210,23 @@ describe('/api/agent-stream', () => {
     expect(done.action.staged).toEqual([expect.objectContaining({ kind: 'tour_create', staged_action_id: 'sa-1' })]);
     // Same per-item summary the classic agent adds for the phone app.
     expect(typeof done.action.staged[0].summary).toBe('string');
+  });
+
+  it('sends follow-up suggestions after the reply is done', async () => {
+    mockSuggestionsText = '["What pays best in November?", "Draft the Tulsa follow-up"]';
+    const { r, events } = res();
+    await handler(req({ message: 'what is in November?' }), r);
+    const types = events().map(e => e.type);
+    expect(types.indexOf('suggestions')).toBeGreaterThan(types.indexOf('done'));
+    expect(events().find(e => e.type === 'suggestions')).toEqual({ type: 'suggestions', items: ['What pays best in November?', 'Draft the Tulsa follow-up'] });
+  });
+
+  it('still finishes normally when suggestions fail', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { r, events } = res();
+    await handler(req({ message: 'what is in November?' }), r);
+    expect(events().map(e => e.type)).toEqual(['text', 'done']);
+    expect(r.writableEnded).toBe(true);
   });
 
   it('sends no card when nothing was staged', async () => {

@@ -6,8 +6,9 @@ import {
   executeDelete,
   showRowBlocker,
   MAX_DELETES_PER_REQUEST,
+  MAX_TARGET_REMOVALS_PER_REQUEST,
 } from '../../lib/server/agentDeletes';
-import { describeDelete } from '../../lib/agentStagingHelpers';
+import { describeDelete, stagedItemCaution } from '../../lib/agentStagingHelpers';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 const ACT = 'act-1';
@@ -190,5 +191,55 @@ describe('notes and media', () => {
     await expect(buildDeletePayload(logo.s, ACT, USER, { target: 'media', ids: [A] }, NOW)).rejects.toThrow(/main logo/);
     const used = fake({ single: { media_library: { id: A, file_name: 'bg.jpg', is_primary_logo: false } }, counts: { 'social_announcements.background_media_id': 1 } });
     await expect(buildDeletePayload(used.s, ACT, USER, { target: 'media', ids: [A] }, NOW)).rejects.toThrow(/poster or social/);
+  });
+});
+
+describe('tour targets (venue off a tour\'s outreach)', () => {
+  const target = (actId = ACT, extra: Record<string, unknown> = {}) => ({
+    id: A, status: 'follow_up', tour_id: 'tour-1', tour: { id: 'tour-1', name: 'HIGH PLAINS', act_id: actId }, venue: { name: 'Brickyard' }, ...extra,
+  });
+
+  it('stages removal of a target on the band\'s own tour, labelled as a removal that keeps the venue', async () => {
+    const { s } = fake({ single: { tour_venues: target() } });
+    const p = await buildDeletePayload(s, ACT, USER, { target: 'tour_target', ids: [A] }, NOW);
+    expect(p.items).toEqual([{ id: A, tour_id: 'tour-1', label: 'Brickyard from HIGH PLAINS outreach (the venue stays saved)', mode: 'remove' }]);
+    expect(describeDelete(p)).toBe('Remove Brickyard from HIGH PLAINS outreach (the venue stays saved)');
+    expect(stagedItemCaution('record_delete', { ...p })).toMatch(/venues, their contacts and email history stay saved/);
+  });
+
+  it('refuses a target on another band\'s tour, or one that does not exist', async () => {
+    await expect(buildDeletePayload(fake({ single: { tour_venues: target('act-other') } }).s, ACT, USER, { target: 'tour_target', ids: [A] }, NOW))
+      .rejects.toThrow(/isn't on one of your tours/);
+    await expect(buildDeletePayload(fake({ single: { tour_venues: null } }).s, ACT, USER, { target: 'tour_target', ids: [A] }, NOW))
+      .rejects.toThrow(/isn't on one of your tours/);
+  });
+
+  it('warns about unsent drafts and a confirmed show staying put', async () => {
+    const { s } = fake({ single: { tour_venues: target(ACT, { status: 'confirmed' }) }, counts: { 'email_drafts.tour_venue_id': 2 } });
+    const p = await buildDeletePayload(s, ACT, USER, { target: 'tour_target', ids: [A] }, NOW);
+    expect(p.items[0].note).toBe('Its confirmed show stays on your calendar. 2 unsent drafts for it will be discarded.');
+  });
+
+  it('allows more at once than other deletes, but still caps it', async () => {
+    const ids = (n: number) => Array.from({ length: n }, (_, i) => `${String(i).padStart(8, '0')}-1111-4111-8111-111111111111`);
+    expect((await import('../../lib/server/agentDeletes')).deleteRequestSchema.safeParse({ target: 'tour_target', ids: ids(MAX_TARGET_REMOVALS_PER_REQUEST) }).success).toBe(true);
+    await expect(buildDeletePayload(fake({}).s, ACT, USER, { target: 'tour_target', ids: ids(MAX_TARGET_REMOVALS_PER_REQUEST + 1) }, NOW)).rejects.toThrow(/at most 20 venues/);
+    await expect(buildDeletePayload(fake({}).s, ACT, USER, { target: 'show', ids: ids(MAX_DELETES_PER_REQUEST + 1) }, NOW)).rejects.toThrow(/at most 3 things/);
+  });
+
+  it('execute removes only the outreach row, scoped to the band\'s tour, and never touches the venue', async () => {
+    const { s, log } = fake({ single: { tour_venues: target() } });
+    const p = await buildDeletePayload(s, ACT, USER, { target: 'tour_target', ids: [A] }, NOW);
+    await executeDelete(s, ACT, USER, p, jest.fn(), NOW);
+    expect(log.deletes).toEqual(['tour_venues']);
+    expect(log.filters).toEqual(expect.arrayContaining([['tour_venues', 'id', A], ['tour_venues', 'tour_id', 'tour-1']]));
+    expect(log.deletes).not.toContain('venues');
+  });
+
+  it('execute re-checks: a target moved to another band\'s tour is not removed', async () => {
+    const staged = { target: 'tour_target', include_shows: false, items: [{ id: A, tour_id: 'tour-1', label: 'x', mode: 'remove' }] };
+    const { s, log } = fake({ single: { tour_venues: target('act-other') } });
+    await expect(executeDelete(s, ACT, USER, staged, jest.fn(), NOW)).rejects.toThrow(/isn't on one of your tours/);
+    expect(log.deletes).toEqual([]);
   });
 });

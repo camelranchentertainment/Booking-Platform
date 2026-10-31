@@ -4,6 +4,10 @@
 // the band's records. Policy (Scott, Oct 20 2026):
 //
 //   May delete  — upcoming shows / calendar days, tours, band members, notes, media.
+//   May remove  — a venue from a tour's outreach list (tour_target). Only the
+//                 tour_venues row goes; the venue, its contacts and its email
+//                 history stay (email_log.tour_venue_id is ON DELETE SET NULL).
+//                 Venues themselves are never deleted (Scott, Oct 30 2026).
 //   Never       — show history (past or completed shows), anything with money
 //                 attached (payments, deposits, expenses, pay history), logins /
 //                 profiles, and never more than MAX_DELETES_PER_REQUEST things at once.
@@ -19,11 +23,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
-export const DELETE_TARGETS = ['show', 'tour', 'member', 'note', 'media'] as const;
+export const DELETE_TARGETS = ['show', 'tour', 'member', 'note', 'media', 'tour_target'] as const;
 export type DeleteTarget = (typeof DELETE_TARGETS)[number];
 
 /** Hard cap on items in one delete request — no bulk wipes. */
 export const MAX_DELETES_PER_REQUEST = 3;
+/**
+ * Taking venues off a tour's outreach list erases nothing (the venues stay
+ * saved), so a cleanup of a long target list may cover more at once.
+ */
+export const MAX_TARGET_REMOVALS_PER_REQUEST = 20;
 /** A tour deleted together with its shows may not take more than this many shows with it. */
 export const MAX_TOUR_SHOWS_DELETED = 30;
 
@@ -33,8 +42,11 @@ export const deleteRequestSchema = z
     ids: z
       .array(z.string().uuid('Pick the item from your list'))
       .min(1, 'Say which item to delete.')
-      .max(MAX_DELETES_PER_REQUEST, `I can delete at most ${MAX_DELETES_PER_REQUEST} things at a time.`),
+      .max(MAX_TARGET_REMOVALS_PER_REQUEST, `I can take at most ${MAX_TARGET_REMOVALS_PER_REQUEST} venues off a tour at a time.`),
     include_shows: z.boolean().optional(),
+  })
+  .refine(r => r.target === 'tour_target' || r.ids.length <= MAX_DELETES_PER_REQUEST, {
+    message: `I can delete at most ${MAX_DELETES_PER_REQUEST} things at a time.`,
   })
   .refine(r => r.target !== 'tour' || r.ids.length === 1, { message: 'Delete one tour at a time.' })
   .refine(r => r.target === 'tour' || r.include_shows === undefined, { message: 'include_shows only applies to tours.' });
@@ -43,8 +55,13 @@ export type DeleteRequest = z.infer<typeof deleteRequestSchema>;
 export interface DeleteItem {
   id: string;
   label: string;
-  /** 'retire' = member is kept but marked inactive because they have history. */
-  mode: 'delete' | 'retire';
+  /**
+   * 'retire' = member is kept but marked inactive because they have history.
+   * 'remove' = taken off a list (a venue off a tour's outreach); nothing is erased.
+   */
+  mode: 'delete' | 'retire' | 'remove';
+  /** For tour_target: the tour the target belongs to, re-checked against the band on execute. */
+  tour_id?: string;
   /** Shows that go with a tour (include_shows) or stay on the calendar without it. */
   shows?: Array<{ id: string; label: string }>;
   note?: string;
@@ -235,6 +252,37 @@ async function assessMedia(service: SupabaseClient, actId: string, id: string): 
   return { ok: true, item: { id, label: name, mode: 'delete' } };
 }
 
+async function assessTourTarget(service: SupabaseClient, actId: string, id: string): Promise<Verdict> {
+  // tour_venues has no act_id: ownership is proven through its tour.
+  const { data, error } = await service
+    .from('tour_venues').select('id, status, tour_id, tour:tours(id, name, act_id), venue:venues(name)').eq('id', id).maybeSingle();
+  if (error) throw new Error(`Outreach lookup failed: ${error.message}`);
+  const row = data as unknown as {
+    status: string | null; tour_id: string;
+    tour: { name: string | null; act_id: string } | { name: string | null; act_id: string }[] | null;
+    venue: { name: string | null } | { name: string | null }[] | null;
+  } | null;
+  const tour = Array.isArray(row?.tour) ? row?.tour[0] : row?.tour;
+  if (!row || !tour || tour.act_id !== actId) return { ok: false, reason: "That venue isn't on one of your tours' outreach lists." };
+  const venue = (Array.isArray(row.venue) ? row.venue[0] : row.venue)?.name || 'That venue';
+  const tourName = tour.name || 'the tour';
+
+  const notes: string[] = [];
+  if (row.status === 'confirmed') notes.push('Its confirmed show stays on your calendar.');
+  const drafts = await count(service, 'email_drafts', 'tour_venue_id', id);
+  if (drafts > 0) notes.push(`${drafts} unsent draft${drafts === 1 ? '' : 's'} for it will be discarded.`);
+  return {
+    ok: true,
+    item: {
+      id,
+      tour_id: row.tour_id,
+      label: `${venue} from ${tourName} outreach (the venue stays saved)`,
+      mode: 'remove',
+      ...(notes.length ? { note: notes.join(' ') } : {}),
+    },
+  };
+}
+
 /** Runs the right check for one item. */
 async function assess(
   service: SupabaseClient, actId: string, userId: string, target: DeleteTarget, id: string, today: string, includeShows: boolean,
@@ -245,6 +293,7 @@ async function assess(
     case 'member': return assessMember(service, actId, id, today);
     case 'note': return assessNote(service, actId, userId, id);
     case 'media': return assessMedia(service, actId, id);
+    case 'tour_target': return assessTourTarget(service, actId, id);
   }
 }
 
@@ -296,7 +345,7 @@ export async function executeDelete(
     ...(p?.target === 'tour' ? { include_shows: p?.include_shows === true } : {}),
   }, now);
 
-  const done: Array<{ id: string; label: string; mode: 'delete' | 'retire' }> = [];
+  const done: Array<{ id: string; label: string; mode: DeleteItem['mode'] }> = [];
   for (const item of fresh.items) {
     switch (fresh.target) {
       case 'show':
@@ -326,6 +375,13 @@ export async function executeDelete(
       case 'note': {
         const { error } = await service.from('daily_notes').delete().eq('id', item.id);
         if (error) throw new Error(`Could not delete the note: ${error.message}`);
+        break;
+      }
+      case 'tour_target': {
+        // Scoped to the tour the re-check just proved is this band's. Only the outreach row goes.
+        if (!item.tour_id) throw new Error(`Could not remove ${item.label}: its tour is unknown.`);
+        const { error } = await service.from('tour_venues').delete().eq('id', item.id).eq('tour_id', item.tour_id);
+        if (error) throw new Error(`Could not remove ${item.label}: ${error.message}`);
         break;
       }
       case 'media': {

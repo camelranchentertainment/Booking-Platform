@@ -22,7 +22,7 @@ import { formatShowDate, localToday } from '../../lib/formatDate';
 import AssistantHistoryList from '../dashboard/AssistantHistoryList';
 import AgentMessageBody from './AgentMessageBody';
 import type { ConversationDaySummary } from '../../lib/agentConversationDays';
-import { buildConfirmMessage, describeTourUpdate, describeVenueUpsert, describeContactUpsert, describeWrapup, describeExpenseUpdate, describeOfficeAction, describeDelete } from '../../lib/agentStagingHelpers';
+import { buildConfirmMessage, stagedItemCaution, describeTourUpdate, describeVenueUpsert, describeContactUpsert, describeWrapup, describeExpenseUpdate, describeOfficeAction, describeDelete } from '../../lib/agentStagingHelpers';
 import { buildAgentGreeting } from '../../lib/agent/agentGreeting';
 import { openInMainWindow } from '../../lib/agent/agentWindow';
 import { FEATURES } from '../../lib/featureFlags';
@@ -158,7 +158,7 @@ function summarizeStagedItem(item: { kind: string; proposal: any }): string {
   }
   else if (item.kind === 'email_send') summary = `Email to ${p.recipient}${p.venue_name ? ` (${p.venue_name})` : ''}: ${p.subject}`;
   else if (item.kind === 'tour_update') summary = describeTourUpdate(p);
-  else if (item.kind === 'record_delete') summary = `⚠ ${describeDelete(p)}`;
+  else if (item.kind === 'record_delete') summary = `${p?.target === 'tour_target' ? '' : '⚠ '}${describeDelete(p)}`;
   else if (item.kind === 'venue_upsert') summary = describeVenueUpsert(p);
   else if (item.kind === 'contact_upsert') summary = describeContactUpsert(p);
   else if (item.kind === 'booking_wrapup') summary = describeWrapup(p);
@@ -186,6 +186,10 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
   const [streamText, setStreamText]       = useState('');
   const [streamStatus, setStreamStatus]   = useState('');
   const streamAbortRef                    = useRef<AbortController | null>(null);
+  // Follow-up quick replies from the new agent; empty = the default buttons.
+  const [suggestions, setSuggestions]     = useState<string[]>([]);
+  // Which beta turn is current, so late suggestions from an older turn are ignored.
+  const turnRef                           = useRef(0);
   // The local day this chat is filed under. Set once on load so a chat that runs
   // past midnight keeps saving to the day it started; the next visit starts fresh.
   const chatDayRef                        = useRef<string>('');
@@ -332,6 +336,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
 
   const startNewChat = async () => {
     setMessages([{ role: 'assistant' as const, content: buildGreeting() }]);
+    setSuggestions([]);
     setPendingAction(null);
     setAgentError('');
     setSendResult(null);
@@ -389,6 +394,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
   useEffect(() => () => streamAbortRef.current?.abort(), []);
 
   const toggleBeta = () => {
+    setSuggestions([]);
     setUseBeta(prev => {
       writeBetaPreference(!prev);
       return !prev;
@@ -438,46 +444,63 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
     saveNote: boolean,
     file: { name: string; content: string } | null,
   ) => {
+    // A previous turn may still be fetching its suggestions; it's superseded.
+    streamAbortRef.current?.abort();
     const abort = new AbortController();
     streamAbortRef.current = abort;
+    const turn = ++turnRef.current;
+    setSuggestions([]);
     setStreamText('');
     setStreamStatus('');
-    const restoreInput = () => {
-      setMessages(next.slice(0, -1));
-      setAgentInput(typed);
-      setAttachedFile(file);
-    };
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const history = next.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
-      const { reply, action } = await streamAgentTurn(
-        { message: fullMsg, history, saveNote },
-        session?.access_token,
-        event => {
-          if (event.type === 'text') { setStreamStatus(''); setStreamText(prev => prev + event.delta); }
-          else if (event.type === 'reset') setStreamText('');
-          else if (event.type === 'status') setStreamStatus(event.text);
-        },
-        abort.signal,
-      );
+
+    // The reply is final the moment `done` arrives: the input unlocks then, while the
+    // stream stays open a beat longer for the follow-up suggestions.
+    let finalized = false;
+    const finalize = (reply: string, action?: Record<string, unknown>) => {
+      finalized = true;
       const updated = [...next, { role: 'assistant' as const, content: reply }];
       setMessages(updated);
       saveConversationHistory(updated);
       // The server builds this card in the same shape /api/agent uses, so the existing card UI renders it.
       if (action && isAgentAction(action)) showApprovalCard(action);
       if (saveNote) setNoteSaved(true);
+      setStreamText('');
+      setStreamStatus('');
+      setAgentLoading(false);
+    };
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const history = next.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
+      const result = await streamAgentTurn(
+        { message: fullMsg, history, saveNote },
+        session?.access_token,
+        event => {
+          if (event.type === 'text') { setStreamStatus(''); setStreamText(prev => prev + event.delta); }
+          else if (event.type === 'reset') setStreamText('');
+          else if (event.type === 'status') setStreamStatus(event.text);
+          else if (event.type === 'done') finalize(event.reply, event.action);
+          else if (event.type === 'suggestions' && turn === turnRef.current) setSuggestions(event.items);
+        },
+        abort.signal,
+      );
+      if (!finalized) finalize(result.reply, result.action);
     } catch (err) {
-      restoreInput();
+      // After the reply is in, only the optional suggestions can fail; there's nothing to undo.
+      if (finalized) return;
+      setMessages(next.slice(0, -1));
+      setAgentInput(typed);
+      setAttachedFile(file);
       if (abort.signal.aborted) {
         setAgentError('Stopped. Your message is back in the box.');
       } else {
         setAgentError(err instanceof AgentStreamError || err instanceof Error ? err.message : 'The agent couldn\'t answer. Try again.');
       }
-    } finally {
-      streamAbortRef.current = null;
       setStreamText('');
       setStreamStatus('');
       setAgentLoading(false);
+    } finally {
+      if (streamAbortRef.current === abort) streamAbortRef.current = null;
     }
   };
 
@@ -976,7 +999,10 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
                             </div>
                           )}
                           {item.kind === 'record_delete' && (
-                            <span style={{ fontSize: 11, color: 'var(--orange)' }}>⚠ Deleting can&apos;t be undone. Past shows and money records are never touched.</span>
+                            <span style={{ fontSize: 11, color: 'var(--orange)' }}>
+                              {/* Same text the phone app gets from stagedItemCaution. */}
+                              ⚠ {stagedItemCaution('record_delete', p)}
+                            </span>
                           )}
                           {item.kind === 'member_invite' && (
                             <span style={{ fontSize: 11, color: 'var(--orange)' }}>⚠ Confirming emails an invite link to {String(p.email)}.</span>
@@ -1090,8 +1116,13 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
             {/* Chips, errors and input belong to today's live chat; History is read-only. */}
             {historyView === null && (<>
             {/* Quick chips */}
-            <div className="dash-agent-chips" role="group" aria-label="Suggested questions">
-              {QUICK_CHIPS.map(chip =>
+            <div className="dash-agent-chips" role="group" aria-label={suggestions.length ? 'Suggested next messages' : 'Suggested questions'}>
+              {suggestions.map(text => (
+                <button key={`s-${text}`} type="button" className="dash-agent-chip dash-agent-chip--suggested" onClick={() => sendMessage(text)} disabled={agentLoading} style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, padding: '0.3rem 0.75rem', border: '1px solid var(--accent)', color: '#fff', background: 'rgba(232,130,58,0.14)', cursor: 'pointer', transition: 'all 0.15s' }}>
+                  {text}
+                </button>
+              ))}
+              {(suggestions.length ? QUICK_CHIPS.filter(chip => chip.href) : QUICK_CHIPS).map(chip =>
                 chip.href && isPopout ? (
                   // In the pop-out, app pages open in the main window, not this narrow one.
                   <button key={chip.label} type="button" className="dash-agent-chip" onClick={() => openInMainWindow(window, chip.href!)} style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, padding: '0.3rem 0.75rem', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', background: 'rgba(255,255,255,0.08)', cursor: 'pointer', transition: 'all 0.15s' }}

@@ -136,4 +136,6 @@ export type AgentStreamEvent =
    */
   | { type: 'done'; reply: string; action?: Record<string, unknown> }
   /** The turn failed. `message` is safe to show the user. */
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  /** Follow-up quick replies for the chat buttons. Sent after `done`, best effort. */
+  | { type: 'suggestions'; items: string[] };
