@@ -424,12 +424,14 @@ export const deleteRecordsTool = defineTool({
   name: 'delete_records',
   kind: 'write',
   description:
-    'Proposes deleting up to a few items of ONE kind: upcoming shows (booking_id), a tour (one, and ask first whether its upcoming '
+    'Proposes deleting up to 3 items of ONE kind: upcoming shows (booking_id), a tour (one, and ask first whether its upcoming '
     + 'shows go too: include_shows true/false), roster members (people with history are retired, not erased), notes, or media. '
-    + 'Never: past or completed shows, anything with money attached, expenses, payments, emails, venues, contacts, logins, the band. '
+    + 'Also takes venues OFF a tour\'s outreach list (target "tour_target", tour_venue_id values from get_outreach, up to 20): '
+    + 'the venue itself, its contacts and its email history stay saved. This is how to drop a venue from a tour. '
+    + 'Never: past or completed shows, anything with money attached, expenses, payments, emails, venues themselves, contacts, logins, the band. '
     + 'Offer status "cancelled" for shows that can\'t be deleted.',
   schema: deleteRequestSchema,
-  status: () => 'Checking what can be deleted…',
+  status: i => (i.target === 'tour_target' ? 'Checking the outreach list…' : 'Checking what can be deleted…'),
   run: (ctx, input) => stageOne(ctx, 'record_delete', async () => {
     const payload = await buildDeletePayload(ctx.service, ctx.actId, ctx.userId, input);
     return stageAction(ctx.service, ctx.actId, ctx.userId, 'record_delete', payload);

@@ -293,8 +293,8 @@ To EDIT an EXPENSE already logged (use expense_id from the Money section; only c
 You can never remove, archive or delete an expense, payment or any money record — if asked, say the
 user can archive it themselves on the Financials page. New expenses still use the expense item in stage_items.
 
-To DELETE something (only these kinds, at most ${MAX_DELETES_PER_REQUEST} per request, all the same kind):
-{"reply":"<conversational text>","action":{"type":"delete_record","target":"show|tour|member|note|media","ids":["<id from context>"]}}
+To DELETE something (only these kinds, at most ${MAX_DELETES_PER_REQUEST} per request except tour_target, all the same kind):
+{"reply":"<conversational text>","action":{"type":"delete_record","target":"show|tour|member|note|media|tour_target","ids":["<id from context>"]}}
   • show   — an upcoming show or calendar day (booking_id). Past/completed shows and shows with money
              received, expenses or email history can't be deleted — offer to set status "cancelled".
   • tour   — ONE tour (tour id). FIRST ask the user whether its upcoming shows should be deleted too.
@@ -305,6 +305,9 @@ To DELETE something (only these kinds, at most ${MAX_DELETES_PER_REQUEST} per re
   • note   — a band note (note_id from Band notes).
   • media  — a photo or file (media_id from Media). The band's main logo and files used in posters or
              social posts can't be deleted.
+  • tour_target — take a venue OFF a tour's outreach list (tour_venue_id from the Outreach section, up to
+             20 per request). Only the outreach entry goes; the venue, its contacts and email history stay.
+             Use this for "remove X from the tour's outreach / targets".
 Never delete: past shows, anything with money attached, expenses, payments, emails, venues, contacts,
 profiles, logins, the band itself. Never offer to "delete everything" — more than ${MAX_DELETES_PER_REQUEST} items is
 always refused; ask the user to pick.
@@ -454,6 +457,8 @@ WRITE (all writes require explicit user approval via staged-confirm — no direc
   ✓ Expenses — add (stage_items), edit (expense_update); never archive or delete
   ✓ Delete (delete_record) — upcoming shows/calendar days, tours, roster members (retired if they
     have history), notes, media; one kind and at most ${MAX_DELETES_PER_REQUEST} items per request
+  ✓ Tour outreach — take venues off a tour's outreach list (delete_record, target tour_target); the
+    venue itself is never deleted
   ✓ Inbox — archive emails (email_archive); save drafts without sending (email_draft)
   ✓ Member invites — invite someone to log in as a band member (member_invite); never as admin
   ✓ Notes — read recent band notes; add to or replace a day's note (note_upsert)
