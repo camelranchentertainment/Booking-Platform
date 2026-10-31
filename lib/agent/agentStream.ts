@@ -10,9 +10,10 @@ export type AgentStreamEvent =
   | { type: 'reset' }
   | { type: 'status'; text: string }
   | { type: 'done'; reply: string; action?: Record<string, unknown> }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'suggestions'; items: string[] };
 
-const EVENT_TYPES = new Set(['text', 'reset', 'status', 'done', 'error']);
+const EVENT_TYPES = new Set(['text', 'reset', 'status', 'done', 'error', 'suggestions']);
 
 /** Narrows parsed JSON to a well-formed event; anything else is ignored. */
 export function isAgentStreamEvent(value: unknown): value is AgentStreamEvent {
@@ -24,6 +25,7 @@ export function isAgentStreamEvent(value: unknown): value is AgentStreamEvent {
     case 'status': return typeof v.text === 'string';
     case 'done': return typeof v.reply === 'string' && (v.action === undefined || (typeof v.action === 'object' && v.action !== null && !Array.isArray(v.action)));
     case 'error': return typeof v.message === 'string';
+    case 'suggestions': return Array.isArray(v.items) && v.items.every(i => typeof i === 'string');
     default: return true;
   }
 }

@@ -16,6 +16,12 @@ describe('isAgentStreamEvent', () => {
     expect(isAgentStreamEvent({ type: 'done', reply: 'x', action: [] })).toBe(false);
   });
 
+  it('accepts follow-up suggestions, and rejects malformed ones', () => {
+    expect(isAgentStreamEvent({ type: 'suggestions', items: ['Draft the follow-up'] })).toBe(true);
+    expect(isAgentStreamEvent({ type: 'suggestions', items: [1] })).toBe(false);
+    expect(isAgentStreamEvent({ type: 'suggestions', items: 'x' })).toBe(false);
+  });
+
   it('rejects unknown types and missing fields', () => {
     expect(isAgentStreamEvent({ type: 'text' })).toBe(false);
     expect(isAgentStreamEvent({ type: 'done', reply: 5 })).toBe(false);

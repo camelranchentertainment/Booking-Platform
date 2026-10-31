@@ -29,6 +29,7 @@ import { buildAgentSnapshot } from '../../lib/server/agent/snapshot';
 import { READ_TOOLS } from '../../lib/server/agent/readTools';
 import { writeTools, newProposalCollector, buildApprovalAction } from '../../lib/server/agent/writeTools';
 import { formatPendingContextSummary, withStagedSummaries } from '../../lib/agentStagingHelpers';
+import { generateSuggestions } from '../../lib/server/agent/suggestions';
 import { runAgentTurn, sdkStreamFn } from '../../lib/server/agent/engine';
 import { agentStreamBodySchema, resolveAgentModel, trimHistory } from '../../lib/server/agent/request';
 import type { AgentStreamEvent, AgentToolContext } from '../../lib/server/agent/types';
@@ -176,6 +177,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (action) console.info('[agent-stream] proposals staged', { actId, type: action.type, count: Array.isArray(action.staged) ? action.staged.length : 1 });
     // withStagedSummaries adds the per-item summary/caution text the phone app shows, same as /api/agent.
     send({ type: 'done', reply: result.reply, ...(action ? { action: withStagedSummaries(action) } : {}) });
+
+    // After the answer is on screen: follow-up quick replies. Best effort, never fails the turn.
+    const suggestions = await generateSuggestions(
+      (params, options) => client.messages.create(params, options),
+      { userMessage: message, reply: result.reply, cardWaiting: Boolean(action) },
+      abort.signal,
+    );
+    if (suggestions.length) send({ type: 'suggestions', items: suggestions });
   } catch (err) {
     if (abort.signal.aborted) {
       console.info('[agent-stream] turn cancelled by the client', { actId });
