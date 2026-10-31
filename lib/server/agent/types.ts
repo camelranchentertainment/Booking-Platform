@@ -10,9 +10,9 @@
 //   - The band comes from AgentToolContext.actId, which the route takes from the
 //     caller's profile. No tool accepts an act id, band id or user id as input.
 //   - Every tool input is validated with its zod schema before run() sees it.
-//   - Read tools only read. Anything that changes data is staged for the
-//     user's Confirm click (added in the next step of the rebuild); no tool
-//     ever writes the band's data directly.
+//   - Read tools only read. Write tools only STAGE: they add a pending
+//     proposal to the turn's approval card; the user's Confirm click is what
+//     saves it. No tool ever writes the band's data directly.
 
 import { z } from 'zod';
 import type Anthropic from '@anthropic-ai/sdk';
@@ -28,6 +28,39 @@ export interface AgentToolContext {
   userId: string;
   /** Today in YYYY-MM-DD (UTC), so every tool agrees on what "upcoming" means. */
   today: string;
+  /**
+   * Where write tools collect this turn's proposals for the approval card.
+   * Present only when the route offers write tools; read tools never touch it.
+   */
+  proposals?: ProposalCollector;
+  /** Anthropic key, for the one write tool that drafts text with a second model call (tour outreach). */
+  anthropicKey?: string;
+}
+
+/** One staged change on the approval card — the shape the panel and the execute route already use. */
+export interface StagedCardItem {
+  kind: string;
+  action_type: string;
+  staged_action_id: string;
+  proposal: object;
+  conflicts?: unknown[];
+}
+
+/** Everything the write tools staged during one turn. */
+export interface ProposalCollector {
+  staged: StagedCardItem[];
+  /** Items that couldn't be staged, in plain language; shown under the card. */
+  errors: string[];
+  /** A bulk-outreach card (its own card type: venue picker + draft). At most one per turn. */
+  outreach: Record<string, unknown> | null;
+  /**
+   * Rows to dedupe against: recently executed actions, plus everything staged
+   * earlier in this turn, so the model can't stage the same show twice.
+   */
+  dedup: {
+    pending: Array<{ action_type: string; payload: Record<string, unknown> }>;
+    recent: Array<{ action_type: string; payload: Record<string, unknown> }>;
+  };
 }
 
 /** What a tool hands back to the model. */
@@ -41,6 +74,11 @@ export interface AgentToolResult {
 export interface AgentTool<Schema extends z.ZodType = z.ZodType> {
   /** snake_case name the model calls. */
   name: string;
+  /**
+   * 'write' tools stage proposals and run one at a time, in order, so two calls in
+   * the same step can't both pass the duplicate check. Reads run in parallel.
+   */
+  kind?: 'read' | 'write';
   /** When to use it and what comes back. This is the model's only manual for the tool. */
   description: string;
   /** Input contract. Validated before run(); also sent to the model as JSON Schema. */
@@ -73,7 +111,8 @@ export function defineTool<Schema extends z.ZodType>(tool: AgentTool<Schema>): A
  * @returns The API tool definition.
  */
 export function toApiTool(tool: AgentTool): Anthropic.Tool {
-  const json = z.toJSONSchema(tool.schema) as Record<string, unknown>;
+  // The input side of the schema: fields with defaults are optional to the model, filled in on parse.
+  const json = z.toJSONSchema(tool.schema, { io: 'input' }) as Record<string, unknown>;
   // The API takes a bare schema object; the draft marker is noise in every request.
   delete json.$schema;
   return {
@@ -91,7 +130,10 @@ export type AgentStreamEvent =
   | { type: 'reset' }
   /** A tool started; show the line while it runs. */
   | { type: 'status'; text: string }
-  /** The turn finished. `reply` is the complete, final text to keep in the conversation. */
-  | { type: 'done'; reply: string }
+  /**
+   * The turn finished. `reply` is the complete, final text to keep in the
+   * conversation; `action` is the approval card, when anything was staged.
+   */
+  | { type: 'done'; reply: string; action?: Record<string, unknown> }
   /** The turn failed. `message` is safe to show the user. */
   | { type: 'error'; message: string };

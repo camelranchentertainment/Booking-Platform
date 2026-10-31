@@ -5,12 +5,13 @@
 // in a loop with look-up tools and the reply streams to the browser as it's
 // written (server-sent events).
 //
-// Read-only in this release: the tools look things up; nothing here writes the
-// band's data. Saving changes stays with the classic agent until the staged
-// write tools land.
+// Nothing here writes the band's data. Write tools STAGE proposals (pending
+// ai_staged_actions rows, the same ones the classic agent creates); the turn's
+// proposals reach the browser as one approval card, and the user's Confirm
+// click runs /api/help/actions/execute.
 //
 // Event stream (one JSON object per `data:` line, see AgentStreamEvent):
-//   status → text… → reset (model used a tool; drop the draft) → … → done | error
+//   status → text… → reset (model used a tool; drop the draft) → … → done (+ approval card) | error
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import Anthropic from '@anthropic-ai/sdk';
@@ -26,6 +27,8 @@ import { AGENT_WEB_SEARCH_TOOL, isWebSearchUnavailableError } from '../../lib/se
 import { AGENT_SYSTEM_PROMPT } from '../../lib/server/agent/systemPrompt';
 import { buildAgentSnapshot } from '../../lib/server/agent/snapshot';
 import { READ_TOOLS } from '../../lib/server/agent/readTools';
+import { writeTools, newProposalCollector, buildApprovalAction } from '../../lib/server/agent/writeTools';
+import { formatPendingContextSummary, withStagedSummaries } from '../../lib/agentStagingHelpers';
 import { runAgentTurn, sdkStreamFn } from '../../lib/server/agent/engine';
 import { agentStreamBodySchema, resolveAgentModel, trimHistory } from '../../lib/server/agent/request';
 import type { AgentStreamEvent, AgentToolContext } from '../../lib/server/agent/types';
@@ -104,20 +107,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const ctx: AgentToolContext = { service, actId, userId: caller.userId, today };
+  // Recently confirmed actions: staging the same thing again within 10 minutes is refused as a duplicate.
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60_000).toISOString();
+  const ctx: AgentToolContext = {
+    service, actId, userId: caller.userId, today, anthropicKey,
+    proposals: newProposalCollector(),
+  };
 
   try {
-    const [snapshot, modelSetting] = await Promise.all([
+    const [snapshot, modelSetting, recentRes, pendingRes] = await Promise.all([
       buildAgentSnapshot(service, actId, today),
       getSetting('agent_model'),
+      service.from('ai_staged_actions').select('action_type, payload')
+        .eq('act_id', actId).eq('status', 'executed').gt('executed_at', tenMinutesAgo),
+      service.from('ai_staged_actions').select('id, action_type, payload, created_at')
+        .eq('act_id', actId).eq('created_by', caller.userId).eq('status', 'pending').gt('expires_at', new Date().toISOString()),
     ]);
+    if (ctx.proposals) ctx.proposals.dedup.recent = (recentRes.data ?? []) as typeof ctx.proposals.dedup.recent;
+
+    // A card left unconfirmed when the user sends a new message is cleared, as in the classic
+    // agent; the model is told what it was so it can offer it again.
+    const pendingRows = pendingRes.data ?? [];
+    if (pendingRows.length) {
+      const { error: cancelErr } = await service.from('ai_staged_actions').update({ status: 'cancelled' })
+        .eq('act_id', actId).eq('created_by', caller.userId).eq('status', 'pending');
+      if (cancelErr) console.error('[agent-stream] clearing unconfirmed proposals failed', { actId, message: cancelErr.message });
+    }
+    const pendingNote = pendingRows.length
+      ? `\n\nUNCONFIRMED FROM THE LAST MESSAGE (now cleared — offer to stage them again if the user still wants them):\n${formatPendingContextSummary(pendingRows)}`
+      : '';
     const model = resolveAgentModel(modelSetting);
 
     // Stable blocks first and cached; the per-band snapshot changes, so it comes last, uncached.
     const system: Anthropic.TextBlockParam[] = [
       { type: 'text', text: `${AGENT_SYSTEM_PROMPT}\n\n${AGENT_CONTENT_RULES}\n\n═══ PLATFORM DOCUMENTATION ═══\n\n${HELP_SYSTEM_PROMPT}`, cache_control: { type: 'ephemeral' } },
       ...(FEATURES.socials ? [] : [{ type: 'text' as const, text: 'Socials is switched off right now: don\'t offer or draft social posts; if asked, say the feature is being finished.' }]),
-      { type: 'text', text: `SNAPSHOT (live from the database; use tools for anything more):\n\n${snapshot}` },
+      { type: 'text', text: `SNAPSHOT (live from the database; use tools for anything more):\n\n${snapshot}${pendingNote}` },
     ];
 
     const client = new Anthropic({ apiKey: anthropicKey });
@@ -127,7 +152,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       model,
       system,
       messages,
-      tools: READ_TOOLS,
+      tools: [...READ_TOOLS, ...writeTools()],
       ctx,
       onEvent: send,
       signal: abort.signal,
@@ -147,7 +172,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.info('[agent-stream] turn', { actId, model, steps: result.steps, toolCalls: result.toolCalls, truncated: result.truncated, ms: Date.now() - started });
 
     if (saveNote) await saveConversationNote(ctx, history, message, result.reply);
-    send({ type: 'done', reply: result.reply });
+    const action = ctx.proposals ? buildApprovalAction(ctx.proposals) : undefined;
+    if (action) console.info('[agent-stream] proposals staged', { actId, type: action.type, count: Array.isArray(action.staged) ? action.staged.length : 1 });
+    // withStagedSummaries adds the per-item summary/caution text the phone app shows, same as /api/agent.
+    send({ type: 'done', reply: result.reply, ...(action ? { action: withStagedSummaries(action) } : {}) });
   } catch (err) {
     if (abort.signal.aborted) {
       console.info('[agent-stream] turn cancelled by the client', { actId });

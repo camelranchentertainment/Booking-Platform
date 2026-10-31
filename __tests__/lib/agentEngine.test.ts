@@ -181,6 +181,32 @@ describe('runAgentTurn', () => {
   });
 });
 
+describe('write tools in one step', () => {
+  it('run one at a time, in the order asked, while reads run in parallel', async () => {
+    const log: string[] = [];
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    const write = (name: string, ms: number) => defineTool({
+      name, kind: 'write', description: 'w', schema: z.object({}).strict(), status: () => name,
+      run: async () => { log.push(`${name}:start`); await sleep(ms); log.push(`${name}:end`); return { content: name }; },
+    });
+    const read = (name: string, ms: number) => defineTool({
+      name, description: 'r', schema: z.object({}).strict(), status: () => name,
+      run: async () => { log.push(`${name}:start`); await sleep(ms); log.push(`${name}:end`); return { content: name }; },
+    });
+    const tools = [write('w1', 20), write('w2', 1), read('r1', 10), read('r2', 10)] as AgentTool[];
+    const { promise, calls } = run([
+      msg([toolUse('a', 'w1', {}), toolUse('b', 'r1', {}), toolUse('c', 'w2', {}), toolUse('d', 'r2', {})], 'tool_use'),
+      msg([text('done')], 'end_turn'),
+    ], tools);
+    await promise;
+    // Both reads start before either finishes; w2 doesn't start until w1 is done.
+    expect(log.indexOf('r2:start')).toBeLessThan(log.indexOf('r1:end'));
+    expect(log.indexOf('w1:end')).toBeLessThan(log.indexOf('w2:start'));
+    // Results go back in the order the model asked for them.
+    expect(toolResultsOf(calls[1]).map(r => r.tool_use_id)).toEqual(['a', 'b', 'c', 'd']);
+  });
+});
+
 describe('toApiTool', () => {
   it('sends the zod schema as JSON Schema without the draft marker', () => {
     const api = toApiTool(echoTool as AgentTool);

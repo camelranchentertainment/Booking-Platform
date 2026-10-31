@@ -1,5 +1,15 @@
 # Dev Log
 
+## 2026-10-31 — Agent rebuild, step 3: the new agent stages changes on one approval card
+
+**Branch:** `feat/agent-write-tools` · no migration
+
+- **What:** the beta agent ("New agent (beta)") can now propose changes. 19 write tools (shows/travel/notes/expenses, payments, tours, venues, contacts, single emails, drafts, templates, tour outreach, wrap-ups, expenses, roster, member invites, calendar sync, notes, deletes) stage pending `ai_staged_actions` rows; everything staged in one reply goes to the browser as ONE approval card (`stage_items`), confirmed through the existing `/api/help/actions/execute`. Bulk tour outreach keeps its own card and can't be mixed with other changes in the same reply.
+- **Limits:** the classic caps (one action per reply, 4 shows, 8 venues) are replaced by up to 40 changes of any mix per reply. Venue batches still go through `stageVenueBatch` in chunks of 8, so its checks are unchanged.
+- **Same rules as the classic agent:** every tool calls the classic agent's own validators and staging functions. `resolveStageItems` and `resolveTourOutreach` moved from `pages/api/agent.ts` to `lib/server/agent/` unchanged so both agents share them.
+- **Safety:** write tools run one at a time within a step (reads stay parallel), so two calls can't both pass the duplicate check. Each staged item is added to the turn's dedup list. An unconfirmed card from the previous message is cancelled when a new message arrives (same as classic), and the model is told what it was.
+- **Next:** step 4, make the new agent the default and retire the classic prompt.
+
 ## 2026-10-30 — Agent rebuild, steps 1–2: readable replies, then a tool-based engine (beta)
 
 **Branches:** `feat/agent-chat-readable-replies` (PR #194), `feat/agent-tool-engine` (PR #195, built on #194) · no migration
