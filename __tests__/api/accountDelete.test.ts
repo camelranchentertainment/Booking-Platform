@@ -8,7 +8,9 @@ import { BLOCKING_USER_REFERENCES } from '../../lib/server/accountDeletion';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 interface Profile {
+  id?: string;
   role: string;
+  act_id?: string | null;
   subscription_status?: string | null;
   stripe_subscription_id?: string | null;
 }
@@ -113,6 +115,37 @@ describe('DELETE /api/account/delete', () => {
     const res = mockRes();
     await handler(mockReq(), res);
     expect(res.statusCode).toBe(401);
+  });
+
+  describe('Booking Agent logins (band_admin role, no band)', () => {
+    const agent = { id: 'workspace-1', role: 'band_admin', act_id: null, stripe_subscription_id: null };
+
+    it('deletes an agent with no shows or commission records', async () => {
+      const { service, deleteUser } = buildService({ profile: agent });
+      (getServiceClient as jest.Mock).mockReturnValue(service);
+      const res = mockRes();
+      await handler(mockReq(), res);
+      expect(res.statusCode).toBe(200);
+      expect(deleteUser).toHaveBeenCalledWith('user-1');
+    });
+
+    it.each(['booker_shows.booker_id', 'booker_commission_payments.booker_id'])('blocks an agent with records in %s', async (ref) => {
+      const { service, deleteUser } = buildService({ profile: agent, references: { [ref]: 1 } });
+      (getServiceClient as jest.Mock).mockReturnValue(service);
+      const res = mockRes();
+      await handler(mockReq(), res);
+      expect(res.statusCode).toBe(409);
+      expect(deleteUser).not.toHaveBeenCalled();
+    });
+
+    it('blocks an agent who is still subscribed', async () => {
+      const { service, deleteUser } = buildService({ profile: { ...agent, stripe_subscription_id: 'sub_1' } });
+      (getServiceClient as jest.Mock).mockReturnValue(service);
+      const res = mockRes();
+      await handler(mockReq(), res);
+      expect(res.statusCode).toBe(409);
+      expect(deleteUser).not.toHaveBeenCalled();
+    });
   });
 
   it('deletes a member with no linked records', async () => {
