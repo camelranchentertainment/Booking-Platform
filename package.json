@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "typecheck": "node --max-old-space-size=4096 node_modules/typescript/bin/tsc --noEmit -p tsconfig.test.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "jest",
