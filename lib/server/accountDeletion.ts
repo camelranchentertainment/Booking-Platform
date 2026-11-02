@@ -19,7 +19,8 @@ export type DeletionBlockCode =
   | 'SUPERADMIN'
   | 'BAND_ADMIN_HANDOFF_REQUIRED'
   | 'SUBSCRIPTION_ACTIVE'
-  | 'ACCOUNT_HAS_BAND_RECORDS';
+  | 'ACCOUNT_HAS_BAND_RECORDS'
+  | 'AGENT_HAS_RECORDS';
 
 export interface DeletionBlock {
   code: DeletionBlockCode;
@@ -57,6 +58,12 @@ export const BLOCKING_USER_REFERENCES: readonly UserReference[] = [
   { table: 'ai_staged_actions', column: 'executed_by' },
 ] as const;
 
+/**
+ * booker_* tables CASCADE from the agent workspace, so deleting an agent would
+ * also delete their shows and commission payments. Those must block.
+ */
+export const BLOCKING_AGENT_TABLES = ['booker_shows', 'booker_commission_payments'] as const;
+
 const MESSAGES: Record<DeletionBlockCode, string> = {
   SUPERADMIN: 'Superadmin accounts cannot be deleted through this endpoint.',
   BAND_ADMIN_HANDOFF_REQUIRED:
@@ -67,10 +74,42 @@ const MESSAGES: Record<DeletionBlockCode, string> = {
   ACCOUNT_HAS_BAND_RECORDS:
     "Your account is linked to band records (shows, venues or emails you created), so it can't be deleted automatically. " +
     "Contact us through camelranchbooking.com and we'll remove it for you.",
+  AGENT_HAS_RECORDS:
+    "Your agent workspace has shows or commission records, so it can't be deleted automatically. " +
+    "Contact us through camelranchbooking.com and we'll remove it for you.",
 };
 
 function block(code: DeletionBlockCode): DeletionBlock {
   return { code, status: code === 'SUPERADMIN' ? 403 : 409, message: MESSAGES[code] };
+}
+
+/** Whether this login is a Booking Agent, and what stops their workspace being deleted. */
+async function findAgentBlocker(
+  service: SupabaseClient,
+  userId: string,
+  profile: { role?: string | null; act_id?: string | null } | null,
+): Promise<{ isAgent: boolean; blocker: DeletionBlock | null }> {
+  if (profile?.role !== 'band_admin' || profile.act_id !== null) return { isAgent: false, blocker: null };
+
+  const { data: workspace, error } = await service
+    .from('booker_profiles')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw new Error(`agent workspace lookup failed: ${error.message}`);
+  if (!workspace) return { isAgent: false, blocker: null };
+
+  const counts = await Promise.all(
+    BLOCKING_AGENT_TABLES.map(async (table) => {
+      const { count, error: countErr } = await service
+        .from(table)
+        .select('*', { count: 'exact', head: true })
+        .eq('booker_id', workspace.id);
+      if (countErr) throw new Error(`agent record check ${table} failed: ${countErr.message}`);
+      return count ?? 0;
+    }),
+  );
+  return { isAgent: true, blocker: counts.some((n) => n > 0) ? block('AGENT_HAS_RECORDS') : null };
 }
 
 /**
@@ -92,7 +131,7 @@ export async function findDeletionBlocker(
 ): Promise<DeletionBlock | null> {
   const { data: profile, error: profileErr } = await service
     .from('profiles')
-    .select('role, stripe_subscription_id')
+    .select('role, act_id, stripe_subscription_id')
     .eq('id', userId)
     .maybeSingle();
   if (profileErr) throw new Error(`profile lookup failed: ${profileErr.message}`);
@@ -100,7 +139,15 @@ export async function findDeletionBlocker(
   // A missing profile is allowed through: an orphaned auth user should still be
   // deletable. Ownership and reference checks below still apply.
   if (profile?.role === 'superadmin') return block('SUPERADMIN');
-  if (profile?.role === 'band_admin') return block('BAND_ADMIN_HANDOFF_REQUIRED');
+
+  // Booking Agent logins also carry the band_admin role but have no band, so the
+  // band hand-off message would be wrong for them. Only a real workspace counts.
+  const agentBlock = await findAgentBlocker(service, userId, profile);
+  if (agentBlock.isAgent) {
+    if (agentBlock.blocker) return agentBlock.blocker;
+  } else if (profile?.role === 'band_admin') {
+    return block('BAND_ADMIN_HANDOFF_REQUIRED');
+  }
 
   const { count: ownedActs, error: actsErr } = await service
     .from('acts')
