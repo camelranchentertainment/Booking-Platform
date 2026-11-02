@@ -17,7 +17,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const admin = await getAuthedSuperadmin(req);
   if (!admin) return res.status(403).json({ error: 'Superadmin only' });
 
-  const mapsKey = await getSetting('google_maps_api_key').catch(() => null);
+  // Keys can live in Vercel env vars or be saved in Settings → Platform Setup.
+  // getSetting checks both, so the status matches what the site actually uses.
+  const [mapsKey, stripeKey, resendKey] = await Promise.all([
+    getSetting('google_maps_api_key').catch(() => null),
+    getSetting('stripe_secret_key').catch(() => null),
+    getSetting('resend_api_key').catch(() => null),
+  ]);
 
   let supabaseOk = false;
   try {
@@ -31,8 +37,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   return res.json({
     supabase:       supabaseOk,
-    stripe:         !!process.env.STRIPE_SECRET_KEY,
-    resend:         !!process.env.RESEND_API_KEY,
+    stripe:         !!stripeKey,
+    resend:         !!resendKey,
     googleMaps:     !!(process.env.GOOGLE_MAPS_API_KEY || mapsKey),
     googleCalendar: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     gitHash:        process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || null,
