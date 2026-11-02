@@ -28,14 +28,15 @@ import { openInMainWindow } from '../../lib/agent/agentWindow';
 import { FEATURES } from '../../lib/featureFlags';
 import { streamAgentTurn, AgentStreamError } from '../../lib/agent/agentStream';
 
-/** Browser-only remembered choice for the beta switch. Per viewer, per device; losing it just means the classic agent. */
+/** Browser-only remembered choice for the agent switch. Per viewer, per device; losing it just means the new agent. */
 const AGENT_BETA_STORAGE_KEY = 'crb.agentToolEngineBeta';
 
 function readBetaPreference(): boolean {
   try {
-    return window.localStorage.getItem(AGENT_BETA_STORAGE_KEY) === '1';
+    // The new agent is the default. Only someone who switched it off stays on classic.
+    return window.localStorage.getItem(AGENT_BETA_STORAGE_KEY) !== '0';
   } catch {
-    return false; // private mode / blocked storage: default to the classic agent
+    return true; // private mode / blocked storage: the default
   }
 }
 
@@ -180,7 +181,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
   const [pendingAction, setPendingAction] = useState<AgentAction | null>(null);
   const [greetingSent, setGreetingSent]   = useState(false);
   const [conversationLoaded, setConversationLoaded] = useState(false);
-  // New tool-based agent (beta). Off unless the feature is enabled AND the user switched it on.
+  // New tool-based agent: on by default once the browser preference is read, unless switched off.
   const [useBeta, setUseBeta]             = useState(false);
   // While a beta reply streams: the text so far, and what the agent is looking up.
   const [streamText, setStreamText]       = useState('');
@@ -828,10 +829,10 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
                     className={`btn btn-ghost btn-sm dash-agent-beta${useBeta ? ' is-on' : ''}`}
                     title={useBeta
                       ? 'Using the new agent: looks things up, streams its answers, and puts every change on one card for you to confirm. Switch off for the classic agent.'
-                      : 'Try the new agent: looks things up for you, streams its answers, and puts every change on one card for you to confirm.'}
+                      : 'Switch on the new agent: looks things up for you, streams its answers, and puts every change on one card for you to confirm.'}
                   >
                     <span className="dash-agent-beta-track" aria-hidden="true"><span className="dash-agent-beta-knob" /></span>
-                    New agent (beta)
+                    New agent
                   </button>
                 )}
                 {historyView !== null ? (
