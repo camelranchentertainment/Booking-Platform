@@ -16,6 +16,8 @@ import { getMyBookerProfile } from '../../lib/booker/data';
 import { bandSideHome } from '../../lib/accountSide';
 import type { BookerProfile } from '../../lib/booker/types';
 import { ErrorBanner } from './ui';
+import TrialBanner from '../layout/TrialBanner';
+import { trialNotice } from '../../lib/trialNotice';
 
 interface BookerContextValue {
   booker: BookerProfile;
@@ -161,6 +163,8 @@ export default function BookerShell({ children, title }: Props) {
     return <NotAnAgentAccount home={bandSideHome(profile?.role ?? null)} onSignOut={handleSignOut} />;
   }
 
+  const notice = trialNotice(profile, 'agent');
+
   return (
     <BookerContext.Provider value={{ booker, refreshBooker: loadBooker }}>
       <Head>
@@ -217,6 +221,7 @@ export default function BookerShell({ children, title }: Props) {
         </aside>
 
         <main id="booker-main" className="main-content" tabIndex={-1}>
+          {notice && <TrialBanner notice={notice} href="/agent/settings" />}
           {children}
         </main>
       </div>
