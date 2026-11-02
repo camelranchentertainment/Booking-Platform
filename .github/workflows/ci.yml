@@ -28,6 +28,9 @@ jobs:
 
       - name: Type check
         run: npx tsc --noEmit -p tsconfig.test.json
+        env:
+          # The project sits right at Node's default 2 GB limit, which fails at random.
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Test
         run: npm test -- --coverage
