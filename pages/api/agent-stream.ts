@@ -1,6 +1,6 @@
 // pages/api/agent-stream.ts
 //
-// The tool-based booking agent (beta). Same caller rules as /api/agent — band
+// The tool-based booking agent. Same caller rules as /api/agent — band
 // admins only, the band comes from the caller's profile — but the model works
 // in a loop with look-up tools and the reply streams to the browser as it's
 // written (server-sent events).

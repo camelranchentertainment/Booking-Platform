@@ -13,10 +13,10 @@ export const FEATURES = {
    */
   socials: false,
   /**
-   * The tool-based booking agent (/api/agent-stream) as an opt-in beta: band
-   * admins see a "New agent (beta)" switch in the agent panel. Off = the switch
-   * is hidden and the route returns 404; the classic agent is unaffected
-   * either way.
+   * The tool-based booking agent (/api/agent-stream). On = every band admin
+   * uses it; there is no per-user switch. Off = the panel falls back to the
+   * classic agent (/api/agent) and this route returns 404, so this one line is
+   * the rollback until the classic agent is removed.
    */
   agentToolEngine: true,
 } as const;
