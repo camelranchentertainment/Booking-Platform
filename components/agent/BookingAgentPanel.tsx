@@ -28,26 +28,6 @@ import { openInMainWindow } from '../../lib/agent/agentWindow';
 import { FEATURES } from '../../lib/featureFlags';
 import { streamAgentTurn, AgentStreamError } from '../../lib/agent/agentStream';
 
-/** Browser-only remembered choice for the agent switch. Per viewer, per device; losing it just means the new agent. */
-const AGENT_BETA_STORAGE_KEY = 'crb.agentToolEngineBeta';
-
-function readBetaPreference(): boolean {
-  try {
-    // The new agent is the default. Only someone who switched it off stays on classic.
-    return window.localStorage.getItem(AGENT_BETA_STORAGE_KEY) !== '0';
-  } catch {
-    return true; // private mode / blocked storage: the default
-  }
-}
-
-function writeBetaPreference(on: boolean): void {
-  try {
-    window.localStorage.setItem(AGENT_BETA_STORAGE_KEY, on ? '1' : '0');
-  } catch {
-    // Not remembered across visits; the switch still works for this session.
-  }
-}
-
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Message = { role: 'user' | 'assistant'; content: string };
 
@@ -181,15 +161,13 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
   const [pendingAction, setPendingAction] = useState<AgentAction | null>(null);
   const [greetingSent, setGreetingSent]   = useState(false);
   const [conversationLoaded, setConversationLoaded] = useState(false);
-  // New tool-based agent: on by default once the browser preference is read, unless switched off.
-  const [useBeta, setUseBeta]             = useState(false);
-  // While a beta reply streams: the text so far, and what the agent is looking up.
+  // While a reply streams: the text so far, and what the agent is looking up.
   const [streamText, setStreamText]       = useState('');
   const [streamStatus, setStreamStatus]   = useState('');
   const streamAbortRef                    = useRef<AbortController | null>(null);
   // Follow-up quick replies from the new agent; empty = the default buttons.
   const [suggestions, setSuggestions]     = useState<string[]>([]);
-  // Which beta turn is current, so late suggestions from an older turn are ignored.
+  // Which turn is current, so late suggestions from an older turn are ignored.
   const turnRef                           = useRef(0);
   // The local day this chat is filed under. Set once on load so a chat that runs
   // past midnight keeps saving to the day it started; the next visit starts fresh.
@@ -386,21 +364,8 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
     agentInputRef.current?.focus();
   }, []);
 
-  // Restore the beta switch after mount (localStorage isn't available during server render).
-  useEffect(() => {
-    if (FEATURES.agentToolEngine && readBetaPreference()) setUseBeta(true); // eslint-disable-line react-hooks/set-state-in-effect
-  }, []);
-
   // A stream still running when the panel unmounts (navigating away) is cancelled, so nothing keeps billing.
   useEffect(() => () => streamAbortRef.current?.abort(), []);
-
-  const toggleBeta = () => {
-    setSuggestions([]);
-    setUseBeta(prev => {
-      writeBetaPreference(!prev);
-      return !prev;
-    });
-  };
 
   /** Stop button: cancels the streaming reply; the message goes back into the box to edit or resend. */
   const stopStreaming = () => streamAbortRef.current?.abort();
@@ -521,7 +486,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
     setPendingAction(null);
     setSendResult(null);
 
-    if (FEATURES.agentToolEngine && useBeta) {
+    if (FEATURES.agentToolEngine) {
       await sendWithToolEngine(msg, fullMsg, next, saveNote, attachedFile);
       return;
     }
@@ -740,14 +705,6 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
         textarea.dash-agent-input { flex:1 1 auto; min-width:0; width:auto; font-size:16px; line-height:1.5; resize:none; overflow-y:auto; max-height:8.5rem; }
         .dash-agent-btn         { flex:0 0 auto; min-width:44px; min-height:44px; justify-content:center; }
         .dash-agent-hdr-actions { display:flex; flex-wrap:wrap; gap:0.5rem; }
-        .dash-agent-beta { display:inline-flex; align-items:center; gap:0.45rem; color:var(--text-muted); }
-        .dash-agent-beta.is-on { color:var(--text-primary); }
-        .dash-agent-beta:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-        .dash-agent-beta-track { position:relative; width:28px; height:16px; border-radius:999px; border:1px solid var(--border); background:var(--bg); flex-shrink:0; transition:background 0.15s, border-color 0.15s; }
-        .dash-agent-beta-knob { position:absolute; top:2px; left:2px; width:10px; height:10px; border-radius:50%; background:var(--text-muted); transition:transform 0.15s; }
-        .dash-agent-beta.is-on .dash-agent-beta-track { background:var(--accent); border-color:var(--accent); }
-        .dash-agent-beta.is-on .dash-agent-beta-knob { transform:translateX(12px); background:#fff; }
-        @media (prefers-reduced-motion: reduce) { .dash-agent-beta-track, .dash-agent-beta-knob { transition:none; } }
         /* Doubled class so the pop-out fills its window even past the 768px rule below. */
         .dash-agent.dash-agent--popout { margin:0; height:100vh; height:100dvh; border:0; border-radius:0; }
         /* Conversation scrollbar: wide enough to grab (the site-wide one is 5px). */
@@ -819,22 +776,6 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
                 </div>
               </div>
               <div className="dash-agent-hdr-actions">
-                {FEATURES.agentToolEngine && historyView === null && (
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={useBeta}
-                    onClick={toggleBeta}
-                    disabled={agentLoading}
-                    className={`btn btn-ghost btn-sm dash-agent-beta${useBeta ? ' is-on' : ''}`}
-                    title={useBeta
-                      ? 'Using the new agent: looks things up, streams its answers, and puts every change on one card for you to confirm. Switch off for the classic agent.'
-                      : 'Switch on the new agent: looks things up for you, streams its answers, and puts every change on one card for you to confirm.'}
-                  >
-                    <span className="dash-agent-beta-track" aria-hidden="true"><span className="dash-agent-beta-knob" /></span>
-                    New agent
-                  </button>
-                )}
                 {historyView !== null ? (
                   <button type="button" onClick={closeHistory} className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}>
                     ← Back to today
@@ -1226,7 +1167,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
                     }
                   }}
                 />
-                {agentLoading && useBeta && FEATURES.agentToolEngine ? (
+                {agentLoading && FEATURES.agentToolEngine ? (
                 <button
                   type="button"
                   onClick={stopStreaming}
