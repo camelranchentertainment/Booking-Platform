@@ -66,7 +66,16 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       'To bill subscriptions, prevent abuse and fix problems.',
     ],
     paragraphs: [
-      'We do not sell your data, share it for advertising, or use it to show you ads. There are no ad trackers in the website or the apps.',
+      'We do not sell your data. Your account and band information is never shared for advertising or used to show you ads. Inside your account and in the apps there are no ad trackers.',
+    ],
+  },
+  {
+    id: 'advertising',
+    heading: 'Advertising on our public pages',
+    paragraphs: [
+      'We advertise Camel Ranch Booking on Facebook and Instagram. To measure those ads, our public homepage, booking agent page and sign-up page use the Meta Pixel, a tool from Meta Platforms. It does not run on the pages inside your account or in the apps.',
+      'On those public pages, Meta may receive your IP address, browser details, the page you visited and cookie identifiers. It is also told when someone completes a band sign-up. We do not send Meta your name, email address or anything about your band. We and Meta may use this to measure ads and to show our ads to people who visited these pages. Meta handles this information under its own privacy policy.',
+      'You can limit this through your ad preferences on Facebook or Instagram, or by blocking cookies or trackers in your browser. The site still works if you do.',
     ],
   },
   {

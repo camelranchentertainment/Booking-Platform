@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import BrandLogo from '../components/BrandLogo';
+import { trackCompleteRegistration } from '../lib/metaPixel';
 
 type Tier = 'band_admin' | 'member';
 
@@ -116,6 +117,8 @@ export default function Register() {
 
     const { error: signInErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
     if (signInErr) { setError(signInErr.message); setLoading(false); return; }
+
+    if (tier === 'band_admin') trackCompleteRegistration();
 
     if (tier === 'band_admin' && form.signupCode.trim() && apiData.codeApplied === false) {
       // Account exists and is signed in; tell them the code did not apply before moving on.
