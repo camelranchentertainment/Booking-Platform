@@ -13,7 +13,8 @@ export default function PrivacyPage() {
         <p>
           This explains what information Camel Ranch Booking collects, how it&apos;s used, and the choices you
           have. It covers the website and the iPhone and Android apps. The short version: we use your
-          information only to run the service for your band, and we never sell it or use it for ads.
+          information only to run the service for your band, and we never sell it. Your band&apos;s information is
+          never used for ads. Our public pages use one advertising tool, the Meta Pixel, explained below.
         </p>
       }
       sections={PRIVACY_SECTIONS}
