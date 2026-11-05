@@ -205,7 +205,7 @@ describe('POST /api/email/gmail-sync', () => {
   });
 
   it('records the reply date in a real tour_venues column and leaves the stage alone', async () => {
-    const { tourVenueUpdates } = setup({ tourVenues: [{ id: 'tv-1' }] });
+    const { tourVenueUpdates } = setup({ existingIds: ['m-old'], tourVenues: [{ id: 'tv-1' }] });
     const { res } = mockRes();
     await handler(mockReq('POST', { trigger: 'manual' }), res);
     expect(tourVenueUpdates).toEqual([expect.objectContaining({ responded_at: expect.any(String) })]);
