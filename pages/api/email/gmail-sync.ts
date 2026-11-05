@@ -300,13 +300,14 @@ export default async function handler(
 
       // Record that the venue replied, but DO NOT change outreach status.
       if (tourVenue?.id) {
-        await service
+        const { error: replyErr } = await service
           .from('tour_venues')
           .update({
-            last_replied_at: internalDate,
+            responded_at: internalDate,
             updated_at: new Date().toISOString(),
           })
           .eq('id', tourVenue.id);
+        if (replyErr) console.error('Gmail sync could not record venue reply:', { tourVenueId: tourVenue.id, code: replyErr.code });
       }
 
       imported++;
