@@ -709,7 +709,8 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
         /* Doubled class so the pop-out fills its window even past the 768px rule below. */
         .dash-agent.dash-agent--popout { margin:0; height:100vh; height:100dvh; border:0; border-radius:0; }
         /* Conversation scrollbar: wide enough to grab (the site-wide one is 5px). */
-        .dash-agent-thread      { scrollbar-width:auto; scrollbar-color:var(--border-light) transparent; }
+        /* position:relative keeps absolutely positioned text inside this scroller (the hidden "opens in a new tab" link labels); without it they stretch the whole page. */
+        .dash-agent-thread      { position:relative; scrollbar-width:auto; scrollbar-color:var(--border-light) transparent; }
         .dash-agent-thread::-webkit-scrollbar       { width:12px; }
         .dash-agent-thread::-webkit-scrollbar-track { background:transparent; }
         .dash-agent-thread::-webkit-scrollbar-thumb { background:var(--border-light); border-radius:6px; border:2px solid var(--surface); }
