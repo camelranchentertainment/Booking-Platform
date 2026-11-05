@@ -30,6 +30,7 @@ import { tourUpdateSchema, buildTourUpdatePayload } from '../agentTourActions';
 import { venueUpsertSchema, contactUpsertSchema, buildContactUpsertPayload } from '../agentVenueActions';
 import { stageVenueBatch, VENUE_BATCH_CAP } from '../agentVenueBatch';
 import { buildTourTargetPayload, loadTourTarget, type TourTargetAddPayload } from '../agentTourTargets';
+import { buildTourTargetStagePayload, MOVABLE_STAGES } from '../agentTourStages';
 import { wrapupSchema, expenseUpdateSchema, buildWrapupPayload, buildExpenseUpdatePayload } from '../agentMoneyActions';
 import { deleteRequestSchema, buildDeletePayload } from '../agentDeletes';
 import {
@@ -302,6 +303,45 @@ export const addVenuesToTourTool = defineTool({
   },
 });
 
+export const moveVenueStageTool = defineTool({
+  name: 'move_venue_stage',
+  kind: 'write',
+  description:
+    'Proposes moving venues on a tour\'s outreach board to another stage: target, follow_up, declined or thank_you. '
+    + 'tour_venue_ids come from get_outreach; every id goes to the same stage, so call again for a different stage. Nothing is emailed. '
+    + 'It can\'t set or change Confirmed, because that creates or affects a show: send the user to the tour page for that.',
+  schema: z.object({
+    tour_venue_ids: z.array(z.string().uuid()).min(1).max(MAX_STAGED_PER_TURN),
+    stage: z.enum(MOVABLE_STAGES),
+  }).strict(),
+  status: i => `Preparing ${i.tour_venue_ids.length} stage change${i.tour_venue_ids.length === 1 ? '' : 's'}…`,
+  run: async (ctx, input) => {
+    const c = collectorOf(ctx);
+    assertNoOutreach(c);
+    const staged: StagedCardItem[] = [];
+    const errors: string[] = [];
+    const onCard = new Set(c.staged.filter(s => s.kind === 'tour_target_stage').map(s => (s.proposal as { tour_venue_id: string }).tour_venue_id));
+    for (const id of new Set(input.tour_venue_ids)) {
+      if (onCard.has(id)) {
+        errors.push('One of those venues already has a stage change on this card.');
+        continue;
+      }
+      if (c.staged.length + staged.length >= MAX_STAGED_PER_TURN) {
+        errors.push(`Some venues didn't fit on this card (max ${MAX_STAGED_PER_TURN}); stage them after the user confirms.`);
+        break;
+      }
+      try {
+        const proposal = await buildTourTargetStagePayload(ctx.service, ctx.actId, id, input.stage);
+        const result = await stageAction(ctx.service, ctx.actId, ctx.userId, 'tour_target_stage', proposal);
+        staged.push({ kind: 'tour_target_stage', ...result });
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : 'That venue could not be staged.');
+      }
+    }
+    return record(c, staged, errors);
+  },
+});
+
 export const saveContactTool = defineTool({
   name: 'save_venue_contact',
   kind: 'write',
@@ -508,6 +548,7 @@ export function writeTools(): AgentTool[] {
     updateTourTool,
     saveVenuesTool,
     addVenuesToTourTool,
+    moveVenueStageTool,
     saveContactTool,
     sendEmailTool,
     saveEmailDraftTool,
