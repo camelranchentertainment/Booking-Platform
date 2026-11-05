@@ -30,7 +30,7 @@ import { READ_TOOLS } from '../../lib/server/agent/readTools';
 import { writeTools, newProposalCollector, buildApprovalAction } from '../../lib/server/agent/writeTools';
 import { formatPendingContextSummary, withStagedSummaries } from '../../lib/agentStagingHelpers';
 import { generateSuggestions } from '../../lib/server/agent/suggestions';
-import { runAgentTurn, sdkStreamFn } from '../../lib/server/agent/engine';
+import { phantomCardCorrection, runAgentTurn, sdkStreamFn } from '../../lib/server/agent/engine';
 import { agentStreamBodySchema, resolveAgentModel, trimHistory } from '../../lib/server/agent/request';
 import type { AgentStreamEvent, AgentToolContext } from '../../lib/server/agent/types';
 
@@ -157,6 +157,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ctx,
       onEvent: send,
       signal: abort.signal,
+      checkReply: (reply: string) => {
+        const c = ctx.proposals;
+        return phantomCardCorrection(reply, Boolean(c && (c.staged.length || c.outreach)), Boolean(c?.errors.length));
+      },
     };
 
     const started = Date.now();

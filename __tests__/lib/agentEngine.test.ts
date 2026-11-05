@@ -12,6 +12,7 @@ import {
   runAgentTurn,
   withCacheBreakpoint,
   type StreamFn,
+  PHANTOM_CARD_NOTE,
 } from '../../lib/server/agent/engine';
 import { defineTool, toApiTool, type AgentStreamEvent, type AgentTool, type AgentToolContext } from '../../lib/server/agent/types';
 
@@ -241,5 +242,34 @@ describe('withCacheBreakpoint', () => {
   it('leaves a server-tool tail alone', () => {
     const input: Anthropic.MessageParam[] = [{ role: 'assistant', content: [{ type: 'server_tool_use', id: 's', name: 'web_search', input: {} } as unknown as Anthropic.ContentBlockParam] }];
     expect(withCacheBreakpoint(input)).toBe(input);
+  });
+});
+
+describe('runAgentTurn checkReply', () => {
+  const message = (text: string): Anthropic.Message => ({
+    id: 'm', type: 'message', role: 'assistant', model: 'x', stop_reason: 'end_turn', stop_sequence: null,
+    content: [{ type: 'text', text, citations: null }],
+    usage: { input_tokens: 1, output_tokens: 1 },
+  } as unknown as Anthropic.Message);
+  const run = (replies: string[], check: (r: string) => string | null) => {
+    const stream = jest.fn();
+    replies.forEach(r => stream.mockResolvedValueOnce(message(r)));
+    return { stream, result: runAgentTurn({
+      stream, model: 'x', system: [], messages: [{ role: 'user', content: 'hi' }], tools: [],
+      ctx: { service: {} as AgentToolContext['service'], actId: 'a', userId: 'u', today: '2026-11-05' },
+      onEvent: () => undefined, log: () => undefined, checkReply: check,
+    }) };
+  };
+
+  it('gives the model one chance to correct a reply', async () => {
+    const { stream, result } = run(['on the card', 'fixed'], r => (r === 'on the card' ? 'fix it' : null));
+    await expect(result).resolves.toMatchObject({ reply: 'fixed', steps: 2 });
+    expect(stream).toHaveBeenCalledTimes(2);
+  });
+
+  it('tells the user when the second reply is still wrong', async () => {
+    const { stream, result } = run(['on the card', 'still on the card'], () => 'fix it');
+    expect((await result).reply).toContain(PHANTOM_CARD_NOTE);
+    expect(stream).toHaveBeenCalledTimes(2);
   });
 });

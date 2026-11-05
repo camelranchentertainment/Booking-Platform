@@ -183,6 +183,8 @@ function formatItemLabel(item: { kind: string; proposal: Record<string, unknown>
       return describeTourUpdate(p as TourUpdateCard);
     case 'venue_upsert':
       return describeVenueUpsert(p as VenueCard);
+    case 'tour_target_add':
+      return describeTourTargetAdd(p);
     case 'contact_upsert':
       return describeContactUpsert(p as ContactCard);
     case 'booking_wrapup':
@@ -240,6 +242,8 @@ export function formatPendingContextSummary(
         return `  • ${describeTourUpdate(p as TourUpdateCard)}`;
       case 'venue_upsert':
         return `  • ${describeVenueUpsert(p as VenueCard)}`;
+      case 'tour_target_add':
+        return `  • ${describeTourTargetAdd(p)}`;
       case 'contact_upsert':
         return `  • ${describeContactUpsert(p as ContactCard)}`;
       case 'booking_wrapup':
@@ -306,6 +310,12 @@ export function describeVenueUpsert(p: VenueCard): string {
     return `New venue: ${p.venue_name ?? ''}${where ? ` (${where})` : ''}${c.email ? ` · ${c.email}` : ''}`;
   }
   return `Update venue ${p.venue_name ?? ''}: ${fieldList(c)}`;
+}
+
+/** One-line description of a venue being added to a tour's outreach list. */
+export function describeTourTargetAdd(p: { tour_name?: unknown; venue_name?: unknown; city?: unknown; state?: unknown; email?: unknown; mode?: unknown }): string {
+  const where = [p.city, p.state].filter(Boolean).join(', ');
+  return `${String(p.tour_name ?? 'Tour')} outreach list: ${String(p.venue_name ?? '')}${where ? ` (${where})` : ''}${p.mode === 'create' ? ' · new venue' : ''}${p.email ? ` · ${String(p.email)}` : ''}`;
 }
 
 /** One-line description of a staged contact create/edit. */

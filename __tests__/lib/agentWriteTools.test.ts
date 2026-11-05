@@ -44,6 +44,7 @@ import {
   newProposalCollector,
   prepareTourOutreachTool,
   recordPaymentTool,
+  addVenuesToTourTool,
   createTourTool,
   saveVenuesTool,
   stageShowsTool,
@@ -202,5 +203,44 @@ describe('buildApprovalAction', () => {
     c.staged.push({ kind: 'show', action_type: 'booking_upsert', staged_action_id: 'a', proposal: {} }, { kind: 'payment_settle', action_type: 'payment_settle', staged_action_id: 'b', proposal: {} });
     c.errors.push('one skipped');
     expect(buildApprovalAction(c)).toEqual({ type: 'stage_items', staged: c.staged, errors: ['one skipped'], overflow: 0 });
+  });
+});
+
+describe('add_venues_to_tour', () => {
+  const tourDb = (venues: Array<Record<string, unknown>> = []) => {
+    const from = (table: string) => {
+      const builder: Record<string, unknown> = {
+        select: () => builder,
+        eq: () => builder,
+        ilike: () => builder,
+        limit: () => builder,
+        maybeSingle: async () => ({ data: venues[0] ?? null, error: null }),
+        then: (resolve: (r: unknown) => unknown) => resolve({
+          data: table === 'tours' ? [{ id: 'tour-1', name: 'LONE STAR', status: 'planning' }] : table === 'venues' ? venues : [],
+          error: null,
+        }),
+      };
+      return builder;
+    };
+    return { from } as unknown as AgentToolContext['service'];
+  };
+  const newVenue = { name: 'City Limits', city: 'San Angelo', state: 'TX' };
+
+  it('is offered to the model and stages new venues on the card, once each', async () => {
+    expect(writeTools().map(t => t.name)).toContain('add_venues_to_tour');
+    const c = { ...ctx(), service: tourDb() };
+    const result = await addVenuesToTourTool.run(c, { tour_name: 'lone star', venues: [newVenue, newVenue] });
+    expect(mockStageAction).toHaveBeenCalledWith(expect.anything(), ACT, USER, 'tour_target_add', expect.objectContaining({ mode: 'create', tour_name: 'LONE STAR', venue_name: 'City Limits' }));
+    expect(c.proposals?.staged.map(s => s.kind)).toEqual(['tour_target_add']);
+    expect(result.content).toContain('LONE STAR outreach list: City Limits (San Angelo, TX)');
+    expect(result.content).toContain('already on this card');
+  });
+
+  it('reports one bad venue and still stages the rest', async () => {
+    const c = { ...ctx(), service: tourDb() };
+    const result = await addVenuesToTourTool.run(c, { tour_name: 'LONE STAR', venues: [{ name: 'No City' }, newVenue] });
+    expect(c.proposals?.staged).toHaveLength(1);
+    expect(result.content).toContain('No City');
+    expect(result.isError).toBe(false);
   });
 });
