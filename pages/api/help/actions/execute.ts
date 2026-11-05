@@ -7,6 +7,7 @@ import { saveTemplate, templateSaveSchema, TemplateExistsError } from '../../../
 import { executeTourUpdate } from '../../../../lib/server/agentTourActions';
 import { executeVenueUpsert, executeContactUpsert } from '../../../../lib/server/agentVenueActions';
 import { executeTourTargetAdd } from '../../../../lib/server/agentTourTargets';
+import { executeTourTargetStage } from '../../../../lib/server/agentTourStages';
 import { executeWrapup, executeExpenseUpdate } from '../../../../lib/server/agentMoneyActions';
 import { executeDelete } from '../../../../lib/server/agentDeletes';
 import {
@@ -394,6 +395,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         result = await executeVenueUpsert(supabase, profile.act_id, user.id, p);
       } else if (staged.action_type === 'tour_target_add') {
         result = await executeTourTargetAdd(supabase, profile.act_id, user.id, p);
+      } else if (staged.action_type === 'tour_target_stage') {
+        result = await executeTourTargetStage(supabase, profile.act_id, user.id, p);
       } else if (staged.action_type === 'contact_upsert') {
         result = await executeContactUpsert(supabase, profile.act_id, p);
       } else if (staged.action_type === 'booking_wrapup') {

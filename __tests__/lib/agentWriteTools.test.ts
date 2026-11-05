@@ -44,7 +44,7 @@ import {
   newProposalCollector,
   prepareTourOutreachTool,
   recordPaymentTool,
-  addVenuesToTourTool,
+  addVenuesToTourTool, moveVenueStageTool,
   createTourTool,
   saveVenuesTool,
   stageShowsTool,
@@ -242,5 +242,32 @@ describe('add_venues_to_tour', () => {
     expect(c.proposals?.staged).toHaveLength(1);
     expect(result.content).toContain('No City');
     expect(result.isError).toBe(false);
+  });
+});
+
+describe('move_venue_stage', () => {
+  const ID = '5b1d7c2e-0000-4000-8000-0000000000a1';
+  const service = (status: string) => {
+    const q: Record<string, unknown> = {};
+    q.select = () => q;
+    q.eq = () => q;
+    q.maybeSingle = () => Promise.resolve({ data: { id: ID, status, tour: { name: 'LONE STAR', act_id: ACT }, venue: { name: 'Saxon Pub' } }, error: null });
+    return { from: () => q } as unknown as AgentToolContext['service'];
+  };
+
+  it('is offered to the model and stages a move on the card, once per venue', async () => {
+    expect(writeTools().map(t => t.name)).toContain('move_venue_stage');
+    const c = { ...ctx(), service: service('target') };
+    const result = await moveVenueStageTool.run(c, { tour_venue_ids: [ID, ID], stage: 'follow_up' });
+    expect(mockStageAction).toHaveBeenCalledWith(expect.anything(), ACT, USER, 'tour_target_stage', expect.objectContaining({ tour_venue_id: ID, to_stage: 'follow_up' }));
+    expect(c.proposals?.staged.map(s => s.kind)).toEqual(['tour_target_stage']);
+    expect(result.content).toContain('LONE STAR: Saxon Pub from Target to Follow up');
+  });
+
+  it('reports a Confirmed venue instead of staging it', async () => {
+    const c = { ...ctx(), service: service('confirmed') };
+    const result = await moveVenueStageTool.run(c, { tour_venue_ids: [ID], stage: 'declined' });
+    expect(c.proposals?.staged).toEqual([]);
+    expect(result.content).toContain('tour page');
   });
 });

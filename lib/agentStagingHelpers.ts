@@ -1,3 +1,4 @@
+import { stageLabel } from './domain/emailPipeline';
 import { z } from 'zod';
 
 export const BATCH_CAP = 4;
@@ -185,6 +186,8 @@ function formatItemLabel(item: { kind: string; proposal: Record<string, unknown>
       return describeVenueUpsert(p as VenueCard);
     case 'tour_target_add':
       return describeTourTargetAdd(p);
+    case 'tour_target_stage':
+      return describeTourTargetStage(p);
     case 'contact_upsert':
       return describeContactUpsert(p as ContactCard);
     case 'booking_wrapup':
@@ -244,6 +247,8 @@ export function formatPendingContextSummary(
         return `  • ${describeVenueUpsert(p as VenueCard)}`;
       case 'tour_target_add':
         return `  • ${describeTourTargetAdd(p)}`;
+      case 'tour_target_stage':
+        return `  • ${describeTourTargetStage(p)}`;
       case 'contact_upsert':
         return `  • ${describeContactUpsert(p as ContactCard)}`;
       case 'booking_wrapup':
@@ -316,6 +321,12 @@ export function describeVenueUpsert(p: VenueCard): string {
 export function describeTourTargetAdd(p: { tour_name?: unknown; venue_name?: unknown; city?: unknown; state?: unknown; email?: unknown; mode?: unknown }): string {
   const where = [p.city, p.state].filter(Boolean).join(', ');
   return `${String(p.tour_name ?? 'Tour')} outreach list: ${String(p.venue_name ?? '')}${where ? ` (${where})` : ''}${p.mode === 'create' ? ' · new venue' : ''}${p.email ? ` · ${String(p.email)}` : ''}`;
+}
+
+/** One-line description of a staged outreach stage move. */
+export function describeTourTargetStage(p: { tour_name?: unknown; venue_name?: unknown; from_stage?: unknown; to_stage?: unknown }): string {
+  const label = (v: unknown) => stageLabel(String(v ?? ''));
+  return `${String(p.tour_name ?? 'Tour')}: ${String(p.venue_name ?? '')} from ${label(p.from_stage)} to ${label(p.to_stage)}`;
 }
 
 /** One-line description of a staged contact create/edit. */
