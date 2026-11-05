@@ -6,6 +6,7 @@ import { isBandAdminRole } from '../../../../lib/server/requireBandAdmin';
 import { saveTemplate, templateSaveSchema, TemplateExistsError } from '../../../../lib/server/emailTemplates';
 import { executeTourUpdate } from '../../../../lib/server/agentTourActions';
 import { executeVenueUpsert, executeContactUpsert } from '../../../../lib/server/agentVenueActions';
+import { executeTourTargetAdd } from '../../../../lib/server/agentTourTargets';
 import { executeWrapup, executeExpenseUpdate } from '../../../../lib/server/agentMoneyActions';
 import { executeDelete } from '../../../../lib/server/agentDeletes';
 import {
@@ -391,6 +392,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         result = await executeTourUpdate(supabase, profile.act_id, p);
       } else if (staged.action_type === 'venue_upsert') {
         result = await executeVenueUpsert(supabase, profile.act_id, user.id, p);
+      } else if (staged.action_type === 'tour_target_add') {
+        result = await executeTourTargetAdd(supabase, profile.act_id, user.id, p);
       } else if (staged.action_type === 'contact_upsert') {
         result = await executeContactUpsert(supabase, profile.act_id, p);
       } else if (staged.action_type === 'booking_wrapup') {

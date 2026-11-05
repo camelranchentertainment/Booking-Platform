@@ -29,6 +29,7 @@ import { stageAction } from '../agentStage';
 import { tourUpdateSchema, buildTourUpdatePayload } from '../agentTourActions';
 import { venueUpsertSchema, contactUpsertSchema, buildContactUpsertPayload } from '../agentVenueActions';
 import { stageVenueBatch, VENUE_BATCH_CAP } from '../agentVenueBatch';
+import { buildTourTargetPayload, loadTourTarget, type TourTargetAddPayload } from '../agentTourTargets';
 import { wrapupSchema, expenseUpdateSchema, buildWrapupPayload, buildExpenseUpdatePayload } from '../agentMoneyActions';
 import { deleteRequestSchema, buildDeletePayload } from '../agentDeletes';
 import {
@@ -230,6 +231,7 @@ export const saveVenuesTool = defineTool({
     'Proposes adding or editing one or more saved venues. Edit: venue_id (from find_venues) plus ONLY the fields that change. '
     + 'New: name, city and state (plus anything else known). Put all changes for one venue in one entry. Use web_search to find '
     + 'missing details first; never guess an email or phone. To add a show at a new venue, use stage_shows instead (it saves both). '
+    + 'To put a venue on a tour\'s outreach list, use add_venues_to_tour instead (it saves a new venue too). '
     + 'A field you send that already has that exact value is left off the card: it is already saved, not a failure, so say so '
     + 'plainly ("already on file") and never tell the user it may not have saved.',
   schema: z.object({
@@ -251,6 +253,51 @@ export const saveVenuesTool = defineTool({
       errors.push(...result.errors);
     }
     if (skipped) errors.push(`${skipped} more venue${skipped === 1 ? '' : 's'} didn't fit on this card; stage them after the user confirms.`);
+    return record(c, staged, errors);
+  },
+});
+
+export const addVenuesToTourTool = defineTool({
+  name: 'add_venues_to_tour',
+  kind: 'write',
+  description:
+    'Proposes adding venues to a tour\'s outreach list as Targets, ready to pitch with prepare_tour_outreach. Saved venue: venue_id '
+    + 'from find_venues. Venue not saved yet: name, city and state plus anything else known. One Confirm saves it and adds it to the '
+    + 'tour, so do NOT also put it in save_venues. Use web_search first for missing details; never guess an email or phone. '
+    + 'Details on a venue that is already saved are ignored here; edit those with save_venues. Nothing is emailed.',
+  schema: z.object({
+    tour_name: z.string().trim().min(1).max(200),
+    venues: z.array(venueUpsertSchema).min(1).max(MAX_VENUES_PER_CALL),
+  }).strict(),
+  status: i => `Adding ${i.venues.length} venue${i.venues.length === 1 ? '' : 's'} to ${i.tour_name}…`,
+  run: async (ctx, input) => {
+    const c = collectorOf(ctx);
+    assertNoOutreach(c);
+    const tour = await loadTourTarget(ctx.service, ctx.actId, input.tour_name);
+    const onCard = c.staged.filter(s => s.kind === 'tour_target_add').map(s => s.proposal as TourTargetAddPayload);
+    const staged: StagedCardItem[] = [];
+    const errors: string[] = [];
+    for (const venue of input.venues) {
+      const label = venue.name ?? 'That venue';
+      if (c.staged.length + staged.length >= MAX_STAGED_PER_TURN) {
+        errors.push(`${label} didn't fit on this card (max ${MAX_STAGED_PER_TURN}); stage it after the user confirms.`);
+        continue;
+      }
+      try {
+        const proposal = await buildTourTargetPayload(ctx.service, ctx.actId, tour, venue);
+        const sameVenue = (o: TourTargetAddPayload) => o.tour_id === proposal.tour_id
+          && (proposal.venue_id ? o.venue_id === proposal.venue_id
+            : o.venue_name.toLowerCase() === proposal.venue_name.toLowerCase() && o.city?.toLowerCase() === proposal.city?.toLowerCase());
+        if ([...onCard, ...staged.map(s => s.proposal as TourTargetAddPayload)].some(sameVenue)) {
+          errors.push(`${proposal.venue_name} is already on this card.`);
+          continue;
+        }
+        const result = await stageAction(ctx.service, ctx.actId, ctx.userId, 'tour_target_add', proposal);
+        staged.push({ kind: 'tour_target_add', ...result });
+      } catch (err) {
+        errors.push(`${label}: ${err instanceof Error ? err.message : 'could not be staged.'}`);
+      }
+    }
     return record(c, staged, errors);
   },
 });
@@ -460,6 +507,7 @@ export function writeTools(): AgentTool[] {
     createTourTool,
     updateTourTool,
     saveVenuesTool,
+    addVenuesToTourTool,
     saveContactTool,
     sendEmailTool,
     saveEmailDraftTool,

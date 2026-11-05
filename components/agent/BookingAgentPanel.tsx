@@ -22,7 +22,7 @@ import { formatShowDate, localToday } from '../../lib/formatDate';
 import AssistantHistoryList from '../dashboard/AssistantHistoryList';
 import AgentMessageBody from './AgentMessageBody';
 import type { ConversationDaySummary } from '../../lib/agentConversationDays';
-import { buildConfirmMessage, stagedItemCaution, describeTourUpdate, describeVenueUpsert, describeContactUpsert, describeWrapup, describeExpenseUpdate, describeOfficeAction, describeDelete } from '../../lib/agentStagingHelpers';
+import { buildConfirmMessage, stagedItemCaution, describeTourUpdate, describeVenueUpsert, describeTourTargetAdd, describeContactUpsert, describeWrapup, describeExpenseUpdate, describeOfficeAction, describeDelete } from '../../lib/agentStagingHelpers';
 import { buildAgentGreeting } from '../../lib/agent/agentGreeting';
 import { openInMainWindow } from '../../lib/agent/agentWindow';
 import { FEATURES } from '../../lib/featureFlags';
@@ -141,6 +141,7 @@ function summarizeStagedItem(item: { kind: string; proposal: any }): string {
   else if (item.kind === 'tour_update') summary = describeTourUpdate(p);
   else if (item.kind === 'record_delete') summary = `${p?.target === 'tour_target' ? '' : '⚠ '}${describeDelete(p)}`;
   else if (item.kind === 'venue_upsert') summary = describeVenueUpsert(p);
+  else if (item.kind === 'tour_target_add') summary = describeTourTargetAdd(p);
   else if (item.kind === 'contact_upsert') summary = describeContactUpsert(p);
   else if (item.kind === 'booking_wrapup') summary = describeWrapup(p);
   else if (item.kind === 'expense_update' || item.kind === 'expense_archive') summary = describeExpenseUpdate({ kind: item.kind, ...p });

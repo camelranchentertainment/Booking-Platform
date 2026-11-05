@@ -60,6 +60,11 @@ export interface RunTurnOptions {
   ctx: AgentToolContext;
   onEvent: (event: AgentStreamEvent) => void;
   signal?: AbortSignal;
+  /**
+   * Checks a finished reply. A returned string is sent to the model once as a
+   * correction so it can redo the reply; null means the reply is fine.
+   */
+  checkReply?: (reply: string) => string | null;
   /** Structured log sink; defaults to console. Never receives message text. */
   log?: (event: string, data: Record<string, unknown>) => void;
 }
@@ -71,6 +76,25 @@ export interface TurnResult {
   toolCalls: number;
   /** True when the last call hit the output limit, so the reply may be cut short. */
   truncated: boolean;
+}
+
+/** Shown when a reply still promises a card after being corrected. */
+export const PHANTOM_CARD_NOTE = '_(Nothing is waiting on a card yet, so nothing can be confirmed. Ask me to set it up again.)_';
+
+const PHANTOM_CARD_RE = /\b(?:on|to|in) (?:the|this|your) (?:approval )?card\b|\bcard (?:above|below)\b|\bconfirm (?:the|this) card\b/i;
+
+/**
+ * Catches a reply that talks about an approval card when this turn staged none.
+ *
+ * @param reply - The finished reply.
+ * @param hasCard - Whether this turn produced a card.
+ * @param hadStagingErrors - Whether a write was refused, in which case mentioning the card is fair.
+ * @returns A correction for the model, or null when the reply is fine.
+ */
+export function phantomCardCorrection(reply: string, hasCard: boolean, hadStagingErrors: boolean): string | null {
+  if (hasCard || hadStagingErrors || !PHANTOM_CARD_RE.test(reply)) return null;
+  return 'System check: your reply mentions an approval card, but no write tool staged anything in this reply, so the user has no card. '
+    + 'Earlier cards do not carry over. If the user wants the change, call the write tool now. Otherwise rewrite the reply without mentioning a card.';
 }
 
 const defaultLog = (event: string, data: Record<string, unknown>) => console.info(`[agent-engine] ${event}`, data);
@@ -93,6 +117,7 @@ export async function runAgentTurn(opts: RunTurnOptions): Promise<TurnResult> {
   const messages: Anthropic.MessageParam[] = [...opts.messages];
   let toolCalls = 0;
   let sources: WebSource[] = [];
+  let corrected = false;
 
   for (let step = 1; step <= MAX_STEPS; step++) {
     const isLastStep = step === MAX_STEPS || toolCalls >= MAX_TOOL_CALLS;
@@ -141,6 +166,18 @@ export async function runAgentTurn(opts: RunTurnOptions): Promise<TurnResult> {
     let reply = text.trim();
     if (truncated) reply += '\n\n_(That ran long and got cut off. Ask me to continue.)_';
     if (!reply) reply = 'I couldn\'t put an answer together for that. Try asking it another way?';
+    // The reply promises an approval card that doesn't exist: make it stage the change or say so.
+    const correction = truncated ? null : opts.checkReply?.(reply) ?? null;
+    if (correction) {
+      if (!corrected && !isLastStep) {
+        corrected = true;
+        log('reply_corrected', { actId: opts.ctx.actId, step });
+        opts.onEvent({ type: 'reset' });
+        messages.push({ role: 'assistant', content: reply }, { role: 'user', content: correction });
+        continue;
+      }
+      reply += `\n\n${PHANTOM_CARD_NOTE}`;
+    }
     return { reply: appendSources(reply, sources), steps: step, toolCalls, truncated };
   }
 
