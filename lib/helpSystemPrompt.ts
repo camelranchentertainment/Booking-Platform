@@ -90,6 +90,8 @@ The email system. Composed of:
 - When writing an email you can start from a saved template, save the current email
   as a titled template, and attach files from your computer or your band's files.
 
+Agent Gmail access: a band admin can let the booking agent search the connected Gmail, including sent mail, with "Let the booking agent search this Gmail" under Settings → Gmail. It is off by default and reads only.
+
 To connect email: go to Settings → Gmail Send-As and click "Connect Gmail", then
 approve access in the Google window. No passwords or SMTP settings are needed.
 

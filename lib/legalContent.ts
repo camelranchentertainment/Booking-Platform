@@ -9,7 +9,7 @@
 // kind of data, update SERVICE_PROVIDERS / the sections below and bump
 // LEGAL_EFFECTIVE_DATE.
 
-export const LEGAL_EFFECTIVE_DATE = 'October 26, 2026';
+export const LEGAL_EFFECTIVE_DATE = 'November 5, 2026';
 export const LEGAL_CONTACT_EMAIL = 'scott@camelranchbooking.com';
 export const LEGAL_OPERATOR = 'Camel Ranch Entertainment';
 
@@ -82,7 +82,8 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     id: 'google-user-data',
     heading: 'Google user data',
     paragraphs: [
-      'If you connect a Google account, we ask for permission to read Gmail messages, create Gmail drafts, and read and update Google Calendar events. We use this only to show and track booking conversations with venues, draft and send the booking emails you approve, and keep your show calendar in sync.',
+      'If you connect a Google account, we ask for permission to read Gmail messages, create Gmail drafts, and read and update Google Calendar events. We use this only to show and track booking conversations with venues, draft and send the booking emails you approve, answer your questions about your email if you turn that on, and keep your show calendar in sync.',
+      'The AI booking assistant can search your connected Gmail only if a band admin turns that on in Settings. It is off by default. When it is on and you ask the assistant about your email, the messages it looks up, including sent mail, go to Anthropic, our AI provider, so it can answer you. The assistant\'s replies are kept in your conversation history. Turn it off at any time in Settings; disconnecting Gmail also turns it off.',
       'Camel Ranch Booking\'s use and transfer of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements. We do not use Google user data for advertising, we do not sell it, and people do not read it except with your permission, for security, or where the law requires it.',
       'Connection tokens are stored encrypted on our servers and are never sent to your browser. You can disconnect at any time in Settings or from your Google account\'s security page.',
     ],

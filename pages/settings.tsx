@@ -8,6 +8,7 @@ import BookingAgentSettings from '../components/band/BookingAgentSettings';
 import PageHero from '../components/layout/PageHero';
 import RanchOfficeScene from '../components/settings/RanchOfficeScene';
 import css from '../styles/settings.module.css';
+import AgentGmailAccessToggle from '../components/settings/AgentGmailAccessToggle';
 
 const TIER_LABELS: Record<string, string> = {
   band_admin: 'Band Admin — $18 / month',
@@ -1052,6 +1053,7 @@ export default function Settings() {
                         Connected {new Date(myAct.gmail_connected_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </div>
                     )}
+                    <AgentGmailAccessToggle gmailAddress={myAct.gmail_address} />
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button
                         className="btn btn-sm"

@@ -27,12 +27,13 @@ import { AGENT_WEB_SEARCH_TOOL, isWebSearchUnavailableError } from '../../lib/se
 import { AGENT_SYSTEM_PROMPT } from '../../lib/server/agent/systemPrompt';
 import { buildAgentSnapshot } from '../../lib/server/agent/snapshot';
 import { READ_TOOLS } from '../../lib/server/agent/readTools';
+import { GMAIL_ACCESS_OFF_NOTE, isAgentGmailEnabled, searchGmailTool } from '../../lib/server/agentGmail';
 import { writeTools, newProposalCollector, buildApprovalAction } from '../../lib/server/agent/writeTools';
 import { formatPendingContextSummary, withStagedSummaries } from '../../lib/agentStagingHelpers';
 import { generateSuggestions } from '../../lib/server/agent/suggestions';
 import { phantomCardCorrection, runAgentTurn, sdkStreamFn } from '../../lib/server/agent/engine';
 import { agentStreamBodySchema, resolveAgentModel, trimHistory } from '../../lib/server/agent/request';
-import type { AgentStreamEvent, AgentToolContext } from '../../lib/server/agent/types';
+import type { AgentStreamEvent, AgentTool, AgentToolContext } from '../../lib/server/agent/types';
 
 export const config = {
   api: { bodyParser: { sizeLimit: '1mb' } },
@@ -116,8 +117,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   };
 
   try {
-    const [snapshot, modelSetting, recentRes, pendingRes] = await Promise.all([
+    const [snapshot, gmailEnabled, modelSetting, recentRes, pendingRes] = await Promise.all([
       buildAgentSnapshot(service, actId, today),
+      isAgentGmailEnabled(service, actId),
       getSetting('agent_model'),
       service.from('ai_staged_actions').select('action_type, payload')
         .eq('act_id', actId).eq('status', 'executed').gt('executed_at', tenMinutesAgo),
@@ -143,6 +145,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const system: Anthropic.TextBlockParam[] = [
       { type: 'text', text: `${AGENT_SYSTEM_PROMPT}\n\n${AGENT_CONTENT_RULES}\n\n═══ PLATFORM DOCUMENTATION ═══\n\n${HELP_SYSTEM_PROMPT}`, cache_control: { type: 'ephemeral' } },
       ...(FEATURES.socials ? [] : [{ type: 'text' as const, text: 'Socials is switched off right now: don\'t offer or draft social posts; if asked, say the feature is being finished.' }]),
+      ...(gmailEnabled ? [] : [{ type: 'text' as const, text: GMAIL_ACCESS_OFF_NOTE }]),
       { type: 'text', text: `SNAPSHOT (live from the database; use tools for anything more):\n\n${snapshot}${pendingNote}` },
     ];
 
@@ -153,7 +156,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       model,
       system,
       messages,
-      tools: [...READ_TOOLS, ...writeTools()],
+      // The Gmail tool is only offered to bands that switched it on in Settings.
+      tools: [...READ_TOOLS, ...(gmailEnabled ? [searchGmailTool as AgentTool] : []), ...writeTools()],
       ctx,
       onEvent: send,
       signal: abort.signal,

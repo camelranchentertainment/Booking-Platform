@@ -10,6 +10,7 @@ import type {
   InboxSyncTrigger,
 } from '../../../lib/inboxSync';
 import { isGmailAuthError } from '../../../lib/gmailAuthError';
+import { extractEmailAddress, extractMessageBody, getHeader } from '../../../lib/server/gmailMessage';
 
 /**
  * Minimum gap between Gmail syncs for one act. Auto checks run every 2.5 min
@@ -82,71 +83,6 @@ async function claimSyncSlot(
   return { allowed: false, lastSyncedAt: (current?.gmail_last_sync_at as string | null) ?? null };
 }
 
-
-function decodeBase64Url(data?: string | null): string {
-  if (!data) return '';
-
-  try {
-    const normalized = data
-      .replace(/-/g, '+')
-      .replace(/_/g, '/');
-
-    return Buffer.from(normalized, 'base64').toString('utf8');
-  } catch {
-    return '';
-  }
-}
-
-function getHeader(
-  headers: Array<{ name?: string | null; value?: string | null }> = [],
-  name: string,
-): string {
-  return (
-    headers.find(
-      header => header.name?.toLowerCase() === name.toLowerCase(),
-    )?.value || ''
-  );
-}
-
-function extractEmailAddress(value: string): string {
-  const match = value.match(/<([^>]+)>/);
-
-  return (match?.[1] || value)
-    .trim()
-    .toLowerCase();
-}
-
-function extractMessageBody(payload: any): string {
-  if (!payload) return '';
-
-  if (payload.body?.data) {
-    return decodeBase64Url(payload.body.data);
-  }
-
-  const parts = payload.parts || [];
-
-  // Prefer plain text
-  for (const part of parts) {
-    if (part.mimeType === 'text/plain' && part.body?.data) {
-      return decodeBase64Url(part.body.data);
-    }
-  }
-
-  // Fall back to HTML
-  for (const part of parts) {
-    if (part.mimeType === 'text/html' && part.body?.data) {
-      return decodeBase64Url(part.body.data);
-    }
-  }
-
-  // Handle nested multipart messages
-  for (const part of parts) {
-    const nested = extractMessageBody(part);
-    if (nested) return nested;
-  }
-
-  return '';
-}
 
 export default async function handler(
   req: NextApiRequest,

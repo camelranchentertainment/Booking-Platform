@@ -32,5 +32,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     gmail_connected_at: null,
   }).eq('id', profile.act_id);
 
+  // Reconnecting must not silently bring the agent's access back: it stays off until switched on again.
+  const { error: accessErr } = await service.from('acts').update({ agent_gmail_access: false }).eq('id', profile.act_id);
+  if (accessErr) console.error('[gmail/disconnect] could not switch off agent access', { actId: profile.act_id, message: accessErr.message });
+
   return res.status(200).json({ ok: true });
 }
