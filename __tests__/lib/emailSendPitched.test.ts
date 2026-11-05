@@ -1,6 +1,6 @@
 // __tests__/lib/emailSendPitched.test.ts
 // sendActEmail: sends from the band's Gmail when connected, and the first
-// email to a tour target marks it pitched without touching its status.
+// email to a tour target marks it pitched and moves it from Target to Follow up.
 
 jest.mock('resend', () => {
   const send = jest.fn().mockResolvedValue({ data: { id: 'resend-1' }, error: null });
@@ -72,14 +72,17 @@ describe('sendActEmail', () => {
     expect((jest.requireMock('resend') as { __send: jest.Mock }).__send).not.toHaveBeenCalled();
   });
 
-  it('marks the tour target pitched only if it was not already, and never changes its status', async () => {
+  it('marks the tour target pitched only if it was not already, and moves it only out of Target', async () => {
     const { updates } = setup({ gmail: false });
     await sendActEmail(params);
     const tv = updates.filter(u => u.table === 'tour_venues');
     const pitched = tv.find(u => 'pitched_at' in u.values);
     expect(pitched?.filters).toEqual(expect.arrayContaining([['eq', 'id', TV], ['is', 'pitched_at', null]]));
     expect(tv.some(u => 'last_contacted_at' in u.values)).toBe(true);
-    expect(tv.every(u => !('status' in u.values))).toBe(true);
+    const moved = tv.filter(u => 'status' in u.values);
+    expect(moved).toHaveLength(1);
+    expect(moved[0].values.status).toBe('follow_up');
+    expect(moved[0].filters).toEqual(expect.arrayContaining([['eq', 'id', TV], ['eq', 'status', 'target']]));
   });
 
   it('skips the per-email notification when notify is false', async () => {
