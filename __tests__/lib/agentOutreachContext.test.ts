@@ -5,7 +5,7 @@
 // stages beyond a name list.
 
 import {
-  formatOutreachContext, buildOutreachContext, type OutreachTarget, type SentEmail,
+  formatOutreachContext, buildOutreachContext, formatOutreachPage, OUTREACH_VENUES_PER_PAGE, type OutreachTarget, type SentEmail,
 } from '../../lib/server/agentOutreachContext';
 import {
   selectOutreachRows, emptyOutreachMessage, categoryForNextEmail, parseOutreachStage, isOverdue,
@@ -133,5 +133,55 @@ describe('follow-up outreach helpers', () => {
     expect(parseOutreachStage('followup')).toBe('target');
     expect(isOverdue({ status: 'follow_up', last_contacted_at: '2026-10-19T15:00:00Z' }, NOW)).toBe(true);
     expect(isOverdue({ status: 'follow_up', last_contacted_at: '2026-10-19T15:00:01Z' }, NOW)).toBe(false);
+  });
+});
+
+describe('formatOutreachPage', () => {
+  const MAX_TOOL_RESULT_CHARS = 14_000;
+  const manyTargets: OutreachTarget[] = Array.from({ length: 80 }, (_, i) => ({
+    id: `aaaaaaaa-aaaa-4aaa-8aaa-${String(i).padStart(12, '0')}`,
+    tour_id: 'tour-long',
+    status: 'target',
+    booking_date: null,
+    last_contacted_at: '2026-11-01T12:00:00Z',
+    pitched_at: '2026-11-01T12:00:00Z',
+    updated_at: '2026-11-01T12:00:00Z',
+    venue: { id: `bbbbbbbb-bbbb-4bbb-8bbb-${String(i).padStart(12, '0')}`, name: `${'V'.repeat(70)} ${String(i).padStart(3, '0')}`, city: 'C'.repeat(40), state: 'TX', email: 'a@b.co' },
+  }));
+  const longEmails: SentEmail[] = manyTargets.map(t => ({
+    id: `e-${t.id}`, sent_at: '2026-11-01T12:00:00Z', recipient: 'a@b.co', subject: 'S'.repeat(90), body: 'hello', category: 'target', tour_venue_id: t.id, venue_id: t.venue?.id ?? null, venue: { name: t.venue?.name ?? null },
+  }));
+  const data = { tours: new Map([['tour-long', 'LONE STAR'], ['tour-b', 'HIGH PLAINS']]), targets: manyTargets, sent: longEmails, replies: [] };
+  const opts = { view: 'venues' as const, offset: 0 };
+
+  it('reaches every venue across pages, each page within the tool result cap', () => {
+    const seen = new Set<string>();
+    let offset = 0;
+    for (let guard = 0; guard < 10; guard++) {
+      const text = formatOutreachPage(data, { ...opts, offset }, NOW);
+      expect(text.length).toBeLessThan(MAX_TOOL_RESULT_CHARS);
+      for (const m of text.matchAll(/tour_venue_id=(\S+)/g)) seen.add(m[1]);
+      const next = text.match(/offset=(\d+)/);
+      if (!next) { expect(text).toContain('That is all of them.'); break; }
+      offset = Number(next[1]);
+    }
+    expect(seen.size).toBe(80);
+    expect(OUTREACH_VENUES_PER_PAGE).toBeLessThan(80);
+  });
+
+  it('gives full tour counts on a later page', () => {
+    expect(formatOutreachPage(data, { ...opts, offset: 70 }, NOW)).toContain('80 Target');
+  });
+
+  it('filters by tour and stage, and names the open tours when a tour is unknown', () => {
+    expect(formatOutreachPage(data, { ...opts, tourName: 'high plains' }, NOW)).toContain('No venues match.');
+    expect(formatOutreachPage(data, { ...opts, stage: 'follow_up' }, NOW)).toContain('No venues match.');
+    expect(formatOutreachPage(data, { ...opts, tourName: 'nope' }, NOW)).toMatch(/Open tours: LONE STAR, HIGH PLAINS/);
+  });
+
+  it('lists sent emails for one tour', () => {
+    const text = formatOutreachPage(data, { view: 'sent_emails', tourName: 'lone star', offset: 0 }, NOW);
+    expect(text).toContain('Body: hello');
+    expect(text).toContain('That is all of them.');
   });
 });
