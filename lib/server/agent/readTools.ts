@@ -13,7 +13,7 @@
 import { z } from 'zod';
 import { escapeLike } from '../emailTemplates';
 import { buildMoneyContext } from '../agentMoneyActions';
-import { buildOutreachContext } from '../agentOutreachContext';
+import { buildOutreachPage } from '../agentOutreachContext';
 import { buildInboxContext } from '../agentInboxContext';
 import { buildOfficeContext } from '../agentOfficeActions';
 import { defineTool, type AgentTool, type AgentToolContext } from './types';
@@ -387,12 +387,26 @@ export const getMoneyTool = defineTool({
 export const getOutreachTool = defineTool({
   name: 'get_outreach',
   description:
-    'Booking outreach on open tours: every targeted venue by stage (Target, Follow up, Confirmed, Declined, Thank you) with '
-    + 'last contact, OVERDUE flags, emails sent and replies, plus the emails the band sent in the last 60 days with bodies. '
+    'Booking outreach on open tours, one page at a time. view "venues" (default) lists targeted venues with stage, last contact, '
+    + 'OVERDUE flags, emails sent, replies and tour_venue_id. view "sent_emails" lists what the band sent in the last 60 days, with bodies. '
+    + 'Every page gives each tour\'s full counts. Filter with tour_name and stage. If a page says it is not all of them, call again with '
+    + 'the offset it gives before answering about the rest: never say you can\'t see a venue until you have read every page. '
     + 'Use it for "who needs a follow-up", "what did I send the Texas venues", "who hasn\'t answered".',
-  schema: z.object({}).strict(),
+  schema: z.object({
+    view: z.enum(['venues', 'sent_emails']).default('venues'),
+    tour_name: z.string().trim().min(1).max(200).optional(),
+    stage: z.enum(['target', 'follow_up', 'confirmed', 'declined', 'thank_you']).optional(),
+    offset: z.number().int().min(0).max(5000).default(0),
+  }).strict(),
   status: () => 'Checking outreach…',
-  run: async ctx => ({ content: await buildOutreachContext(ctx.service, ctx.actId) }),
+  run: async (ctx, input) => ({
+    content: await buildOutreachPage(ctx.service, ctx.actId, {
+      view: input.view,
+      tourName: input.tour_name,
+      stage: input.stage,
+      offset: input.offset,
+    }),
+  }),
 });
 
 export const getInboxTool = defineTool({
