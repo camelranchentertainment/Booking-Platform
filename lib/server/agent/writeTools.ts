@@ -363,8 +363,8 @@ export const sendEmailTool = defineTool({
   kind: 'write',
   description:
     'Proposes sending ONE email to a venue. When the user confirms, it really sends to a real person, so the recipient, subject and '
-    + 'body must be exactly right. venue_id must come from find_venues/get_venue/get_outreach; recipient must be an address on file '
-    + 'for that venue or one the user gave you. Show the user the full email in your reply. For many venues on a tour at once, '
+    + 'body must be exactly right. venue_id must come from find_venues/get_venue/get_outreach; recipient must be saved for that venue: its email, '
+    + 'other emails or a saved contact. For a new address, save it first with save_venue_contact or save_venues, and send after the user confirms that save. Show the user the full email in your reply. For many venues on a tour at once, '
     + 'use prepare_tour_outreach. To save without sending, use save_email_draft.',
   schema: z.object({
     venue_id: uuid('Use a venue_id from find_venues.'),

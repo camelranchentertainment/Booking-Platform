@@ -809,6 +809,8 @@ export const STAGE_EMAIL_TOOL = {
   },
 };
 
+const normalizeEmail = (address: string): string => address.trim().toLowerCase();
+
 export async function execStageEmail(
   actId: string,
   userId: string,
@@ -827,14 +829,33 @@ export async function execStageEmail(
 
   const { data: venue, error: venueErr } = await supabase
     .from('venues')
-    .select('id, name, booking_contact, email')
+    .select('id, name, booking_contact, email, secondary_emails')
     .eq('id', args.venue_id)
     .eq('act_id', actId)
     .maybeSingle();
   if (venueErr) throw new Error(`Lookup failed: ${venueErr.message}`);
   if (!venue) throw new Error('That venue was not found for this band.');
-  if (args.recipient !== venue.email) {
-    throw new Error("Recipient email doesn't match this venue's contact on file. Use the email returned by find_venue.");
+
+  const { data: contacts, error: contactsErr } = await supabase
+    .from('contacts')
+    .select('email, status')
+    .eq('act_id', actId)
+    .eq('venue_id', args.venue_id);
+  if (contactsErr) throw new Error(`Lookup failed: ${contactsErr.message}`);
+
+  // Email addresses aren't case sensitive, and the agent's tool lowercases the
+  // recipient, so comparing exact text refused every venue saved with a capital.
+  const onFile = new Set(
+    [
+      venue.email,
+      ...(venue.secondary_emails ?? []),
+      ...(contacts ?? []).filter(c => c.status !== 'do_not_contact').map(c => c.email),
+    ]
+      .filter((address): address is string => Boolean(address?.trim()))
+      .map(normalizeEmail),
+  );
+  if (!onFile.has(normalizeEmail(args.recipient))) {
+    throw new Error(`${args.recipient} isn't saved for ${venue.name}. Check the address with the user, save it with save_venue_contact or save_venues, and send once they've confirmed that save.`);
   }
 
   const payload = {
