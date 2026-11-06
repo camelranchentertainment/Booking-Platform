@@ -4,6 +4,7 @@ import Link from 'next/link';
 import AppShell from '../../../components/layout/AppShell';
 import { supabase } from '../../../lib/supabase';
 import { formatShowDate } from '../../../lib/formatDate';
+import MemberSetListCard from '../../../components/setlists/MemberSetListCard';
 
 type Show = {
   id: string;
@@ -186,6 +187,9 @@ export default function MemberShowDetail() {
             <TimeRow label="Set Time"   value={fmt(show.set_time)} accent />
           </div>
         )}
+
+        {/* Set list — the last version the band admin pushed */}
+        {show.booking_id && <MemberSetListCard bookingId={show.booking_id} />}
 
         {/* Pay — read-only, source label is mandatory */}
         <div className="card">

@@ -306,3 +306,60 @@ export function friendlyDbError(err: DbErrorLike | null | undefined, fallback: s
       return fallback;
   }
 }
+
+/** One row of a pushed set list, as frozen by publish_set_list(). */
+export interface SnapshotItem {
+  position: number;
+  type: SetItemType;
+  title: string;
+  artist: string | null;
+  key: string | null;
+  bpm: number | null;
+  duration_sec: number | null;
+  song_notes: string | null;
+  notes: string | null;
+}
+
+/** The pushed set list members see (set_lists.published_snapshot). */
+export interface SetListSnapshot {
+  name: string;
+  notes: string | null;
+  version: number;
+  items: SnapshotItem[];
+}
+
+const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v : null);
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/**
+ * Reads a published snapshot defensively. Rows that aren't a song, break or
+ * note are skipped rather than breaking the member's page.
+ *
+ * @param raw the jsonb value from set_lists.published_snapshot
+ * @returns the snapshot, or null when it isn't one
+ */
+export function parseSnapshot(raw: unknown): SetListSnapshot | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const name = str(o.name);
+  if (!name || !Array.isArray(o.items)) return null;
+  const items: SnapshotItem[] = [];
+  for (const it of o.items) {
+    if (!it || typeof it !== 'object') continue;
+    const r = it as Record<string, unknown>;
+    if (r.type !== 'song' && r.type !== 'break' && r.type !== 'note') continue;
+    items.push({
+      position: num(r.position) ?? items.length,
+      type: r.type,
+      title: str(r.title) ?? (r.type === 'break' ? 'Break' : r.type === 'note' ? 'Note' : 'Untitled song'),
+      artist: str(r.artist),
+      key: str(r.key),
+      bpm: num(r.bpm),
+      duration_sec: num(r.duration_sec),
+      song_notes: str(r.song_notes),
+      notes: str(r.notes),
+    });
+  }
+  items.sort((a, b) => a.position - b.position);
+  return { name, notes: str(o.notes), version: num(o.version) ?? 1, items };
+}
