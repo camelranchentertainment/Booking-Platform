@@ -51,12 +51,15 @@ interface Setup {
   venues?: Array<{ id: string; name: string; email: string; secondary_emails: string[] }>;
   /** Sender for the m-stranger message. */
   strangerFrom?: string;
+  /** The venue's tour targets. */
+  tourVenues?: Array<{ id: string }>;
 }
 
 function setup({
   role = 'band_admin', actId = ACT, authOk = true, claim = 'won', existingIds = [],
-  venues = [], strangerFrom = 'Fan <fan@elsewhere.org>',
+  venues = [], strangerFrom = 'Fan <fan@elsewhere.org>', tourVenues = [],
 }: Setup = {}) {
+  const tourVenueUpdates: Array<Record<string, unknown>> = [];
   const inserts: unknown[] = [];
   const emailLogInQueries: string[][] = [];
   const venueFilters: Array<[string, unknown]> = [];
@@ -90,8 +93,11 @@ function setup({
       }
       case 'contacts':
         return chain({ data: [], error: null });
-      case 'tour_venues':
-        return chain({ data: [], error: null });
+      case 'tour_venues': {
+        const c = chain({ data: tourVenues, error: null });
+        c.update = jest.fn((row: Record<string, unknown>) => { tourVenueUpdates.push(row); return chain({ error: null }); });
+        return c;
+      }
       case 'email_log': {
         const c = chain({ data: existingIds.map(id => ({ message_id: id })), error: null });
         c.in = jest.fn((_col: string, ids: string[]) => { emailLogInQueries.push(ids); return c; });
@@ -126,7 +132,7 @@ function setup({
     gmailAddress: 'band@example.com',
   });
 
-  return { from, list, get, inserts, emailLogInQueries, venueFilters };
+  return { from, list, get, inserts, emailLogInQueries, tourVenueUpdates, venueFilters };
 }
 
 beforeEach(() => jest.clearAllMocks());
@@ -196,6 +202,15 @@ describe('POST /api/email/gmail-sync', () => {
       ok: true, status: 'synced', imported: 1, skipped: 1, unmatched: 1, scanned: 3,
     }));
     expect(notifyActMembers).toHaveBeenCalledTimes(1);
+  });
+
+  it('records the reply date in a real tour_venues column and leaves the stage alone', async () => {
+    const { tourVenueUpdates } = setup({ existingIds: ['m-old'], tourVenues: [{ id: 'tv-1' }] });
+    const { res } = mockRes();
+    await handler(mockReq('POST', { trigger: 'manual' }), res);
+    expect(tourVenueUpdates).toEqual([expect.objectContaining({ responded_at: expect.any(String) })]);
+    expect(tourVenueUpdates[0]).not.toHaveProperty('last_replied_at');
+    expect(tourVenueUpdates[0]).not.toHaveProperty('status');
   });
 
   it('matches only against the caller\'s band\'s venues', async () => {

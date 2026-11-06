@@ -109,13 +109,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Record reply activity without changing outreach status.
       // Outreach status is manually controlled by the user.
-await service
-  .from('tour_venues')
-  .update({
-    last_replied_at: now,
-    updated_at: now,
-  })
-  .eq('id', tv.id);
+      const { error: replyErr } = await service
+        .from('tour_venues')
+        .update({
+          responded_at: now,
+          updated_at: now,
+        })
+        .eq('id', tv.id);
+      if (replyErr) console.error('[inbound] could not record venue reply', { tourVenueId: tv.id, code: replyErr.code });
 
       // Log the inbound email
       await service.from('email_log').insert({
