@@ -211,13 +211,28 @@ export async function sendActEmail(params: {
       .eq('id', tourVenueId);
     if (touchErr) console.error('[emailSend] could not record last contact', { tourVenueId, code: touchErr.code });
     // The first email to a tour target marks it pitched (the tour card's
-    // "Pitched" count reads this). Its outreach status is left to the user.
+    // "Pitched" count reads this).
     const { error: pitchErr } = await service
       .from('tour_venues')
       .update({ pitched_at: now })
       .eq('id', tourVenueId)
       .is('pitched_at', null);
     if (pitchErr) console.error('[emailSend] could not mark target pitched', { tourVenueId, code: pitchErr.code });
+  }
+
+  // The email was about this tour target, so it has now been pitched: it moves
+  // from Target to Follow up, which is what makes it show as overdue later. Only
+  // ever out of Target, so a Confirmed or Declined venue stays put. When a venue
+  // is on several tours and the email names none, no tour's stage changes. Follow
+  // up isn't mirrored to shows, so there's no booking to sync. Failure only logs:
+  // the email has already gone.
+  if (links.tourVenueId) {
+    const { error: stageErr } = await service
+      .from('tour_venues')
+      .update({ status: 'follow_up', updated_at: now })
+      .eq('id', links.tourVenueId)
+      .eq('status', 'target');
+    if (stageErr) console.error('[emailSend] could not move target to follow up', { tourVenueId: links.tourVenueId, code: stageErr.code });
   }
 
   if (links.bookingId) {

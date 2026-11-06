@@ -177,7 +177,7 @@ export function formatOutreachContext(
 
   const lines: string[] = [
     'Outreach — the Email page\'s Outreach tab: venues being pitched on open tours, in every stage, and the emails sent to them.',
-    'Stages: Target (not emailed yet or first pitch only) → Follow up (pitched, waiting on an answer) → Confirmed / Declined / Thank you.',
+    'Stages: Target (not emailed yet) → Follow up (pitched, waiting on an answer) → Confirmed / Declined / Thank you.',
     'A Follow up venue is OVERDUE when it has had no contact for 7+ days.',
   ];
 
