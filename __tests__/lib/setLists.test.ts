@@ -1,7 +1,7 @@
 // __tests__/lib/setLists.test.ts
 import {
   parseDuration, formatDuration, setTotals, setLengthFit, pushStatus,
-  toSavePayload, itemsFromRows, moveItem, friendlyDbError, songNumbers, LIMITS,
+  toSavePayload, itemsFromRows, moveItem, friendlyDbError, songNumbers, parseSnapshot, LIMITS,
   type BuilderItem, type SongRow,
 } from '../../lib/domain/setLists';
 
@@ -152,5 +152,33 @@ describe('songNumbers', () => {
     expect(songNumbers([
       { item_type: 'song' }, { item_type: 'song' }, { item_type: 'break' }, { item_type: 'song' }, { item_type: 'note' },
     ])).toEqual([1, 2, null, 3, null]);
+  });
+});
+
+describe('parseSnapshot', () => {
+  it('reads a published set list in position order', () => {
+    const snap = parseSnapshot({
+      name: 'Friday set', notes: null, version: 2,
+      items: [
+        { position: 1, type: 'break', title: 'Break' },
+        { position: 0, type: 'song', title: 'Opener', artist: null, key: 'G', bpm: 120, duration_sec: 200, song_notes: 'Capo 2', notes: null },
+      ],
+    });
+    expect(snap?.version).toBe(2);
+    expect(snap?.items.map(i => i.title)).toEqual(['Opener', 'Break']);
+    expect(snap?.items[0]).toEqual(expect.objectContaining({ key: 'G', song_notes: 'Capo 2' }));
+  });
+
+  it('skips unknown rows and fills missing titles', () => {
+    const snap = parseSnapshot({ name: 'X', items: [{ type: 'weird' }, null, { position: 0, type: 'song', title: '' }] });
+    expect(snap?.items).toEqual([expect.objectContaining({ type: 'song', title: 'Untitled song' })]);
+    expect(snap?.version).toBe(1);
+  });
+
+  it('returns null for anything that is not a snapshot', () => {
+    expect(parseSnapshot(null)).toBeNull();
+    expect(parseSnapshot([])).toBeNull();
+    expect(parseSnapshot({ name: '', items: [] })).toBeNull();
+    expect(parseSnapshot({ name: 'X', items: 'no' })).toBeNull();
   });
 });

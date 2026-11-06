@@ -25,6 +25,7 @@ export const NOTIFICATION_TYPES = [
   'invite_accepted',
   'subscription_active',
   'subscription_cancelled',
+  'set_list_published',
   'general',
   'system',
 ] as const;
@@ -49,6 +50,7 @@ export const NOTIFICATION_LABEL: Record<NotificationType, string> = {
   invite_accepted: 'Invite',
   subscription_active: 'Billing',
   subscription_cancelled: 'Billing',
+  set_list_published: 'Set List',
   general: 'Notice',
   system: 'Notice',
 };
@@ -66,6 +68,7 @@ export const NOTIFICATION_COLOR: Record<NotificationType, string> = {
   invite_accepted: 'var(--accent)',
   subscription_active: '#34d399',
   subscription_cancelled: '#f87171',
+  set_list_published: 'var(--teal)',
   general: 'var(--accent)',
   system: 'var(--accent)',
 };

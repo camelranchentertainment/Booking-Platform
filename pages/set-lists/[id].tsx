@@ -7,14 +7,16 @@
 // A failed save keeps every edit on screen and offers a retry; leaving the page
 // with unsaved edits asks first.
 //
-// Pushing to members' phones comes in the next update; the status chip already
-// shows whether members have the latest version.
+// Push to Band (components/setlists/PushToBand.tsx) waits for every pending
+// edit to save, then publishes; the status chip shows whether members have the
+// latest version.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import AppShell from '../../components/layout/AppShell';
 import PushStatusChip from '../../components/setlists/PushStatusChip';
+import PushToBand from '../../components/setlists/PushToBand';
 import SetListRows, { rowTitle } from '../../components/setlists/SetListRows';
 import SongPicker from '../../components/setlists/SongPicker';
 import SongFormModal from '../../components/setlists/SongFormModal';
@@ -30,6 +32,8 @@ import {
 import { formatShowDate } from '../../lib/formatDate';
 
 const SAVE_DELAY_MS = 800;
+/** How long Push waits for an in-flight save before giving up. */
+const SAVE_WAIT_MS = 20_000;
 
 type Load =
   | { kind: 'loading' }
@@ -183,6 +187,28 @@ export default function SetListBuilderPage() {
     setHeader(res.data);
   };
 
+  /**
+   * Resolves once every edit (rows and name) is saved. Publishing freezes what
+   * is in the database, so Push must never run ahead of autosave.
+   */
+  const ensureSaved = async (): Promise<boolean> => {
+    if (header && nameDraft.trim() && nameDraft.trim() !== header.name) await saveName();
+    await flush();
+    const started = Date.now();
+    while (inFlight.current && Date.now() - started < SAVE_WAIT_MS) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    // A save that failed stops its loop; try once more before reporting.
+    if (!inFlight.current && savedSeq.current !== editSeq.current) await flush();
+    return !inFlight.current && savedSeq.current === editSeq.current;
+  };
+
+  const refreshHeader = async (): Promise<void> => {
+    if (!actId || !id) return;
+    const h = await loadSetList(supabase, actId, id);
+    if (h.ok && h.data) setHeader(h.data);
+  };
+
   const print = (): void => {
     document.body.classList.add('sl-printing');
     const done = (): void => {
@@ -261,6 +287,8 @@ export default function SetListBuilderPage() {
               <span className="sl-save-state" role="status" aria-live="polite">{saveLabel}</span>
               <button type="button" className="btn btn-secondary btn-sm sl-print-btn" onClick={print}>Print</button>
             </div>
+
+            <PushToBand header={header} ensureSaved={ensureSaved} onPushed={() => void refreshHeader()} />
 
             {save.kind === 'error' && (
               <div className="sl-save-error" role="alert">

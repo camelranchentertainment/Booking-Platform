@@ -2481,3 +2481,30 @@ a.venues-muted:hover { color: var(--text); }
   .sl-print-sheet .sl-print-break { font-size: 14pt; text-transform: uppercase; letter-spacing: 0.2em; margin: 8pt 0; border-top: 2px solid #000; padding-top: 6pt; }
   .sl-print-sheet .sl-print-note { font-size: 13pt; font-weight: 600; font-style: italic; }
 }
+
+/* Set Lists — Push to Band and the member's read-only card */
+.sl-push { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.9rem; }
+.sl-push-btn { min-height: 44px; }
+.sl-push-result { color: var(--text-muted); font-weight: 600; font-size: 0.85rem; }
+
+.sl-member-head { display: flex; flex-direction: column; gap: 0.1rem; margin-bottom: 0.75rem; }
+.sl-member-name { font-family: var(--font-display); font-size: 1.5rem; line-height: 1.05; color: var(--text); }
+.sl-member-notes { color: var(--text-muted); font-weight: 600; margin-bottom: 0.75rem; }
+.sl-member-error { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.sl-member-list { list-style: none; display: flex; flex-direction: column; }
+.sl-member-song {
+  display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 0.6rem; align-items: baseline;
+  padding: 0.55rem 0; border-bottom: 1px solid var(--border);
+}
+.sl-member-song:last-child { border-bottom: 0; }
+.sl-member-num { color: var(--accent); font-size: 1.1rem; text-align: right; }
+.sl-member-song-body { display: flex; flex-direction: column; min-width: 0; }
+.sl-member-song-title { color: var(--text); font-size: 1.05rem; overflow-wrap: anywhere; }
+.sl-member-song-meta { color: var(--text-muted); font-size: 0.8rem; font-weight: 700; }
+.sl-member-song-notes { color: var(--text-muted); font-size: 0.82rem; font-weight: 600; }
+.sl-member-break {
+  margin: 0.5rem 0; padding: 0.35rem 0; text-align: center;
+  border-top: 1px dashed var(--border); border-bottom: 1px dashed var(--border);
+  color: var(--text-muted); font-size: 0.78rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+}
+.sl-member-note { padding: 0.4rem 0 0.4rem 2.6rem; color: var(--text-muted); font-style: italic; font-weight: 600; }
