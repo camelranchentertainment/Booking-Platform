@@ -53,10 +53,13 @@ export default function PricingPage() {
   const [isAuthed, setIsAuthed] = useState(false);
   const [trialMessage, setTrialMessage] = useState('');
   const [checkoutError, setCheckoutError] = useState('');
+  const [signedInAs, setSignedInAs] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setIsAuthed(!!session?.user);
+      setSignedInAs(session?.user?.email ?? null);
     });
     if (router.query.trial === 'expired') {
       setTrialMessage('Your 14-day trial has ended. Choose a plan to continue.');
@@ -87,8 +90,36 @@ export default function PricingPage() {
     }
   };
 
+  // A lapsed account is sent here from every other page, so this page must
+  // always offer a way out: without it the browser is stuck on this account.
+  const signOut = async (): Promise<void> => {
+    setSigningOut(true);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('[pricing] sign out failed', { message: error.message });
+      setSigningOut(false);
+      setCheckoutError('Couldn’t sign out. Try again.');
+      return;
+    }
+    router.replace('/login');
+  };
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4rem 1rem' }}>
+
+      {isAuthed && (
+        <div style={{ width: '100%', maxWidth: 960, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginTop: '-2.5rem', marginBottom: '1.5rem' }}>
+          {signedInAs && (
+            <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 600 }}>
+              Signed in as {signedInAs}
+            </span>
+          )}
+          <button type="button" className="btn btn-secondary btn-sm" style={{ minHeight: 44 }} onClick={() => void signOut()}
+            disabled={signingOut} aria-busy={signingOut}>
+            {signingOut ? 'Signing out…' : 'Sign out'}
+          </button>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
