@@ -36,6 +36,7 @@ const bandAdminNav = [
   { label: 'Venues',     href: '/venues',       icon: '⌂' },
   { label: 'Email',      href: '/email',        icon: '✉' },
   { label: 'Calendar',   href: '/calendar',     icon: '◷' },
+  { label: 'Set Lists',  href: '/set-lists',    icon: '♫' },
   { label: 'Analytics',  href: '/analytics',    icon: '↗' },
   { label: 'Financials', href: '/financials',   icon: '$' },
   { label: 'History',    href: '/history',      icon: '◎' },
