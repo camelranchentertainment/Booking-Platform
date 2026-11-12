@@ -76,6 +76,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       'We advertise Camel Ranch Booking on Facebook and Instagram. To measure those ads, our public homepage, booking agent page and sign-up page use the Meta Pixel, a tool from Meta Platforms. It does not run on the pages inside your account or in the apps.',
       'On those public pages, Meta may receive your IP address, browser details, the page you visited and cookie identifiers. It is also told when someone completes a band sign-up. We do not send Meta your name, email address or anything about your band. We and Meta may use this to measure ads and to show our ads to people who visited these pages. Meta handles this information under its own privacy policy.',
       'You can limit this through your ad preferences on Facebook or Instagram, or by blocking cookies or trackers in your browser. The site still works if you do.',
+      'Separately, we count visits to our public pages with Vercel Web Analytics, which uses no cookies. It records the page, where the visitor came from (such as the link or campaign tag they followed), and the country, browser and device type. It is not used for advertising, it does not run on the pages inside your account, and it never receives sign-up codes or other details from the address bar.',
     ],
   },
   {
