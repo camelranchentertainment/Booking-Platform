@@ -133,6 +133,11 @@ h4 { font-size: 1.2rem; }
 .main-content {
   margin-left: var(--sidebar-width);
   flex: 1;
+  /* A flex item defaults to min-width: auto, so a wide child (the Bookings
+     board's 250px-minimum columns) stretched the whole page past the window
+     and pushed buttons like "+ New Booking" off-screen. min-width: 0 keeps
+     the page at the window's width; wide children scroll inside themselves. */
+  min-width: 0;
   min-height: 100vh;
   padding: 2rem;
   position: relative;
