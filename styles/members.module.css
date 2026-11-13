@@ -64,7 +64,9 @@
 .name {
   margin: 0;
   font-weight: 700; font-size: 1rem; color: var(--text);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* Wrap long names (Jesse "Hoss" Delgado) instead of cutting them off
+     beside the login badge; break inside a word only if one can't fit. */
+  overflow-wrap: break-word;
 }
 .role { margin: 0; font-size: 0.82rem; color: var(--text-muted); }
 .facts { display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem; font-size: 0.82rem; color: var(--text-muted); }
@@ -74,6 +76,7 @@
 
 .badge {
   align-self: flex-start;
+  flex-shrink: 0; white-space: nowrap;
   font-size: 0.66rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
   padding: 0.18rem 0.5rem; border-radius: 999px;
   border: 1px solid var(--border); color: var(--text-muted);
