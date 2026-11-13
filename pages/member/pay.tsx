@@ -165,41 +165,41 @@ export default function MemberPay() {
               </div>
             ) : (
               <div className={`${styles.tableWrap} table-wrap`}>
-                <table className={styles.table}>
+                <table className={styles.table} role="table">
                   <caption className="pay-sr-only">Pay by show for {year}, grouped by month</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Date</th>
-                      <th scope="col">Venue</th>
-                      <th scope="col">City</th>
-                      <th scope="col">Status</th>
-                      <th scope="col" className={styles.num}>Pay</th>
+                  <thead role="rowgroup">
+                    <tr role="row">
+                      <th scope="col" role="columnheader">Date</th>
+                      <th scope="col" role="columnheader">Venue</th>
+                      <th scope="col" role="columnheader">City</th>
+                      <th scope="col" role="columnheader">Status</th>
+                      <th scope="col" role="columnheader" className={styles.num}>Pay</th>
                     </tr>
                   </thead>
                   {statement.months.map((m) => (
-                    <tbody key={m.month}>
-                      <tr className={`pay-month-row ${styles.monthRow}`}>
-                        <th scope="rowgroup" colSpan={5}>{MONTHS[m.month]}</th>
+                    <tbody key={m.month} role="rowgroup">
+                      <tr role="row" className={`pay-month-row ${styles.monthRow}`}>
+                        <th scope="rowgroup" role="rowheader" colSpan={5}>{MONTHS[m.month]}</th>
                       </tr>
                       {m.lines.map((line) => (
-                        <tr key={line.id}>
-                          <td style={{ whiteSpace: 'nowrap' }}>{formatShowDate(line.date, { weekday: 'short', month: 'short', day: 'numeric' })}</td>
-                          <td>{line.venue}</td>
-                          <td>{line.place}</td>
-                          <td>{line.kind === 'played' ? 'Played' : line.rsvp === 'pending' ? 'Coming up · not confirmed' : 'Coming up'}</td>
-                          <td className={styles.num}>{line.amount === null ? <span className={styles.est}>Not set</span> : <>{money.format(line.amount)}{line.estimated && <span className={styles.est}> est.</span>}</>}</td>
+                        <tr key={line.id} role="row" className={styles.lineRow}>
+                          <td role="cell" className={styles.cellDate} style={{ whiteSpace: 'nowrap' }}>{formatShowDate(line.date, { weekday: 'short', month: 'short', day: 'numeric' })}</td>
+                          <td role="cell" className={styles.cellVenue}>{line.venue}</td>
+                          <td role="cell" className={styles.cellPlace}>{line.place}</td>
+                          <td role="cell" className={styles.cellStatus}>{line.kind === 'played' ? 'Played' : line.rsvp === 'pending' ? 'Coming up · not confirmed' : 'Coming up'}</td>
+                          <td role="cell" className={`${styles.num} ${styles.cellPay}`}>{line.amount === null ? <span className={styles.est}>Not set</span> : <>{money.format(line.amount)}{line.estimated && <span className={styles.est}> est.</span>}</>}</td>
                         </tr>
                       ))}
-                      <tr className={`pay-subtotal-row ${styles.subRow}`}>
-                        <td colSpan={4} style={{ textAlign: 'right' }}>{MONTHS[m.month]} total</td>
-                        <td className={styles.num}>{money.format(m.played + m.upcoming)}</td>
+                      <tr role="row" className={`pay-subtotal-row ${styles.subRow}`}>
+                        <td role="cell" colSpan={4} className={styles.subLabel}>{MONTHS[m.month]} total</td>
+                        <td role="cell" className={styles.num}>{money.format(m.played + m.upcoming)}</td>
                       </tr>
                     </tbody>
                   ))}
-                  <tfoot>
-                    <tr className={`pay-subtotal-row ${styles.subRow}`}>
-                      <td colSpan={4} style={{ textAlign: 'right' }}>{year} total ({money.format(statement.played)} earned, {money.format(statement.upcoming)} coming up)</td>
-                      <td className={styles.num}>{money.format(statement.played + statement.upcoming)}</td>
+                  <tfoot role="rowgroup">
+                    <tr role="row" className={`pay-subtotal-row ${styles.subRow}`}>
+                      <td role="cell" colSpan={4} className={styles.subLabel}>{year} total ({money.format(statement.played)} earned, {money.format(statement.upcoming)} coming up)</td>
+                      <td role="cell" className={styles.num}>{money.format(statement.played + statement.upcoming)}</td>
                     </tr>
                   </tfoot>
                 </table>
