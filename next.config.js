@@ -1,4 +1,5 @@
 const { withSentryConfig } = require('@sentry/nextjs');
+const { shortLinkRedirects } = require('./lib/shortLinks');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -18,6 +19,8 @@ const nextConfig = {
     return [
       { source: '/booker', destination: '/agent', permanent: true },
       { source: '/booker/:path*', destination: '/agent/:path*', permanent: true },
+      // Short marketing links (/friends, /fb, …) → tagged public pages.
+      ...shortLinkRedirects(),
     ];
   },
   async headers() {
