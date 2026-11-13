@@ -151,6 +151,43 @@ a.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .subRow td { font-weight: 800; background: color-mix(in srgb, var(--surface-2) 40%, transparent); }
 .tableWrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .est { color: var(--text-muted); font-size: 0.8rem; }
+.subLabel { text-align: right; }
+
+/* Phones: a five-column table can't fit, and a sideways-scrolling table hides
+   the Pay column. Stack each show into a two-line card instead: venue and pay
+   on top, date · city · status underneath. Screen only, so printed statements
+   keep the full table. The table/row/cell roles in pay.tsx keep screen readers
+   announcing it as a table even though display is no longer table. */
+@media screen and (max-width: 560px) {
+  .tableWrap { overflow-x: visible; }
+  .table { min-width: 0; }
+  .table, .table tbody, .table tfoot { display: block; }
+  .table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+  .table tr { display: block; }
+  .table th, .table td { display: block; }
+  .monthRow th { padding: 1rem 1rem 0.35rem; }
+  .table .lineRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "venue pay" "date status" "place status";
+    column-gap: 0.75rem;
+    row-gap: 0.15rem;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  }
+  .table .lineRow td { padding: 0; border: 0; }
+  .table .lineRow .cellVenue { grid-area: venue; font-weight: 700; overflow-wrap: anywhere; }
+  .table .lineRow .cellPay { grid-area: pay; font-weight: 800; }
+  .table .lineRow .cellDate,
+  .table .lineRow .cellPlace { font-size: 0.8rem; color: var(--text-muted); }
+  .table .lineRow .cellDate { grid-area: date; }
+  .table .lineRow .cellPlace { grid-area: place; overflow-wrap: break-word; }
+  /* capped width so a long status wraps instead of squeezing the city out */
+  .table .lineRow .cellStatus { grid-area: status; align-self: center; max-width: 8.5rem; font-size: 0.76rem; color: var(--text-muted); text-align: right; }
+  .table .subRow { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; background: color-mix(in srgb, var(--surface-2) 40%, transparent); }
+  .table .subRow td { padding: 0.6rem 1rem; background: none; }
+  .table .subRow .subLabel { text-align: left; }
+}
 .fineprint { margin: 0; font-size: 0.82rem; color: var(--text-muted); line-height: 1.6; }
 
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
