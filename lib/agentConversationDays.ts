@@ -87,3 +87,75 @@ export function previewOf(messages: unknown): string {
 export function countMessages(messages: unknown): number {
   return (sanitizeMessages(messages) ?? []).length;
 }
+
+// ── Pending approval card ─────────────────────────────────────────────────────
+
+/**
+ * The approval card waiting on screen, saved with the day's chat so it
+ * survives popping the agent out, docking it back, or a reload.
+ *
+ * Nothing here is trusted on approval: the execute and bulk-send routes
+ * re-check every id against the caller's band. This only has to be a sane,
+ * bounded shape the panel can draw.
+ */
+export type PendingCard = {
+  /** The card itself, as the agent produced it (stage_items, tour_outreach or city_search). */
+  action: { type: PendingCardType } & Record<string, unknown>;
+  /** Outreach email subject as the user has edited it. */
+  draftSubject: string;
+  /** Outreach email body as the user has edited it. */
+  draftBody: string;
+  /** Venue rows still ticked on an outreach card. */
+  selectedIds: string[];
+};
+
+export type PendingCardType = 'stage_items' | 'tour_outreach' | 'city_search';
+
+/** Serialized size cap. Matches the DB check (128 KB) with room to spare, and
+ *  keeps a dock/pop-out flush under the browser's 64 KB keepalive limit in practice. */
+export const PENDING_CARD_MAX_CHARS = 60_000;
+const MAX_SELECTED_IDS = 500;
+const MAX_DRAFT_CHARS = 20_000;
+
+/** Whether `action` has the minimum shape for its card type. */
+function isCardAction(action: unknown): action is PendingCard['action'] {
+  if (!action || typeof action !== 'object' || Array.isArray(action)) return false;
+  const a = action as Record<string, unknown>;
+  if (a.type === 'stage_items') return Array.isArray(a.staged);
+  if (a.type === 'tour_outreach') {
+    return Array.isArray(a.venues) && typeof a.tourId === 'string'
+      && !!a.draft && typeof a.draft === 'object' && !Array.isArray(a.draft);
+  }
+  if (a.type === 'city_search') return Array.isArray(a.venues);
+  return false;
+}
+
+/**
+ * Validates a pending card from the browser or the database.
+ *
+ * @returns `{ ok: true, card }` with `card` null for "no card", or `{ ok: false }`
+ *          when the input is the wrong shape or too large.
+ */
+export function sanitizePendingCard(input: unknown): { ok: true; card: PendingCard | null } | { ok: false } {
+  if (input === null || input === undefined) return { ok: true, card: null };
+  if (typeof input !== 'object' || Array.isArray(input)) return { ok: false };
+  const raw = input as Record<string, unknown>;
+  if (!isCardAction(raw.action)) return { ok: false };
+
+  const draftSubject = typeof raw.draftSubject === 'string' ? raw.draftSubject : '';
+  const draftBody = typeof raw.draftBody === 'string' ? raw.draftBody : '';
+  if (draftSubject.length > MAX_DRAFT_CHARS || draftBody.length > MAX_DRAFT_CHARS) return { ok: false };
+
+  const ids = Array.isArray(raw.selectedIds) ? raw.selectedIds : [];
+  if (ids.length > MAX_SELECTED_IDS || !ids.every(id => typeof id === 'string' && id.length <= 64)) return { ok: false };
+
+  const card: PendingCard = { action: raw.action, draftSubject, draftBody, selectedIds: ids as string[] };
+  let size: number;
+  try {
+    size = JSON.stringify(card).length;
+  } catch {
+    return { ok: false }; // circular or otherwise unserializable
+  }
+  if (size > PENDING_CARD_MAX_CHARS) return { ok: false };
+  return { ok: true, card };
+}

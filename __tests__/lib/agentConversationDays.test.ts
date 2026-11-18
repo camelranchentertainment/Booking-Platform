@@ -1,6 +1,8 @@
 // __tests__/lib/agentConversationDays.test.ts
 import {
   MAX_STORED_MESSAGES,
+  PENDING_CARD_MAX_CHARS,
+  sanitizePendingCard,
   countMessages,
   isValidDay,
   isWritableDay,
@@ -102,5 +104,36 @@ describe('previewOf / countMessages', () => {
   it('counts well-formed lines', () => {
     expect(countMessages([{ role: 'user', content: 'a' }, { role: 'bad' }])).toBe(1);
     expect(countMessages(undefined)).toBe(0);
+  });
+});
+
+describe('sanitizePendingCard', () => {
+  const staged = { action: { type: 'stage_items', staged: [{ kind: 'show', staged_action_id: 'a', proposal: {} }], errors: [] } };
+
+  it('treats null/undefined as "no card"', () => {
+    expect(sanitizePendingCard(null)).toEqual({ ok: true, card: null });
+    expect(sanitizePendingCard(undefined)).toEqual({ ok: true, card: null });
+  });
+
+  it('accepts each card type and fills in missing draft fields', () => {
+    expect(sanitizePendingCard(staged)).toEqual({ ok: true, card: { ...staged, draftSubject: '', draftBody: '', selectedIds: [] } });
+    const city = { action: { type: 'city_search', venues: [], city: 'Tulsa', state: 'OK' }, selectedIds: ['v1'] };
+    expect(sanitizePendingCard(city).ok).toBe(true);
+    const outreach = { action: { type: 'tour_outreach', tourId: 't', venues: [], draft: { subject: '', body: '' } } };
+    expect(sanitizePendingCard(outreach).ok).toBe(true);
+  });
+
+  it('rejects unknown types and wrong shapes', () => {
+    expect(sanitizePendingCard('card').ok).toBe(false);
+    expect(sanitizePendingCard([]).ok).toBe(false);
+    expect(sanitizePendingCard({ action: { type: 'find_venue', venues: [] } }).ok).toBe(false);
+    expect(sanitizePendingCard({ action: { type: 'stage_items' } }).ok).toBe(false);
+    expect(sanitizePendingCard({ action: { type: 'tour_outreach', venues: [], draft: {} } }).ok).toBe(false); // no tourId
+    expect(sanitizePendingCard({ ...staged, selectedIds: [1, 2] }).ok).toBe(false);
+  });
+
+  it('rejects an oversized card', () => {
+    const big = { ...staged, draftBody: 'x'.repeat(19_000), draftSubject: 'y'.repeat(19_000), action: { ...staged.action, errors: ['z'.repeat(PENDING_CARD_MAX_CHARS)] } };
+    expect(sanitizePendingCard(big).ok).toBe(false);
   });
 });
