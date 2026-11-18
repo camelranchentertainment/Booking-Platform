@@ -101,8 +101,57 @@ describe('/api/agent-conversation', () => {
     expect(calls.some(c => c.method === 'upsert')).toBe(false);
   });
 
-  it('PUT rejects a missing message list', async () => {
+  it('PUT rejects a body with neither messages nor a card', async () => {
     expect((await call('PUT', {}, { day: '2026-10-26' })).status).toBe(400);
+  });
+
+  it('PUT rejects a message list that is not an array', async () => {
+    expect((await call('PUT', {}, { day: '2026-10-26', messages: 'nope' })).status).toBe(400);
+  });
+
+  const outreachCard = {
+    action: { type: 'tour_outreach', tourId: 't-1', tourName: 'Fall', venues: [], draft: { subject: 's', body: 'b' } },
+    draftSubject: 'Edited subject',
+    draftBody: 'Edited body',
+    selectedIds: ['tv-1'],
+  };
+
+  it('PUT saves only the approval card, leaving the messages alone', async () => {
+    const r = await call('PUT', {}, { day: '2026-10-26', pending: outreachCard });
+    expect(r.status).toBe(200);
+    const row = calls.find(c => c.method === 'upsert')!.args[0] as Record<string, unknown>;
+    expect(row).toMatchObject({ user_id: 'user-1', act_id: 'act-1', day: '2026-10-26', pending_card: outreachCard });
+    expect(row).not.toHaveProperty('messages');
+  });
+
+  it('PUT clears the card with pending: null', async () => {
+    expect((await call('PUT', {}, { day: '2026-10-26', pending: null })).status).toBe(200);
+    expect(calls.find(c => c.method === 'upsert')!.args[0]).toMatchObject({ pending_card: null });
+  });
+
+  it('PUT with messages only does not touch the card', async () => {
+    await call('PUT', {}, { day: '2026-10-26', messages: [] });
+    expect(calls.find(c => c.method === 'upsert')!.args[0]).not.toHaveProperty('pending_card');
+  });
+
+  it('PUT rejects a malformed card', async () => {
+    const r = await call('PUT', {}, { day: '2026-10-26', pending: { action: { type: 'wire_money' } } });
+    expect(r.status).toBe(400);
+    expect(calls.some(c => c.method === 'upsert')).toBe(false);
+  });
+
+  it("GET returns today's waiting card", async () => {
+    nextResult = { data: { messages: [], pending_card: outreachCard, updated_at: 'x' }, error: null };
+    const r = await call('GET', { day: '2026-10-26' });
+    expect(r.body.pending).toEqual(outreachCard);
+    expect(calls.find(c => c.method === 'select')?.args[0]).toContain('pending_card');
+  });
+
+  it('GET never returns a card for a past day, or a corrupt one', async () => {
+    nextResult = { data: { messages: [], pending_card: outreachCard, updated_at: 'x' }, error: null };
+    expect((await call('GET', { day: '2026-10-20' })).body.pending).toBeNull();
+    nextResult = { data: { messages: [], pending_card: { action: 'junk' }, updated_at: 'x' }, error: null };
+    expect((await call('GET', { day: '2026-10-26' })).body.pending).toBeNull();
   });
 
   it("DELETE clears only today's chat; past days are kept", async () => {

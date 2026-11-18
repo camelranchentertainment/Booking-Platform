@@ -3,7 +3,9 @@
 //
 //   GET    ?day=YYYY-MM-DD   that day's chat (today's to continue, or a past day to read)
 //   GET    ?view=days        past days for History, newest first (preview + count only)
-//   PUT    { day, messages } save today's chat
+//   PUT    { day, messages?, pending? }
+//                            save today's chat and/or the approval card on
+//                            screen (pending: card object, or null for none)
 //   DELETE ?day=YYYY-MM-DD   "New Chat": clear today's chat
 //
 // "day" is the browser's local calendar day. Past days are read-only: PUT and
@@ -24,7 +26,9 @@ import {
   isWritableDay,
   previewOf,
   sanitizeMessages,
+  sanitizePendingCard,
   type ConversationDaySummary,
+  type PendingCard,
 } from '../../lib/agentConversationDays';
 
 const TABLE = 'agent_conversations';
@@ -77,32 +81,51 @@ async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void>
     const day = readDay(req);
     const { data, error } = await service
       .from(TABLE)
-      .select('messages, updated_at')
+      .select('messages, pending_card, updated_at')
       .eq('user_id', userId)
       .eq('act_id', actId)
       .eq('day', day)
       .maybeSingle();
     if (error) throw new Error(`agent_conversations read failed: ${error.message}`);
+    const readOnly = !isWritableDay(day);
+    // A past day can't be acted on, so its card (if any) is never returned.
+    const stored = readOnly ? null : sanitizePendingCard(data?.pending_card);
     return res.status(200).json({
       day,
       messages: sanitizeMessages(data?.messages) ?? [],
+      pending: stored && stored.ok ? stored.card : null,
       updated_at: data?.updated_at ?? null,
-      readOnly: !isWritableDay(day),
+      readOnly,
     });
   }
 
   if (req.method === 'PUT') {
     const day = readDay(req);
     assertWritable(day);
-    const messages = sanitizeMessages((req.body as { messages?: unknown } | undefined)?.messages);
-    if (!messages) throw new AppError(400, 'messages must be an array.');
+    const body = (req.body ?? {}) as { messages?: unknown; pending?: unknown };
+    const hasMessages = Object.prototype.hasOwnProperty.call(body, 'messages');
+    const hasPending = Object.prototype.hasOwnProperty.call(body, 'pending');
+    if (!hasMessages && !hasPending) throw new AppError(400, 'Send messages, pending, or both.');
+
+    // Only the fields sent are written, so a card save never clobbers the
+    // messages and a message save never drops the card.
+    const row: { user_id: string; act_id: string; day: string; updated_at: string; messages?: unknown; pending_card?: PendingCard | null } = {
+      user_id: userId, act_id: actId, day, updated_at: new Date().toISOString(),
+    };
+    if (hasMessages) {
+      const messages = sanitizeMessages(body.messages);
+      if (!messages) throw new AppError(400, 'messages must be an array.');
+      row.messages = messages;
+    }
+    if (hasPending) {
+      const pending = sanitizePendingCard(body.pending);
+      if (!pending.ok) throw new AppError(400, 'pending is not a valid approval card.');
+      row.pending_card = pending.card;
+    }
 
     const { error } = await service
       .from(TABLE)
-      .upsert(
-        { user_id: userId, act_id: actId, day, messages, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id,act_id,day' },
-      );
+      .upsert(row, { onConflict: 'user_id,act_id,day' });
     if (error) throw new Error(`agent_conversations save failed: ${error.message}`);
     return res.status(200).json({ success: true });
   }

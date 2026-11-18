@@ -21,7 +21,7 @@ import { supabase } from '../../lib/supabase';
 import { formatShowDate, localToday } from '../../lib/formatDate';
 import AssistantHistoryList from '../dashboard/AssistantHistoryList';
 import AgentMessageBody from './AgentMessageBody';
-import type { ConversationDaySummary } from '../../lib/agentConversationDays';
+import type { ConversationDaySummary, PendingCard } from '../../lib/agentConversationDays';
 import { buildConfirmMessage, stagedItemCaution, describeTourUpdate, describeVenueUpsert, describeTourTargetAdd, describeTourTargetStage, describeContactUpsert, describeWrapup, describeExpenseUpdate, describeOfficeAction, describeDelete } from '../../lib/agentStagingHelpers';
 import { buildAgentGreeting } from '../../lib/agent/agentGreeting';
 import { openInMainWindow } from '../../lib/agent/agentWindow';
@@ -78,6 +78,15 @@ const QUICK_CHIPS: { label: string; href?: string; prompt?: string }[] = [
   { label: 'How do I connect Google Calendar?', prompt: 'How do I connect Google Calendar?' },
   { label: 'How do I set up email?', prompt: 'How do I set up email sending for outreach?' },
 ];
+
+// ── Saved approval card ───────────────────────────────────────────────────────
+/** Quiet time after the last edit before the card is saved with the chat. */
+const PENDING_SAVE_DELAY_MS = 300;
+
+/** Serialized form of the card on screen, or 'null'. Used to skip redundant saves. */
+function serializeCard(card: PendingCard | null): string {
+  return card ? JSON.stringify(card) : 'null';
+}
 
 // ── Docked card height (drag the corner to resize) ────────────────────────────
 const AGENT_HEIGHT_KEY = 'crb.agentPanelHeight';
@@ -191,6 +200,15 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
   const [sending, setSending]                     = useState(false);
   const [sendResult, setSendResult]               = useState<{ sent: number; noEmail: number; errors: number } | null>(null);
 
+  // The approval card is saved next to today's chat so it follows the chat
+  // between the dashboard and the pop-out (and survives a reload).
+  // lastSavedCardRef holds what the server already has, so unchanged cards
+  // aren't re-sent; accessTokenRef lets a flush start synchronously while a
+  // window is closing, before an async session read could finish.
+  const lastSavedCardRef = useRef<string>('null');
+  const cardSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const accessTokenRef   = useRef<string | null>(null);
+
   const threadRef   = useRef<HTMLDivElement>(null);
   const panelRef    = useRef<HTMLDivElement>(null);
   const agentInputRef = useRef<HTMLTextAreaElement>(null);
@@ -223,6 +241,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
         // Each day starts fresh: only today's chat is restored; earlier days live in History.
         chatDayRef.current = localToday();
         const { data: { session } } = await supabase.auth.getSession();
+        accessTokenRef.current = session?.access_token ?? null;
         const res = await fetch(`/api/agent-conversation?day=${encodeURIComponent(chatDayRef.current)}`, {
           headers: { Authorization: `Bearer ${session?.access_token}` },
         });
@@ -231,6 +250,16 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
           if (Array.isArray(json.messages) && json.messages.length > 0) {
             setMessages(json.messages);
             setGreetingSent(true); // prevent the greeting effect from overwriting the restored chat
+          }
+          // Bring back an approval card that was waiting when the chat moved here.
+          // The server already validated its shape; approving re-checks every id.
+          if (json.pending && typeof json.pending === 'object') {
+            const card = json.pending as PendingCard;
+            lastSavedCardRef.current = serializeCard(card);
+            setPendingAction(card.action as unknown as AgentAction);
+            setDraftSubject(card.draftSubject);
+            setDraftBody(card.draftBody);
+            setSelectedVenueIds(new Set(card.selectedIds));
           }
         }
       } catch {
@@ -264,6 +293,85 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
       }
     })();
   };
+
+  /** The approval card as it should be saved right now, or null when none is open. */
+  const currentCard = (): PendingCard | null => pendingAction && pendingAction.type !== 'find_venue'
+    ? {
+        action: pendingAction as unknown as PendingCard['action'],
+        draftSubject,
+        draftBody,
+        selectedIds: Array.from(selectedVenueIds),
+      }
+    : null;
+
+  /**
+   * Saves the approval card with today's chat if it changed since the last save.
+   * `keepalive` lets the request finish while the window is closing (dock,
+   * pop-out window closed); it needs the token already in hand.
+   */
+  const saveCardNow = (card: PendingCard | null, keepalive: boolean) => {
+    const serialized = serializeCard(card);
+    if (serialized === lastSavedCardRef.current) return;
+    lastSavedCardRef.current = serialized;
+    const send = (token: string | null) => fetch('/api/agent-conversation', {
+      method: 'PUT',
+      keepalive,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ day: chatDayRef.current || localToday(), pending: card }),
+    }).then(res => {
+      // Let a later change retry rather than believing the server has it.
+      if (!res.ok) lastSavedCardRef.current = '';
+    });
+    const failed = (err: unknown) => {
+      lastSavedCardRef.current = '';
+      console.warn('[BookingAgentPanel] approval card not saved', err);
+    };
+    if (keepalive && accessTokenRef.current) {
+      send(accessTokenRef.current).catch(failed);
+      return;
+    }
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        accessTokenRef.current = session?.access_token ?? null;
+        return send(accessTokenRef.current);
+      })
+      .catch(failed);
+  };
+
+  // Save the card shortly after it appears, is edited, or goes away. Waits
+  // for the saved chat to load first so a restored card isn't wiped.
+  useEffect(() => {
+    if (!conversationLoaded) return;
+    if (cardSaveTimerRef.current) clearTimeout(cardSaveTimerRef.current);
+    const card = currentCard();
+    cardSaveTimerRef.current = setTimeout(() => {
+      cardSaveTimerRef.current = null;
+      saveCardNow(card, false);
+    }, PENDING_SAVE_DELAY_MS);
+    return () => { if (cardSaveTimerRef.current) clearTimeout(cardSaveTimerRef.current); };
+  }, [conversationLoaded, pendingAction, draftSubject, draftBody, selectedVenueIds]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Saves any unsaved card edits immediately, e.g. just before the chat changes windows. */
+  const flushCard = () => {
+    if (!conversationLoaded) return;
+    if (cardSaveTimerRef.current) { clearTimeout(cardSaveTimerRef.current); cardSaveTimerRef.current = null; }
+    saveCardNow(currentCard(), true);
+  };
+  // Read through a ref so the pagehide listener always sees the latest state.
+  const flushCardRef = useRef(flushCard);
+  useEffect(() => { flushCardRef.current = flushCard; });
+
+  // Closing the window by any route (Dock, the dashboard's dock request, the
+  // window's own close button) still saves the latest edits.
+  useEffect(() => {
+    const onPageHide = () => flushCardRef.current();
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, []);
+
+  /** Pop out / Dock: save the card first so it is waiting in the other window. */
+  const handlePopOut = () => { flushCard(); onPopOut?.(); };
+  const handleDock = () => { flushCard(); onDock?.(); };
 
   /** Opens History and loads the list of past days (today is left out — it's the live chat). */
   const openHistory = async () => {
@@ -316,6 +424,9 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
   };
 
   const startNewChat = async () => {
+    // The row is deleted below; mark "no card" as saved so no stray save recreates it.
+    if (cardSaveTimerRef.current) { clearTimeout(cardSaveTimerRef.current); cardSaveTimerRef.current = null; }
+    lastSavedCardRef.current = 'null';
     setMessages([{ role: 'assistant' as const, content: buildGreeting() }]);
     setSuggestions([]);
     setPendingAction(null);
@@ -680,8 +791,9 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
     setNoteSaved(true);
   };
 
-  // Popping out mid-approval would drop the card (it isn't saved with the chat).
-  const popOutBlocked = agentLoading || sending || pendingAction !== null;
+  // A reply still streaming or a save/send in flight can't move windows. An
+  // approval card can: it is saved with the chat and reopens on the other side.
+  const popOutBlocked = agentLoading || sending;
 
 
   return (
@@ -801,11 +913,11 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
                 {!isPopout && onPopOut && (
                   <button
                     type="button"
-                    onClick={onPopOut}
+                    onClick={handlePopOut}
                     className="btn btn-ghost btn-sm dash-agent-popout-btn"
                     style={{ color: 'var(--text-muted)' }}
                     disabled={popOutBlocked}
-                    title={popOutBlocked ? 'Finish or cancel what the agent is working on first' : 'Open the agent in its own window you can move anywhere'}
+                    title={popOutBlocked ? 'Wait for the agent to finish first' : 'Open the agent in its own window you can move anywhere'}
                   >
                     Pop out ↗
                   </button>
@@ -813,11 +925,11 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
                 {isPopout && onDock && (
                   <button
                     type="button"
-                    onClick={onDock}
+                    onClick={handleDock}
                     className="btn btn-ghost btn-sm"
                     style={{ color: 'var(--text-muted)' }}
                     disabled={popOutBlocked}
-                    title={popOutBlocked ? 'Finish or cancel what the agent is working on first' : 'Close this window and put the agent back on the dashboard'}
+                    title={popOutBlocked ? 'Wait for the agent to finish first' : 'Close this window and put the agent back on the dashboard'}
                   >
                     ↙ Dock
                   </button>
