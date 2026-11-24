@@ -1,328 +1,308 @@
-﻿import { useState, useEffect } from 'react';
+// pages/register.tsx — band sign-up (and the doorway for invited members).
+//
+// Most visitors arrive from an ad or a post promising a 14-day free trial, so the
+// page leads with that offer and puts the form right under it. Plan feature
+// lists sit below the form: the home page does the selling, this page should
+// only get a band started.
+
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { supabase } from '../lib/supabase';
 import BrandLogo from '../components/BrandLogo';
 import { trackCompleteRegistration } from '../lib/metaPixel';
+import styles from '../styles/Register.module.css';
 
 type Tier = 'band_admin' | 'member';
 
-const GOLD = '#E07820';
+/** Band admin price and trial, shown in the offer line and the role picker. */
+const BAND_PRICE = '$18/mo';
+const TRIAL_DAYS = 14;
+const MIN_PASSWORD = 8;
 
-const TIER_CONFIG: Record<Tier, {
-  label: string; icon: string; color: string;
-  price: string; desc: string; selfSignup: boolean; apiRole: string;
-  features: string[]; badge?: string; note?: string;
-}> = {
-  band_admin: {
-    label: 'Band Admin',
-    icon:  '♪',
-    color: GOLD,
-    price: '$18/mo',
-    desc:  'For independent bands and touring artists of any genre',
-    selfSignup: true,
-    apiRole: 'band_admin',
-    badge: 'Recommended',
-    features: [
-      'Tour planning and management',
-      'Venue discovery and database',
-      'AI email outreach campaigns',
-      'Booking pipeline management',
-      'Calendar with iCal export',
-      'Financial tracking and history',
-      'Band member management',
-      'Social media tools',
-      'Show Day View for your crew',
-    ],
-  },
-  member: {
-    label: 'Member',
-    icon:  '◉',
-    color: '#94a3b8',
-    price: 'Free',
-    desc:  'For band members and crew',
-    selfSignup: false,
-    apiRole: 'member',
-    note: 'Requires invitation from band manager',
-    features: [
-      'Tour Day View',
-      'Show schedule and details',
-      'Load-in and logistics info',
-      'Band calendar access',
-    ],
-  },
+const BAND_FEATURES = [
+  'Tours, calendar and show day sheets',
+  'Venue database and AI outreach emails',
+  'Booking pipeline and follow-ups',
+  'Band pay and money tracking',
+  'Free accounts for your band members',
+  'AI booking agent that knows your band',
+];
+
+type FormState = {
+  email: string;
+  password: string;
+  displayName: string;
+  actName: string;
+  inviteCode: string;
+  signupCode: string;
 };
+
+const EMPTY_FORM: FormState = {
+  email: '', password: '', displayName: '', actName: '', inviteCode: '', signupCode: '',
+};
+
+const SIGNED_UP_NOT_IN = 'Your account was created, but we couldn’t sign you in automatically.';
+
+/**
+ * Checks the band sign-up fields before anything is sent.
+ * @returns A message for the first problem found, or null when the form is ready.
+ */
+function validateBandForm(form: FormState): string | null {
+  if (!form.displayName.trim()) return 'Please enter your name.';
+  if (!form.actName.trim()) return 'Please enter your band or act name.';
+  if (!form.email.trim()) return 'Please enter your email.';
+  if (form.password.length < MIN_PASSWORD) return `Your password needs at least ${MIN_PASSWORD} characters.`;
+  return null;
+}
+
+/**
+ * Reads the register API's reply without throwing on a non-JSON body
+ * (a gateway error page, for example).
+ */
+async function readJson(res: Response): Promise<{ error?: string; codeApplied?: boolean }> {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
+}
 
 export default function Register() {
   const router = useRouter();
-  const [tier, setTier]       = useState<Tier | null>('band_admin');
-  const [form, setForm]       = useState({
-    email: '', password: '', confirmPassword: '',
-    displayName: '',
-    actName: '',
-    inviteCode: '',
-    signupCode: '',
-  });
+  const [tier, setTier]       = useState<Tier>('band_admin');
+  const [form, setForm]       = useState<FormState>(EMPTY_FORM);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showCode, setShowCode] = useState(false);
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
   // Set when a code was entered but could not be applied (e.g. all uses taken): sign-up still succeeded.
   const [codeNotice, setCodeNotice] = useState('');
 
   useEffect(() => {
-    const role = router.query.role as string;
-    if (role === 'band_admin' || role === 'member') setTier(role as Tier);
-  }, [router.query.role]);
+    const role = router.query.role;
+    if (role === 'band_admin' || role === 'member') setTier(role);
+    // A shared link can carry a code (?code=BETA): open the field with it filled in.
+    const code = router.query.code;
+    if (typeof code === 'string' && code.trim()) {
+      setForm(f => ({ ...f, signupCode: code.trim().slice(0, 40) }));
+      setShowCode(true);
+    }
+  }, [router.query.role, router.query.code]);
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const chooseTier = (t: Tier) => { setTier(t); setError(''); };
+
+  const handleMemberSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tier) return;
-    setError('');
-
-    if (tier === 'member') {
-      const code = form.inviteCode.trim();
-      if (!code) { setError('Invite code is required'); return; }
-      router.push(`/join?token=${encodeURIComponent(code)}`);
-      return;
-    }
-
-    if (form.password !== form.confirmPassword) { setError('Passwords do not match'); return; }
-    if (form.password.length < 8) { setError('Password must be at least 8 characters'); return; }
-    if (!form.displayName.trim()) { setError('Name is required'); return; }
-    if (tier === 'band_admin' && !form.actName.trim()) { setError('Act / band name is required'); return; }
-
-    setLoading(true);
-
-    const body: Record<string, string> = {
-      email: form.email,
-      password: form.password,
-      role: cfg!.apiRole,
-      displayName: form.displayName,
-    };
-    if (tier === 'band_admin') {
-      body.planTier = 'band_admin';
-      body.actName = form.actName;
-      if (form.signupCode.trim()) body.signupCode = form.signupCode.trim();
-    }
-
-    const apiRes = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const apiData = await apiRes.json();
-    if (!apiRes.ok) { setError(apiData.error || 'Registration failed'); setLoading(false); return; }
-
-    const { error: signInErr } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
-    if (signInErr) { setError(signInErr.message); setLoading(false); return; }
-
-    if (tier === 'band_admin') trackCompleteRegistration();
-
-    if (tier === 'band_admin' && form.signupCode.trim() && apiData.codeApplied === false) {
-      // Account exists and is signed in; tell them the code did not apply before moving on.
-      setCodeNotice('Your account is ready, but that code is no longer valid, so you have the standard 14-day free trial.');
-      setLoading(false);
-      return;
-    }
-
-    if (tier === 'band_admin') router.replace('/band');
-    else router.replace('/member');
+    const code = form.inviteCode.trim();
+    if (!code) { setError('Paste the invite code from your email.'); return; }
+    router.push(`/join?token=${encodeURIComponent(code)}`);
   };
 
-  const cfg = tier ? TIER_CONFIG[tier] : null;
+  const handleBandSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    const problem = validateBandForm(form);
+    if (problem) { setError(problem); return; }
+
+    setLoading(true);
+    const body: Record<string, string> = {
+      email: form.email.trim(),
+      password: form.password,
+      role: 'band_admin',
+      displayName: form.displayName.trim(),
+      planTier: 'band_admin',
+      actName: form.actName.trim(),
+    };
+    if (form.signupCode.trim()) body.signupCode = form.signupCode.trim();
+
+    try {
+      const apiRes = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const apiData = await readJson(apiRes);
+      if (!apiRes.ok) {
+        setError(apiData.error || 'We couldn’t create your account. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      const { error: signInErr } = await supabase.auth.signInWithPassword({ email: body.email, password: form.password });
+      if (signInErr) {
+        // The account exists; only the automatic sign-in failed, so send them to Sign in, not back through sign-up.
+        console.error('[register] automatic sign-in after sign-up failed', signInErr.message);
+        setError(SIGNED_UP_NOT_IN);
+        setLoading(false);
+        return;
+      }
+
+      trackCompleteRegistration();
+
+      if (body.signupCode && apiData.codeApplied === false) {
+        // Account exists and is signed in; tell them the code did not apply before moving on.
+        setCodeNotice(`Your account is ready, but that code is no longer valid, so you have the standard ${TRIAL_DAYS}-day free trial.`);
+        setLoading(false);
+        return;
+      }
+
+      router.replace('/band');
+    } catch (err) {
+      console.error('[register] sign-up request failed', err);
+      setError('We couldn’t reach Camel Ranch Booking. Check your connection and try again.');
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="auth-wrap" style={{ alignItems: 'flex-start', paddingTop: '2.5rem' }}>
-      <div style={{ width: '100%', maxWidth: 560 }}>
+    <div className="auth-wrap" style={{ alignItems: 'flex-start', paddingTop: '1.75rem' }}>
+      <div className={styles.wrap}>
 
-        <div style={{ textAlign: 'center', marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-          <BrandLogo variant="banner" height={52} />
-          <div className="auth-sub">Create Account</div>
+        <header className={styles.header}>
+          <BrandLogo variant="banner" height={44} />
+          {tier === 'band_admin' ? (
+            <>
+              <h1 className={styles.title}>Start your free trial</h1>
+              <p className={styles.offer}>
+                <strong>{TRIAL_DAYS} days free. No credit card.</strong>{' '}
+                Then {BAND_PRICE} for your whole band. Cancel anytime.
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className={styles.title}>Join your band</h1>
+              <p className={styles.offer}>Band members are always free. Use the invite your band admin sent you.</p>
+            </>
+          )}
+        </header>
+
+        <div className={styles.roles} role="group" aria-label="I am signing up as">
+          <button
+            type="button"
+            aria-pressed={tier === 'band_admin'}
+            onClick={() => chooseTier('band_admin')}
+            className={`${styles.role} ${tier === 'band_admin' ? styles.roleSelected : ''}`}
+          >
+            <span className={styles.roleName}>I run a band</span>
+            <span className={styles.roleNote}>Free trial, then {BAND_PRICE}</span>
+          </button>
+          <button
+            type="button"
+            aria-pressed={tier === 'member'}
+            onClick={() => chooseTier('member')}
+            className={`${styles.role} ${tier === 'member' ? styles.roleSelected : ''}`}
+          >
+            <span className={styles.roleName}>I was invited</span>
+            <span className={styles.roleNote}>Band member · always free</span>
+          </button>
         </div>
 
-        {/* Step 1 — Tier selection (always visible, required) */}
-        <div style={{ marginBottom: '1.75rem' }}>
-          <div style={{
-            fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700,
-            letterSpacing: '0.2em', textTransform: 'uppercase',
-            color: 'var(--text-muted)', marginBottom: '0.75rem', textAlign: 'center',
-          }}>
-            Step 1 — I am a...
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.65rem' }}>
-            {(Object.entries(TIER_CONFIG) as [Tier, typeof TIER_CONFIG[Tier]][]).map(([t, c]) => {
-              const selected = tier === t;
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => { setTier(t); setError(''); }}
-                  style={{
-                    padding: '1.1rem 0.75rem',
-                    border: `2px solid ${selected ? c.color : 'var(--border)'}`,
-                    borderRadius: 'var(--radius-sm)',
-                    background: selected ? `${c.color}18` : 'var(--bg-panel)',
-                    color: selected ? c.color : 'var(--text-muted)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem',
-                    position: 'relative',
-                    textAlign: 'left',
-                  }}
-                >
-                  {c.badge && (
-                    <div style={{
-                      position: 'absolute', top: -1, left: '50%', transform: 'translateX(-50%)',
-                      background: c.color, color: '#000',
-                      fontFamily: 'var(--font-body)', fontSize: '0.58rem', fontWeight: 700,
-                      letterSpacing: '0.18em', textTransform: 'uppercase',
-                      padding: '0.15rem 0.55rem', whiteSpace: 'nowrap',
-                    }}>{c.badge}</div>
-                  )}
-                  <span style={{ fontSize: '1.5rem', lineHeight: 1, marginTop: c.badge ? '0.5rem' : 0 }}>{c.icon}</span>
-                  <span style={{
-                    fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700,
-                    letterSpacing: '0.08em', textTransform: 'uppercase',
-                  }}>{c.label}</span>
-                  <span style={{
-                    fontFamily: 'var(--font-body)', fontSize: '0.7rem', fontWeight: 400,
-                    color: selected ? `${c.color}cc` : 'var(--text-muted)',
-                    letterSpacing: '0.03em',
-                  }}>{c.price}</span>
-                  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.4rem' }}>
-                    {c.features.map(f => (
-                      <div key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.35rem', textAlign: 'left' }}>
-                        <span style={{ color: c.color, fontSize: '0.62rem', flexShrink: 0, marginTop: '0.1rem' }}>✓</span>
-                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', color: selected ? 'rgba(255,255,255,0.65)' : 'var(--text-muted)', lineHeight: 1.4 }}>{f}</span>
-                      </div>
-                    ))}
-                    {c.note && (
-                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.3rem', fontStyle: 'italic' }}>{c.note}</div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          <Link href="/agent/signup" style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem',
-            marginTop: '0.65rem', padding: '0.85rem 1rem',
-            border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',
-            background: 'var(--bg-panel)', textDecoration: 'none',
-          }}>
-            <span style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#33c9b0' }}>
-                ◈ I'm a Booking Agent
-              </span>
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                Book several bands? Create an agent workspace — $35/mo after your trial.
-              </span>
-            </span>
-            <span aria-hidden="true" style={{ color: '#33c9b0', fontWeight: 700 }}>→</span>
-          </Link>
-        </div>
-
-        {/* Step 2 — Form (only shown after tier is chosen) */}
-        {tier && cfg && (
-          <div className="auth-card">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
-              <span style={{ fontSize: '1.4rem', color: cfg.color }}>{cfg.icon}</span>
-              <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', letterSpacing: '0.04em', color: cfg.color }}>{cfg.label}</div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>{cfg.desc}</div>
+        <div className={styles.card}>
+          {tier === 'member' ? (
+            <form onSubmit={handleMemberSubmit} className={styles.form} noValidate>
+              <div className="field">
+                <label className="field-label" htmlFor="reg-invite">Invite code</label>
+                <input
+                  id="reg-invite" className="input" value={form.inviteCode} onChange={set('inviteCode')}
+                  placeholder="Paste the code from your invite email" autoComplete="off" spellCheck={false}
+                />
               </div>
-            </div>
+              {error && <div role="alert" className={styles.alert}>{error}</div>}
+              <button className={`btn btn-lg ${styles.submit}`} type="submit">Continue with invite</button>
+              <p className={styles.reassure}>No invite yet? Ask your band admin to send you one.</p>
+            </form>
+          ) : (
+            <form onSubmit={handleBandSubmit} className={styles.form} noValidate>
+              <div className={styles.row}>
+                <div className="field">
+                  <label className="field-label" htmlFor="reg-name">Your name</label>
+                  <input id="reg-name" className="input" value={form.displayName} onChange={set('displayName')}
+                    autoComplete="name" placeholder="Your name" />
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor="reg-act">Band / act name</label>
+                  <input id="reg-act" className="input" value={form.actName} onChange={set('actName')}
+                    autoComplete="organization" placeholder="The Band Name" />
+                </div>
+              </div>
+              <div className="field">
+                <label className="field-label" htmlFor="reg-email">Email</label>
+                <input id="reg-email" className="input" type="email" inputMode="email" value={form.email} onChange={set('email')}
+                  autoComplete="email" autoCapitalize="none" spellCheck={false} placeholder="you@yourband.com" />
+              </div>
+              <div className="field">
+                <label className="field-label" htmlFor="reg-password">Password</label>
+                <div className={styles.passwordBox}>
+                  <input id="reg-password" className="input" type={showPassword ? 'text' : 'password'}
+                    value={form.password} onChange={set('password')} autoComplete="new-password"
+                    aria-describedby="reg-password-hint" minLength={MIN_PASSWORD} style={{ width: '100%' }} />
+                  <button type="button" className={styles.showToggle} onClick={() => setShowPassword(v => !v)}
+                    aria-controls="reg-password" aria-pressed={showPassword}>
+                    {showPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                <div id="reg-password-hint" className={styles.hint}>At least {MIN_PASSWORD} characters.</div>
+              </div>
 
-            {/* Member — invite only */}
-            {tier === 'member' && (
-              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div style={{ background: 'var(--bg-overlay)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 'var(--radius-sm)', padding: '0.9rem 1rem', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                  Band members join via invite link sent by their booking agent or band admin. Paste your invite token below.
-                </div>
+              {showCode ? (
                 <div className="field">
-                  <label className="field-label">Invite Code / Token</label>
-                  <input className="input" value={form.inviteCode} onChange={set('inviteCode')} placeholder="Paste invite token from your email..." autoFocus required />
-                </div>
-                {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
-                <button className="btn btn-lg" type="submit" style={{ width: '100%', justifyContent: 'center', background: '#34d399', color: '#000', border: '1px solid #34d399' }}>
-                  Continue with Invite
-                </button>
-                <div style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  No invite? Ask your booking agent or band admin.
-                </div>
-              </form>
-            )}
-
-            {/* Band Admin */}
-            {tier === 'band_admin' && (
-              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div className="grid-2">
-                  <div className="field">
-                    <label className="field-label">Your Name *</label>
-                    <input className="input" value={form.displayName} onChange={set('displayName')} placeholder="Your name" required autoFocus />
-                  </div>
-                  <div className="field">
-                    <label className="field-label">Act / Band Name *</label>
-                    <input className="input" value={form.actName} onChange={set('actName')} placeholder="The Band Name" required />
-                  </div>
-                </div>
-                <div className="field">
-                  <label className="field-label">Email *</label>
-                  <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="you@yourband.com" required />
-                </div>
-                <div className="field">
-                  <label className="field-label">Password *</label>
-                  <input className="input" type="password" value={form.password} onChange={set('password')} placeholder="Min. 8 characters" required />
-                </div>
-                <div className="field">
-                  <label className="field-label">Confirm Password *</label>
-                  <input className="input" type="password" value={form.confirmPassword} onChange={set('confirmPassword')} placeholder="Repeat password" required />
-                </div>
-                <div className="field">
-                  <label className="field-label" htmlFor="signup-code">Signup Code (optional)</label>
+                  <label className="field-label" htmlFor="reg-code">Signup code</label>
                   <input
-                    id="signup-code" className="input" value={form.signupCode} onChange={set('signupCode')}
-                    placeholder="Have a code? Enter it here" autoComplete="off" autoCapitalize="characters"
+                    id="reg-code" className="input" value={form.signupCode} onChange={set('signupCode')}
+                    placeholder="Enter your code" autoComplete="off" autoCapitalize="characters"
                     spellCheck={false} maxLength={40} disabled={!!codeNotice}
                   />
                 </div>
-                {error && <div role="alert" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 'var(--radius-sm)', padding: '0.6rem', color: '#f87171', fontSize: '0.85rem' }}>{error}</div>}
-                {codeNotice ? (
-                  <>
-                    <div role="status" style={{ background: 'var(--bg-overlay)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '0.75rem', color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.5 }}>{codeNotice}</div>
-                    <button className="btn btn-lg" type="button" onClick={() => router.replace('/band')}
-                      style={{ width: '100%', justifyContent: 'center', background: '#a78bfa', color: '#000', border: '1px solid #a78bfa' }}>
-                      Continue
-                    </button>
-                  </>
-                ) : (
-                  <button className="btn btn-lg" type="submit" disabled={loading}
-                    style={{ width: '100%', justifyContent: 'center', background: '#a78bfa', color: '#000', border: '1px solid #a78bfa' }}>
-                    {loading ? 'Creating account...' : 'Create Band Account'}
-                  </button>
-                )}
-                <div style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  Band member?{' '}
-                  <button type="button" onClick={() => setTier('member')} style={{ background: 'none', border: 'none', color: '#a78bfa', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.78rem' }}>
-                    Use invite code instead
-                  </button>
+              ) : (
+                <button type="button" className={styles.linkButton} onClick={() => setShowCode(true)}>
+                  Have a signup code?
+                </button>
+              )}
+
+              {error && (
+                <div role="alert" className={styles.alert}>
+                  {error}
+                  {error === SIGNED_UP_NOT_IN && (
+                    <> <Link href="/login" style={{ color: 'var(--accent)' }}>Sign in to continue</Link></>
+                  )}
                 </div>
-              </form>
-            )}
+              )}
 
-            <div style={{ textAlign: 'center', marginTop: '1.25rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-              Already have an account? <Link href="/login" style={{ color: 'var(--accent)' }}>Sign in</Link>
-            </div>
-          </div>
+              {codeNotice ? (
+                <>
+                  <div role="status" className={styles.notice}>{codeNotice}</div>
+                  <button className={`btn btn-lg ${styles.submit}`} type="button" onClick={() => router.replace('/band')}>
+                    Continue
+                  </button>
+                </>
+              ) : (
+                <button className={`btn btn-lg ${styles.submit}`} type="submit" disabled={loading} aria-busy={loading}>
+                  {loading ? 'Setting up your band…' : 'Start my free trial'}
+                </button>
+              )}
+              <p className={styles.reassure}>No credit card needed · Your band members join free</p>
+            </form>
+          )}
+        </div>
+
+        {tier === 'band_admin' && (
+          <ul className={styles.features} aria-label="What your band gets">
+            {BAND_FEATURES.map(f => <li key={f}>{f}</li>)}
+          </ul>
         )}
 
-        {!tier && (
-          <div style={{ textAlign: 'center', marginTop: '1rem', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-            Already have an account? <Link href="/login" style={{ color: 'var(--accent)' }}>Sign in</Link>
-          </div>
-        )}
+        <Link href="/agent/signup" className={styles.agentLink}>
+          <span><strong>Booking agent?</strong> Manage several bands in an agent workspace.</span>
+          <span aria-hidden="true" style={{ color: 'var(--accent)', fontWeight: 700 }}>→</span>
+        </Link>
+
+        <div className={styles.footer}>
+          Already have an account? <Link href="/login" style={{ color: 'var(--accent)' }}>Sign in</Link>
+        </div>
       </div>
     </div>
   );
