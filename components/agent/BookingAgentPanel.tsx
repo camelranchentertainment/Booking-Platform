@@ -149,18 +149,17 @@ function AgentAvatar({ logoUrl, actName, className, style, decorative }: {
 
   const useLogo = Boolean(logoUrl) && !failed;
   const alt = decorative ? '' : useLogo ? `${actName || 'Band'} logo` : 'Booking agent mascot';
-  // Logos come in every shape, so fit the whole mark inside the circle on a light
-  // backing; the mascot photo fills the circle.
-  const fit: React.CSSProperties = useLogo
-    ? { objectFit: 'contain', background: '#ffffff', padding: '8%' }
-    : { objectFit: 'cover' };
+  // Fill the circle edge to edge, centred, the same as the mascot. Band "logos"
+  // are often band photos, and fitting a wide photo inside the circle left it
+  // small with blank bands around it.
+  const fit: React.CSSProperties = { objectFit: 'cover', objectPosition: 'center' };
 
   return (
     <img
       src={useLogo ? (logoUrl as string) : MASCOT_SRC}
       alt={alt}
       className={className}
-      style={{ ...style, ...fit, boxSizing: 'border-box' }}
+      style={{ ...style, ...fit }}
       onError={() => { if (useLogo) setFailed(true); }}
     />
   );
