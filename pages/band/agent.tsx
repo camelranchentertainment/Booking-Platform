@@ -18,7 +18,7 @@ import { getActId } from '../../lib/bookingQueries';
 import { fetchAgentGreetingStats } from '../../lib/agent/agentGreeting';
 import { isAgentWindowMessage, openAgentChannel, postAgentMessage, type AgentChannel } from '../../lib/agent/agentWindow';
 
-type ActInfo = { id: string; act_name: string | null };
+type ActInfo = { id: string; act_name: string | null; logo_url: string | null };
 type Stats = { toursCount: number; targetsCount: number };
 
 /** Loads what the agent needs, then shows it. Rendered inside PopoutShell, so the user is signed in. */
@@ -40,13 +40,13 @@ function AgentWindow() {
         const actId = await getActId(supabase, user.id);
         if (!actId) { if (!cancelled) setState('no-band'); return; }
         const [actRes, profileRes] = await Promise.all([
-          supabase.from('acts').select('id, act_name').eq('id', actId).eq('is_active', true).maybeSingle(),
+          supabase.from('acts').select('id, act_name, logo_url').eq('id', actId).eq('is_active', true).maybeSingle(),
           supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle(),
         ]);
         if (actRes.error) throw new Error(`band lookup failed: ${actRes.error.message}`);
         if (cancelled) return;
         if (!actRes.data) { setState('no-band'); return; }
-        setAct({ id: actRes.data.id, act_name: actRes.data.act_name ?? null });
+        setAct({ id: actRes.data.id, act_name: actRes.data.act_name ?? null, logo_url: actRes.data.logo_url ?? null });
         setDisplayName(profileRes.data?.display_name ?? null);
         setState('ready');
         // The greeting can wait for the counts; a failure here only means a 0/0 greeting.

@@ -535,7 +535,7 @@ export default function BandDashboard() {
                 </p>
               )}
               <BookingAgentPanel
-                act={{ id: myAct.id, act_name: myAct.act_name ?? null }}
+                act={{ id: myAct.id, act_name: myAct.act_name ?? null, logo_url: myAct.logo_url ?? null }}
                 displayName={userProfile?.display_name ?? null}
                 greetingStats={loading ? null : { toursCount, targetsCount }}
                 mode="docked"

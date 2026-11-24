@@ -111,8 +111,9 @@ function savePanelHeight(px: number): void {
 }
 
 export interface BookingAgentPanelProps {
-  /** The caller's band. Only used for display and the send payload; the server re-checks it. */
-  act: { id: string; act_name: string | null };
+  /** The caller's band. Only used for display and the send payload; the server re-checks it.
+   *  logo_url, when set, replaces the camel mascot as the agent's avatar. */
+  act: { id: string; act_name: string | null; logo_url?: string | null };
   /** Signed-in person's display name, for the greeting. */
   displayName: string | null;
   /** Counts for the greeting; null until the host has loaded them (no greeting before then). */
@@ -125,6 +126,44 @@ export interface BookingAgentPanelProps {
   onPopOut?: () => void;
   /** Pop-out only: close this window and hand the chat back to the dashboard. */
   onDock?: () => void;
+}
+
+const MASCOT_SRC = '/Agent-Camel.jpg';
+
+/**
+ * The agent's avatar: the band's own logo when it has one, otherwise the camel
+ * mascot. Falls back to the mascot if the logo fails to load (deleted file,
+ * expired URL), so the panel never shows a broken image.
+ */
+function AgentAvatar({ logoUrl, actName, className, style, decorative }: {
+  logoUrl: string | null | undefined;
+  actName: string | null;
+  className?: string;
+  style?: React.CSSProperties;
+  /** True where nearby text already says what this is (screen readers skip it). */
+  decorative?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  // A new logo (band changed it in Settings) gets a fresh chance to load.
+  useEffect(() => { setFailed(false); }, [logoUrl]);
+
+  const useLogo = Boolean(logoUrl) && !failed;
+  const alt = decorative ? '' : useLogo ? `${actName || 'Band'} logo` : 'Booking agent mascot';
+  // Logos come in every shape, so fit the whole mark inside the circle on a light
+  // backing; the mascot photo fills the circle.
+  const fit: React.CSSProperties = useLogo
+    ? { objectFit: 'contain', background: '#ffffff', padding: '8%' }
+    : { objectFit: 'cover' };
+
+  return (
+    <img
+      src={useLogo ? (logoUrl as string) : MASCOT_SRC}
+      alt={alt}
+      className={className}
+      style={{ ...style, ...fit, boxSizing: 'border-box' }}
+      onError={() => { if (useLogo) setFailed(true); }}
+    />
+  );
 }
 
 /** One line describing a staged item on the approval card. */
@@ -864,10 +903,10 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
 
           <div ref={panelRef} className={isPopout ? 'dash-agent dash-agent--popout' : 'dash-agent dash-agent--docked'}>
 
-            {/* Left — mascot column (hidden below 768px; a small avatar shows in the header instead) */}
+            {/* Left — avatar column: the band's logo, or the camel mascot when there is none (hidden below 768px; a small avatar shows in the header instead) */}
             <div className="dash-agent-mascot" style={{ width: 220, flexShrink: 0, background: 'var(--bg-overlay)', borderRight: '1px solid var(--border)', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16 }}>
               <div style={{ width: 120, height: 120, borderRadius: '50%', background: '#0d1420', border: '3px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', flexShrink: 0 }}>
-                <img src="/Agent-Camel.jpg" alt="Booking agent mascot" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <AgentAvatar logoUrl={act.logo_url} actName={act.act_name} style={{ width: '100%', height: '100%' }} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', display: 'inline-block', flexShrink: 0 }} />
@@ -881,7 +920,7 @@ export default function BookingAgentPanel({ act, displayName, greetingStats, mod
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', minWidth: 0 }}>
                 {/* Mobile-only avatar + status; decorative here because the status text carries the meaning */}
-                <img src="/Agent-Camel.jpg" alt="" className="dash-agent-hdr-avatar" />
+                <AgentAvatar logoUrl={act.logo_url} actName={act.act_name} className="dash-agent-hdr-avatar" decorative />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>AI BOOKING AGENT</span>
                   <span className="dash-agent-hdr-status">
