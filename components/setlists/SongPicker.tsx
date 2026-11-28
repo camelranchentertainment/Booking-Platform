@@ -4,8 +4,8 @@
 // Up/Down to move through matches, Enter to add. When nothing matches, Enter
 // (or the button) offers to add the typed title to the library first.
 
-import { useId, useMemo, useState, type KeyboardEvent } from 'react';
-import { formatDuration, type SongRow } from '../../lib/domain/setLists';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { filterSongs, formatDuration, type SongRow } from '../../lib/domain/setLists';
 
 interface Props {
   songs: readonly SongRow[];
@@ -15,23 +15,16 @@ interface Props {
   onCreate: (title: string) => void;
 }
 
-const MAX_RESULTS = 8;
-
 /** Combobox for adding songs to a set. */
 export default function SongPicker({ songs, onListIds, onPick, onCreate }: Props) {
   const uid = useId();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  const listRef = useRef<HTMLUListElement>(null);
 
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return songs.slice(0, MAX_RESULTS);
-    const starts = songs.filter(s => s.title.toLowerCase().startsWith(q));
-    const contains = songs.filter(s => !s.title.toLowerCase().startsWith(q)
-      && (s.title.toLowerCase().includes(q) || (s.artist ?? '').toLowerCase().includes(q)));
-    return [...starts, ...contains].slice(0, MAX_RESULTS);
-  }, [songs, query]);
+  // The whole library is listed (the dropdown scrolls), not just the first few.
+  const matches = useMemo(() => filterSongs(songs, query), [songs, query]);
 
   const typed = query.trim();
   const canCreate = typed.length > 0 && !songs.some(s => s.title.toLowerCase() === typed.toLowerCase());
@@ -72,6 +65,14 @@ export default function SongPicker({ songs, onListIds, onPick, onCreate }: Props
   const optId = (i: number): string => `${uid}-opt-${i}`;
   const showList = open && optionCount > 0;
 
+  // Keep the keyboard-highlighted option visible as Up/Down moves past the scroll edge.
+  useEffect(() => {
+    if (!showList) return;
+    const id = `${uid}-opt-${Math.min(active, optionCount - 1)}`;
+    const el = listRef.current?.querySelector<HTMLElement>(`[id="${CSS.escape(id)}"]`);
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [uid, active, showList, optionCount]);
+
   return (
     <div className="sl-picker">
       <label className="field-label" htmlFor={`${uid}-input`}>Add a song</label>
@@ -93,7 +94,7 @@ export default function SongPicker({ songs, onListIds, onPick, onCreate }: Props
         onKeyDown={onKeyDown}
       />
       {showList && (
-        <ul id={listId} role="listbox" className="sl-picker-list" aria-label="Matching songs">
+        <ul ref={listRef} id={listId} role="listbox" className="sl-picker-list" aria-label="Matching songs">
           {matches.map((s, i) => (
             <li key={s.id} id={optId(i)} role="option" aria-selected={i === active}
               className={`sl-picker-opt${i === active ? ' sl-picker-opt--active' : ''}`}
