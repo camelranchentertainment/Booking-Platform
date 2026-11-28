@@ -118,7 +118,17 @@ export function formatDuration(seconds: number | null | undefined): string {
 }
 
 /**
- * Filters the song library for the builder's "Add a song" picker.
+ * Songs from the library that are not already in the set, for the Song List pool.
+ * @param songs the band's library, already sorted for display
+ * @param onListIds ids of songs already in the set
+ * @returns the library minus songs already in the set, order preserved
+ */
+export function availableSongs<T extends Pick<SongRow, 'id'>>(songs: readonly T[], onListIds: ReadonlySet<string>): readonly T[] {
+  return songs.filter(s => !onListIds.has(s.id));
+}
+
+/**
+ * Filters the song library for the builder's Song List pool.
  * An empty query returns the whole library (in its given order) so it can be
  * browsed by scrolling; otherwise titles starting with the query come first,
  * then titles or artists containing it. No cap: the list scrolls.

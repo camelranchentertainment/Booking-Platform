@@ -18,7 +18,7 @@ import AppShell from '../../components/layout/AppShell';
 import PushStatusChip from '../../components/setlists/PushStatusChip';
 import PushToBand from '../../components/setlists/PushToBand';
 import SetListRows, { rowTitle } from '../../components/setlists/SetListRows';
-import SongPicker from '../../components/setlists/SongPicker';
+import SongPool from '../../components/setlists/SongPool';
 import SongFormModal from '../../components/setlists/SongFormModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -299,14 +299,14 @@ export default function SetListBuilderPage() {
           </header>
 
           <section className="card sl-builder" aria-label="Build the set">
-            <div className="sl-add-bar">
-              <SongPicker songs={songs} onListIds={onListIds}
-                onPick={s => addRow('song', s)} onCreate={title => setCreatingSong(title)} />
-              <div className="sl-add-buttons">
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => addRow('break')}>+ Break</button>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => addRow('note')}>+ Note</button>
-              </div>
-            </div>
+            <SongPool songs={songs} onListIds={onListIds}
+              onPick={s => addRow('song', s)} onCreate={() => setCreatingSong('')}
+              actions={(
+                <div className="sl-add-buttons">
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => addRow('break')}>+ Break</button>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => addRow('note')}>+ Note</button>
+                </div>
+              )} />
             <SetListRows items={items} songsById={songsById} onChange={changeItems} />
           </section>
 
