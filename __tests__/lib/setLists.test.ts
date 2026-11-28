@@ -10,7 +10,7 @@ const song = (id: string, duration_sec: number | null): SongRow => ({
 });
 
 const row = (over: Partial<BuilderItem>): BuilderItem => ({
-  key: 'k', item_type: 'song', song_id: 's1', label: null, key_override: null, notes: null, ...over,
+  key: 'k', item_type: 'song', song_id: 's1', label: null, key_override: null, notes: null, duration_sec: null, ...over,
 });
 
 describe('parseDuration', () => {
@@ -46,7 +46,7 @@ describe('formatDuration', () => {
 describe('setTotals', () => {
   const lib = new Map([['s1', song('s1', 200)], ['s2', song('s2', null)], ['s3', song('s3', 100)]]);
 
-  it('counts songs and sums known lengths, ignoring breaks and notes', () => {
+  it('counts songs and sums known lengths; breaks without a length and notes add nothing', () => {
     const items = [
       row({ song_id: 's1' }),
       row({ item_type: 'break', song_id: null, label: 'Break' }),
@@ -54,11 +54,26 @@ describe('setTotals', () => {
       row({ song_id: 's3' }),
       row({ item_type: 'note', song_id: null, label: 'Thank the bar' }),
     ];
-    expect(setTotals(items, lib)).toEqual({ songs: 3, seconds: 300, songsWithoutLength: 1 });
+    expect(setTotals(items, lib)).toEqual({ songs: 3, seconds: 300, breakSeconds: 0, songsWithoutLength: 1 });
   });
 
   it('treats a song missing from the library as having no length', () => {
-    expect(setTotals([row({ song_id: 'gone' })], lib)).toEqual({ songs: 1, seconds: 0, songsWithoutLength: 1 });
+    expect(setTotals([row({ song_id: 'gone' })], lib)).toEqual({ songs: 1, seconds: 0, breakSeconds: 0, songsWithoutLength: 1 });
+  });
+
+  it('adds break lengths to the running time', () => {
+    const items = [
+      row({ song_id: 's1' }),
+      row({ item_type: 'break', song_id: null, label: 'Set break', duration_sec: 900 }),
+      row({ song_id: 's3' }),
+      row({ item_type: 'break', song_id: null, label: 'Quick one', duration_sec: 300 }),
+    ];
+    expect(setTotals(items, lib)).toEqual({ songs: 2, seconds: 1500, breakSeconds: 1200, songsWithoutLength: 0 });
+  });
+
+  it('ignores a break length the database would reject', () => {
+    const items = [row({ item_type: 'break', song_id: null, label: 'B', duration_sec: -60 })];
+    expect(setTotals(items, lib).breakSeconds).toBe(0);
   });
 });
 
@@ -94,10 +109,20 @@ describe('toSavePayload', () => {
       row({ item_type: 'note', song_id: null, label: ' Encore if they want it ', key_override: 'A' }),
     ]);
     expect(payload).toEqual([
-      { item_type: 'song', song_id: 's1', label: null, key_override: 'G', notes: null },
-      { item_type: 'break', song_id: null, label: 'Break', key_override: null, notes: null },
-      { item_type: 'note', song_id: null, label: 'Encore if they want it', key_override: null, notes: null },
+      { item_type: 'song', song_id: 's1', label: null, key_override: 'G', notes: null, duration_sec: null },
+      { item_type: 'break', song_id: null, label: 'Break', key_override: null, notes: null, duration_sec: null },
+      { item_type: 'note', song_id: null, label: 'Encore if they want it', key_override: null, notes: null, duration_sec: null },
     ]);
+  });
+
+  it('sends a break length only on breaks, and only when valid', () => {
+    const payload = toSavePayload([
+      row({ item_type: 'break', song_id: null, label: 'Set break', duration_sec: 900 }),
+      row({ item_type: 'break', song_id: null, label: 'Huge', duration_sec: LIMITS.breakMaxSec + 1 }),
+      row({ song_id: 's1', duration_sec: 900 }),
+      row({ item_type: 'note', song_id: null, label: 'N', duration_sec: 60 }),
+    ]);
+    expect(payload.map(p => p.duration_sec)).toEqual([900, null, null, null]);
   });
 
   it('refuses lists longer than the database allows', () => {
@@ -109,10 +134,11 @@ describe('toSavePayload', () => {
 describe('itemsFromRows', () => {
   it('sorts by position and keeps the row id as the key', () => {
     const items = itemsFromRows([
-      { id: 'b', position: 1, item_type: 'break', song_id: null, label: 'Break', key_override: null, notes: null },
-      { id: 'a', position: 0, item_type: 'song', song_id: 's1', label: null, key_override: null, notes: null },
+      { id: 'b', position: 1, item_type: 'break', song_id: null, label: 'Break', key_override: null, notes: null, duration_sec: 600 },
+      { id: 'a', position: 0, item_type: 'song', song_id: 's1', label: null, key_override: null, notes: null, duration_sec: null },
     ]);
     expect(items.map(i => i.key)).toEqual(['a', 'b']);
+    expect(items.map(i => i.duration_sec)).toEqual([null, 600]);
   });
 });
 
