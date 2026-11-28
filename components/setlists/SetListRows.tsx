@@ -5,7 +5,9 @@
 // Escape to cancel). dnd-kit announces each move to screen readers.
 //
 // Songs are numbered; breaks and notes aren't. Key and notes can be changed
-// per row without touching the song in the library.
+// per row without touching the song in the library. Rows stay one line tall;
+// a row's notes field opens only when its ✎ button is pressed, so a whole set
+// fits on screen.
 
 import {
   DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors,
@@ -15,6 +17,7 @@ import {
   SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useId, useState } from 'react';
 import { LIMITS, formatDuration, songNumbers, type BuilderItem, type SongRow } from '../../lib/domain/setLists';
 
 interface Props {
@@ -66,7 +69,7 @@ export default function SetListRows({ items, songsById, onChange }: Props) {
     return (
       <div className="sl-empty sl-rows-empty">
         <p className="sl-empty-title">This set is empty</p>
-        <p>Add songs with the search box above. Add a break between sets, or a note like “thank the bartenders”.</p>
+        <p>Tap songs in the Song List to add them. Add a break between sets, or a note like “thank the bartenders”.</p>
       </div>
     );
   }
@@ -105,8 +108,13 @@ interface RowProps {
 function SortableRow({ item, number, song, title, onUpdate, onRemove }: RowProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: item.key });
   const style = { transform: CSS.Transform.toString(transform), transition };
+  const uid = useId();
+  const [notesOpen, setNotesOpen] = useState(false);
   const isSong = item.item_type === 'song';
   const missing = isSong && !song;
+  const notes = item.notes?.trim() ?? '';
+  const libraryNote = isSong ? song?.notes?.trim() ?? '' : '';
+  const notesId = `${uid}-notes`;
 
   return (
     <li ref={setNodeRef} style={style}
@@ -121,8 +129,8 @@ function SortableRow({ item, number, song, title, onUpdate, onRemove }: RowProps
       <div className="sl-row-body">
         {isSong ? (
           <div className="sl-row-title">
-            {title}
-            {song?.artist && <span className="sl-row-artist"> · {song.artist}</span>}
+            <span className="sl-row-name">{title}</span>
+            {song?.artist && <span className="sl-row-artist">{song.artist}</span>}
           </div>
         ) : (
           <input className="input sl-row-label" aria-label={item.item_type === 'break' ? 'Break label' : 'Note text'}
@@ -130,24 +138,43 @@ function SortableRow({ item, number, song, title, onUpdate, onRemove }: RowProps
             placeholder={item.item_type === 'break' ? 'Break' : 'Note for the band'}
             onChange={e => onUpdate(item.key, { label: e.target.value })} />
         )}
-        <input className="input sl-row-notes" aria-label={`Notes for ${title}`} value={item.notes ?? ''}
-          maxLength={LIMITS.itemNotes} placeholder={isSong ? (song?.notes ? `Library note: ${song.notes}` : 'Note for tonight') : 'Extra detail'}
-          onChange={e => onUpdate(item.key, { notes: e.target.value })} />
+        {!notesOpen && (notes || libraryNote) && (
+          <div className={`sl-row-note${notes ? '' : ' sl-row-note--library'}`}>{notes || libraryNote}</div>
+        )}
       </div>
 
-      {isSong && (
-        <div className="sl-row-meta">
-          <input className="input sl-row-key mono" aria-label={`Key for ${title}`} value={item.key_override ?? ''}
-            maxLength={LIMITS.key} placeholder={song?.song_key ?? 'Key'}
-            onChange={e => onUpdate(item.key, { key_override: e.target.value })} />
-          <span className="sl-row-len mono" aria-label={song?.duration_sec ? `Length ${formatDuration(song.duration_sec)}` : 'No length'}>
-            {formatDuration(song?.duration_sec) || '—'}
-          </span>
+      <div className="sl-row-meta">
+        {isSong && (
+          <>
+            <input className="input sl-row-key mono" aria-label={`Key for ${title}`} value={item.key_override ?? ''}
+              maxLength={LIMITS.key} placeholder={song?.song_key ?? 'Key'}
+              onChange={e => onUpdate(item.key, { key_override: e.target.value })} />
+            <span className="sl-row-len mono" aria-label={song?.duration_sec ? `Length ${formatDuration(song.duration_sec)}` : 'No length'}>
+              {formatDuration(song?.duration_sec) || '—'}
+            </span>
+          </>
+        )}
+        <button type="button" className={`sl-row-icon${notes ? ' sl-row-icon--on' : ''}`}
+          aria-expanded={notesOpen} aria-controls={notesId}
+          aria-label={notesOpen ? `Close notes for ${title}` : `${notes ? 'Edit' : 'Add'} notes for ${title}`}
+          onClick={() => setNotesOpen(o => !o)}>
+          <span aria-hidden="true">✎</span>
+        </button>
+        <button type="button" className="sl-row-icon sl-row-remove" onClick={() => onRemove(item.key)}
+          aria-label={`Remove ${title} from the set`}>
+          <span aria-hidden="true">✕</span>
+        </button>
+      </div>
+
+      {notesOpen && (
+        <div className="sl-row-notes-wrap" id={notesId}>
+          <input className="input sl-row-notes" aria-label={`Notes for ${title}`} value={item.notes ?? ''}
+            maxLength={LIMITS.itemNotes} autoFocus
+            placeholder={isSong ? (libraryNote ? `Library note: ${libraryNote}` : 'Note for tonight') : 'Extra detail'}
+            onChange={e => onUpdate(item.key, { notes: e.target.value })}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') setNotesOpen(false); }} />
         </div>
       )}
-
-      <button type="button" className="btn btn-ghost btn-sm sl-row-remove" onClick={() => onRemove(item.key)}
-        aria-label={`Remove ${title} from the set`}>✕</button>
     </li>
   );
 }
