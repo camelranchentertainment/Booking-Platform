@@ -18,7 +18,9 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useId, useState } from 'react';
-import { LIMITS, formatDuration, songNumbers, type BuilderItem, type SongRow } from '../../lib/domain/setLists';
+import {
+  BREAK_MINUTES, LIMITS, formatDuration, songNumbers, validBreakLength, type BuilderItem, type SongRow,
+} from '../../lib/domain/setLists';
 
 interface Props {
   items: readonly BuilderItem[];
@@ -144,6 +146,10 @@ function SortableRow({ item, number, song, title, onUpdate, onRemove }: RowProps
       </div>
 
       <div className="sl-row-meta">
+        {item.item_type === 'break' && (
+          <BreakLengthSelect title={title} value={item.duration_sec}
+            onChange={sec => onUpdate(item.key, { duration_sec: sec })} />
+        )}
         {isSong && (
           <>
             <input className="input sl-row-key mono" aria-label={`Key for ${title}`} value={item.key_override ?? ''}
@@ -176,5 +182,32 @@ function SortableRow({ item, number, song, title, onUpdate, onRemove }: RowProps
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * Time selector for a break. Offers common lengths; a stored length that
+ * isn't one of them (set elsewhere) is kept as its own option.
+ */
+function BreakLengthSelect({ title, value, onChange }: {
+  title: string;
+  value: number | null;
+  onChange: (seconds: number | null) => void;
+}) {
+  const current = validBreakLength(value);
+  const options: number[] = BREAK_MINUTES.map(m => m * 60);
+  if (current !== null && !options.includes(current)) options.push(current);
+  options.sort((a, b) => a - b);
+  return (
+    <span className="sl-row-break-len-wrap">
+    <select className="select sl-row-break-len mono" aria-label={`Length of ${title}`}
+      value={current === null ? '' : String(current)}
+      onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}>
+      <option value="">No time</option>
+      {options.map(sec => (
+        <option key={sec} value={sec}>{sec % 60 === 0 ? `${sec / 60} min` : formatDuration(sec)}</option>
+      ))}
+    </select>
+    </span>
   );
 }

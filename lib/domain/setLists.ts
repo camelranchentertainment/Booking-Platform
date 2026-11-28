@@ -42,6 +42,8 @@ export interface BuilderItem {
   label: string | null;
   key_override: string | null;
   notes: string | null;
+  /** Breaks only: the break's length in seconds; null when not set. */
+  duration_sec: number | null;
 }
 
 /** A row as stored in public.set_list_items. */
@@ -53,6 +55,7 @@ export interface SetListItemRow {
   label: string | null;
   key_override: string | null;
   notes: string | null;
+  duration_sec: number | null;
 }
 
 /** The exact element shape save_set_list_items() reads from its JSON array. */
@@ -62,6 +65,8 @@ export interface SaveItemPayload {
   label: string | null;
   key_override: string | null;
   notes: string | null;
+  /** Stored for breaks only; always null on songs and notes. */
+  duration_sec: number | null;
 }
 
 /** Hard limits that mirror the database CHECK constraints, so the UI fails early and clearly. */
@@ -77,7 +82,12 @@ export const LIMITS = {
   bpmMin: 20,
   bpmMax: 400,
   durationMaxSec: 3600,
+  /** Mirrors set_list_items_duration_check (4 hours). */
+  breakMaxSec: 14_400,
 } as const;
+
+/** Break lengths offered in the builder's time selector, in minutes. */
+export const BREAK_MINUTES = [5, 10, 15, 20, 25, 30, 45, 60, 90] as const;
 
 /**
  * Parses a song length typed by a person.
@@ -147,14 +157,17 @@ export function filterSongs<T extends Pick<SongRow, 'title' | 'artist'>>(songs: 
 
 export interface SetTotals {
   songs: number;
-  /** Sum of known song lengths, in seconds. */
+  /** Running time in seconds: known song lengths plus break lengths. */
   seconds: number;
+  /** The part of `seconds` that is breaks. */
+  breakSeconds: number;
   /** Songs on the list with no length entered, so the total is a floor. */
   songsWithoutLength: number;
 }
 
 /**
- * Totals a set: song count and running time. Breaks and notes don't count.
+ * Totals a set: song count and running time. Songs count their library
+ * length; breaks count their own length; notes don't count.
  *
  * @param items builder rows in order
  * @param songsById the band's library keyed by id
@@ -162,15 +175,30 @@ export interface SetTotals {
 export function setTotals(items: readonly BuilderItem[], songsById: ReadonlyMap<string, SongRow>): SetTotals {
   let songs = 0;
   let seconds = 0;
+  let breakSeconds = 0;
   let songsWithoutLength = 0;
   for (const item of items) {
+    if (item.item_type === 'break') {
+      const len = validBreakLength(item.duration_sec);
+      if (len) { breakSeconds += len; seconds += len; }
+      continue;
+    }
     if (item.item_type !== 'song' || !item.song_id) continue;
     songs += 1;
     const len = songsById.get(item.song_id)?.duration_sec;
     if (typeof len === 'number' && len > 0) seconds += len;
     else songsWithoutLength += 1;
   }
-  return { songs, seconds, songsWithoutLength };
+  return { songs, seconds, breakSeconds, songsWithoutLength };
+}
+
+/**
+ * A break length the database will accept, or null.
+ * @param value seconds from the builder
+ */
+export function validBreakLength(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= LIMITS.breakMaxSec
+    ? value : null;
 }
 
 export type SetLengthFit = 'none' | 'under' | 'over';
@@ -229,6 +257,7 @@ export function toSavePayload(items: readonly BuilderItem[]): SaveItemPayload[] 
         label: null,
         key_override: clean(item.key_override),
         notes: clean(item.notes),
+        duration_sec: null,
       };
     }
     return {
@@ -237,6 +266,7 @@ export function toSavePayload(items: readonly BuilderItem[]): SaveItemPayload[] 
       label: clean(item.label) ?? (item.item_type === 'break' ? 'Break' : 'Note'),
       key_override: null,
       notes: clean(item.notes),
+      duration_sec: item.item_type === 'break' ? validBreakLength(item.duration_sec) : null,
     };
   });
 }
@@ -276,6 +306,7 @@ export function itemsFromRows(rows: readonly SetListItemRow[]): BuilderItem[] {
       label: r.label,
       key_override: r.key_override,
       notes: r.notes,
+      duration_sec: r.item_type === 'break' ? validBreakLength(r.duration_sec) : null,
     }));
 }
 

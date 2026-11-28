@@ -18,7 +18,7 @@ export type Result<T> = { ok: true; data: T } | { ok: false; message: string };
 
 const SONG_COLUMNS = 'id, title, artist, song_key, tempo_bpm, duration_sec, notes, updated_at';
 const SET_LIST_COLUMNS = 'id, name, booking_id, is_template, notes, published_version, published_at, updated_at, created_at';
-const ITEM_COLUMNS = 'id, position, item_type, song_id, label, key_override, notes';
+const ITEM_COLUMNS = 'id, position, item_type, song_id, label, key_override, notes, duration_sec';
 
 /** Statuses of shows you'd build a set for. Pitches and holds aren't real nights yet. */
 export const SET_LIST_SHOW_STATUSES = ['contract', 'confirmed', 'advancing'] as const;

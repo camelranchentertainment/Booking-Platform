@@ -2486,6 +2486,15 @@ a.venues-muted:hover { color: var(--text); }
 }
 .sl-row-key:hover, .sl-row-key:focus { border-color: var(--border); background: var(--surface); }
 .sl-row-len { color: var(--text-muted); width: 3.2rem; text-align: right; font-size: 0.9rem; }
+.sl-row-break-len-wrap { position: relative; display: inline-flex; }
+.sl-row-break-len-wrap::after {
+  content: "▾"; position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%);
+  color: var(--accent); pointer-events: none; font-size: 0.8rem;
+}
+.sl-row-break-len {
+  min-height: 40px; width: auto; padding: 0.3rem 1.8rem 0.3rem 0.6rem; font-weight: 700; color: var(--accent);
+  background-color: var(--surface); border-color: var(--border);
+}
 .sl-row-icon {
   width: 2.75rem; height: 2.75rem; display: inline-flex; align-items: center; justify-content: center;
   background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm);
@@ -2556,9 +2565,11 @@ a.venues-muted:hover { color: var(--text); }
   /* Rows: the title gets the full width; key, notes and remove sit on a second line. */
   .sl-row { grid-template-columns: 1.9rem 1.5rem minmax(0, 1fr); padding: 0.3rem 0.35rem 0.1rem 0.1rem; }
   .sl-row-meta { grid-column: 3; justify-content: flex-end; margin-top: -0.35rem; }
-  /* Breaks and notes are one short label, so their buttons stay on the same line. */
-  .sl-row--break, .sl-row--note { grid-template-columns: 1.9rem 1.5rem minmax(0, 1fr) auto; }
-  .sl-row--break .sl-row-meta, .sl-row--note .sl-row-meta { grid-column: 4; margin-top: 0; }
+  /* Notes are one short label, so their buttons stay on the same line.
+     Breaks keep the second line for the time selector. */
+  .sl-row--note { grid-template-columns: 1.9rem 1.5rem minmax(0, 1fr) auto; }
+  .sl-row--note .sl-row-meta { grid-column: 4; margin-top: 0; }
+  .sl-row--break .sl-row-meta { margin-top: 0; }
   .sl-row-handle { width: 1.9rem; }
   .sl-row-notes-wrap { grid-column: 1 / -1; padding-inline: 0.35rem; }
 }

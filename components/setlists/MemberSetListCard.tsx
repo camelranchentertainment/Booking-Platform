@@ -78,7 +78,11 @@ export default function MemberSetListCard({ bookingId }: { bookingId: string }) 
             <ol className="sl-member-list">
               {state.snapshot.items.map((item, idx) => {
                 if (item.type === 'break') {
-                  return <li key={idx} className="sl-member-break">{item.title}</li>;
+                  return (
+                    <li key={idx} className="sl-member-break">
+                      {item.title}{item.duration_sec ? ` · ${Math.round(item.duration_sec / 60)} min` : ''}
+                    </li>
+                  );
                 }
                 if (item.type === 'note') {
                   return (

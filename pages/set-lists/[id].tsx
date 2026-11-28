@@ -173,6 +173,8 @@ export default function SetListBuilderPage() {
       label: type === 'break' ? 'Break' : null,
       key_override: null,
       notes: null,
+      // New breaks start at 15 minutes; the row's time selector changes it.
+      duration_sec: type === 'break' ? 15 * 60 : null,
     }]);
   };
 
@@ -308,6 +310,9 @@ export default function SetListBuilderPage() {
               ) : (
                 <span className="tour-metric-note">No set length on this show</span>
               )}
+              {totals.breakSeconds > 0 && (
+                <span className="tour-metric-note">Includes {Math.round(totals.breakSeconds / 60)} min of breaks</span>
+              )}
               {fit === 'over' && <span className="tour-metric-note sl-over">Over the booked set</span>}
             </div>
             <div className="tour-metric">
@@ -351,7 +356,8 @@ export default function SetListBuilderPage() {
                   const key = i.key_override?.trim() || s?.song_key || '';
                   return <li key={i.key} className="sl-print-song"><span>{numbers[idx]}.</span> {rowTitle(i, songsById)}{key ? <em> ({key})</em> : null}</li>;
                 }
-                return <li key={i.key} className={`sl-print-${i.item_type}`}>{rowTitle(i, songsById)}</li>;
+                const breakLen = i.item_type === 'break' && i.duration_sec ? ` · ${Math.round(i.duration_sec / 60)} min` : '';
+                return <li key={i.key} className={`sl-print-${i.item_type}`}>{rowTitle(i, songsById)}{breakLen}</li>;
               })}
             </ol>
           </div>
