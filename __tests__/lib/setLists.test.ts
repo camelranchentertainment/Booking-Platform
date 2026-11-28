@@ -1,7 +1,7 @@
 // __tests__/lib/setLists.test.ts
 import {
   parseDuration, formatDuration, setTotals, setLengthFit, pushStatus,
-  toSavePayload, itemsFromRows, moveItem, friendlyDbError, songNumbers, parseSnapshot, LIMITS,
+  toSavePayload, itemsFromRows, filterSongs, moveItem, friendlyDbError, songNumbers, parseSnapshot, LIMITS,
   type BuilderItem, type SongRow,
 } from '../../lib/domain/setLists';
 
@@ -180,5 +180,28 @@ describe('parseSnapshot', () => {
     expect(parseSnapshot([])).toBeNull();
     expect(parseSnapshot({ name: '', items: [] })).toBeNull();
     expect(parseSnapshot({ name: 'X', items: 'no' })).toBeNull();
+  });
+});
+
+describe('filterSongs', () => {
+  const lib = Array.from({ length: 27 }, (_, i) => ({ title: `Song ${String(i).padStart(2, '0')}`, artist: null as string | null }));
+
+  it('returns the whole library for an empty query (no 8-song cap)', () => {
+    expect(filterSongs(lib, '')).toHaveLength(27);
+    expect(filterSongs(lib, '   ')).toHaveLength(27);
+  });
+
+  it('puts title-prefix matches before contains matches', () => {
+    const songs = [
+      { title: 'Ozark Home', artist: null },
+      { title: 'Holy Ghost', artist: null },
+      { title: 'Home Sweet', artist: null },
+      { title: 'Tulsa', artist: 'Home Band' },
+    ];
+    expect(filterSongs(songs, 'ho').map(s => s.title)).toEqual(['Holy Ghost', 'Home Sweet', 'Ozark Home', 'Tulsa']);
+  });
+
+  it('returns every match, not just the first eight', () => {
+    expect(filterSongs(lib, 'song')).toHaveLength(27);
   });
 });

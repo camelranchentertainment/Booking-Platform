@@ -117,6 +117,24 @@ export function formatDuration(seconds: number | null | undefined): string {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
 
+/**
+ * Filters the song library for the builder's "Add a song" picker.
+ * An empty query returns the whole library (in its given order) so it can be
+ * browsed by scrolling; otherwise titles starting with the query come first,
+ * then titles or artists containing it. No cap: the list scrolls.
+ * @param songs the band's library, already sorted for display
+ * @param query what the user has typed
+ * @returns the matching songs, best matches first
+ */
+export function filterSongs<T extends Pick<SongRow, 'title' | 'artist'>>(songs: readonly T[], query: string): readonly T[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return songs;
+  const starts = songs.filter(s => s.title.toLowerCase().startsWith(q));
+  const contains = songs.filter(s => !s.title.toLowerCase().startsWith(q)
+    && (s.title.toLowerCase().includes(q) || (s.artist ?? '').toLowerCase().includes(q)));
+  return [...starts, ...contains];
+}
+
 export interface SetTotals {
   songs: number;
   /** Sum of known song lengths, in seconds. */
