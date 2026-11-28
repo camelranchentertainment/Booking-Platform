@@ -270,6 +270,13 @@ h4 { font-size: 1.2rem; }
 .main-content > * {
   animation: fadeIn 0.22s ease both;
 }
+/* Chrome restarts CSS animations when it lays out a print preview, so a page
+   section using the fade-in above printed at its first frame (opacity 0) and
+   the page came out blank (set list Print, pay statement). Nothing animates
+   on paper. */
+@media print {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
 
 /* ── Cards ─────────────────────────────────────────────────── */
 .card {
