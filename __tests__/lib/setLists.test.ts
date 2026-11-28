@@ -1,7 +1,7 @@
 // __tests__/lib/setLists.test.ts
 import {
   parseDuration, formatDuration, setTotals, setLengthFit, pushStatus,
-  toSavePayload, itemsFromRows, filterSongs, moveItem, friendlyDbError, songNumbers, parseSnapshot, LIMITS,
+  toSavePayload, itemsFromRows, filterSongs, availableSongs, moveItem, friendlyDbError, songNumbers, parseSnapshot, LIMITS,
   type BuilderItem, type SongRow,
 } from '../../lib/domain/setLists';
 
@@ -203,5 +203,21 @@ describe('filterSongs', () => {
 
   it('returns every match, not just the first eight', () => {
     expect(filterSongs(lib, 'song')).toHaveLength(27);
+  });
+});
+
+describe('availableSongs', () => {
+  const lib = [{ id: 'a', title: 'Brandi' }, { id: 'b', title: 'Bullfighter' }, { id: 'c', title: 'Dammit' }];
+
+  it('drops songs already in the set and keeps library order', () => {
+    expect(availableSongs(lib, new Set(['b'])).map(s => s.id)).toEqual(['a', 'c']);
+  });
+
+  it('returns the whole library when the set is empty', () => {
+    expect(availableSongs(lib, new Set())).toHaveLength(3);
+  });
+
+  it('returns nothing when every song is in the set', () => {
+    expect(availableSongs(lib, new Set(['a', 'b', 'c']))).toEqual([]);
   });
 });
