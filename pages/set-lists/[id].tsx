@@ -253,8 +253,8 @@ export default function SetListBuilderPage() {
 
       {load.kind === 'ready' && !missingTarget && header && actId && (
         <>
-          <header className="card sl-builder-head">
-            <div className="sl-builder-title-row">
+          <header className="card sl-head">
+            <div className="sl-head-main">
               <div className="field sl-name-field">
                 <label className="sr-only" htmlFor="sl-name">Set list name</label>
                 <input id="sl-name" className="sl-name-input" value={nameDraft} maxLength={LIMITS.setName}
@@ -263,32 +263,20 @@ export default function SetListBuilderPage() {
                   aria-invalid={!!nameError} aria-describedby={nameError ? 'sl-name-err' : undefined} />
                 {nameError && <span id="sl-name-err" className="sl-field-error" role="alert">{nameError}</span>}
               </div>
-              <PushStatusChip row={header} />
+              <p className="sl-head-sub">
+                {show
+                  ? <>{formatShowDate(show.show_date, { weekday: 'long', month: 'long', day: 'numeric' })} · {showLabel(show)}</>
+                  : header.is_template ? 'Template — copy it for any show' : 'Show no longer available'}
+              </p>
+              <div className="sl-head-status">
+                <PushStatusChip row={header} />
+                <span className="sl-save-state" role="status" aria-live="polite">{saveLabel}</span>
+              </div>
             </div>
-
-            <p className="sl-builder-sub">
-              {show
-                ? <>{formatShowDate(show.show_date, { weekday: 'long', month: 'long', day: 'numeric' })} · {showLabel(show)}</>
-                : header.is_template ? 'Template — copy it for any show' : 'Show no longer available'}
-            </p>
-
-            <div className="sl-builder-stats">
-              <span className="sl-stat"><strong className="mono">{totals.songs}</strong> {totals.songs === 1 ? 'song' : 'songs'}</span>
-              <span className={`sl-stat${fit === 'over' ? ' sl-stat--over' : ''}`}>
-                <strong className="mono">{formatDuration(totals.seconds) || '0:00'}</strong>
-                {show?.set_length_min ? ` of ${show.set_length_min} min` : ' running time'}
-                {fit === 'over' && ' — over the booked set'}
-              </span>
-              {totals.songsWithoutLength > 0 && (
-                <span className="sl-stat sl-muted">
-                  {totals.songsWithoutLength} {totals.songsWithoutLength === 1 ? 'song has' : 'songs have'} no length
-                </span>
-              )}
-              <span className="sl-save-state" role="status" aria-live="polite">{saveLabel}</span>
-              <button type="button" className="btn btn-secondary btn-sm sl-print-btn" onClick={print}>Print</button>
+            <div className="sl-head-actions">
+              <button type="button" className="btn btn-secondary sl-print-btn" onClick={print}>Print</button>
+              <PushToBand header={header} ensureSaved={ensureSaved} onPushed={() => void refreshHeader()} />
             </div>
-
-            <PushToBand header={header} ensureSaved={ensureSaved} onPushed={() => void refreshHeader()} />
 
             {save.kind === 'error' && (
               <div className="sl-save-error" role="alert">
@@ -298,17 +286,59 @@ export default function SetListBuilderPage() {
             )}
           </header>
 
-          <section className="card sl-builder" aria-label="Build the set">
-            <SongPool songs={songs} onListIds={onListIds}
-              onPick={s => addRow('song', s)} onCreate={() => setCreatingSong('')}
-              actions={(
+          <section className="tours-metrics sl-metrics" aria-label="Set summary">
+            <div className="tour-metric">
+              <span className="tour-metric-label">Songs</span>
+              <div className="tour-metric-value">
+                <strong>{totals.songs}</strong><span>in the set</span>
+              </div>
+              <span className="tour-metric-note">{onListIds.size < songs.length ? `${songs.length - onListIds.size} more in the library` : 'Whole library is in'}</span>
+            </div>
+            <div className="tour-metric">
+              <span className="tour-metric-label">Run time</span>
+              <div className="tour-metric-value">
+                <strong className={fit === 'over' ? 'tour-metric-hot' : undefined}>{formatDuration(totals.seconds) || '0:00'}</strong>
+                <span>{show?.set_length_min ? `of ${show.set_length_min} min` : 'total'}</span>
+              </div>
+              {show?.set_length_min ? (
+                <div className="tour-meter" role="img"
+                  aria-label={`${Math.round(totals.seconds / 60)} of ${show.set_length_min} minutes`}>
+                  <div className="tour-meter-bar" style={{ width: `${Math.min(100, (totals.seconds / (show.set_length_min * 60)) * 100)}%` }} />
+                </div>
+              ) : (
+                <span className="tour-metric-note">No set length on this show</span>
+              )}
+              {fit === 'over' && <span className="tour-metric-note sl-over">Over the booked set</span>}
+            </div>
+            <div className="tour-metric">
+              <span className="tour-metric-label">Missing lengths</span>
+              <div className="tour-metric-value">
+                <strong className={totals.songsWithoutLength > 0 ? 'tour-metric-hot' : undefined}>{totals.songsWithoutLength}</strong>
+                <span>{totals.songsWithoutLength === 1 ? 'song' : 'songs'}</span>
+              </div>
+              <span className="tour-metric-note">
+                {totals.songsWithoutLength > 0 ? 'Add lengths in the Song Library for a true run time' : 'Every song has a length'}
+              </span>
+            </div>
+          </section>
+
+          <div className="sl-work">
+            <section className="card sl-set" aria-labelledby="sl-set-title">
+              <div className="sl-set-head">
+                <h2 className="sl-section-title" id="sl-set-title">
+                  The Set <span className="sl-section-count mono">{items.length}</span>
+                </h2>
                 <div className="sl-add-buttons">
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => addRow('break')}>+ Break</button>
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => addRow('note')}>+ Note</button>
                 </div>
-              )} />
-            <SetListRows items={items} songsById={songsById} onChange={changeItems} />
-          </section>
+              </div>
+              <SetListRows items={items} songsById={songsById} onChange={changeItems} />
+            </section>
+
+            <SongPool songs={songs} onListIds={onListIds}
+              onPick={s => addRow('song', s)} onCreate={() => setCreatingSong('')} />
+          </div>
 
           {/* Print-only sheet: big type, one per stage position. */}
           <div className="sl-print-sheet" aria-hidden="true">
